@@ -5,7 +5,9 @@
    <img src="https://img.shields.io/badge/platforms-android-blueviolet?style=for-the-badge"/>
    <a href="https://github.com/rebelonion/Dantotsu/releases"><img src="https://img.shields.io/github/downloads/rebelonion/Dantotsu/total?color=%233DDC84&logo=android&logoColor=%23fff&style=for-the-badge"></a>
    <a href="https://www.codefactor.io/repository/github/rebelonion/dantotsu"><img src="https://www.codefactor.io/repository/github/rebelonion/dantotsu/badge?color=%233DDC84&logo=android&logoColor=%23fff&style=for-the-badge" alt="CodeFactor" /></a>
-   <a href="https://discord.gg/4HPZ5nAWwM"><img src="https://img.shields.io/discord/358599430502481920.svg?style=for-the-badge&logo=discord&colorB=7289DA"></a>
+   <a href="https://discord.gg/4HPZ5nAWwM"><img src="https://img.shields.io/discord/358599430502481920.svg?style=for-the-badge&logo=discord&colorB=7289DA"></a><br>
+  <a href="README.md"><img src="https://img.shields.io/badge/lang-English-blue" alt="English"></a>
+  <a href="README.es.md"><img src="https://img.shields.io/badge/lang-Español-red" alt="Español"></a>
 </p>
 
 # **Dantotsu** 🌟
