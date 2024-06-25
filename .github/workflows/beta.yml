@@ -20,14 +20,6 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Download last SHA artifact
-      uses: dawidd6/action-download-artifact@v3
-      with:
-        workflow: beta.yml
-        name: last-sha
-        path: .
-      continue-on-error: true
-
     - name: Get Commits Since Last Run
       run: |
         if [ -f last_sha.txt ]; then
@@ -68,44 +60,6 @@ jobs:
 
     - name: List files in the directory
       run: ls -l
-
-    - name: Setup JDK 17
-      if: ${{ env.SKIP_BUILD != 'true' }}
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: 17
-        cache: gradle
-
-    - name: Decode Keystore File
-      if: ${{ github.repository == 'rebelonion/Dantotsu' }}
-      run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > $GITHUB_WORKSPACE/key.keystore
-
-    - name: Make gradlew executable
-      if: ${{ env.SKIP_BUILD != 'true' }}
-      run: chmod +x ./gradlew
-
-    - name: Build with Gradle
-      if: ${{ env.SKIP_BUILD != 'true' }}
-      run: |
-        if [ "${{ github.repository }}" == "rebelonion/Dantotsu" ]; then
-          ./gradlew assembleGoogleAlpha \
-            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/key.keystore \
-            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }};
-        else
-          ./gradlew assembleGoogleAlpha;
-        fi
-          
-    - name: Upload a Build Artifact
-      if: ${{ env.SKIP_BUILD != 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-          name: Dantotsu
-          retention-days: 5
-          compression-level: 9
-          path: "app/build/outputs/apk/google/alpha/app-google-alpha.apk"
 
     - name: Upload APK to Discord and Telegram
       shell: bash
@@ -211,58 +165,6 @@ jobs:
         fi
         if [ ${#commit_messages} -gt $max_length ]; then
           commit_messages="${commit_messages:0:$max_length}... (truncated)"
-        fi
-
-        # Construct Discord payload
-        discord_data=$(jq -nc \
-                      --arg field_value "$commit_messages" \
-                      --arg author_value "$developers" \
-                      --arg footer_text "Version $VERSION" \
-                      --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
-                      --arg thumbnail_url "$thumbnail_url" \
-                      '{
-                        "content": "<@&1225347048321191996>",
-                        "embeds": [
-                          {
-                            "title": "New Alpha-Build dropped",
-                            "color": 15532323,
-                            "fields": [
-                              {
-                                "name": "Commits:",
-                                "value": $field_value,
-                                "inline": true
-                              },
-                              {
-                                "name": "Developers:",
-                                "value": $author_value,
-                                "inline": false
-                              }
-                            ],
-                            "footer": {
-                              "text": $footer_text
-                            },
-                            "timestamp": $timestamp,
-                            "thumbnail": {
-                              "url": $thumbnail_url
-                            }
-                          }
-                        ],
-                        "attachments": []
-                      }')
-        
-        # Send Discord message
-        curl -H "Content-Type: application/json" \
-             -d "$discord_data" \
-             ${{ secrets.DISCORD_WEBHOOK }}
-        echo "You have only send an embed to discord due to SKIP_BUILD being set to true"
-        
-        # Upload APK to Discord
-        if [ "$SKIP_BUILD" != "true" ]; then
-          curl -F "payload_json=${contentbody}" \
-               -F "dantotsu_debug=@app/build/outputs/apk/google/alpha/app-google-alpha.apk" \
-               ${{ secrets.DISCORD_WEBHOOK }}
-        else
-          echo "Skipping APK upload to Discord due to SKIP_BUILD being set to true"
         fi
 
         # Format commit messages for Telegram
