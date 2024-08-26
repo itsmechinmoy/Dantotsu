@@ -8,7 +8,7 @@
    <a href="https://discord.gg/4HPZ5nAWwM"><img src="https://img.shields.io/discord/358599430502481920.svg?style=for-the-badge&logo=discord&colorB=7289DA"></a>
 </p>
 
-# **Dantotsu** 🌟
+# **Dantotsu**  🌟
 
 **Dantotsu** is an [AniList](https://anilist.co/) exclusive client that aims to be the "best of the best" — just like its name, **Dantotsu (断トツ; Dan-totsu)**, which means exactly that in Japanese. Dive into the app and experience top-notch performance and features designed to elevate your AniList experience.
 
