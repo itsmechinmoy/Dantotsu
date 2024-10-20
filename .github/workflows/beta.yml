@@ -120,10 +120,9 @@ jobs:
       uses: softprops/action-gh-release@v2.0.6
       with:
         files: app/build/outputs/apk/google/alpha/app-google-alpha.apk
-        name: ${{ env.BRANCH }} build ${{ env.VERSION }}
+        name: ${{ env.VERSION }}
         tag_name: v${{ env.VERSION }}
         body: |
-          New Pretester Build ${{ env.VERSION }} released!" :)
           Commits:
           $(cat commit_log.txt)
         prerelease: false
