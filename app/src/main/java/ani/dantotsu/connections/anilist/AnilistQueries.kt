@@ -498,64 +498,61 @@ class AnilistQueries {
         return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status , sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
     }
     suspend fun initHomePage(): Map<String, ArrayList<Media>> {
+        val (queries, removedMedia) = prepareQueries()
+        val response = executeQuery<Query.HomePageMedia>("{${queries.joinToString(",")}}", show = true)
+        val returnMap = mutableMapOf<String, ArrayList<Media>>()
+    
+        returnMap.putAll(processMediaByType(response, removedMedia))
+        returnMap.putAll(processFavorites(response, removedMedia))
+        returnMap["recommendations"] = processRecommendations(response)
+        returnMap["hidden"] = removedMedia.distinctBy { it.id }.toCollection(arrayListOf())
+    
+        return returnMap
+    }
+    
+    // Helper function to prepare GraphQL queries and initialize removed media list
+    private fun prepareQueries(): Pair<List<String>, ArrayList<Media>> {
         val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
         val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
         val removedMedia = ArrayList<Media>()
-        val toShow: List<Boolean> =
-            PrefManager.getVal(PrefName.HomeLayout) // list of booleans for what to show
-
+        val toShow = PrefManager.getVal(PrefName.HomeLayout)
         val queries = mutableListOf<String>()
+    
         if (toShow.getOrNull(0) == true) {
             queries.add("""currentAnime: ${continueMediaQuery("ANIME", "CURRENT")}""")
             queries.add("""repeatingAnime: ${continueMediaQuery("ANIME", "REPEATING")}""")
         }
         if (toShow.getOrNull(1) == true) queries.add("""favoriteAnime: ${favMediaQuery(true, 1)}""")
-        if (toShow.getOrNull(2) == true) queries.add(
-            """plannedAnime: ${
-                continueMediaQuery(
-                    "ANIME",
-                    "PLANNING"
-                )
-            }"""
-        )
+        if (toShow.getOrNull(2) == true) queries.add("""plannedAnime: ${continueMediaQuery("ANIME", "PLANNING")}""")
         if (toShow.getOrNull(3) == true) {
             queries.add("""currentManga: ${continueMediaQuery("MANGA", "CURRENT")}""")
             queries.add("""repeatingManga: ${continueMediaQuery("MANGA", "REPEATING")}""")
         }
-        if (toShow.getOrNull(4) == true) queries.add(
-            """favoriteManga: ${
-                favMediaQuery(
-                    false,
-                    1
-                )
-            }"""
-        )
-        if (toShow.getOrNull(5) == true) queries.add(
-            """plannedManga: ${
-                continueMediaQuery(
-                    "MANGA",
-                    "PLANNING"
-                )
-            }"""
-        )
+        if (toShow.getOrNull(4) == true) queries.add("""favoriteManga: ${favMediaQuery(false, 1)}""")
+        if (toShow.getOrNull(5) == true) queries.add("""plannedManga: ${continueMediaQuery("MANGA", "PLANNING")}""")
         if (toShow.getOrNull(6) == true) {
             queries.add("""recommendationQuery: ${recommendationQuery()}""")
             queries.add("""recommendationPlannedQueryAnime: ${recommendationPlannedQuery("ANIME")}""")
             queries.add("""recommendationPlannedQueryManga: ${recommendationPlannedQuery("MANGA")}""")
         }
-
-        val query = "{${queries.joinToString(",")}}"
-        val response = executeQuery<Query.HomePageMedia>(query, show = true)
+    
+        return Pair(queries, removedMedia)
+    }
+    
+    // Helper function to process media types based on current, repeating, and planned lists
+    private fun processMediaByType(
+        response: Query.HomePageMedia?,
+        removedMedia: ArrayList<Media>
+    ): Map<String, ArrayList<Media>> {
         val returnMap = mutableMapOf<String, ArrayList<Media>>()
-
-        fun processMedia(
-            type: String,
-            currentMedia: List<MediaList>?,
-            repeatingMedia: List<MediaList>?
-        ) {
+        val toShow = PrefManager.getVal(PrefName.HomeLayout)
+    
+        fun processMedia(type: String, currentMedia: List<MediaList>?, repeatingMedia: List<MediaList>?) {
             val subMap = mutableMapOf<Int, Media>()
             val returnArray = arrayListOf<Media>()
-
+            val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
+            val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
+    
             (currentMedia ?: emptyList()).forEach { entry ->
                 val media = Media(entry)
                 if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
@@ -565,7 +562,7 @@ class AnilistQueries {
                     removedMedia.add(media)
                 }
             }
-
+    
             (repeatingMedia ?: emptyList()).forEach { entry ->
                 val media = Media(entry)
                 if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
@@ -575,48 +572,40 @@ class AnilistQueries {
                     removedMedia.add(media)
                 }
             }
-            @Suppress("UNCHECKED_CAST")
-            val list = PrefManager.getNullableCustomVal(
-                "continue${type}List",
-                listOf<Int>(),
-                List::class.java
-            ) as List<Int>
-            if (list.isNotEmpty()) {
-                list.reversed().forEach { id ->
-                    subMap[id]?.let { returnArray.add(it) }
-                }
-                subMap.values.forEach {
-                    if (!returnArray.contains(it)) returnArray.add(it)
-                }
-            } else {
-                returnArray.addAll(subMap.values)
-            }
+    
+            returnArray.addAll(subMap.values)
             returnMap["current$type"] = returnArray
         }
-
+    
         if (toShow.getOrNull(0) == true) processMedia(
             "Anime",
-            response?.data?.currentAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
-            response?.data?.repeatingAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed()
+            response?.data?.currentAnime?.lists?.flatMap { it.entries ?: emptyList() },
+            response?.data?.repeatingAnime?.lists?.flatMap { it.entries ?: emptyList() }
         )
-        if (toShow.getOrNull(2) == true) processMedia(
-            "AnimePlanned",
-            response?.data?.plannedAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
-            null
-        )
+        if (toShow.getOrNull(2) == true) processMedia("AnimePlanned", response?.data?.plannedAnime?.lists?.flatMap { it.entries ?: emptyList() }, null)
         if (toShow.getOrNull(3) == true) processMedia(
             "Manga",
-            response?.data?.currentManga?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
-            response?.data?.repeatingManga?.lists?.flatMap { it.entries ?: emptyList() }?.reversed()
+            response?.data?.currentManga?.lists?.flatMap { it.entries ?: emptyList() },
+            response?.data?.repeatingManga?.lists?.flatMap { it.entries ?: emptyList() }
         )
-        if (toShow.getOrNull(5) == true) processMedia(
-            "MangaPlanned",
-            response?.data?.plannedManga?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
-            null
-        )
-
-        fun processFavorites(type: String, favorites: List<MediaEdge>?) {
+        if (toShow.getOrNull(5) == true) processMedia("MangaPlanned", response?.data?.plannedManga?.lists?.flatMap { it.entries ?: emptyList() }, null)
+    
+        return returnMap
+    }
+    
+    // Helper function to process favorite media for anime and manga
+    private fun processFavorites(
+        response: Query.HomePageMedia?,
+        removedMedia: ArrayList<Media>
+    ): Map<String, ArrayList<Media>> {
+        val returnMap = mutableMapOf<String, ArrayList<Media>>()
+        val toShow = PrefManager.getVal(PrefName.HomeLayout)
+    
+        fun processFavorite(type: String, favorites: List<MediaEdge>?) {
             val returnArray = arrayListOf<Media>()
+            val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
+            val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
+    
             favorites?.forEach { edge ->
                 edge.node?.let {
                     val media = Media(it).apply { isFav = true }
@@ -629,51 +618,40 @@ class AnilistQueries {
             }
             returnMap["favorite$type"] = returnArray
         }
-
-        if (toShow.getOrNull(1) == true) processFavorites(
-            "Anime",
-            response?.data?.favoriteAnime?.favourites?.anime?.edges
-        )
-        if (toShow.getOrNull(4) == true) processFavorites(
-            "Manga",
-            response?.data?.favoriteManga?.favourites?.manga?.edges
-        )
-
-        if (toShow.getOrNull(6) == true) {
-            val subMap = mutableMapOf<Int, Media>()
-            response?.data?.recommendationQuery?.recommendations?.forEach {
-                it.mediaRecommendation?.let { json ->
-                    val media = Media(json)
-                    media.relation = json.type?.toString()
-                    subMap[media.id] = media
-                }
-            }
-            response?.data?.recommendationPlannedQueryAnime?.lists?.flatMap {
-                it.entries ?: emptyList()
-            }?.forEach {
-                val media = Media(it)
-                if (media.status in listOf("RELEASING", "FINISHED")) {
-                    media.relation = it.media?.type?.toString()
-                    subMap[media.id] = media
-                }
-            }
-            response?.data?.recommendationPlannedQueryManga?.lists?.flatMap {
-                it.entries ?: emptyList()
-            }?.forEach {
-                val media = Media(it)
-                if (media.status in listOf("RELEASING", "FINISHED")) {
-                    media.relation = it.media?.type?.toString()
-                    subMap[media.id] = media
-                }
-            }
-            val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
-            returnMap["recommendations"] = list
-        }
-
-        returnMap["hidden"] = removedMedia.distinctBy { it.id }.toCollection(arrayListOf())
+    
+        if (toShow.getOrNull(1) == true) processFavorite("Anime", response?.data?.favoriteAnime?.favourites?.anime?.edges)
+        if (toShow.getOrNull(4) == true) processFavorite("Manga", response?.data?.favoriteManga?.favourites?.manga?.edges)
+    
         return returnMap
     }
-
+    
+    // Helper function to process media recommendations
+    private fun processRecommendations(response: Query.HomePageMedia?): ArrayList<Media> {
+        val subMap = mutableMapOf<Int, Media>()
+        response?.data?.recommendationQuery?.recommendations?.forEach {
+            it.mediaRecommendation?.let { json ->
+                val media = Media(json)
+                media.relation = json.type?.toString()
+                subMap[media.id] = media
+            }
+        }
+        response?.data?.recommendationPlannedQueryAnime?.lists?.flatMap { it.entries ?: emptyList() }?.forEach {
+            val media = Media(it)
+            if (media.status in listOf("RELEASING", "FINISHED")) {
+                media.relation = it.media?.type?.toString()
+                subMap[media.id] = media
+            }
+        }
+        response?.data?.recommendationPlannedQueryManga?.lists?.flatMap { it.entries ?: emptyList() }?.forEach {
+            val media = Media(it)
+            if (media.status in listOf("RELEASING", "FINISHED")) {
+                media.relation = it.media?.type?.toString()
+                subMap[media.id] = media
+            }
+        }
+    
+        return ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
+    }
 
     private suspend fun bannerImage(type: String): String? {
         val image = BannerImage(
@@ -708,68 +686,125 @@ class AnilistQueries {
         userId: Int,
         sortOrder: String? = null
     ): MutableMap<String, ArrayList<Media>> {
-        val response =
-            executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: $userId, type: ${if (anime) "ANIME" else "MANGA"}) { lists { name isCustomList entries { status progress private score(format:POINT_100) updatedAt media { id idMal isAdult type status chapters episodes nextAiringEpisode {episode} bannerImage genres meanScore isFavourite format coverImage{large} startDate{year month day} title {english romaji userPreferred } } } } user { id mediaListOptions { rowOrder animeList { sectionOrder } mangaList { sectionOrder } } } } }""")
-        val sorted = mutableMapOf<String, ArrayList<Media>>()
+        val response = fetchMediaListResponse(anime, userId)
+        val unsortedMediaLists = parseMediaListResponse(response)
+        val sortedMediaLists = applySectionOrder(unsortedMediaLists, anime, response)
+        applyFavouritesAndAllMedia(sortedMediaLists, anime, userId)
+        
+        val sortType = determineSortType(anime, sortOrder, response)
+        return sortMediaLists(sortedMediaLists, sortType)
+    }
+    
+    private suspend fun fetchMediaListResponse(anime: Boolean, userId: Int): Query.MediaListCollection? {
+        return executeQuery<Query.MediaListCollection>(
+            """{
+                MediaListCollection(userId: $userId, type: ${if (anime) "ANIME" else "MANGA"}) {
+                    lists {
+                        name isCustomList entries {
+                            status progress private score(format:POINT_100) updatedAt
+                            media { 
+                                id idMal isAdult type status chapters episodes nextAiringEpisode {episode}
+                                bannerImage genres meanScore isFavourite format coverImage{large}
+                                startDate{year month day} title {english romaji userPreferred}
+                            }
+                        }
+                    }
+                    user {
+                        id mediaListOptions {
+                            rowOrder animeList { sectionOrder }
+                            mangaList { sectionOrder }
+                        }
+                    }
+                }
+            }"""
+        )
+    }
+    
+    private fun parseMediaListResponse(response: Query.MediaListCollection?): MutableMap<String, ArrayList<Media>> {
         val unsorted = mutableMapOf<String, ArrayList<Media>>()
         val all = arrayListOf<Media>()
-        val allIds = arrayListOf<Int>()
-
-        response?.data?.mediaListCollection?.lists?.forEach { i ->
-            val name = i.name.toString().trim('"')
+        val allIds = mutableSetOf<Int>()
+    
+        response?.data?.mediaListCollection?.lists?.forEach { list ->
+            val name = list.name.toString().trim('"')
             unsorted[name] = arrayListOf()
-            i.entries?.forEach {
-                val a = Media(it)
-                unsorted[name]?.add(a)
-                if (!allIds.contains(a.id)) {
-                    allIds.add(a.id)
-                    all.add(a)
+            list.entries?.forEach { entry ->
+                val media = Media(entry)
+                unsorted[name]?.add(media)
+                if (allIds.add(media.id)) {
+                    all.add(media)
                 }
             }
         }
-
-        val options = response?.data?.mediaListCollection?.user?.mediaListOptions
-        val mediaList = if (anime) options?.animeList else options?.mangaList
-        mediaList?.sectionOrder?.forEach {
-            if (unsorted.containsKey(it)) sorted[it] = unsorted[it]!!
+        unsorted["All"] = all
+        return unsorted
+    }
+    
+    private fun applySectionOrder(
+        unsorted: MutableMap<String, ArrayList<Media>>,
+        anime: Boolean,
+        response: Query.MediaListCollection?
+    ): MutableMap<String, ArrayList<Media>> {
+        val sorted = mutableMapOf<String, ArrayList<Media>>()
+        val mediaListOptions = response?.data?.mediaListCollection?.user?.mediaListOptions
+        val sectionOrder = if (anime) mediaListOptions?.animeList?.sectionOrder else mediaListOptions?.mangaList?.sectionOrder
+    
+        sectionOrder?.forEach { sectionName ->
+            if (unsorted.containsKey(sectionName)) sorted[sectionName] = unsorted[sectionName]!!
         }
-        unsorted.forEach {
-            if (!sorted.containsKey(it.key)) sorted[it.key] = it.value
-        }
-
-        sorted["Favourites"] = favMedia(anime, userId)
-        sorted["Favourites"]?.sortWith(compareBy { it.userFavOrder })
-        //favMedia doesn't fill userProgress, so we need to fill it manually by searching :(
-        sorted["Favourites"]?.forEach { fav ->
-            all.find { it.id == fav.id }?.let {
-                fav.userProgress = it.userProgress
-            }
-        }
-
-        sorted["All"] = all
-        val listSort: String? = if (anime) PrefManager.getVal(PrefName.AnimeListSortOrder)
-        else PrefManager.getVal(PrefName.MangaListSortOrder)
-        val sort = listSort ?: sortOrder ?: options?.rowOrder
-        for (i in sorted.keys) {
-            when (sort) {
-                "score" -> sorted[i]?.sortWith { b, a ->
-                    compareValuesBy(
-                        a,
-                        b,
-                        { it.userScore },
-                        { it.meanScore })
-                }
-
-                "title" -> sorted[i]?.sortWith(compareBy { it.userPreferredName })
-                "updatedAt" -> sorted[i]?.sortWith(compareByDescending { it.userUpdatedAt })
-                "release" -> sorted[i]?.sortWith(compareByDescending { it.startDate })
-                "id" -> sorted[i]?.sortWith(compareBy { it.id })
-            }
+        unsorted.forEach { (key, value) ->
+            if (!sorted.containsKey(key)) sorted[key] = value
         }
         return sorted
     }
-
-
+    
+    private fun applyFavouritesAndAllMedia(
+        mediaMap: MutableMap<String, ArrayList<Media>>,
+        anime: Boolean,
+        userId: Int
+    ) {
+        mediaMap["Favourites"] = favMedia(anime, userId)
+        mediaMap["Favourites"]?.sortWith(compareBy { it.userFavOrder })
+        
+        mediaMap["Favourites"]?.forEach { fav ->
+            mediaMap["All"]?.find { it.id == fav.id }?.let {
+                fav.userProgress = it.userProgress
+            }
+        }
+    }
+    
+    private fun determineSortType(
+        anime: Boolean,
+        sortOrder: String?,
+        response: Query.MediaListCollection?
+    ): String {
+        val listSort = if (anime) PrefManager.getVal(PrefName.AnimeListSortOrder)
+                       else PrefManager.getVal(PrefName.MangaListSortOrder)
+        return listSort ?: sortOrder ?: response?.data?.mediaListCollection?.user?.mediaListOptions?.rowOrder ?: "title"
+    }
+    
+    private fun sortMediaLists(
+        mediaMap: MutableMap<String, ArrayList<Media>>,
+        sortType: String
+    ): MutableMap<String, ArrayList<Media>> {
+        val comparator = getSortComparator(sortType)
+        mediaMap.forEach { (_, mediaList) ->
+            mediaList.sortWith(comparator)
+        }
+        return mediaMap
+    }
+    
+    private fun getSortComparator(sortType: String): Comparator<Media> {
+        return when (sortType) {
+            "score" -> compareByDescending<Media> { it.userScore }.thenByDescending { it.meanScore }
+            "title" -> compareBy { it.userPreferredName }
+            "updatedAt" -> compareByDescending { it.userUpdatedAt }
+            "release" -> compareByDescending { it.startDate }
+            "id" -> compareBy { it.id }
+            else -> compareBy { it.userPreferredName } // Default to "title"
+        }
+    }
+    
     suspend fun getGenresAndTags(): Boolean {
         var genres: ArrayList<String>? = PrefManager.getVal<Set<String>>(PrefName.GenresList)
             .toMutableList() as ArrayList<String>?
