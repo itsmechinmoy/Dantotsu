@@ -910,140 +910,117 @@ class AnilistQueries {
         hd: Boolean = false,
         adultOnly: Boolean = false
     ): SearchResults? {
+    
         val query = """
-query (${"$"}page: Int = 1, ${"$"}id: Int, ${"$"}type: MediaType, ${"$"}isAdult: Boolean = false, ${"$"}search: String, ${"$"}format: [MediaFormat], ${"$"}status: MediaStatus, ${"$"}countryOfOrigin: CountryCode, ${"$"}source: MediaSource, ${"$"}season: MediaSeason, ${"$"}seasonYear: Int, ${"$"}year: String, ${"$"}onList: Boolean, ${"$"}yearLesser: FuzzyDateInt, ${"$"}yearGreater: FuzzyDateInt, ${"$"}episodeLesser: Int, ${"$"}episodeGreater: Int, ${"$"}durationLesser: Int, ${"$"}durationGreater: Int, ${"$"}chapterLesser: Int, ${"$"}chapterGreater: Int, ${"$"}volumeLesser: Int, ${"$"}volumeGreater: Int, ${"$"}licensedBy: [String], ${"$"}isLicensed: Boolean, ${"$"}genres: [String], ${"$"}excludedGenres: [String], ${"$"}tags: [String], ${"$"}excludedTags: [String], ${"$"}minimumTagRank: Int, ${"$"}sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC, START_DATE_DESC]) {
-  Page(page: ${"$"}page, perPage: ${perPage ?: 50}) {
-    pageInfo {
-      total
-      perPage
-      currentPage
-      lastPage
-      hasNextPage
-    }
-    media(id: ${"$"}id, type: ${"$"}type, season: ${"$"}season, format_in: ${"$"}format, status: ${"$"}status, countryOfOrigin: ${"$"}countryOfOrigin, source: ${"$"}source, search: ${"$"}search, onList: ${"$"}onList, seasonYear: ${"$"}seasonYear, startDate_like: ${"$"}year, startDate_lesser: ${"$"}yearLesser, startDate_greater: ${"$"}yearGreater, episodes_lesser: ${"$"}episodeLesser, episodes_greater: ${"$"}episodeGreater, duration_lesser: ${"$"}durationLesser, duration_greater: ${"$"}durationGreater, chapters_lesser: ${"$"}chapterLesser, chapters_greater: ${"$"}chapterGreater, volumes_lesser: ${"$"}volumeLesser, volumes_greater: ${"$"}volumeGreater, licensedBy_in: ${"$"}licensedBy, isLicensed: ${"$"}isLicensed, genre_in: ${"$"}genres, genre_not_in: ${"$"}excludedGenres, tag_in: ${"$"}tags, tag_not_in: ${"$"}excludedTags, minimumTagRank: ${"$"}minimumTagRank, sort: ${"$"}sort, isAdult: ${"$"}isAdult) {
-      id
-      idMal
-      isAdult
-      status
-      chapters
-      episodes
-      nextAiringEpisode {
-        episode
-      }
-      type
-      genres
-      meanScore
-      isFavourite
-      format
-      bannerImage
-      coverImage {
-        large
-        extraLarge
-      }
-      title {
-        english
-        romaji
-        userPreferred
-      }
-      mediaListEntry {
-        progress
-        private
-        score(format: POINT_100)
-        status
-      }
-    }
-  }
-}
-        """.replace("\n", " ").replace("""  """, "")
-        val variables = """{"type":"$type","isAdult":$isAdult
-            ${if (adultOnly) ""","isAdult":true""" else ""}
-            ${if (onList != null) ""","onList":$onList""" else ""}
-            ${if (page != null) ""","page":"$page"""" else ""}
-            ${if (id != null) ""","id":"$id"""" else ""}
-            ${if (type == "ANIME" && seasonYear != null) ""","seasonYear":"$seasonYear"""" else ""}
-            ${if (type == "MANGA" && startYear != null) ""","yearGreater":${startYear}0000,"yearLesser":${startYear + 1}0000""" else ""}
-            ${if (season != null) ""","season":"$season"""" else ""}
-            ${if (search != null) ""","search":"$search"""" else ""}
-            ${if (source != null) ""","source":"$source"""" else ""}
-            ${if (sort != null) ""","sort":"$sort"""" else ""}
-            ${if (status != null) ""","status":"$status"""" else ""}
-            ${if (format != null) ""","format":"${format.replace(" ", "_")}"""" else ""}
-            ${if (countryOfOrigin != null) ""","countryOfOrigin":"$countryOfOrigin"""" else ""}
-            ${if (genres?.isNotEmpty() == true) ""","genres":[${genres.joinToString { "\"$it\"" }}]""" else ""}
-            ${
-            if (excludedGenres?.isNotEmpty() == true)
-                ""","excludedGenres":[${
-                    excludedGenres.joinToString {
-                        "\"${
-                            it.replace(
-                                "Not ",
-                                ""
-                            )
-                        }\""
-                    }
-                }]"""
-            else ""
-        }
-            ${if (tags?.isNotEmpty() == true) ""","tags":[${tags.joinToString { "\"$it\"" }}]""" else ""}
-            ${
-            if (excludedTags?.isNotEmpty() == true)
-                ""","excludedTags":[${
-                    excludedTags.joinToString {
-                        "\"${
-                            it.replace(
-                                "Not ",
-                                ""
-                            )
-                        }\""
-                    }
-                }]"""
-            else ""
-        }
-            }""".replace("\n", " ").replace("""  """, "")
-        val response = executeQuery<Query.Page>(query, variables, true)?.data?.page
-        if (response?.media != null) {
-            val responseArray = arrayListOf<Media>()
-            response.media?.forEach { i ->
-                val userStatus = i.mediaListEntry?.status.toString()
-                val genresArr = arrayListOf<String>()
-                if (i.genres != null) {
-                    i.genres?.forEach { genre ->
-                        genresArr.add(genre)
-                    }
+            query (
+                ${"$"}page: Int = 1, ${"$"}id: Int, ${"$"}type: MediaType, 
+                ${"$"}isAdult: Boolean = false, ${"$"}search: String, 
+                ${"$"}format: [MediaFormat], ${"$"}status: MediaStatus, 
+                ${"$"}countryOfOrigin: CountryCode, ${"$"}source: MediaSource, 
+                ${"$"}season: MediaSeason, ${"$"}seasonYear: Int, ${"$"}year: String, 
+                ${"$"}onList: Boolean, ${"$"}yearLesser: FuzzyDateInt, 
+                ${"$"}yearGreater: FuzzyDateInt, ${"$"}episodeLesser: Int, 
+                ${"$"}episodeGreater: Int, ${"$"}durationLesser: Int, 
+                ${"$"}durationGreater: Int, ${"$"}chapterLesser: Int, 
+                ${"$"}chapterGreater: Int, ${"$"}volumeLesser: Int, 
+                ${"$"}volumeGreater: Int, ${"$"}licensedBy: [String], 
+                ${"$"}isLicensed: Boolean, ${"$"}genres: [String], 
+                ${"$"}excludedGenres: [String], ${"$"}tags: [String], 
+                ${"$"}excludedTags: [String], ${"$"}minimumTagRank: Int, 
+                ${"$"}sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC, START_DATE_DESC]
+            ) {
+              Page(page: ${"$"}page, perPage: ${perPage ?: 50}) {
+                pageInfo { total perPage currentPage lastPage hasNextPage }
+                media(
+                    id: ${"$"}id, type: ${"$"}type, season: ${"$"}season, 
+                    format_in: ${"$"}format, status: ${"$"}status, 
+                    countryOfOrigin: ${"$"}countryOfOrigin, source: ${"$"}source, 
+                    search: ${"$"}search, onList: ${"$"}onList, 
+                    seasonYear: ${"$"}seasonYear, startDate_like: ${"$"}year, 
+                    startDate_lesser: ${"$"}yearLesser, startDate_greater: ${"$"}yearGreater, 
+                    episodes_lesser: ${"$"}episodeLesser, episodes_greater: ${"$"}episodeGreater, 
+                    duration_lesser: ${"$"}durationLesser, duration_greater: ${"$"}durationGreater, 
+                    chapters_lesser: ${"$"}chapterLesser, chapters_greater: ${"$"}chapterGreater, 
+                    volumes_lesser: ${"$"}volumeLesser, volumes_greater: ${"$"}volumeGreater, 
+                    licensedBy_in: ${"$"}licensedBy, isLicensed: ${"$"}isLicensed, 
+                    genre_in: ${"$"}genres, genre_not_in: ${"$"}excludedGenres, 
+                    tag_in: ${"$"}tags, tag_not_in: ${"$"}excludedTags, 
+                    minimumTagRank: ${"$"}minimumTagRank, sort: ${"$"}sort, 
+                    isAdult: ${"$"}isAdult
+                ) {
+                  id idMal isAdult status chapters episodes 
+                  nextAiringEpisode { episode }
+                  type genres meanScore isFavourite format bannerImage
+                  coverImage { large extraLarge }
+                  title { english romaji userPreferred }
+                  mediaListEntry { progress private score(format: POINT_100) status }
                 }
-                val media = Media(i)
-                if (!hd) media.cover = i.coverImage?.large
-                media.relation = if (onList == true) userStatus else null
-                media.genres = genresArr
-                responseArray.add(media)
+              }
             }
-
-            val pageInfo = response.pageInfo ?: return null
-
-            return SearchResults(
-                type = type,
-                perPage = perPage,
-                search = search,
-                sort = sort,
-                isAdult = isAdult,
-                onList = onList,
-                genres = genres,
-                excludedGenres = excludedGenres,
-                tags = tags,
-                excludedTags = excludedTags,
-                status = status,
-                source = source,
-                format = format,
-                countryOfOrigin = countryOfOrigin,
-                startYear = startYear,
-                seasonYear = seasonYear,
-                season = season,
-                results = responseArray,
-                page = pageInfo.currentPage.toString().toIntOrNull() ?: 0,
-                hasNextPage = pageInfo.hasNextPage == true,
+        """.trimIndent()
+    
+        val variables = buildVariables(
+            type, page, perPage, search, sort, genres, tags, status, source,
+            format, countryOfOrigin, isAdult, onList, excludedGenres, excludedTags,
+            startYear, seasonYear, season, id, hd, adultOnly
+        )
+    
+        val response = executeQuery<Query.Page>(query, variables, true)?.data?.page
+        return response?.media?.let { mediaList ->
+            SearchResults(
+                type = type, perPage = perPage, search = search, sort = sort,
+                isAdult = isAdult, onList = onList, genres = genres, 
+                excludedGenres = excludedGenres, tags = tags, excludedTags = excludedTags,
+                status = status, source = source, format = format, 
+                countryOfOrigin = countryOfOrigin, startYear = startYear,
+                seasonYear = seasonYear, season = season,
+                results = parseMediaResults(mediaList, hd, onList),
+                page = response.pageInfo?.currentPage ?: 0,
+                hasNextPage = response.pageInfo?.hasNextPage ?: false
             )
         }
-        return null
+    }
+    
+    private fun buildVariables(
+        type: String, page: Int?, perPage: Int?, search: String?, sort: String?,
+        genres: MutableList<String>?, tags: MutableList<String>?, status: String?, 
+        source: String?, format: String?, countryOfOrigin: String?, isAdult: Boolean,
+        onList: Boolean?, excludedGenres: MutableList<String>?, excludedTags: MutableList<String>?, 
+        startYear: Int?, seasonYear: Int?, season: String?, id: Int?, 
+        hd: Boolean, adultOnly: Boolean
+    ): String {
+        return """{"type":"$type","isAdult":$isAdult
+            ${if (adultOnly) ""","isAdult":true""" else ""}
+            ${page?.let { ""","page":"$page"""" } ?: ""}
+            ${id?.let { ""","id":"$id"""" } ?: ""}
+            ${onList?.let { ""","onList":$onList""" } ?: ""}
+            ${seasonYear?.let { ""","seasonYear":"$seasonYear"""" } ?: ""}
+            ${startYear?.let { ""","yearGreater":${startYear}0000,"yearLesser":${startYear + 1}0000""" } ?: ""}
+            ${season?.let { ""","season":"$season"""" } ?: ""}
+            ${search?.let { ""","search":"$search"""" } ?: ""}
+            ${source?.let { ""","source":"$source"""" } ?: ""}
+            ${sort?.let { ""","sort":"$sort"""" } ?: ""}
+            ${status?.let { ""","status":"$status"""" } ?: ""}
+            ${format?.let { ""","format":"${format.replace(" ", "_")}"""" } ?: ""}
+            ${countryOfOrigin?.let { ""","countryOfOrigin":"$countryOfOrigin"""" } ?: ""}
+            ${genres?.takeIf { it.isNotEmpty() }?.let { ""","genres":[${it.joinToString { "\"$it\"" }}]""" } ?: ""}
+            ${excludedGenres?.takeIf { it.isNotEmpty() }?.let { ""","excludedGenres":[${it.joinToString { "\"${it.replace("Not ", "")}\"" }}]""" } ?: ""}
+            ${tags?.takeIf { it.isNotEmpty() }?.let { ""","tags":[${it.joinToString { "\"$it\"" }}]""" } ?: ""}
+            ${excludedTags?.takeIf { it.isNotEmpty() }?.let { ""","excludedTags":[${it.joinToString { "\"${it.replace("Not ", "")}\"" }}]""" } ?: ""}
+            }""".replace("\n", " ").replace("""  """, "")
+    }
+    
+    private fun parseMediaResults(mediaList: List<Media>, hd: Boolean, onList: Boolean?): ArrayList<Media> {
+        val results = arrayListOf<Media>()
+        mediaList.forEach { item ->
+            val media = Media(item).apply {
+                cover = if (!hd) item.coverImage?.large else item.coverImage?.extraLarge
+                genres = item.genres ?: emptyList()
+                relation = onList?.let { item.mediaListEntry?.status.toString() }
+            }
+            results.add(media)
+        }
+        return results
     }
 
     private fun mediaList(media1: Page?): ArrayList<Media> {
@@ -1095,36 +1072,37 @@ query (${"$"}page: Int = 1, ${"$"}id: Int, ${"$"}type: MediaType, ${"$"}isAdult:
 
     suspend fun loadAnimeList(): Map<String, ArrayList<Media>> = coroutineScope {
         val list = mutableMapOf<String, ArrayList<Media>>()
-
+    
         fun filterRecentUpdates(page: Page?): ArrayList<Media> {
-            val listOnly = getPreference(PrefName.RecentlyListOnly)
-            val adultOnly = getPreference(PrefName.AdultOnly)
             val idArr = mutableSetOf<Int>()
             return page?.airingSchedules?.mapNotNull { i ->
-                i.media?.takeIf { !idArr.contains(it.id) }?.let {
-                    val shouldAdd = when {
-                        !listOnly && it.countryOfOrigin == "JP" && adultOnly && it.isAdult == true -> true
-                        !listOnly && !adultOnly && it.countryOfOrigin == "JP" && it.isAdult == false -> true
-                        listOnly && it.mediaListEntry != null -> true
-                        else -> false
-                    }
-                    if (shouldAdd) {
-                        idArr.add(it.id)
-                        Media(it)
-                    } else null
-                }
+                i.media?.takeIf { !idArr.contains(it.id) && shouldAddMedia(it) }?.also {
+                    idArr.add(it.id)
+                }?.let { Media(it) }
             }?.toCollection(ArrayList()) ?: arrayListOf()
         }
-
-        val animeList = async { executeQuery<Query.AnimeList>(queryAnimeList(), force = true) }
-
-        animeList.await()?.data?.apply {
-            list["recentUpdates"] = filterRecentUpdates(recentUpdates)
-            list["trendingMovies"] = mediaList(trendingMovies)
-            list["topRated"] = mediaList(topRated)
-            list["mostFav"] = mediaList(mostFav)
+    
+        fun shouldAddMedia(media: Media): Boolean {
+            val listOnly = getPreference(PrefName.RecentlyListOnly)
+            val adultOnly = getPreference(PrefName.AdultOnly)
+            return when {
+                !listOnly && media.countryOfOrigin == "JP" && adultOnly && media.isAdult == true -> true
+                !listOnly && !adultOnly && media.countryOfOrigin == "JP" && media.isAdult == false -> true
+                listOnly && media.mediaListEntry != null -> true
+                else -> false
+            }
         }
-
+    
+        suspend fun addMediaListsToMap(data: Data) {
+            list["recentUpdates"] = filterRecentUpdates(data.recentUpdates)
+            list["trendingMovies"] = mediaList(data.trendingMovies)
+            list["topRated"] = mediaList(data.topRated)
+            list["mostFav"] = mediaList(data.mostFav)
+        }
+    
+        val animeList = async { executeQuery<Query.AnimeList>(queryAnimeList(), force = true) }
+        animeList.await()?.data?.let { addMediaListsToMap(it) }
+    
         list
     }
 
