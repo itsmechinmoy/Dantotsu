@@ -240,7 +240,7 @@ class Stories @JvmOverloads constructor(
     }
 
     private fun secondsToMillis(seconds: Int): Long {
-        return (seconds.toLong()).times(1000)
+        return seconds.toLong().times(1000)
     }
 
     private fun resetProgressBar(storyIndex: Int) {
@@ -260,9 +260,6 @@ class Stories @JvmOverloads constructor(
             }
         }
     }
-
-
-
 
     private fun rightPanelTouch() {
         Logger.log("rightPanelTouch: $storyIndex")
@@ -317,13 +314,33 @@ class Stories @JvmOverloads constructor(
 
     @SuppressLint("ClickableViewAccessibility")
     private fun loadStory(story: Activity) {
+        updateStoryPreferences(story)
+        setupUserInfo(story)
+        setupTouchListeners()
+    
+        when (story.typename) {
+            "ListActivity" -> handleListActivity(story)
+            "TextActivity" -> handleTextActivity(story)
+            "MessageActivity" -> handleMessageActivity(story)
+        }
+    
+        setupLikesAndReplies(story)
+        binding.androidStoriesLoadingView.visibility = View.GONE
+        timer.start()
+    }
+    
+    private fun updateStoryPreferences(story: Activity) {
         val key = "activities"
-        val set = PrefManager.getCustomVal<Set<Int>>(key, setOf()).plus((story.id))
+        val set = PrefManager.getCustomVal<Set<Int>>(key, setOf()).plus(story.id)
         val newList = set.sorted().takeLast(200).toSet()
         PrefManager.setCustomVal(key, newList)
+    }
+    
+    private fun setupUserInfo(story: Activity) {
         binding.statusUserAvatar.loadImage(story.user?.avatar?.large)
         binding.statusUserName.text = story.user?.name
         binding.statusUserTime.text = ActivityItemBuilder.getDateTime(story.createdAt)
+    
         binding.statusUserContainer.setOnClickListener {
             ContextCompat.startActivity(
                 context,
@@ -331,96 +348,65 @@ class Stories @JvmOverloads constructor(
                 null
             )
         }
-
-        binding.textActivity.setOnTouchListener { v, event ->
+    }
+    
+    private fun setupTouchListeners() {
+        val touchListener = { v: View, event: MotionEvent ->
             onTouchView(v, event, true)
             v.onTouchEvent(event)
         }
-        binding.textActivityContainer.setOnTouchListener { v, event ->
-            onTouchView(v, event, true)
-            v.onTouchEvent(event)
-        }
-        fun visible(isList: Boolean) {
-            binding.textActivity.isVisible = !isList
-            binding.textActivityContainer.isVisible = !isList
-            binding.infoText.isVisible = isList
-            binding.coverImage.isVisible = isList
-            binding.infoText.visibility = if (isList) View.VISIBLE else View.INVISIBLE
-            binding.infoText.text = ""
-            binding.contentImageViewKen.isVisible = isList
-            binding.contentImageView.isVisible = isList
-        }
-
-        when (story.typename) {
-            "ListActivity" -> {
-                visible(true)
-                val text = "${
-                    story.status?.replaceFirstChar {
-                        if (it.isLowerCase()) {
-                            it.titlecase(Locale.ROOT)
-                        } else {
-                            it.toString()
-                        }
-                    }
-                } ${story.progress ?: story.media?.title?.userPreferred} " +
-                        if (
-                            story.status?.contains("completed") == false &&
-                            !story.status.contains("plans") &&
-                            !story.status.contains("repeating")&&
-                            !story.status.contains("paused")&&
-                            !story.status.contains("dropped")
-                        ) {
-                            "of ${story.media?.title?.userPreferred}"
-                        } else {
-                            ""
-                        }
-                binding.infoText.text = text
-                val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
-                blurImage(
-                    if (bannerAnimations) binding.contentImageViewKen else binding.contentImageView,
-                    story.media?.bannerImage ?: story.media?.coverImage?.extraLarge
-                )
-                binding.coverImage.loadImage(story.media?.coverImage?.extraLarge)
-                binding.coverImage.setOnClickListener {
-                    ContextCompat.startActivity(
-                        context,
-                        Intent(context, MediaDetailsActivity::class.java).putExtra(
-                            "mediaId",
-                            story.media?.id
-                        ),
-                        ActivityOptionsCompat.makeSceneTransitionAnimation(
-                            (it.context as FragmentActivity),
-                            binding.coverImage,
-                            ViewCompat.getTransitionName(binding.coverImage)!!
-                        ).toBundle()
-                    )
-                }
+        binding.textActivity.setOnTouchListener(touchListener)
+        binding.textActivityContainer.setOnTouchListener(touchListener)
+    }
+    
+    private fun handleListActivity(story: Activity) {
+        visible(true)
+        val text = "${story.status?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }} ${story.progress ?: story.media?.title?.userPreferred} " +
+            if (story.status?.contains("completed") == false && !story.status.contains("plans") &&
+                !story.status.contains("repeating") && !story.status.contains("paused") &&
+                !story.status.contains("dropped")) {
+                "of ${story.media?.title?.userPreferred}"
+            } else {
+                ""
             }
-
-            "TextActivity" -> {
-                visible(false)
-                if (!(context as android.app.Activity).isDestroyed) {
-                    val markwon = buildMarkwon(context, false)
-                    markwon.setMarkdown(
-                        binding.textActivity, AniMarkdown.getBasicAniHTML(story.text ?: "")
-                    )
-                }
-            }
-
-            "MessageActivity" -> {
-                visible(false)
-                if (!(context as android.app.Activity).isDestroyed) {
-                    val markwon = buildMarkwon(context, false)
-                    markwon.setMarkdown(
-                        binding.textActivity, AniMarkdown.getBasicAniHTML(story.message ?: "")
-                    )
-                }
-            }
+        binding.infoText.text = text
+        val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
+        blurImage(
+            if (bannerAnimations) binding.contentImageViewKen else binding.contentImageView,
+            story.media?.bannerImage ?: story.media?.coverImage?.extraLarge
+        )
+        binding.coverImage.loadImage(story.media?.coverImage?.extraLarge)
+        binding.coverImage.setOnClickListener {
+            ContextCompat.startActivity(
+                context,
+                Intent(context, MediaDetailsActivity::class.java).putExtra("mediaId", story.media?.id),
+                ActivityOptionsCompat.makeSceneTransitionAnimation(
+                    (it.context as FragmentActivity),
+                    binding.coverImage,
+                    ViewCompat.getTransitionName(binding.coverImage)!!
+                ).toBundle()
+            )
         }
-        val userList = arrayListOf<User>()
-        story.likes?.forEach { i ->
-            userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage))
+    }
+    
+    private fun handleTextActivity(story: Activity) {
+        visible(false)
+        if (!(context as android.app.Activity).isDestroyed) {
+            val markwon = buildMarkwon(context, false)
+            markwon.setMarkdown(binding.textActivity, AniMarkdown.getBasicAniHTML(story.text ?: ""))
         }
+    }
+    
+    private fun handleMessageActivity(story: Activity) {
+        visible(false)
+        if (!(context as android.app.Activity).isDestroyed) {
+            val markwon = buildMarkwon(context, false)
+            markwon.setMarkdown(binding.textActivity, AniMarkdown.getBasicAniHTML(story.message ?: ""))
+        }
+    }
+    
+    private fun setupLikesAndReplies(story: Activity) {
+        val userList = story.likes?.map { User(it.id, it.name.toString(), it.avatar?.medium, it.bannerImage) } ?: emptyList()
         val likeColor = ContextCompat.getColor(context, R.color.yt_red)
         val notLikeColor = ContextCompat.getColor(context, R.color.bg_opp)
         binding.replyCount.text = story.replyCount.toString()
@@ -431,9 +417,7 @@ class Stories @JvmOverloads constructor(
         }
         binding.activityLike.setColorFilter(if (story.isLiked == true) likeColor else notLikeColor)
         binding.activityLikeCount.text = story.likeCount.toString()
-        binding.activityLikeContainer.setOnClickListener {
-            like()
-        }
+        binding.activityLikeContainer.setOnClickListener { like() }
         binding.activityLikeContainer.setOnLongClickListener {
             UsersDialogFragment().apply {
                 userList(userList)
@@ -441,8 +425,6 @@ class Stories @JvmOverloads constructor(
             }
             true
         }
-        binding.androidStoriesLoadingView.visibility = View.GONE
-        timer.start()
     }
 
     fun like() {
@@ -478,60 +460,76 @@ class Stories @JvmOverloads constructor(
         onTouchView(view, event)
         return true
     }
-    private fun onTouchView(view: View, event: MotionEvent, isText: Boolean = false){
-        val maxClickDuration = 200
-        val screenWidth = view.width
-        val leftHalf = screenWidth / 2
-        val leftQuarter = screenWidth * 0.15
-        val rightQuarter = screenWidth * 0.85
-        when (event.action) {
-            MotionEvent.ACTION_DOWN -> {
-                startX = event.x
-                startY = event.y
-                startClickTime = Calendar.getInstance().timeInMillis
-                pause()
-                isLongPress = false
-            }
-            MotionEvent.ACTION_MOVE -> {
-                val deltaX = event.x - startX
-                val deltaY = event.y - startY
-                if (!isLongPress && (abs(deltaX) > swipeThreshold || abs(deltaY) > swipeThreshold)) {
-                    isLongPress = true
-                }
-            }
-            MotionEvent.ACTION_UP -> {
-                val clickDuration = Calendar.getInstance().timeInMillis - startClickTime
-                if (isText) {
-                    if (clickDuration < maxClickDuration && !isLongPress) {
-                        if (event.x < leftQuarter) {
-                            leftPanelTouch()
-                        } else if (event.x > rightQuarter) {
-                            rightPanelTouch()
-                        } else {
-                            resume()
-                        }
-                    } else {
-                        resume()
-                    }
-                } else {
-                    if (clickDuration < maxClickDuration && !isLongPress) {
-                        if (event.x < leftHalf) {
-                            leftPanelTouch()
-                        } else {
-                            rightPanelTouch()
-                        }
-                    } else {
-                        resume()
-                    }
-                }
-                val deltaX = event.x - startX
-                val deltaY = event.y - startY
-                if (abs(deltaX) > swipeThreshold && !(abs(deltaY) > 10)) {
-                    if (deltaX > 0) onStoriesPrevious()
-                    else onStoriesCompleted()
-                }
+    private fun onTouchView(view: View, event: MotionEvent, isText: Boolean = false) {
+    val maxClickDuration = 200
+    val screenWidth = view.width
+    val leftHalf = screenWidth / 2
+    val leftQuarter = screenWidth * 0.15
+    val rightQuarter = screenWidth * 0.85
+    
+    when (event.action) {
+        MotionEvent.ACTION_DOWN -> handleActionDown(event)
+        MotionEvent.ACTION_MOVE -> handleActionMove(event)
+        MotionEvent.ACTION_UP -> handleActionUp(event, isText, maxClickDuration, leftHalf, leftQuarter, rightQuarter)
+    }
+}
 
-            }
+private fun handleActionDown(event: MotionEvent) {
+    startX = event.x
+    startY = event.y
+    startClickTime = Calendar.getInstance().timeInMillis
+    pause()
+    isLongPress = false
+}
+
+private fun handleActionMove(event: MotionEvent) {
+    val deltaX = event.x - startX
+    val deltaY = event.y - startY
+    if (!isLongPress && (abs(deltaX) > swipeThreshold || abs(deltaY) > swipeThreshold)) {
+        isLongPress = true
+    }
+}
+
+private fun handleActionUp(event: MotionEvent, isText: Boolean, maxClickDuration: Int, leftHalf: Int, leftQuarter: Float, rightQuarter: Float) {
+    val clickDuration = Calendar.getInstance().timeInMillis - startClickTime
+    
+    if (clickDuration < maxClickDuration && !isLongPress) {
+        if (isText) {
+            handleTextAction(event, leftQuarter, rightQuarter)
+        } else {
+            handleNonTextAction(event, leftHalf)
+        }
+    } else {
+        resume()
+    }
+    
+    handleSwipe(event)
+}
+
+private fun handleTextAction(event: MotionEvent, leftQuarter: Float, rightQuarter: Float) {
+    when {
+        event.x < leftQuarter -> leftPanelTouch()
+        event.x > rightQuarter -> rightPanelTouch()
+        else -> resume()
+    }
+}
+
+private fun handleNonTextAction(event: MotionEvent, leftHalf: Int) {
+    if (event.x < leftHalf) {
+        leftPanelTouch()
+    } else {
+        rightPanelTouch()
+    }
+}
+
+private fun handleSwipe(event: MotionEvent) {
+    val deltaX = event.x - startX
+    val deltaY = event.y - startY
+    if (abs(deltaX) > swipeThreshold && abs(deltaY) <= 10) {
+        if (deltaX > 0) {
+            onStoriesPrevious()
+        } else {
+            onStoriesCompleted()
         }
     }
 }
