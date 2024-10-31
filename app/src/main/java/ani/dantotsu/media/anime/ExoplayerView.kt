@@ -896,7 +896,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener, SessionAvailabilityL
                 brightnessTimer = Timer()
                 brightnessTimer.schedule(timerTask, 3000)
             }
-            exoBrightness.value = (getCurrentBrightnessValue(this) * 10f)
+            exoBrightness.value = getCurrentBrightnessValue(this) * 10f
 
             exoBrightness.addOnChangeListener { _, value, _ ->
                 val lp = window.attributes
