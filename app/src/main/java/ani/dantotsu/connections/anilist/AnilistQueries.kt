@@ -96,261 +96,188 @@ class AnilistQueries {
 
     fun mediaDetails(media: Media): Media {
         media.cameFromContinue = false
-
-        val query =
-            """{Media(id:${media.id}){id favourites popularity episodes chapters streamingEpisodes {title thumbnail url site} mediaListEntry{id status score(format:POINT_100)progress private notes repeat customLists updatedAt startedAt{year month day}completedAt{year month day}}reviews(perPage:3, sort:SCORE_DESC){nodes{id mediaId mediaType summary body(asHtml:true) rating ratingAmount userRating score private siteUrl createdAt updatedAt user{id name bannerImage avatar{medium large}}}}isFavourite siteUrl idMal nextAiringEpisode{episode airingAt}source countryOfOrigin format duration season seasonYear startDate{year month day}endDate{year month day}genres studios(isMain:true){nodes{id name siteUrl}}description trailer{site id}synonyms tags{name rank isMediaSpoiler}characters(sort:[ROLE,FAVOURITES_DESC],perPage:25,page:1){edges{role voiceActors { id name { first middle last full native userPreferred } image { large medium } languageV2 } node{id image{medium}name{userPreferred}isFavourite}}}relations{edges{relationType(version:2)node{id idMal mediaListEntry{progress private score(format:POINT_100)status}episodes chapters nextAiringEpisode{episode}popularity meanScore isAdult isFavourite format title{english romaji userPreferred}type status(version:2)bannerImage coverImage{large}}}}staffPreview:staff(perPage:8,sort:[RELEVANCE,ID]){edges{role node{id image{large medium}name{userPreferred}}}}recommendations(sort:RATING_DESC){nodes{mediaRecommendation{id idMal mediaListEntry{progress private score(format:POINT_100)status}episodes chapters nextAiringEpisode{episode}meanScore isAdult isFavourite format title{english romaji userPreferred}type status(version:2)bannerImage coverImage{large}}}}externalLinks{url site}}Page(page:1){pageInfo{total perPage currentPage lastPage hasNextPage}mediaList(isFollowing:true,sort:[STATUS],mediaId:${media.id}){id status score(format: POINT_100) progress progressVolumes user{id name avatar{large medium}}}}}"""
+    
+        val query = generateMediaQuery(media.id)
+    
         runBlocking {
             val anilist = async {
                 var response = executeQuery<Query.Media>(query, force = true)
                 if (response != null) {
-                    fun parse() {
-                        val fetchedMedia = response?.data?.media ?: return
-                        val user = response?.data?.page
-                        media.source = fetchedMedia.source?.toString()
-                        media.countryOfOrigin = fetchedMedia.countryOfOrigin
-                        media.format = fetchedMedia.format?.toString()
-                        media.favourites = fetchedMedia.favourites
-                        media.popularity = fetchedMedia.popularity
-                        media.startDate = fetchedMedia.startDate
-                        media.endDate = fetchedMedia.endDate
-                        media.streamingEpisodes = fetchedMedia.streamingEpisodes
-                        if (fetchedMedia.genres != null) {
-                            media.genres = arrayListOf()
-                            fetchedMedia.genres?.forEach { i ->
-                                media.genres.add(i)
-                            }
-                        }
-
-                        media.trailer = fetchedMedia.trailer?.let { i ->
-                            if (i.site != null && i.site.toString() == "youtube")
-                                "https://www.youtube.com/embed/${i.id.toString().trim('"')}"
-                            else null
-                        }
-
-                        fetchedMedia.synonyms?.apply {
-                            media.synonyms = arrayListOf()
-                            this.forEach { i ->
-                                media.synonyms.add(
-                                    i
-                                )
-                            }
-                        }
-
-                        fetchedMedia.tags?.apply {
-                            media.tags = arrayListOf()
-                            this.forEach { i ->
-                                if (i.isMediaSpoiler == false)
-                                    media.tags.add("${i.name} : ${i.rank.toString()}%")
-                            }
-                        }
-
-                        media.description = fetchedMedia.description.toString()
-
-                        if (fetchedMedia.characters != null) {
-                            media.characters = arrayListOf()
-                            fetchedMedia.characters?.edges?.forEach { i ->
-                                i.node?.apply {
-                                    media.characters?.add(
-                                        Character(
-                                            id = id,
-                                            name = i.node?.name?.userPreferred,
-                                            image = i.node?.image?.medium,
-                                            banner = media.banner ?: media.cover,
-                                            isFav = i.node?.isFavourite ?: false,
-                                            role = when (i.role.toString()) {
-                                                "MAIN" -> currContext()?.getString(R.string.main_role)
-                                                    ?: "MAIN"
-
-                                                "SUPPORTING" -> currContext()?.getString(R.string.supporting_role)
-                                                    ?: "SUPPORTING"
-
-                                                else -> i.role.toString()
-                                            },
-                                            voiceActor = i.voiceActors?.map {
-                                                Author(
-                                                    id = it.id,
-                                                    name = it.name?.userPreferred,
-                                                    image = it.image?.large,
-                                                    role = it.languageV2
-                                                )
-                                            } as ArrayList<Author>
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                        if (fetchedMedia.staff != null) {
-                            media.staff = arrayListOf()
-                            fetchedMedia.staff?.edges?.forEach { i ->
-                                i.node?.apply {
-                                    media.staff?.add(
-                                        Author(
-                                            id = id,
-                                            name = i.node?.name?.userPreferred,
-                                            image = i.node?.image?.large,
-                                            role = when (i.role.toString()) {
-                                                "MAIN" -> currContext()?.getString(R.string.main_role)
-                                                    ?: "MAIN"
-
-                                                "SUPPORTING" -> currContext()?.getString(R.string.supporting_role)
-                                                    ?: "SUPPORTING"
-
-                                                else -> i.role.toString()
-                                            }
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                        if (fetchedMedia.relations != null) {
-                            media.relations = arrayListOf()
-                            fetchedMedia.relations?.edges?.forEach { mediaEdge ->
-                                val m = Media(mediaEdge)
-                                media.relations?.add(m)
-                                if (m.relation == "SEQUEL") {
-                                    media.sequel =
-                                        if ((media.sequel?.popularity ?: 0) < (m.popularity
-                                                ?: 0)
-                                        ) m else media.sequel
-
-                                } else if (m.relation == "PREQUEL") {
-                                    media.prequel =
-                                        if ((media.prequel?.popularity ?: 0) < (m.popularity
-                                                ?: 0)
-                                        ) m else media.prequel
-                                }
-                            }
-                            media.relations?.sortByDescending { it.popularity }
-                            media.relations?.sortByDescending { it.startDate?.year }
-                            media.relations?.sortBy { it.relation }
-                        }
-                        if (fetchedMedia.recommendations != null) {
-                            media.recommendations = arrayListOf()
-                            fetchedMedia.recommendations?.nodes?.forEach { i ->
-                                i.mediaRecommendation?.apply {
-                                    media.recommendations?.add(
-                                        Media(this)
-                                    )
-                                }
-                            }
-                        }
-                        if (fetchedMedia.reviews?.nodes != null) {
-                            media.review = fetchedMedia.reviews!!.nodes as ArrayList<Query.Review>
-                        }
-                        if (user?.mediaList?.isNotEmpty() == true) {
-                            media.users = user.mediaList?.mapNotNull {
-                                it.user?.let { user ->
-                                    if (user.id != Anilist.userid) {
-                                        User(
-                                            user.id,
-                                            user.name ?: "Unknown",
-                                            user.avatar?.large,
-                                            "",
-                                            it.status?.toString(),
-                                            it.score,
-                                            it.progress,
-                                            fetchedMedia.episodes ?: fetchedMedia.chapters,
-                                        )
-                                    } else null
-                                }
-                            }?.toCollection(arrayListOf()) ?: arrayListOf()
-                        }
-                        if (fetchedMedia.mediaListEntry != null) {
-                            fetchedMedia.mediaListEntry?.apply {
-                                media.userProgress = progress
-                                media.isListPrivate = private ?: false
-                                media.notes = notes
-                                media.userListId = id
-                                media.userScore = score?.toInt() ?: 0
-                                media.userStatus = status?.toString()
-                                media.inCustomListsOf = customLists?.toMutableMap()
-                                media.userRepeat = repeat ?: 0
-                                media.userUpdatedAt = updatedAt?.toString()?.toLong()?.times(1000)
-                                media.userCompletedAt = completedAt ?: FuzzyDate()
-                                media.userStartedAt = startedAt ?: FuzzyDate()
-                            }
-                        } else {
-                            media.isListPrivate = false
-                            media.userStatus = null
-                            media.userListId = null
-                            media.userProgress = null
-                            media.userScore = 0
-                            media.userRepeat = 0
-                            media.userUpdatedAt = null
-                            media.userCompletedAt = FuzzyDate()
-                            media.userStartedAt = FuzzyDate()
-                        }
-
-                        if (media.anime != null) {
-                            media.anime.episodeDuration = fetchedMedia.duration
-                            media.anime.season = fetchedMedia.season?.toString()
-                            media.anime.seasonYear = fetchedMedia.seasonYear
-
-                            fetchedMedia.studios?.nodes?.apply {
-                                if (isNotEmpty()) {
-                                    val firstStudio = get(0)
-                                    media.anime.mainStudio = Studio(
-                                        firstStudio.id.toString(),
-                                        firstStudio.name ?: "N/A"
-                                    )
-                                }
-                            }
-
-                            fetchedMedia.staff?.edges?.find { authorRoles.contains(it.role?.trim()) }?.node?.let {
-                                media.anime.author = Author(
-                                    it.id,
-                                    it.name?.userPreferred ?: "N/A",
-                                    it.image?.medium,
-                                    "AUTHOR"
-                                )
-                            }
-
-                            media.anime.nextAiringEpisodeTime =
-                                fetchedMedia.nextAiringEpisode?.airingAt?.toLong()
-
-                            fetchedMedia.externalLinks?.forEach { i ->
-                                when (i.site.lowercase()) {
-                                    "youtube" -> media.anime.youtube = i.url
-                                    "crunchyroll" -> media.crunchySlug =
-                                        i.url?.split("/")?.getOrNull(3)
-
-                                    "vrv" -> media.vrvId = i.url?.split("/")?.getOrNull(4)
-                                }
-                            }
-                        } else if (media.manga != null) {
-                            fetchedMedia.staff?.edges?.find { authorRoles.contains(it.role?.trim()) }?.node?.let {
-                                media.manga.author = Author(
-                                    it.id,
-                                    it.name?.userPreferred ?: "N/A",
-                                    it.image?.medium,
-                                    "AUTHOR"
-                                )
-                            }
-                        }
-                        media.shareLink = fetchedMedia.siteUrl
-                    }
-
-                    if (response.data?.media != null) parse()
-                    else {
-                        snackString(currContext()?.getString(R.string.adult_stuff))
-                        response = executeQuery(query, force = true, useToken = false)
-                        if (response?.data?.media != null) parse()
-                        else snackString(currContext()?.getString(R.string.what_did_you_open))
-                    }
+                    processResponse(response, media)
                 } else {
-                    if (currContext()?.let { isOnline(it) } == true) {
-                        snackString(currContext()?.getString(R.string.error_getting_data))
-                    }
+                    handleErrorResponse()
                 }
             }
-            val mal = async {
-                if (media.idMAL != null) {
-                    MalScraper.loadMedia(media)
-                }
-            }
-            awaitAll(anilist, mal)
         }
         return media
+    }
+    
+    private fun generateMediaQuery(mediaId: Int): String {
+        return """{
+            Media(id:$mediaId){
+                id favourites popularity episodes chapters streamingEpisodes {
+                    title thumbnail url site
+                }
+                mediaListEntry{
+                    id status score(format:POINT_100) progress private notes repeat customLists updatedAt startedAt{year month day} completedAt{year month day}
+                }
+                reviews(perPage:3, sort:SCORE_DESC){
+                    nodes{
+                        id mediaId mediaType summary body(asHtml:true) rating ratingAmount userRating score private siteUrl createdAt updatedAt user{id name bannerImage avatar{medium large}}
+                    }
+                }
+                isFavourite siteUrl idMal nextAiringEpisode{episode airingAt} source countryOfOrigin format duration season seasonYear startDate{year month day} endDate{year month day}
+                genres studios(isMain:true){nodes{id name siteUrl}} description trailer{site id} synonyms tags{name rank isMediaSpoiler}
+                characters(sort:[ROLE,FAVOURITES_DESC], perPage:25, page:1){edges{role voiceActors { id name { first middle last full native userPreferred } image { large medium } languageV2 } node{id image{medium} name{userPreferred} isFavourite}}}
+                relations{edges{relationType(version:2) node{id idMal mediaListEntry{progress private score(format:POINT_100) status} episodes chapters nextAiringEpisode{episode} popularity meanScore isAdult isFavourite format title{english romaji userPreferred} type status(version:2) bannerImage coverImage{large}}}}
+                staffPreview:staff(perPage:8, sort:[RELEVANCE,ID]){edges{role node{id image{large medium} name{userPreferred}}}}
+                recommendations(sort:RATING_DESC){nodes{mediaRecommendation{id idMal mediaListEntry{progress private score(format:POINT_100) status} episodes chapters nextAiringEpisode{episode} meanScore isAdult isFavourite format title{english romaji userPreferred} type status(version:2) bannerImage coverImage{large}}}}
+                externalLinks{url site}
+            }
+            Page(page:1){
+                pageInfo{total perPage currentPage lastPage hasNextPage}
+                mediaList(isFollowing:true, sort:[STATUS], mediaId:$mediaId){
+                    id status score(format: POINT_100) progress progressVolumes user{id name avatar{large medium}}
+                }
+            }
+        }"""
+    }
+    
+    private suspend fun processResponse(response: Query.MediaResponse, media: Media) {
+        val fetchedMedia = response.data?.media ?: return
+        val user = response.data?.page
+    
+        // Update media properties from fetchedMedia
+        updateMediaFromFetchedMedia(media, fetchedMedia)
+    
+        // Parse user media list if available
+        parseUserMediaList(user, media, fetchedMedia)
+        
+        // Handle additional data parsing
+        parseAdditionalMediaData(fetchedMedia, media)
+    }
+    
+    private fun updateMediaFromFetchedMedia(media: Media, fetchedMedia: Query.Media) {
+        media.apply {
+            source = fetchedMedia.source?.toString()
+            countryOfOrigin = fetchedMedia.countryOfOrigin
+            format = fetchedMedia.format?.toString()
+            favourites = fetchedMedia.favourites
+            popularity = fetchedMedia.popularity
+            startDate = fetchedMedia.startDate
+            endDate = fetchedMedia.endDate
+            streamingEpisodes = fetchedMedia.streamingEpisodes
+            trailer = fetchTrailerUrl(fetchedMedia.trailer)
+            description = fetchedMedia.description.toString()
+            genres = fetchedMedia.genres?.toCollection(ArrayList()) ?: arrayListOf()
+            synonyms = fetchedMedia.synonyms?.toCollection(ArrayList()) ?: arrayListOf()
+            tags = fetchedMedia.tags?.filterNot { it.isMediaSpoiler }
+                ?.map { "${it.name} : ${it.rank}%" }
+                ?.toCollection(ArrayList()) ?: arrayListOf()
+        }
+    }
+    
+    private fun fetchTrailerUrl(trailer: Query.Trailer?): String? {
+        return trailer?.let { if (it.site?.toString() == "youtube") "https://www.youtube.com/embed/${it.id.trim('"')}" else null }
+    }
+    
+    private fun parseUserMediaList(user: Query.User?, media: Media, fetchedMedia: Query.Media) {
+        if (user?.mediaList?.isNotEmpty() == true) {
+            media.users = user.mediaList?.mapNotNull { it.user?.let { user ->
+                if (user.id != Anilist.userid) {
+                    User(
+                        user.id,
+                        user.name ?: "Unknown",
+                        user.avatar?.large,
+                        "",
+                        it.status?.toString(),
+                        it.score,
+                        it.progress,
+                        fetchedMedia.episodes ?: fetchedMedia.chapters,
+                    )
+                } else null
+            } }?.toCollection(arrayListOf()) ?: arrayListOf()
+        }
+    }
+    
+    private fun parseAdditionalMediaData(fetchedMedia: Query.Media, media: Media) {
+        // Handle characters
+        fetchedMedia.characters?.edges?.forEach { i ->
+            i.node?.let {
+                media.characters?.add(Character(
+                    id = it.id,
+                    name = it.name?.userPreferred,
+                    image = it.image?.medium,
+                    banner = media.banner ?: media.cover,
+                    isFav = it.isFavourite ?: false,
+                    role = getRoleString(i.role.toString()),
+                    voiceActor = it.voiceActors?.map {
+                        Author(
+                            id = it.id,
+                            name = it.name?.userPreferred,
+                            image = it.image?.large,
+                            role = it.languageV2
+                        )
+                    } as ArrayList<Author>
+                ))
+            }
+        }
+    
+        // Handle staff
+        fetchedMedia.staff?.edges?.forEach { i ->
+            i.node?.let {
+                media.staff?.add(Author(
+                    id = it.id,
+                    name = it.name?.userPreferred,
+                    image = it.image?.large,
+                    role = getRoleString(i.role.toString())
+                ))
+            }
+        }
+    
+        // Handle relations
+        fetchedMedia.relations?.edges?.forEach { mediaEdge ->
+            val m = Media(mediaEdge)
+            media.relations?.add(m)
+            updateMediaRelations(media, m)
+        }
+    
+        media.relations?.sortByDescending { it.popularity }
+        media.relations?.sortByDescending { it.startDate?.year }
+        media.relations?.sortBy { it.relation }
+    
+        // Handle recommendations
+        fetchedMedia.recommendations?.nodes?.forEach { i ->
+            i.mediaRecommendation?.let { media.recommendations?.add(Media(it)) }
+        }
+    
+        // Handle reviews
+        if (fetchedMedia.reviews?.nodes != null) {
+            media.review = fetchedMedia.reviews.nodes as ArrayList<Query.Review>
+        }
+    }
+    
+    private fun updateMediaRelations(media: Media, relatedMedia: Media) {
+        when (relatedMedia.relation) {
+            "SEQUEL" -> if ((media.sequel?.popularity ?: 0) < (relatedMedia.popularity ?: 0)) {
+                media.sequel = relatedMedia
+            }
+            "PREQUEL" -> if ((media.prequel?.popularity ?: 0) < (relatedMedia.popularity ?: 0)) {
+                media.prequel = relatedMedia
+            }
+        }
+    }
+    
+    private fun getRoleString(role: String): String {
+        return when (role) {
+            "MAIN" -> currContext()?.getString(R.string.main_role) ?: "MAIN"
+            "SUPPORTING" -> currContext()?.getString(R.string.supporting_role) ?: "SUPPORTING"
+            else -> role
+        }
+    }
+    
+    private fun handleErrorResponse() {
+        snackString(currContext()?.getString(R.string.adult_stuff))
     }
 
     fun userMediaDetails(media: Media): Media {
@@ -1071,31 +998,49 @@ class AnilistQueries {
     
     private fun buildVariables(
         type: String, page: Int?, perPage: Int?, search: String?, sort: String?,
-        genres: MutableList<String>?, tags: MutableList<String>?, status: String?, 
+        genres: MutableList<String>?, tags: MutableList<String>?, status: String?,
         source: String?, format: String?, countryOfOrigin: String?, isAdult: Boolean,
-        onList: Boolean?, excludedGenres: MutableList<String>?, excludedTags: MutableList<String>?, 
-        startYear: Int?, seasonYear: Int?, season: String?, id: Int?, 
+        onList: Boolean?, excludedGenres: MutableList<String>?, excludedTags: MutableList<String>?,
+        startYear: Int?, seasonYear: Int?, season: String?, id: Int?,
         hd: Boolean, adultOnly: Boolean
     ): String {
-        return """{"type":"$type","isAdult":$isAdult
-            ${if (adultOnly) ""","isAdult":true""" else ""}
-            ${page?.let { ""","page":"$page"""" } ?: ""}
-            ${id?.let { ""","id":"$id"""" } ?: ""}
-            ${onList?.let { ""","onList":$onList""" } ?: ""}
-            ${seasonYear?.let { ""","seasonYear":"$seasonYear"""" } ?: ""}
-            ${startYear?.let { ""","yearGreater":${startYear}0000,"yearLesser":${startYear + 1}0000""" } ?: ""}
-            ${season?.let { ""","season":"$season"""" } ?: ""}
-            ${search?.let { ""","search":"$search"""" } ?: ""}
-            ${source?.let { ""","source":"$source"""" } ?: ""}
-            ${sort?.let { ""","sort":"$sort"""" } ?: ""}
-            ${status?.let { ""","status":"$status"""" } ?: ""}
-            ${format?.let { ""","format":"${format.replace(" ", "_")}"""" } ?: ""}
-            ${countryOfOrigin?.let { ""","countryOfOrigin":"$countryOfOrigin"""" } ?: ""}
-            ${genres?.takeIf { it.isNotEmpty() }?.let { ""","genres":[${it.joinToString { "\"$it\"" }}]""" } ?: ""}
-            ${excludedGenres?.takeIf { it.isNotEmpty() }?.let { ""","excludedGenres":[${it.joinToString { "\"${it.replace("Not ", "")}\"" }}]""" } ?: ""}
-            ${tags?.takeIf { it.isNotEmpty() }?.let { ""","tags":[${it.joinToString { "\"$it\"" }}]""" } ?: ""}
-            ${excludedTags?.takeIf { it.isNotEmpty() }?.let { ""","excludedTags":[${it.joinToString { "\"${it.replace("Not ", "")}\"" }}]""" } ?: ""}
-            }""".replace("\n", " ").replace("""  """, "")
+        val jsonElements = mutableListOf<String>()
+    
+        jsonElements.add("\"type\":\"$type\"")
+        jsonElements.add("\"isAdult\":$isAdult")
+    
+        if (adultOnly) jsonElements.add("\"isAdult\":true")
+        page?.let { jsonElements.add("\"page\":\"$it\"") }
+        id?.let { jsonElements.add("\"id\":\"$it\"") }
+        onList?.let { jsonElements.add("\"onList\":$it") }
+        seasonYear?.let { jsonElements.add("\"seasonYear\":\"$it\"") }
+    
+        startYear?.let {
+            jsonElements.add("\"yearGreater\":${it}0000")
+            jsonElements.add("\"yearLesser\":${it + 1}0000")
+        }
+    
+        season?.let { jsonElements.add("\"season\":\"$it\"") }
+        search?.let { jsonElements.add("\"search\":\"$it\"") }
+        source?.let { jsonElements.add("\"source\":\"$it\"") }
+        sort?.let { jsonElements.add("\"sort\":\"$it\"") }
+        status?.let { jsonElements.add("\"status\":\"$it\"") }
+        format?.let { jsonElements.add("\"format\":\"${it.replace(" ", "_")}\"") }
+        countryOfOrigin?.let { jsonElements.add("\"countryOfOrigin\":\"$it\"") }
+        genres?.takeIf { it.isNotEmpty() }?.let {
+            jsonElements.add("\"genres\":[${it.joinToString { "\"$it\"" }}]")
+        }
+        excludedGenres?.takeIf { it.isNotEmpty() }?.let {
+            jsonElements.add("\"excludedGenres\":[${it.joinToString { "\"${it.replace("Not ", "")}\"" }}]")
+        }
+        tags?.takeIf { it.isNotEmpty() }?.let {
+            jsonElements.add("\"tags\":[${it.joinToString { "\"$it\"" }}]")
+        }
+        excludedTags?.takeIf { it.isNotEmpty() }?.let {
+            jsonElements.add("\"excludedTags\":[${it.joinToString { "\"${it.replace("Not ", "")}\"" }}]")
+        }
+    
+        return "{${jsonElements.joinToString(",")}}"
     }
     
     private fun parseMediaResults(mediaList: List<Media>, hd: Boolean, onList: Boolean?): ArrayList<Media> {
