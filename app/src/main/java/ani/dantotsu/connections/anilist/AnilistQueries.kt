@@ -1008,39 +1008,42 @@ class AnilistQueries {
     
         jsonElements.add("\"type\":\"$type\"")
         jsonElements.add("\"isAdult\":$isAdult")
+        if (adultOnly) jsonElements.add("\"adultOnly\":true")
     
-        if (adultOnly) jsonElements.add("\"isAdult\":true")
-        page?.let { jsonElements.add("\"page\":\"$it\"") }
-        id?.let { jsonElements.add("\"id\":\"$it\"") }
-        onList?.let { jsonElements.add("\"onList\":$it") }
-        seasonYear?.let { jsonElements.add("\"seasonYear\":\"$it\"") }
-    
+        addOptional(jsonElements, "page", page)
+        addOptional(jsonElements, "id", id)
+        addOptional(jsonElements, "onList", onList)
+        addOptional(jsonElements, "seasonYear", seasonYear)
+        
         startYear?.let {
             jsonElements.add("\"yearGreater\":${it}0000")
             jsonElements.add("\"yearLesser\":${it + 1}0000")
         }
     
-        season?.let { jsonElements.add("\"season\":\"$it\"") }
-        search?.let { jsonElements.add("\"search\":\"$it\"") }
-        source?.let { jsonElements.add("\"source\":\"$it\"") }
-        sort?.let { jsonElements.add("\"sort\":\"$it\"") }
-        status?.let { jsonElements.add("\"status\":\"$it\"") }
-        format?.let { jsonElements.add("\"format\":\"${it.replace(" ", "_")}\"") }
-        countryOfOrigin?.let { jsonElements.add("\"countryOfOrigin\":\"$it\"") }
-        genres?.takeIf { it.isNotEmpty() }?.let {
-            jsonElements.add("\"genres\":[${it.joinToString { "\"$it\"" }}]")
-        }
-        excludedGenres?.takeIf { it.isNotEmpty() }?.let {
-            jsonElements.add("\"excludedGenres\":[${it.joinToString { "\"${it.replace("Not ", "")}\"" }}]")
-        }
-        tags?.takeIf { it.isNotEmpty() }?.let {
-            jsonElements.add("\"tags\":[${it.joinToString { "\"$it\"" }}]")
-        }
-        excludedTags?.takeIf { it.isNotEmpty() }?.let {
-            jsonElements.add("\"excludedTags\":[${it.joinToString { "\"${it.replace("Not ", "")}\"" }}]")
-        }
+        addOptional(jsonElements, "season", season)
+        addOptional(jsonElements, "search", search)
+        addOptional(jsonElements, "source", source)
+        addOptional(jsonElements, "sort", sort)
+        addOptional(jsonElements, "status", status)
+        addOptional(jsonElements, "format", format?.replace(" ", "_"))
+        addOptional(jsonElements, "countryOfOrigin", countryOfOrigin)
+        addListOptional(jsonElements, "genres", genres)
+        addListOptional(jsonElements, "excludedGenres", excludedGenres, true)
+        addListOptional(jsonElements, "tags", tags)
+        addListOptional(jsonElements, "excludedTags", excludedTags, true)
     
         return "{${jsonElements.joinToString(",")}}"
+    }
+    
+    private fun addOptional(jsonElements: MutableList<String>, key: String, value: Any?) {
+        value?.let { jsonElements.add("\"$key\":\"$it\"") }
+    }
+    
+    private fun addListOptional(jsonElements: MutableList<String>, key: String, list: List<String>?, removePrefix: Boolean = false) {
+        list?.takeIf { it.isNotEmpty() }?.let {
+            val processedList = it.map { item -> if (removePrefix) item.replace("Not ", "") else item }
+            jsonElements.add("\"$key\":[${processedList.joinToString { "\"$it\"" }}]")
+        }
     }
     
     private fun parseMediaResults(mediaList: List<Media>, hd: Boolean, onList: Boolean?): ArrayList<Media> {
