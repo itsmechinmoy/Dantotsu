@@ -547,52 +547,105 @@ class AnilistQueries {
         val returnMap = mutableMapOf<String, ArrayList<Media>>()
         val toShow = PrefManager.getVal(PrefName.HomeLayout)
     
-        fun processMedia(type: String, currentMedia: List<MediaList>?, repeatingMedia: List<MediaList>?) {
-            val subMap = mutableMapOf<Int, Media>()
-            val returnArray = arrayListOf<Media>()
-            val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
-            val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
-    
-            (currentMedia ?: emptyList()).forEach { entry ->
-                val media = Media(entry)
-                if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
-                    media.cameFromContinue = true
-                    subMap[media.id] = media
-                } else {
-                    removedMedia.add(media)
-                }
-            }
-    
-            (repeatingMedia ?: emptyList()).forEach { entry ->
-                val media = Media(entry)
-                if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
-                    media.cameFromContinue = true
-                    subMap[media.id] = media
-                } else {
-                    removedMedia.add(media)
-                }
-            }
-    
-            returnArray.addAll(subMap.values)
-            returnMap["current$type"] = returnArray
+        if (toShow.getOrNull(0) == true) {
+            returnMap["currentAnime"] = processAnimeMedia(
+                response?.data?.currentAnime?.lists?.flatMap { it.entries ?: emptyList() },
+                response?.data?.repeatingAnime?.lists?.flatMap { it.entries ?: emptyList() },
+                removedMedia
+            )
         }
-    
-        if (toShow.getOrNull(0) == true) processMedia(
-            "Anime",
-            response?.data?.currentAnime?.lists?.flatMap { it.entries ?: emptyList() },
-            response?.data?.repeatingAnime?.lists?.flatMap { it.entries ?: emptyList() }
-        )
-        if (toShow.getOrNull(2) == true) processMedia("AnimePlanned", response?.data?.plannedAnime?.lists?.flatMap { it.entries ?: emptyList() }, null)
-        if (toShow.getOrNull(3) == true) processMedia(
-            "Manga",
-            response?.data?.currentManga?.lists?.flatMap { it.entries ?: emptyList() },
-            response?.data?.repeatingManga?.lists?.flatMap { it.entries ?: emptyList() }
-        )
-        if (toShow.getOrNull(5) == true) processMedia("MangaPlanned", response?.data?.plannedManga?.lists?.flatMap { it.entries ?: emptyList() }, null)
+        if (toShow.getOrNull(2) == true) {
+            returnMap["plannedAnime"] = processPlannedMedia("ANIME", response?.data?.plannedAnime?.lists?.flatMap { it.entries ?: emptyList() }, removedMedia)
+        }
+        if (toShow.getOrNull(3) == true) {
+            returnMap["currentManga"] = processMangaMedia(
+                response?.data?.currentManga?.lists?.flatMap { it.entries ?: emptyList() },
+                response?.data?.repeatingManga?.lists?.flatMap { it.entries ?: emptyList() },
+                removedMedia
+            )
+        }
+        if (toShow.getOrNull(5) == true) {
+            returnMap["plannedManga"] = processPlannedMedia("MANGA", response?.data?.plannedManga?.lists?.flatMap { it.entries ?: emptyList() }, removedMedia)
+        }
     
         return returnMap
     }
     
+    // Process anime media (current and repeating)
+    private fun processAnimeMedia(
+        currentMedia: List<MediaList>?,
+        repeatingMedia: List<MediaList>?,
+        removedMedia: ArrayList<Media>
+    ): ArrayList<Media> {
+        val mediaList = arrayListOf<Media>()
+        val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
+        val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
+    
+        mediaList.addAll(processMediaEntries(currentMedia, removedMedia, removeList, hidePrivate))
+        mediaList.addAll(processMediaEntries(repeatingMedia, removedMedia, removeList, hidePrivate))
+        
+        return mediaList
+    }
+    
+    // Process manga media (current and repeating)
+    private fun processMangaMedia(
+        currentMedia: List<MediaList>?,
+        repeatingMedia: List<MediaList>?,
+        removedMedia: ArrayList<Media>
+    ): ArrayList<Media> {
+        val mediaList = arrayListOf<Media>()
+        val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
+        val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
+    
+        mediaList.addAll(processMediaEntries(currentMedia, removedMedia, removeList, hidePrivate))
+        mediaList.addAll(processMediaEntries(repeatingMedia, removedMedia, removeList, hidePrivate))
+    
+        return mediaList
+    }
+    
+    // Process planned media based on type
+    private fun processPlannedMedia(
+        type: String,
+        plannedMedia: List<MediaList>?,
+        removedMedia: ArrayList<Media>
+    ): ArrayList<Media> {
+        val mediaList = arrayListOf<Media>()
+        val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
+        val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
+    
+        plannedMedia?.forEach { entry ->
+            val media = Media(entry)
+            if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
+                mediaList.add(media)
+            } else {
+                removedMedia.add(media)
+            }
+        }
+        return mediaList
+    }
+    
+    // Process media entries (generic method for both anime and manga)
+    private fun processMediaEntries(
+        mediaLists: List<MediaList>?,
+        removedMedia: ArrayList<Media>,
+        removeList: Set<Int>,
+        hidePrivate: Boolean
+    ): List<Media> {
+        val processedMedia = mutableListOf<Media>()
+        mediaLists?.forEach { entry ->
+            entry.forEach { mediaListEntry ->
+                val media = Media(mediaListEntry)
+                if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
+                    media.cameFromContinue = true
+                    processedMedia.add(media)
+                } else {
+                    removedMedia.add(media)
+                }
+            }
+        }
+        return processedMedia
+    }
+   
     // Helper function to process favorite media for anime and manga
     private fun processFavorites(
         response: Query.HomePageMedia?,
