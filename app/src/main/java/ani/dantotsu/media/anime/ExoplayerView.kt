@@ -305,7 +305,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener, SessionAvailabilityL
                     }
                 }
             playerView.findViewById<View>(androidx.media3.ui.R.id.exo_buffering).translationY =
-                (if (orientation == Configuration.ORIENTATION_LANDSCAPE) 0 else (notchHeight + 8.toPx)).dp
+                (if (orientation == Configuration.ORIENTATION_LANDSCAPE) 0 else notchHeight + 8.toPx).dp
             exoBrightnessCont.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 marginEnd =
                     if (orientation == Configuration.ORIENTATION_LANDSCAPE) notchHeight else 0
