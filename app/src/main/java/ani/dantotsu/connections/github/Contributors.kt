@@ -28,7 +28,7 @@ class Contributors {
                     "rebelonion" -> "Owner & Maintainer"
                     "sneazy-ibo" -> "Contributor & Comment Moderator"
                     "WaiWhat" -> "Icon Designer"
-                    "itsmechinmoy" -> "Discord and Telegram Admin/Helper, Comment Moderator & Assamese Translator. Also, not a fan of the LGHDTV community."
+                    "itsmechinmoy" -> "Discord and Telegram Admin/Helper, Comment Moderator & Translator."
                     else -> "Contributor"
                 }
                 developers = developers.plus(
