@@ -63,7 +63,9 @@ jobs:
             const issueNumber = context.issue.number;
             
             // Check if it's a "No Extension" issue
-            const noExtensionMessage = `Automated Message
+            if (${{ steps.check-issue.outputs.is_no_extension_issue }}) {
+              // DMCA notice message
+              const noExtensionMessage = `Automated Message
 On 13 June 2024 the official aniyomi repository got a DMCA notice and had to remove all of their extensions. Because of this we will not be providing anyone any links or extensions to avoid legal problems.
 
 For this reason asking/sharing repo or extensions is prohibited in this server. Asking for it in DM's is also prohibited. If you are found doing this you could be warned or banned.
@@ -75,13 +77,6 @@ How to find repos?
 It's very easy. Search on Google. But keep in mind that the URL must end with index.min.json or else it won't work.
 TLDR: We will not give repo links.`;
 
-            const extensionIssueMessage = `Dantotsu doesn't maintain extensions.
-If the extension doesn't work we cannot help you. 
-Contact the owner of Respective Repo for extension-related problems`;
-            
-            // Check if it's a "No Extension" issue
-            if (${{ steps.check-issue.outputs.is_no_extension_issue }}) {
-              // DMCA notice message
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -90,6 +85,10 @@ Contact the owner of Respective Repo for extension-related problems`;
               });
             } else {
               // Standard extension issue message
+              const extensionIssueMessage = `Dantotsu doesn't maintain extensions.
+If the extension doesn't work we cannot help you. 
+Contact the owner of Respective Repo for extension-related problems`;
+
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
