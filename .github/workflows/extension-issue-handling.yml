@@ -15,11 +15,11 @@ jobs:
         run: |
           # Regex patterns for extension-related issues
           EXTENSION_REGEX_PATTERNS=(
+            # Extension not working (more direct match)
+            "(?i).*(\w+)\s*(extension)?\s*(not working|doesn't work|does not work|cant work|can't work).*"
+            
             # No extension available
             "(?i).*(no|can't find|cannot find|missing).*extension.*"
-            
-            # Extension not working
-            "(?i).*(extension|server|stream).*(not working|can't work|doesnt work|doesn't work|not loading).*"
             
             # Specific server/stream issues
             "(?i).*(no streams|server).*(available|working).*"
@@ -69,9 +69,10 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                body: `On 13 June 2024 the official Aniyomi repository got a DMCA notice and had to remove all of their extensions. Because of this, we will not be providing anyone with any links or extensions to avoid legal problems.
+                body: `Automated Message
+                On 13 June 2024, the official Aniyomi repository got a DMCA notice and had to remove all of their extensions. Because of this, we will not be providing anyone any links or extensions to avoid legal problems.
                 How to add repos?
-                Although we do not give or maintain any repositories, we support adding custom repository links to your Dantotsu.
+                Although we do not give or maintain any repositories, we support adding custom repository links to your Dantotsu.                
                 Go to Profile > Settings > Extensions then paste your anime or manga links there.
                 How to find repos?
                 It's very easy. Search on Google. But remember that the URL must end with index.min.json or else it won't work.
