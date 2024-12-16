@@ -79,14 +79,15 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                body: `Automated Message
+                body: `# Automated Message
                 On 13 June 2024, the official Aniyomi repository got a DMCA notice and had to remove all of their extensions. Because of this, we will not be providing anyone any links or extensions to avoid legal problems.
-                How to add repos?
+                # How to add repos?
                 Although we do not give or maintain any repositories, we support adding custom repository links to your Dantotsu.                
-                Go to Profile > Settings > Extensions then paste your anime or manga links there.
-                How to find repos?
-                It's very easy. Search on Google. But remember that the URL must end with index.min.json or else it won't work.
-                TLDR: We will not give repo links.`
+                Go to \`Profile > Settings > Extensions\` then paste your anime or manga links there.
+                # How to find repos?
+                It's very easy. Search on Google. But remember that the URL must end with <u><b>index.min.json</b></u> or else it won't work.
+                \`TLDR: We will not give repo links.\`
+                `
               });
             } else {
               // Standard extension issue message
