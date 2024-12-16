@@ -15,18 +15,18 @@ jobs:
         run: |
           # Regex patterns for extension-related issues
           EXTENSION_REGEX_PATTERNS=(
-            # Extension not working (more precise match)
-            "(?i)^.*(\w+)?\s*(extension)?\s*(not working|doesn't work|does not work|cant work|can't work).*$"
+            # Extension not working (more flexible match)
+            ".*(\w+)\s*(extension)?\s*(not working|doesn't work|does not work|cant work|can't work).*"
             
             # No extension available
-            "(?i).*(no|can't find|cannot find|missing).*extension.*"
+            ".*(no|can't find|cannot find|missing).*extension.*"
             
             # Specific server/stream issues
-            "(?i).*(no streams|server).*(available|working).*"
+            ".*(no streams|server).*(available|working).*"
             
             # Variants of extension problems
-            "(?i).*{.*}.*not working.*"
-            "(?i).*{.*}.*extension.*(issue|problem).*"
+            ".*{.*}.*not working.*"
+            ".*{.*}.*extension.*(issue|problem).*"
           )
           
           # Convert to lowercase for case-insensitive matching
@@ -37,18 +37,13 @@ jobs:
           IS_EXTENSION_ISSUE=false
           IS_NO_EXTENSION_ISSUE=false
           
-          # Debug: Print title and each pattern
-          echo "Title: $LOWER_TITLE"
-          
           # Check title and body against regex patterns
           for pattern in "${EXTENSION_REGEX_PATTERNS[@]}"; do
-            echo "Checking pattern: $pattern"
-            if [[ "$LOWER_TITLE" =~ $pattern || "$LOWER_BODY" =~ $pattern ]]; then
-              echo "Match found with pattern: $pattern"
+            if [[ "$LOWER_TITLE" =~ $pattern ]] || [[ "$LOWER_BODY" =~ $pattern ]]; then
               IS_EXTENSION_ISSUE=true
               
               # Special check for no extensions available
-              if [[ "$LOWER_TITLE" =~ "no extension" || "$LOWER_TITLE" =~ "can't find extension" ]]; then
+              if [[ "$LOWER_TITLE" =~ "no extension" ]] || [[ "$LOWER_TITLE" =~ "can't find extension" ]]; then
                 IS_NO_EXTENSION_ISSUE=true
               fi
               
@@ -56,8 +51,18 @@ jobs:
             fi
           done
           
-          echo "is_extension_issue=$IS_EXTENSION_ISSUE" >> $GITHUB_OUTPUT
-          echo "is_no_extension_issue=$IS_NO_EXTENSION_ISSUE" >> $GITHUB_OUTPUT
+          # Explicitly output boolean values
+          if [ "$IS_EXTENSION_ISSUE" = true ]; then
+            echo "is_extension_issue=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_extension_issue=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ "$IS_NO_EXTENSION_ISSUE" = true ]; then
+            echo "is_no_extension_issue=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_no_extension_issue=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Comment and Close Extension Issue
         if: steps.check-issue.outputs.is_extension_issue == 'true'
@@ -77,7 +82,7 @@ jobs:
                 body: `Automated Message
                 On 13 June 2024, the official Aniyomi repository got a DMCA notice and had to remove all of their extensions. Because of this, we will not be providing anyone any links or extensions to avoid legal problems.
                 How to add repos?
-                Although we do not give or maintain any repositories, we support adding custom repository links to your Dantotsu.
+                Although we do not give or maintain any repositories, we support adding custom repository links to your Dantotsu.                
                 Go to Profile > Settings > Extensions then paste your anime or manga links there.
                 How to find repos?
                 It's very easy. Search on Google. But remember that the URL must end with index.min.json or else it won't work.
