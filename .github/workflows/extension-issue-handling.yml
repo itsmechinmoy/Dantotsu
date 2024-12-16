@@ -20,6 +20,9 @@ jobs:
             
             # No extension available
             ".*(no|can't find|cannot find|missing).*extension.*"
+
+            # No repo or repositories available
+            ".*(no|can't find|cannot find|missing).*repo(s)?\s*(available|found|accessible).*"
             
             # Specific server/stream issues
             ".*(no streams|server).*(available|working).*"
