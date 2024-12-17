@@ -13,8 +13,6 @@ jobs:
           # List of extension repository links
           REPOS=(
             "https://raw.githubusercontent.com/Kohi-den/extensions/main/index.min.json"
-            "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
-            "https://raw.githubusercontent.com/suwayomi/tachiyomi-extension/repo/index.min.json"
           )
 
           # Temp file to store cleaned extension names
