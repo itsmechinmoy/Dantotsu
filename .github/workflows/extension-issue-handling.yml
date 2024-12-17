@@ -19,11 +19,13 @@ jobs:
           EXTENSIONS_FILE=extensions.txt
           > $EXTENSIONS_FILE  # Clear file
 
-          # Fetch all extensions, clean names, and make them regex-friendly
+          # Fetch all extensions, clean names thoroughly
           for repo in "${REPOS[@]}"; do
             echo "Fetching from $repo"
-            curl -sL "$repo" | jq -r '.[].name' | sed -E 's/^(Aniyomi:|Tachiyomi:)//' | \
-            sed -E 's/[-_ ]+/[\\s\\-_]*/g' >> $EXTENSIONS_FILE
+            curl -sL "$repo" | jq -r '.[].name' | \
+            sed -E 's/^(Aniyomi:|Tachiyomi:)//' | \
+            tr '[:upper:]' '[:lower:]' | \
+            sed -E 's/[^a-z0-9]//g' >> $EXTENSIONS_FILE
           done
 
           # Sort and remove duplicates
@@ -32,6 +34,7 @@ jobs:
           # Save extensions list to an environment variable
           EXTENSIONS_LIST=$(paste -sd'|' $EXTENSIONS_FILE)
           echo "extensions_list=$EXTENSIONS_LIST" >> $GITHUB_OUTPUT
+          cat $EXTENSIONS_FILE  # Debug: show processed extensions
 
       - name: Check Issue Content
         if: github.event.action == 'opened'
@@ -41,6 +44,10 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           EXTENSIONS: ${{ steps.fetch-extensions.outputs.extensions_list }}
         run: |
+          # Clean issue title and body for matching
+          CLEAN_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')
+          CLEAN_BODY=$(echo "$ISSUE_BODY" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')
+
           # Regex patterns for extension-related issues
           EXTENSION_REGEX_PATTERNS=(
             # Generic "not working" issues for specific keywords
@@ -77,39 +84,36 @@ jobs:
             ".*no content.*source.*"
           )
 
-          # Convert to lowercase for case-insensitive matching
-          LOWER_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]')
-          LOWER_BODY=$(echo "$ISSUE_BODY" | tr '[:upper:]' '[:lower:]')
-          
           # Flag to track issue type
           IS_EXTENSION_ISSUE=false
-          IS_NO_EXTENSION_ISSUE=false
-          
-          # Check title and body against regex patterns
+          MATCHED_EXTENSION=""
+
+          # Check clean title and body against regex patterns
           for pattern in "${EXTENSION_REGEX_PATTERNS[@]}"; do
-            if [[ "$LOWER_TITLE" =~ $pattern ]] || [[ "$LOWER_BODY" =~ $pattern ]]; then
+            if [[ "$CLEAN_TITLE" =~ $pattern ]] || [[ "$CLEAN_BODY" =~ $pattern ]]; then
               IS_EXTENSION_ISSUE=true
-              
-              # Special check for no extensions available
-              if [[ "$LOWER_TITLE" =~ "no extension" ]] || [[ "$LOWER_TITLE" =~ "can't find extension" ]]; then
-                IS_NO_EXTENSION_ISSUE=true
-              fi
-              
               break
             fi
           done
-          
+
+          # If no regex match found, check against fetched extensions
+          if [ "$IS_EXTENSION_ISSUE" = false ]; then
+            EXTENSIONS_FILE=extensions.txt
+            while IFS= read -r ext; do
+              if [[ "$CLEAN_TITLE" == *"$ext"* ]] || [[ "$CLEAN_BODY" == *"$ext"* ]]; then
+                IS_EXTENSION_ISSUE=true
+                MATCHED_EXTENSION="$ext"
+                break
+              fi
+            done < "$EXTENSIONS_FILE"
+          fi
+
           # Explicitly output boolean values
           if [ "$IS_EXTENSION_ISSUE" = true ]; then
             echo "is_extension_issue=true" >> $GITHUB_OUTPUT
+            echo "detected_extension=$MATCHED_EXTENSION" >> $GITHUB_OUTPUT
           else
             echo "is_extension_issue=false" >> $GITHUB_OUTPUT
-          fi
-          
-          if [ "$IS_NO_EXTENSION_ISSUE" = true ]; then
-            echo "is_no_extension_issue=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_no_extension_issue=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Comment and Close Extension Issue
@@ -119,7 +123,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const issueNumber = context.issue.number;
-            const reportedExtension = "${{ steps.check-issue.outputs.detected_extension }}";
+            const reportedExtension = "${{ steps.check-issue.outputs.detected_extension || 'Unknown Extension' }}";
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
