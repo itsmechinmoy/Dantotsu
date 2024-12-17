@@ -7,48 +7,118 @@ jobs:
   handle-extension-issues:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch Extensions List
+      - name: Fetch Extensions from Repositories
         id: fetch-extensions
         run: |
-          EXTENSIONS_JSON_URL="https://raw.githubusercontent.com/Kohi-den/extensions/main/index.min.json"
-          echo "Fetching extension data from $EXTENSIONS_JSON_URL"
-          
-          # Download and parse JSON to extract extension names
-          curl -s $EXTENSIONS_JSON_URL | jq -r '.[].name' | sed 's/^Aniyomi: //' > extensions_list.txt
-          
-          echo "Fetched Extensions:"
-          cat extensions_list.txt
-          
-          # Save as output
-          echo "extensions_file=extensions_list.txt" >> $GITHUB_OUTPUT
+          # List of extension repository links
+          REPOS=(
+            "https://raw.githubusercontent.com/ni3x/aniyomi-extensions/repo/index.min.json"
+            "https://raw.githubusercontent.com/Kohi-den/extensions/main/index.min.json"
+            "https://codeberg.org/hollow/aniyomi-extensions-fr/media/branch/repo/index.min.json"
+            "https://raw.githubusercontent.com/Claudemirovsky/cursedyomi-extensions/repo/index.min.json"
+            "https://raw.githubusercontent.com/usyboi/aniyomi-extensions/repo/index.min.json"
+            "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
+            "https://raw.githubusercontent.com/suwayomi/tachiyomi-extension/repo/index.min.json"
+            "https://raw.githubusercontent.com/Kdroidwin/extensions-Japanese/repo/index.min.json"
+            "https://raw.githubusercontent.com/ThePBone/tachiyomi-extensions-revived/repo/index.min.json"
+          )
+
+          # Temp file to store cleaned extension names
+          EXTENSIONS_FILE=extensions.txt
+          > $EXTENSIONS_FILE  # Clear file
+
+          # Fetch all extensions, clean names, and make them regex-friendly
+          for repo in "${REPOS[@]}"; do
+            echo "Fetching from $repo"
+            curl -sL "$repo" | jq -r '.[].name' | sed -E 's/^(Aniyomi:|Tachiyomi:)//' | \
+            sed -E 's/[-_ ]+/[\\s\\-_]*/g' >> $EXTENSIONS_FILE
+          done
+
+          # Sort and remove duplicates
+          sort -u $EXTENSIONS_FILE -o $EXTENSIONS_FILE
+
+          # Save extensions list to an environment variable
+          EXTENSIONS_LIST=$(paste -sd'|' $EXTENSIONS_FILE)
+          echo "extensions_list=$EXTENSIONS_LIST" >> $GITHUB_OUTPUT
 
       - name: Check Issue Content
+        if: github.event.action == 'opened'
         id: check-issue
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
+          EXTENSIONS: ${{ steps.fetch-extensions.outputs.extensions_list }}
         run: |
-          # Convert title and body to lowercase for case-insensitive comparison
+          # Regex patterns for extension-related issues
+          EXTENSION_REGEX_PATTERNS=(
+            # Generic "not working" issues for specific keywords
+            ".*(extension|extensions|repo|repositories|source|sources|stream|server).*not working.*"
+            ".*(extension|extensions|repo|repositories|source|sources|stream|server).*doesn't work.*"
+            ".*(extension|extensions|repo|repositories|source|sources|stream|server).*does not work.*"
+            ".*(extension|extensions|repo|repositories|source|sources|stream|server).*cant work.*"
+            ".*(extension|extensions|repo|repositories|source|sources|stream|server).*can't work.*"
+          
+            # No extension, repo, source, or stream available
+            ".*(no|can't find|cannot find|missing).*extension(s)?.*"
+            ".*(no|can't find|cannot find|missing).*repo(s|sitories)?.*"
+            ".*(no|can't find|cannot find|missing).*source(s)?.*"
+            ".*(no|can't find|cannot find|missing).*stream(s)?.*"
+            ".*(no|can't find|cannot find|missing).*server.*"
+          
+            # Issues regarding server or stream availability
+            ".*(server|stream).*not available.*"
+            ".*(server|stream).*unavailable.*"
+            ".*(server|stream).*down.*"
+          
+            # JSON or structured issues involving keywords
+            ".*{.*}.*(extension|repo|repositories|source|sources).*not working.*"
+            ".*{.*}.*(extension|repo|repositories|source|sources).*issue.*"
+            ".*{.*}.*(extension|repo|repositories|source|sources).*problem.*"
+          
+            # Explicit "not available" issues
+            ".*(extension|extensions|repo|repositories|source|sources|stream|server).*not available.*"
+            ".*(extension|extensions|repo|repositories|source|sources|stream|server).*missing.*"
+          
+            # New pattern: "Nothing came up from this source" variations
+            ".*nothing came up.*source.*look elsewhere.*"
+            ".*no results.*source.*look somewhere else.*"
+            ".*no content.*source.*"
+          )
+
+          # Convert to lowercase for case-insensitive matching
           LOWER_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]')
           LOWER_BODY=$(echo "$ISSUE_BODY" | tr '[:upper:]' '[:lower:]')
           
-          # Initialize flags
+          # Flag to track issue type
           IS_EXTENSION_ISSUE=false
-          REPORTED_EXTENSION=""
+          IS_NO_EXTENSION_ISSUE=false
           
-          # Compare reported content against the list of extensions
-          while IFS= read -r extension; do
-            LOWER_EXTENSION=$(echo "$extension" | tr '[:upper:]' '[:lower:]')
-            if [[ "$LOWER_TITLE" =~ $LOWER_EXTENSION || "$LOWER_BODY" =~ $LOWER_EXTENSION ]]; then
+          # Check title and body against regex patterns
+          for pattern in "${EXTENSION_REGEX_PATTERNS[@]}"; do
+            if [[ "$LOWER_TITLE" =~ $pattern ]] || [[ "$LOWER_BODY" =~ $pattern ]]; then
               IS_EXTENSION_ISSUE=true
-              REPORTED_EXTENSION="$extension"
+              
+              # Special check for no extensions available
+              if [[ "$LOWER_TITLE" =~ "no extension" ]] || [[ "$LOWER_TITLE" =~ "can't find extension" ]]; then
+                IS_NO_EXTENSION_ISSUE=true
+              fi
+              
               break
             fi
-          done < "${{ steps.fetch-extensions.outputs.extensions_file }}"
+          done
           
-          # Output results
-          echo "is_extension_issue=$IS_EXTENSION_ISSUE" >> $GITHUB_OUTPUT
-          echo "reported_extension=$REPORTED_EXTENSION" >> $GITHUB_OUTPUT
+          # Explicitly output boolean values
+          if [ "$IS_EXTENSION_ISSUE" = true ]; then
+            echo "is_extension_issue=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_extension_issue=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ "$IS_NO_EXTENSION_ISSUE" = true ]; then
+            echo "is_no_extension_issue=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_no_extension_issue=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Comment and Close Extension Issue
         if: steps.check-issue.outputs.is_extension_issue == 'true'
@@ -57,19 +127,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const issueNumber = context.issue.number;
-            const reportedExtension = "${{ steps.check-issue.outputs.reported_extension }}";
+            const reportedExtension = "${{ steps.check-issue.outputs.detected_extension }}";
 
-            // Comment for valid extension issues
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
               body: `**Detected Issue with Extension:** ${reportedExtension}\n\n` +
-                "Unfortunately, Dantotsu does not maintain extensions. If this extension doesn't work, please contact the respective repository owner.\n\n" +
-                "_We recommend checking the extension source or updating to the latest version from your repository._"
+                    `# Automated Message\n` +
+                    `Dantotsu doesn't maintain extensions.\n` +
+                    `If the extension doesn't work, we cannot help you.\n` +
+                    `Contact the owner of the respective repository for extension-related problems.`
             });
 
-            // Label the issue as 'wontfix'
+            // Add 'wontfix' label and close the issue
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -77,26 +148,9 @@ jobs:
               labels: ['wontfix']
             });
 
-            // Close the issue
             await github.rest.issues.update({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
               state: 'closed'
-            });
-
-      - name: Handle Non-Extension Issues
-        if: steps.check-issue.outputs.is_extension_issue != 'true'
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const issueNumber = context.issue.number;
-            
-            // Comment for issues unrelated to extensions
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              body: "This issue does not match any known extension names. Please provide clear details and ensure the extension name is correct."
             });
