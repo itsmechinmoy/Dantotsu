@@ -16,7 +16,6 @@ jobs:
             "https://raw.githubusercontent.com/Kohi-den/extensions/main/index.min.json"
             "https://codeberg.org/hollow/aniyomi-extensions-fr/media/branch/repo/index.min.json"
             "https://raw.githubusercontent.com/Claudemirovsky/cursedyomi-extensions/repo/index.min.json"
-            "https://raw.githubusercontent.com/usyboi/aniyomi-extensions/repo/index.min.json"
             "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
             "https://raw.githubusercontent.com/suwayomi/tachiyomi-extension/repo/index.min.json"
             "https://raw.githubusercontent.com/Kdroidwin/extensions-Japanese/repo/index.min.json"
