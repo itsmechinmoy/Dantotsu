@@ -16,21 +16,38 @@ jobs:
         run: |
           # Regex patterns for extension-related issues
           EXTENSION_REGEX_PATTERNS=(
-            # Extension not working (more flexible match)
-            ".*(\w+)\s*(extension)?\s*(not working|doesn't work|does not work|cant work|can't work).*"
-            
-            # No extension available
-            ".*(no|can't find|cannot find|missing).*extension.*"
-
-            # No repo or repositories available
-            ".*(no|can't find|cannot find|missing).*repo(s)?\s*(available|found|accessible).*"
-            
-            # Specific server/stream issues
-            ".*(no streams|server).*(available|working).*"
-            
-            # Variants of extension problems
-            ".*{.*}.*not working.*"
-            ".*{.*}.*extension.*(issue|problem).*"
+          # Generic "not working" issues for specific keywords
+          ".*(extension|extensions|repo|repositories|source|sources|stream|server).*not working.*"
+          ".*(extension|extensions|repo|repositories|source|sources|stream|server).*doesn't work.*"
+          ".*(extension|extensions|repo|repositories|source|sources|stream|server).*does not work.*"
+          ".*(extension|extensions|repo|repositories|source|sources|stream|server).*cant work.*"
+          ".*(extension|extensions|repo|repositories|source|sources|stream|server).*can't work.*"
+        
+          # No extension, repo, source, or stream available
+          ".*(no|can't find|cannot find|missing).*extension(s)?.*"
+          ".*(no|can't find|cannot find|missing).*repo(s|sitories)?.*"
+          ".*(no|can't find|cannot find|missing).*source(s)?.*"
+          ".*(no|can't find|cannot find|missing).*stream(s)?.*"
+          ".*(no|can't find|cannot find|missing).*server.*"
+        
+          # Issues regarding server or stream availability
+          ".*(server|stream).*not available.*"
+          ".*(server|stream).*unavailable.*"
+          ".*(server|stream).*down.*"
+        
+          # JSON or structured issues involving keywords
+          ".*{.*}.*(extension|repo|repositories|source|sources).*not working.*"
+          ".*{.*}.*(extension|repo|repositories|source|sources).*issue.*"
+          ".*{.*}.*(extension|repo|repositories|source|sources).*problem.*"
+        
+          # Explicit "not available" issues
+          ".*(extension|extensions|repo|repositories|source|sources|stream|server).*not available.*"
+          ".*(extension|extensions|repo|repositories|source|sources|stream|server).*missing.*"
+        
+          # New pattern: "Nothing came up from this source" variations
+          ".*nothing came up.*source.*look elsewhere.*"
+          ".*no results.*source.*look somewhere else.*"
+          ".*no content.*source.*"
           )
           
           # Convert to lowercase for case-insensitive matching
