@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check Issue Content
+        if: github.event.action == 'opened'
         id: check-issue
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
