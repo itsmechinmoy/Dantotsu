@@ -10,7 +10,6 @@ jobs:
       - name: Fetch Extensions from Repositories
         id: fetch-extensions
         run: |
-          # List of extension repository links
           REPOS=(
             "https://raw.githubusercontent.com/ni3x/aniyomi-extensions/repo/index.min.json"
             "https://raw.githubusercontent.com/Kohi-den/extensions/main/index.min.json"
@@ -18,11 +17,9 @@ jobs:
             "https://raw.githubusercontent.com/suwayomi/tachiyomi-extension/repo/index.min.json"
           )
 
-          # Temp file to store cleaned extension names
           EXTENSIONS_FILE=extensions.txt
-          > $EXTENSIONS_FILE  # Clear file
+          > $EXTENSIONS_FILE
 
-          # Fetch all extensions, clean names thoroughly
           for repo in "${REPOS[@]}"; do
             echo "Fetching from $repo"
             curl -sL "$repo" | jq -r '.[].name' | \
@@ -31,13 +28,11 @@ jobs:
             sed -E 's/[^a-z0-9]//g' >> $EXTENSIONS_FILE
           done
 
-          # Sort and remove duplicates
           sort -u $EXTENSIONS_FILE -o $EXTENSIONS_FILE
 
-          # Save extensions list to an environment variable
           EXTENSIONS_LIST=$(paste -sd'|' $EXTENSIONS_FILE)
           echo "extensions_list=$EXTENSIONS_LIST" >> $GITHUB_OUTPUT
-          cat $EXTENSIONS_FILE  # Debug: show processed extensions
+          cat $EXTENSIONS_FILE
 
       - name: Check Issue Content
         if: github.event.action == 'opened'
@@ -47,51 +42,41 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           EXTENSIONS: ${{ steps.fetch-extensions.outputs.extensions_list }}
         run: |
-          # Clean issue title and body for matching
           CLEAN_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')
           CLEAN_BODY=$(echo "$ISSUE_BODY" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')
 
-          # Regex patterns for extension-related issues
           EXTENSION_REGEX_PATTERNS=(
-            # Generic "not working" issues for specific keywords
             ".*(extension|extensions|repo|repositories|source|sources|stream|server).*not working.*"
             ".*(extension|extensions|repo|repositories|source|sources|stream|server).*doesn't work.*"
             ".*(extension|extensions|repo|repositories|source|sources|stream|server).*does not work.*"
             ".*(extension|extensions|repo|repositories|source|sources|stream|server).*cant work.*"
             ".*(extension|extensions|repo|repositories|source|sources|stream|server).*can't work.*"
           
-            # No extension, repo, source, or stream available
             ".*(no|can't find|cannot find|missing).*extension(s)?.*"
             ".*(no|can't find|cannot find|missing).*repo(s|sitories)?.*"
             ".*(no|can't find|cannot find|missing).*source(s)?.*"
             ".*(no|can't find|cannot find|missing).*stream(s)?.*"
             ".*(no|can't find|cannot find|missing).*server.*"
           
-            # Issues regarding server or stream availability
             ".*(server|stream).*not available.*"
             ".*(server|stream).*unavailable.*"
             ".*(server|stream).*down.*"
           
-            # JSON or structured issues involving keywords
             ".*{.*}.*(extension|repo|repositories|source|sources).*not working.*"
             ".*{.*}.*(extension|repo|repositories|source|sources).*issue.*"
             ".*{.*}.*(extension|repo|repositories|source|sources).*problem.*"
           
-            # Explicit "not available" issues
             ".*(extension|extensions|repo|repositories|source|sources|stream|server).*not available.*"
             ".*(extension|extensions|repo|repositories|source|sources|stream|server).*missing.*"
           
-            # New pattern: "Nothing came up from this source" variations
             ".*nothing came up.*source.*look elsewhere.*"
             ".*no results.*source.*look somewhere else.*"
             ".*no content.*source.*"
           )
 
-          # Flag to track issue type
           IS_EXTENSION_ISSUE=false
           MATCHED_EXTENSION=""
 
-          # Check clean title and body against regex patterns
           for pattern in "${EXTENSION_REGEX_PATTERNS[@]}"; do
             if [[ "$CLEAN_TITLE" =~ $pattern ]] || [[ "$CLEAN_BODY" =~ $pattern ]]; then
               IS_EXTENSION_ISSUE=true
@@ -99,7 +84,6 @@ jobs:
             fi
           done
 
-          # If no regex match found, check against fetched extensions
           if [ "$IS_EXTENSION_ISSUE" = false ]; then
             EXTENSIONS_FILE=extensions.txt
             while IFS= read -r ext; do
@@ -111,9 +95,8 @@ jobs:
             done < "$EXTENSIONS_FILE"
           fi
 
-          # Explicitly output boolean values
           if [ "$IS_EXTENSION_ISSUE" = true ]; then
-            echo "Matched Extension: $MATCHED_EXTENSION"  # Added line to print matched extension
+            echo "Matched Extension: $MATCHED_EXTENSION"
             echo "is_extension_issue=true" >> $GITHUB_OUTPUT
             echo "detected_extension=$MATCHED_EXTENSION" >> $GITHUB_OUTPUT
           else
@@ -139,7 +122,6 @@ jobs:
                     `Contact the owner of the respective repository for extension-related problems.`
             });
 
-            // Add 'wontfix' label and close the issue
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
