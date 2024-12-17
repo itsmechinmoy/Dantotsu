@@ -113,6 +113,7 @@ jobs:
 
           # Explicitly output boolean values
           if [ "$IS_EXTENSION_ISSUE" = true ]; then
+            echo "Matched Extension: $MATCHED_EXTENSION"  # Added line to print matched extension
             echo "is_extension_issue=true" >> $GITHUB_OUTPUT
             echo "detected_extension=$MATCHED_EXTENSION" >> $GITHUB_OUTPUT
           else
