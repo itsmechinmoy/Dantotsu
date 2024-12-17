@@ -12,7 +12,10 @@ jobs:
         run: |
           # List of extension repository links
           REPOS=(
+            "https://raw.githubusercontent.com/ni3x/aniyomi-extensions/repo/index.min.json"
             "https://raw.githubusercontent.com/Kohi-den/extensions/main/index.min.json"
+            "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
+            "https://raw.githubusercontent.com/suwayomi/tachiyomi-extension/repo/index.min.json"
           )
 
           # Temp file to store cleaned extension names
@@ -129,8 +132,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: `**Detected Issue with Extension:** ${reportedExtension}\n\n` +
-                    `# Automated Message\n` +
+              body: `# Not Our Business!\n` +
                     `Dantotsu doesn't maintain extensions.\n` +
                     `If the extension doesn't work, we cannot help you.\n` +
                     `Contact the owner of the respective repository for extension-related problems.`
