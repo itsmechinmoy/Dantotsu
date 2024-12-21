@@ -112,6 +112,28 @@ jobs:
             const issueNumber = context.issue.number;
             const reportedExtension = "${{ steps.check-issue.outputs.detected_extension || 'Unknown Extension' }}";
 
+            const currentLabels = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+
+            for (const label of currentLabels.data) {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                name: label.name
+              });
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['wontfix']
+            });
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -120,13 +142,6 @@ jobs:
                     Dantotsu doesn't maintain extensions.
                     If the extension doesn't work, we cannot help you.
                     Contact the owner of the respective repository for extension-related problems.`
-            });
-
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              labels: ['wontfix']
             });
 
             await github.rest.issues.update({
