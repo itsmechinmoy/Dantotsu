@@ -14,6 +14,7 @@ jobs:
             "https://raw.githubusercontent.com/ni3x/aniyomi-extensions/repo/index.min.json"
             "https://raw.githubusercontent.com/Kohi-den/extensions/main/index.min.json"
             "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
+            "https://raw.githubusercontent.com/suwayomi/tachiyomi-extension/repo/index.min.json"
           )
 
           EXTENSIONS_FILE=extensions.txt
@@ -31,6 +32,7 @@ jobs:
 
           EXTENSIONS_LIST=$(paste -sd'|' $EXTENSIONS_FILE)
           echo "extensions_list=$EXTENSIONS_LIST" >> $GITHUB_OUTPUT
+          echo "Number of Extensions: $(wc -l < $EXTENSIONS_FILE)"  # Added log for number of extensions
           cat $EXTENSIONS_FILE
 
       - name: Check Issue Content
@@ -43,6 +45,9 @@ jobs:
         run: |
           CLEAN_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')
           CLEAN_BODY=$(echo "$ISSUE_BODY" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')
+
+          echo "Cleaned Title: $CLEAN_TITLE"  # Added log for cleaned title
+          echo "Cleaned Body: $CLEAN_BODY"    # Added log for cleaned body
 
           EXTENSION_REGEX_PATTERNS=(
             ".*(extension|extensions|repo|repositories|source|sources|stream|server).*not working.*"
@@ -83,6 +88,7 @@ jobs:
             fi
           done
 
+          # Check if title or body contains extensions
           if [ "$IS_EXTENSION_ISSUE" = false ]; then
             EXTENSIONS_FILE=extensions.txt
             while IFS= read -r ext; do
@@ -94,8 +100,10 @@ jobs:
             done < "$EXTENSIONS_FILE"
           fi
 
+          echo "Is Extension Issue: $IS_EXTENSION_ISSUE"
+          echo "Matched Extension: $MATCHED_EXTENSION"    
+
           if [ "$IS_EXTENSION_ISSUE" = true ]; then
-            echo "Matched Extension: $MATCHED_EXTENSION"
             echo "is_extension_issue=true" >> $GITHUB_OUTPUT
             echo "detected_extension=$MATCHED_EXTENSION" >> $GITHUB_OUTPUT
           else
