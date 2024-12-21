@@ -31,7 +31,7 @@ jobs:
 
           EXTENSIONS_LIST=$(paste -sd'|' $EXTENSIONS_FILE)
           echo "extensions_list=$EXTENSIONS_LIST" >> $GITHUB_OUTPUT
-          echo "Number of Extensions: $(wc -l < $EXTENSIONS_FILE)"  # Added log for number of extensions
+          echo "Number of Extensions: $(wc -l < $EXTENSIONS_FILE)"
           cat $EXTENSIONS_FILE
 
       - name: Check Issue Content
