@@ -21,20 +21,17 @@ jobs:
 
           for repo in "${REPOS[@]}"; do
             echo "Fetching from $repo"
-            curl -sL "$repo" | \
-              jq -r '.[].name' | \
-              sed -E 's/^(Aniyomi:|Tachiyomi:)//' | \
-              tr '[:upper:]' '[:lower:]' | \
-              sed -E 's/[^a-z0-9]//g' | \
-              sort -u >> $EXTENSIONS_FILE.tmp
+            curl -sL "$repo" | jq -r '.[].name' | \
+            sed -E 's/^(Aniyomi:|Tachiyomi:)//' | \
+            tr '[:upper:]' '[:lower:]' | \
+            sed -E 's/[^a-z0-9]//g' >> $EXTENSIONS_FILE
           done
 
-          sort -u $EXTENSIONS_FILE.tmp -o $EXTENSIONS_FILE
-          rm $EXTENSIONS_FILE.tmp
+          sort -u $EXTENSIONS_FILE -o $EXTENSIONS_FILE
 
           EXTENSIONS_LIST=$(paste -sd'|' $EXTENSIONS_FILE)
           echo "extensions_list=$EXTENSIONS_LIST" >> $GITHUB_OUTPUT
-          echo "Number of Extensions: $(wc -l < $EXTENSIONS_FILE)"
+          echo "Number of Extensions: $(wc -l < $EXTENSIONS_FILE)"  # Added log for number of extensions
           cat $EXTENSIONS_FILE
 
       - name: Check Issue Content
@@ -48,8 +45,8 @@ jobs:
           CLEAN_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')
           CLEAN_BODY=$(echo "$ISSUE_BODY" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')
 
-          echo "Cleaned Title: $CLEAN_TITLE"
-          echo "Cleaned Body: $CLEAN_BODY"
+          echo "Cleaned Title: $CLEAN_TITLE"  # Added log for cleaned title
+          echo "Cleaned Body: $CLEAN_BODY"    # Added log for cleaned body
 
           EXTENSION_REGEX_PATTERNS=(
             ".*(extension|extensions|repo|repositories|source|sources|stream|server).*not working.*"
@@ -90,6 +87,7 @@ jobs:
             fi
           done
 
+          # Check if title or body contains extensions
           if [ "$IS_EXTENSION_ISSUE" = false ]; then
             EXTENSIONS_FILE=extensions.txt
             while IFS= read -r ext; do
