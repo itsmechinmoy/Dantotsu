@@ -245,7 +245,8 @@ class MediaDetailsViewModel : ViewModel() {
         manager: FragmentManager,
         launch: Boolean = true,
         prevEp: String? = null,
-        isDownload: Boolean = false
+        isDownload: Boolean = false,
+        downloadUsingSelectedServer: Boolean = false
     ) {
         Handler(Looper.getMainLooper()).post {
             if (manager.findFragmentByTag("dialog") == null && !manager.isDestroyed) {
@@ -261,7 +262,8 @@ class MediaDetailsViewModel : ViewModel() {
                         media.selected!!.server,
                         launch,
                         prevEp,
-                        isDownload
+                        isDownload,
+                        downloadUsingSelectedServer
                     )
                 selector.show(manager, "dialog")
             }

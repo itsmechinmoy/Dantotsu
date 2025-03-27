@@ -456,7 +456,7 @@ class AnimeWatchFragment : Fragment() {
         model.onEpisodeClick(media, i, requireActivity().supportFragmentManager)
     }
 
-    fun onAnimeEpisodeDownloadClick(i: String) {
+    fun onAnimeEpisodeDownloadClick(i: String, downloadUsingSelectedServer: Boolean = false) {
         activity?.let {
             if (!hasDirAccess(it)) {
                 (it as MediaDetailsActivity).accessAlertDialog(it.launcher) { success ->
@@ -465,7 +465,8 @@ class AnimeWatchFragment : Fragment() {
                             media,
                             i,
                             requireActivity().supportFragmentManager,
-                            isDownload = true
+                            isDownload = true,
+                            downloadUsingSelectedServer = downloadUsingSelectedServer
                         )
                     } else {
                         snackString(getString(R.string.download_permission_required))
@@ -476,7 +477,8 @@ class AnimeWatchFragment : Fragment() {
                     media,
                     i,
                     requireActivity().supportFragmentManager,
-                    isDownload = true
+                    isDownload = true,
+                    downloadUsingSelectedServer = downloadUsingSelectedServer
                 )
             }
         }
