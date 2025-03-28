@@ -327,7 +327,7 @@ class EpisodeAdapter(
                         }.show()
                         return@setOnClickListener
                     } else {
-                        fragment.onAnimeEpisodeDownloadClick(episodeNumber)
+                        fragment.onAnimeEpisodesDownload(arrayListOf(episodeNumber))
                     }
                 }
             }

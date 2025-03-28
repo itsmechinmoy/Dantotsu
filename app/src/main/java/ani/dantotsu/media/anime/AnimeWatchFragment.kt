@@ -22,6 +22,7 @@ import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.util.Log
 import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.GridLayoutManager
@@ -316,6 +317,32 @@ class AnimeWatchFragment : Fragment() {
         }
     }
 
+    //implement Multi download
+    fun multiDownload(n: Int) {
+        // Get last viewed episode
+        val selected = media.userProgress
+        val episodes = media.anime?.episodes?.values?.toList()
+        // Filter by selected language
+        val progressEpisodeIndex = (episodes?.indexOfFirst {
+            MediaNameAdapter.findEpisodeNumber(it.number)?.toInt() == selected
+        } ?: 0) + 1
+
+        if (progressEpisodeIndex < 0 || n < 1 || episodes == null) return
+
+        // Calculate the end index
+        val endIndex = minOf(progressEpisodeIndex + n, episodes.size)
+
+        // Make sure there are enough episodes
+        val listOfEpisodesToDownload = episodes.subList(progressEpisodeIndex, endIndex)
+
+        val episodesToDownload: ArrayList<String> = arrayListOf()
+        listOfEpisodesToDownload.forEach {
+            episodesToDownload.add(it.number)
+        }
+
+        onAnimeEpisodesDownload(episodesToDownload)
+    }
+
     fun onSourceChange(i: Int): AnimeParser {
         media.anime?.episodes = null
         reload()
@@ -456,17 +483,16 @@ class AnimeWatchFragment : Fragment() {
         model.onEpisodeClick(media, i, requireActivity().supportFragmentManager)
     }
 
-    fun onAnimeEpisodeDownloadClick(i: String, downloadUsingSelectedServer: Boolean = false) {
+    fun onAnimeEpisodesDownload(episodesToDownload: ArrayList<String>) {
         activity?.let {
             if (!hasDirAccess(it)) {
                 (it as MediaDetailsActivity).accessAlertDialog(it.launcher) { success ->
                     if (success) {
                         model.onEpisodeClick(
-                            media,
-                            i,
-                            requireActivity().supportFragmentManager,
+                            media =  media,
+                            manager =  requireActivity().supportFragmentManager,
                             isDownload = true,
-                            downloadUsingSelectedServer = downloadUsingSelectedServer
+                            episodes = episodesToDownload
                         )
                     } else {
                         snackString(getString(R.string.download_permission_required))
@@ -474,11 +500,10 @@ class AnimeWatchFragment : Fragment() {
                 }
             } else {
                 model.onEpisodeClick(
-                    media,
-                    i,
-                    requireActivity().supportFragmentManager,
+                    media =  media,
+                    manager =  requireActivity().supportFragmentManager,
                     isDownload = true,
-                    downloadUsingSelectedServer = downloadUsingSelectedServer
+                    episodes = episodesToDownload
                 )
             }
         }
