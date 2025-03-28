@@ -2,6 +2,7 @@ package ani.dantotsu.media
 
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -202,23 +203,39 @@ class MediaDetailsViewModel : ViewModel() {
     suspend fun loadEpisodeSingleVideo(
         ep: Episode,
         selected: Selected,
-        post: Boolean = true
+        post: Boolean = true,
     ): Boolean {
-        if (ep.extractors.isNullOrEmpty()) {
 
-            val server = selected.server ?: return false
-            val link = ep.link ?: return false
+        val server = selected.server ?: return false
+        val link = ep.link ?: return false
 
-            ep.extractors = mutableListOf(watchSources?.get(selected.sourceIndex)?.let {
-                selected.sourceIndex = selected.sourceIndex
-                if (!post && !it.allowsPreloading) null
-                else ep.sEpisode?.let { it1 ->
-                    it.loadSingleVideoServer(
-                        server, link, ep.extra,
-                        it1, post
-                    )
-                }
-            } ?: return false)
+        if (ep.extractors?.find{ it.server.name == server } == null) {
+            //Log.d("AnimeDownloader", "Loading Video Servers for episode: ${ep.number}, selected server: ${selected.server}")
+            if(ep.extractors == null){
+                ep.extractors = mutableListOf(watchSources?.get(selected.sourceIndex)?.let {
+                    selected.sourceIndex = selected.sourceIndex
+                    if (!post && !it.allowsPreloading) null
+                    else ep.sEpisode?.let { it1 ->
+                        it.loadSingleVideoServer(
+                            server, link, ep.extra,
+                            it1, post
+                        )
+                    }
+                } ?: return false)
+            }
+            else{
+                ep.extractors!!.add(watchSources?.get(selected.sourceIndex)?.let {
+                    selected.sourceIndex = selected.sourceIndex
+                    if (!post && !it.allowsPreloading) null
+                    else ep.sEpisode?.let { it1 ->
+                        it.loadSingleVideoServer(
+                            server, link, ep.extra,
+                            it1, post
+                        )
+                    }
+                } ?: return false)
+            }
+
             ep.allStreams = false
         }
         if (post) {
@@ -241,20 +258,23 @@ class MediaDetailsViewModel : ViewModel() {
     val epChanged = MutableLiveData(true)
     fun onEpisodeClick(
         media: Media,
-        i: String,
+        i: String = "",
         manager: FragmentManager,
         launch: Boolean = true,
         prevEp: String? = null,
         isDownload: Boolean = false,
-        downloadUsingSelectedServer: Boolean = false
+        episodes: ArrayList<String> = arrayListOf() // used for handling an array of episodes to download or to view a single episode
     ) {
         Handler(Looper.getMainLooper()).post {
             if (manager.findFragmentByTag("dialog") == null && !manager.isDestroyed) {
-                if (media.anime?.episodes?.get(i) != null) {
-                    media.anime.selectedEpisode = i
-                } else {
-                    snackString(currContext()?.getString(R.string.episode_not_found, i))
-                    return@post
+                if(episodes.isEmpty()){
+                    episodes.add(i)
+                }
+                for (ep in episodes){
+                    if (media.anime?.episodes?.get(ep) == null) {
+                        snackString(currContext()?.getString(R.string.episode_not_found, ep))
+                        return@post
+                    }
                 }
                 media.selected = this.loadSelected(media)
                 val selector =
@@ -263,7 +283,7 @@ class MediaDetailsViewModel : ViewModel() {
                         launch,
                         prevEp,
                         isDownload,
-                        downloadUsingSelectedServer
+                        episodes
                     )
                 selector.show(manager, "dialog")
             }
