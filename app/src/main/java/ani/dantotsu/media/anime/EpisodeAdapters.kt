@@ -28,6 +28,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.ln
 import kotlin.math.pow
+import android.util.Log
 
 fun handleProgress(cont: LinearLayout, bar: View, empty: View, mediaId: Int, ep: String) {
     val curr = PrefManager.getNullableCustomVal("${mediaId}_${ep}", null, Long::class.java)
@@ -227,6 +228,7 @@ class EpisodeAdapter(
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
+            arr[position].downloadProgress = ""
             notifyItemChanged(position)
         }
     }
@@ -352,9 +354,14 @@ class EpisodeAdapter(
         fun bind(episodeNumber: String, progress: String?, desc: String?) {
             if (progress != null) {
                 binding.itemEpisodeDesc.visibility = View.GONE
-                binding.itemDownloadStatus.visibility = View.VISIBLE
+                if(progress == "")
+                    binding.itemDownloadStatus.visibility = View.GONE
+                else
+                    binding.itemDownloadStatus.visibility = View.VISIBLE
                 binding.itemDownloadStatus.text = progress
+                //Log.d("AnimeDownloader", "Downloading ${desc?.substring(0, 10)}\", progress: $progress")
             } else {
+                //Log.d("AnimeDownloader", "No progress\n${desc?.substring(0, 10)}")
                 binding.itemDownloadStatus.visibility = View.GONE
                 binding.itemDownloadStatus.text = ""
             }
