@@ -488,6 +488,7 @@
     <string name="reset_auto_update">Long click \"List Editor\" button to reset Auto Update</string>
     <string name="autoplay_cancelled">Autoplay cancelled, no interaction for more than 1 Hour.</string>
     <string name="auto_select_server_error">Couldn\'t auto select the server, Please try again!</string>
+    <string name="download_empty_list_error">Download list is empty, Please try again!</string>
     <string name="stream_selection_empty">No streams available! Try another source.</string>
     <string name="logging_in_mal">Logging into MAL</string>
     <string name="getting_user_data">Getting User Data</string>
