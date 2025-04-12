@@ -29,6 +29,8 @@ import kotlinx.coroutines.launch
 import kotlin.math.ln
 import kotlin.math.pow
 import android.util.Log
+import android.widget.NumberPicker
+import ani.dantotsu.currContext
 
 fun handleProgress(cont: LinearLayout, bar: View, empty: View, mediaId: Int, ep: String) {
     val curr = PrefManager.getNullableCustomVal("${mediaId}_${ep}", null, Long::class.java)
@@ -338,6 +340,22 @@ class EpisodeAdapter(
                     val episodeNumber = arr[bindingAdapterPosition].number
                     if (downloadedEpisodes.contains(episodeNumber)) {
                         fragment.fixDownload(episodeNumber)
+                    }
+                    else {
+                        fragment.requireContext().customAlertDialog().apply {
+                            setTitle("Multi Episode Downloader")
+                            setMessage("Enter the number of episodes to download")
+                            val input = NumberPicker(currContext())
+                            input.minValue = 1
+                            input.maxValue = 20
+                            input.value = 1
+                            setCustomView(input)
+                            setPosButton(R.string.ok) {
+                                fragment.multiDownload(input.value, episodeNumber)
+                            }
+                            setNegButton(R.string.cancel)
+                            show()
+                        }
                     }
                 }
 
