@@ -1,7 +1,6 @@
 package ani.dantotsu.media.anime
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.app.Dialog
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
@@ -26,6 +25,7 @@ import androidx.fragment.app.activityViewModels
 //import androidx.glance.visibility
 //import androidx.glance.visibility
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.withCreated
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.BottomSheetDialogFragment
@@ -62,7 +62,6 @@ import ani.dantotsu.toast
 import ani.dantotsu.tryWith
 import ani.dantotsu.util.Logger
 import ani.dantotsu.util.customAlertDialog
-import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -70,15 +69,12 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import tachiyomi.core.util.lang.launchIO
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.lang.ref.WeakReference
 import java.text.DecimalFormat
 
 
@@ -95,11 +91,6 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     private var launch: Boolean? = null
     private var isDownloadMenu: Boolean? = null
     private var episodes: ArrayList<String>? = null
-
-    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        val dialog = super.onCreateDialog(savedInstanceState) as BottomSheetDialog
-        return dialog
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -147,9 +138,13 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             if (media != null && !loaded) {
                 loaded = true
 
-                Log.d("AnimeDownloader", "Selected Server for watching: $selected")
-
-                suspend fun initializeVideoServerSelector(ep: Episode, onEpisodeDownloadHandler: EpisodeDownloadHandler? = null) {
+                fun fail(resId: Int){
+                    snackString(getString(resId))
+                    tryWith {
+                        dismiss()
+                    }
+                }
+                fun initializeVideoServerSelector(ep: Episode, onEpisodeDownloadHandler: EpisodeDownloadHandler? = null) {
                     binding.selectorRecyclerView.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                         bottomMargin = navBarHeight
                     }
@@ -176,21 +171,18 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 adapter.addAll(ep.extractors)
                                 binding.selectorProgressBar.visibility = View.GONE
                                 if (adapter.itemCount == 0) {
-                                    snackString(getString(R.string.stream_selection_empty))
-                                    tryWith {
-                                        dismiss()
-                                    }
+                                    fail(R.string.stream_selection_empty)
+                                }
+                                if (model.watchSources!!.isDownloadedSource(media?.selected!!.sourceIndex)) {
+                                    adapter.performClick(0)
                                 }
                             }
-                        }.join()
+                        }
                     } else {
                         media!!.anime?.episodes?.set(media!!.anime?.selectedEpisode!!, ep)
                         adapter.addAll(ep.extractors)
                         if (ep.extractors?.size == 0) {
-                            snackString(getString(R.string.stream_selection_empty))
-                            tryWith {
-                                dismiss()
-                            }
+                            fail(R.string.stream_selection_empty)
                         }
                         if (model.watchSources!!.isDownloadedSource(media?.selected!!.sourceIndex)) {
                             adapter.performClick(0)
@@ -198,7 +190,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         binding.selectorProgressBar.visibility = View.GONE
                     }
                 }
-                suspend fun loadEpisodeVideoServer(episodeName: String, selectedServerName: String): Boolean{
+                suspend fun loadEpisodeSingleServer(episodeName: String, selectedServerName: String): Boolean{
                     media?.anime?.selectedEpisode = episodeName
                     val ep = media?.anime?.episodes?.get(media?.anime?.selectedEpisode)!!
                     episode = ep
@@ -303,7 +295,6 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     }
                                 }
                             }
-                            //val currContext = currContext() ?: requireContext()
                             if (selectedVideo != null) {
                                 Helper.startAnimeDownloadService(
                                     activity,
@@ -331,12 +322,6 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         }
                         return true
                     }
-                    fun fail() {
-                        snackString(getString(R.string.auto_select_server_error))
-                        tryWith {
-                            dismiss()
-                        }
-                    }
 
                     media?.anime?.selectedEpisode = episodeName
                     val ep = media?.anime?.episodes?.get(episodeName)!!
@@ -345,16 +330,20 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     Log.d("AnimeDownloader", "Downloading Episode: ${ep.number}, server: $selectedServerName")
 
                     if (ep.extractors?.find { it.server.name == selectedServerName } == null)
-                        fail()
+                        fail(R.string.auto_select_server_error)
                     else {
                         media!!.anime?.episodes?.set(media!!.anime?.selectedEpisode!!, ep)
                         val selectedExtractor =
                             ep.extractors?.find { it.server.name == selectedServerName }
                         if(!downloadUsingSingleServer(selectedExtractor!!))
-                            fail()
+                            fail(R.string.auto_select_server_error)
                     }
                 }
 
+                Log.d("AnimeDownloader", "Selected Server for watching: $selected")
+                if(episodes.isNullOrEmpty()){
+                    fail(R.string.empty_episodes_list)
+                }
                 if (isDownloadMenu == false) {
                     media?.anime?.selectedEpisode = episodes?.get(0)
                     val ep = media?.anime?.episodes?.get(media?.anime?.selectedEpisode)
@@ -371,11 +360,6 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     dismiss()
                                 }
                             }
-                            fun fail() {
-                                snackString(getString(R.string.auto_select_server_error))
-                                Log.d("AnimeDownloader", "Error Auto select in line 459")
-                                binding.selectorCancel.performClick()
-                            }
 
                             fun load() {
                                 val size =
@@ -391,31 +375,28 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     media!!.anime!!.episodes?.get(media!!.anime!!.selectedEpisode!!)?.selectedVideo =
                                         media!!.selected!!.video
                                     startExoplayer(media!!)
-                                } else fail()
+                                } else fail(R.string.auto_select_server_error)
                             }
 
                             if (ep.extractors?.filter { it.server.name == selected } == null) {
                                 scope.launch{
                                     if(!withContext(Dispatchers.IO){
-                                        loadEpisodeVideoServer(ep.number, selected!!)
-                                    })fail()
-                                    else
-                                        load()
+                                        loadEpisodeSingleServer(ep.number, selected!!)
+                                    }){
+                                        media!!.selected!!.server = null
+                                        model.saveSelected(media!!.id, media!!.selected!!)
+                                        fail(R.string.auto_select_server_error)
+                                    }
+                                    else load()
                                 }
                             } else load()
-                        } else {
-                            scope.launch(Dispatchers.IO){
-                                initializeVideoServerSelector(ep)
-                            }
                         }
+                        else
+                            initializeVideoServerSelector(ep)
                     }
                 }
                 else {
                     binding.selectorMakeDefault.visibility = View.GONE
-                    binding.selectorMakeDefault.setOnClickListener {
-                        makeDefault = binding.selectorMakeDefault.isChecked
-                        PrefManager.setVal(PrefName.MakeDefault, makeDefault)
-                    }
                     media?.anime?.selectedEpisode = episodes?.get(0)
                     val ep = media?.anime?.episodes?.get(media?.anime?.selectedEpisode)
                     episode = ep
@@ -425,7 +406,6 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         EpisodeDownloadHandler(_onFinishingUserSelection = { selectedServerName,
                                                                              selectedSubtitles,
                                                                              selectedAudioTracks ->
-                            //Log.d("AnimeDownloader","Went in Yahoo!!")
                             binding.selectorListContainer.visibility = View.GONE
                             binding.selectorAutoListContainer.visibility = View.VISIBLE
                             binding.selectorTitle.text = "Starting Download"
@@ -438,24 +418,14 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 val serverSelectionTasks = mutableListOf<Deferred<Unit>>()
                                 for (episodeName in episodes!!.drop(1)) {
                                     serverSelectionTasks.add(serverSelectionScope.async {
-                                        if(!loadEpisodeVideoServer(episodeName, selectedServerName)){
-                                            snackString(getString(R.string.auto_select_server_error))
-                                            //Log.d("AnimeDownloader", "Error Auto select in line 523")
+                                        if(!loadEpisodeSingleServer(episodeName, selectedServerName)){
                                             Log.d("AnimeDownloader", "Error loading server $selectedServerName for episode $episodeName")
-                                            tryWith {
-                                                dismiss()
-                                            }
+                                            fail(R.string.auto_select_server_error)
                                         }
                                     })
                                 }
                                 serverSelectionTasks.awaitAll()
 
-                                if(episodes.isNullOrEmpty()){
-                                    snackString(getString(R.string.download_empty_list_error))
-                                    tryWith {
-                                        dismiss()
-                                    }
-                                }
                                 for(episodeName in episodes!!){
                                     startEpisodeDownload(episodeName, selectedServerName, selectedSubtitles, selectedAudioTracks)
                                 }
@@ -464,9 +434,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 }
                             }
                         })
-                        scope.launch(Dispatchers.IO){
-                            initializeVideoServerSelector(ep, downloadHandler)
-                        }
+                        initializeVideoServerSelector(ep, downloadHandler)
                     }
                 }
             }

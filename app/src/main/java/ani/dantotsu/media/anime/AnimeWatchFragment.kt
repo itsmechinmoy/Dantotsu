@@ -318,14 +318,23 @@ class AnimeWatchFragment : Fragment() {
     }
 
     //implement Multi download
-    fun multiDownload(n: Int) {
+    fun multiDownload(n: Int, episodeNumber: String? = null) {
         // Get last viewed episode
         val selected = media.userProgress
         val episodes = media.anime?.episodes?.values?.toList()
         // Filter by selected language
-        val progressEpisodeIndex = (episodes?.indexOfFirst {
-            MediaNameAdapter.findEpisodeNumber(it.number)?.toInt() == selected
-        } ?: 0) + 1
+        val progressEpisodeIndex =
+            if(episodeNumber == null){
+                (episodes?.indexOfFirst {
+                    MediaNameAdapter.findEpisodeNumber(it.number)?.toInt() == selected
+                } ?: 0) + 1
+            }
+            else{
+                (episodes?.indexOfFirst {
+                    it.number == episodeNumber
+                } ?: 0)
+            }
+
 
         if (progressEpisodeIndex < 0 || n < 1 || episodes == null) return
 
