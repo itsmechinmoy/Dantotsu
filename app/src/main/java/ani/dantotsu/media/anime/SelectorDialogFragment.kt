@@ -118,14 +118,15 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     }
 
     interface EpisodeDownloadListener {
-        fun onFinishingUserSelection(selectedServerName: String, selectedSubtitles: MutableList<Pair<String, String>>,
-                                     selectedAudioTracks: MutableList<Pair<String, String>>)
+        fun onFinishingUserSelection(selectedServerName: String,
+                                     selectedSubtitles: MutableList<String>,
+                                     selectedAudioTracks: MutableList<String>)
     }
-    class EpisodeDownloadHandler(private val _onFinishingUserSelection: (String, MutableList<Pair<String, String>>,
-                                                                         MutableList<Pair<String, String>>) -> Unit)
+    class EpisodeDownloadHandler(private val _onFinishingUserSelection: (String, MutableList<String>, MutableList<String>) -> Unit)
         : EpisodeDownloadListener{
-        override fun onFinishingUserSelection(selectedServerName: String, selectedSubtitles: MutableList<Pair<String, String>>,
-                                              selectedAudioTracks: MutableList<Pair<String, String>>) {
+        override fun onFinishingUserSelection(selectedServerName: String,
+                                              selectedSubtitles: MutableList<String>,
+                                              selectedAudioTracks: MutableList<String>) {
             _onFinishingUserSelection(selectedServerName, selectedSubtitles, selectedAudioTracks)
         }
     }
@@ -207,8 +208,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     return success
                 }
                 fun startEpisodeDownload(episodeName: String, selectedServerName: String,
-                                         selectedSubtitles: MutableList<Pair<String, String>>,
-                                         selectedAudioTracks: MutableList<Pair<String, String>>){
+                                         selectedSubtitles: MutableList<String>,
+                                         selectedAudioTracks: MutableList<String>){
                     fun downloadUsingSingleServer(extractor: VideoExtractor): Boolean {
                         val episode =
                             media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!
@@ -248,9 +249,23 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 return false
                             }
                             val subtitles = extractor.subtitles
+                            val subtitlesToDownload: MutableList<Pair<String, String>> = mutableListOf()
+                            subtitles.forEach {
+                                if(it.language in selectedSubtitles){
+                                    subtitlesToDownload.add(Pair(it.file.url, it.language))
+                                }
+                            }
+
+                            val audioTracks = extractor.audioTracks
+                            val audioTracksToDownload: MutableList<Pair<String, String>> = mutableListOf()
+                            audioTracks.forEach {
+                                if(it.lang in selectedAudioTracks){
+                                    audioTracksToDownload.add(Pair(it.url, it.lang))
+                                }
+                            }
+
                             val selectedVideo =
                                 if (extractor.videos.size > episode.selectedVideo) extractor.videos[episode.selectedVideo] else null
-                            //val subtitleNames = subtitles.map { it.language }
                             val activity = currActivity() ?: requireActivity()
                             selectedVideo?.file?.url?.let { url ->
                                 if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
@@ -301,8 +316,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     media!!.mainName(),
                                     episode.number,
                                     selectedVideo,
-                                    selectedSubtitles,
-                                    selectedAudioTracks,
+                                    subtitlesToDownload,
+                                    audioTracksToDownload,
                                     media,
                                     episode.thumb?.url ?: media!!.banner
                                     ?: media!!.cover
@@ -723,8 +738,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     }
                     
                     val subtitleNames = subtitles.map { it.language }
-                    var selectedSubtitles: MutableList<Pair<String, String>> = mutableListOf()
-                    var selectedAudioTracks: MutableList<Pair<String, String>> = mutableListOf()
+                    var selectedSubtitles: MutableList<String> = mutableListOf()
+                    var selectedAudioTracks: MutableList<String> = mutableListOf()
 
                     val currContext = currContext() ?: requireContext()
                     
@@ -742,14 +757,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 setTitle(R.string.download_audio_tracks)
                                 multiChoiceItems(audioNamesArray, checkedItems) {
                                     it.forEachIndexed { index, isChecked ->
-                                        val audioPair = Pair(
-                                            extractor.audioTracks[index].url,
-                                            extractor.audioTracks[index].lang
-                                        )
+                                        val audioName = extractor.audioTracks[index].lang
                                         if (isChecked) {
-                                            selectedAudioTracks.add(audioPair)
+                                            selectedAudioTracks.add(audioName)
                                         } else {
-                                            selectedAudioTracks.remove(audioPair)
+                                            selectedAudioTracks.remove(audioName)
                                         }
                                     }
                                 }
@@ -777,12 +789,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             setTitle(R.string.download_subtitle)
                             multiChoiceItems(subtitleNamesArray, checkedItems) {
                                 it.forEachIndexed { index, isChecked ->
-                                    val subtitlePair =
-                                        Pair(subtitles[index].file.url, subtitles[index].language)
+                                    val subtitleName = subtitles[index].language
                                     if (isChecked) {
-                                        selectedSubtitles.add(subtitlePair)
+                                        selectedSubtitles.add(subtitleName)
                                     } else {
-                                        selectedSubtitles.remove(subtitlePair)
+                                        selectedSubtitles.remove(subtitleName)
                                     }
                                 }
                             }
