@@ -323,7 +323,7 @@ class AnimeDownloaderService : Service() {
                             )
                         )
                         currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
-                        broadcastDownloadFailed(task.episode)
+                        broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
                         break
                     }
                     builder.setProgress(
@@ -332,7 +332,8 @@ class AnimeDownloaderService : Service() {
                     )
                     broadcastDownloadProgress(
                         task.episode,
-                        percent.coerceAtMost(99)
+                        percent.coerceAtMost(99),
+                        task.sourceMedia?.id
                     )
                     if (notifi) {
                         withContext(Dispatchers.Main) {
@@ -376,7 +377,7 @@ class AnimeDownloaderService : Service() {
                             )
                         )
                         currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
-                        broadcastDownloadFailed(task.episode)
+                        broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
                         return@withContext
                     }
                     Logger.log("Download completed")
@@ -407,7 +408,7 @@ class AnimeDownloaderService : Service() {
                     )
 
                     currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
-                    broadcastDownloadFinished(task.episode)
+                    broadcastDownloadFinished(task.episode, task.sourceMedia?.id)
                 } else throw Exception("Download failed")
 
             } catch (e: Exception) {
@@ -417,7 +418,7 @@ class AnimeDownloaderService : Service() {
                     e.printStackTrace()
                     Injekt.get<CrashlyticsInterface>().logException(e)
                 }
-                broadcastDownloadFailed(task.episode)
+                broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
             }
         }
     }
@@ -531,24 +532,27 @@ class AnimeDownloaderService : Service() {
         sendBroadcast(intent)
     }
 
-    private fun broadcastDownloadFinished(episodeNumber: String) {
+    private fun broadcastDownloadFinished(episodeNumber: String, mediaId: Int?) {
         val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_FINISHED).apply {
             putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, episodeNumber)
+            putExtra("mediaId", mediaId)
         }
         sendBroadcast(intent)
     }
 
-    private fun broadcastDownloadFailed(episodeNumber: String) {
+    private fun broadcastDownloadFailed(episodeNumber: String, mediaId: Int?) {
         val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_FAILED).apply {
             putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, episodeNumber)
+            putExtra("mediaId", mediaId)
         }
         sendBroadcast(intent)
     }
 
-    private fun broadcastDownloadProgress(episodeNumber: String, progress: Int) {
+    private fun broadcastDownloadProgress(episodeNumber: String, progress: Int, mediaId: Int?) {
         val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_PROGRESS).apply {
             putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, episodeNumber)
             putExtra("progress", progress)
+            putExtra("mediaId", mediaId)
         }
         sendBroadcast(intent)
     }
@@ -602,4 +606,21 @@ object AnimeServiceDataSingleton {
 
     @Volatile
     var isServiceRunning: Boolean = false
+}
+
+object AnimeDownloader{
+    private val activeDownloads = mutableMapOf<Int, MutableSet<String>>()
+
+    fun startDownload(mediaId: Int, episodeNumber: String) {
+        activeDownloads.getOrPut(mediaId) { mutableSetOf() }.add(episodeNumber)
+    }
+    fun stopDownload(mediaId: Int, episodeNumber: String) {
+        activeDownloads[mediaId]?.remove(episodeNumber)
+        if (activeDownloads[mediaId]?.isEmpty() == true) {
+            activeDownloads.remove(mediaId)
+        }
+    }
+    fun isDownloading(mediaId: Int, episodeNumber: String): Boolean {
+        return activeDownloads[mediaId]?.contains(episodeNumber) == true
+    }
 }
