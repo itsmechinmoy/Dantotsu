@@ -644,16 +644,22 @@ class AnimeWatchFragment : Fragment() {
             when (intent.action) {
                 ACTION_DOWNLOAD_STARTED -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
+                    val mediaId = intent.getIntExtra("mediaId", -1)
+                    if (mediaId != media.id) return
                     chapterNumber?.let { episodeAdapter.startDownload(it) }
                 }
 
                 ACTION_DOWNLOAD_FINISHED -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
+                    val mediaId = intent.getIntExtra("mediaId", -1)
+                    if (mediaId != media.id) return
                     chapterNumber?.let { episodeAdapter.stopDownload(it) }
                 }
 
                 ACTION_DOWNLOAD_FAILED -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
+                    val mediaId = intent.getIntExtra("mediaId", -1)
+                    if (mediaId != media.id) return
                     chapterNumber?.let {
                         episodeAdapter.purgeDownload(it)
                     }
@@ -662,6 +668,8 @@ class AnimeWatchFragment : Fragment() {
                 ACTION_DOWNLOAD_PROGRESS -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
                     val progress = intent.getIntExtra("progress", 0)
+                    val mediaId = intent.getIntExtra("mediaId", -1)
+                    if (mediaId != media.id) return
                     chapterNumber?.let {
                         episodeAdapter.updateDownloadProgress(it, progress)
                     }

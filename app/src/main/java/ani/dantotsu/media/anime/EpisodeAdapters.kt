@@ -31,6 +31,7 @@ import kotlin.math.pow
 import android.util.Log
 import android.widget.NumberPicker
 import ani.dantotsu.currContext
+import ani.dantotsu.download.anime.AnimeDownloader
 
 fun handleProgress(cont: LinearLayout, bar: View, empty: View, mediaId: Int, ep: String) {
     val curr = PrefManager.getNullableCustomVal("${mediaId}_${ep}", null, Long::class.java)
@@ -221,12 +222,10 @@ class EpisodeAdapter(
     }
 
     override fun getItemCount(): Int = arr.size
-
-    private val activeDownloads = mutableSetOf<String>()
     private val downloadedEpisodes = mutableSetOf<String>()
 
     fun startDownload(episodeNumber: String) {
-        activeDownloads.add(episodeNumber)
+        AnimeDownloader.startDownload(media.id, episodeNumber)
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
@@ -237,7 +236,7 @@ class EpisodeAdapter(
 
     @OptIn(UnstableApi::class)
     fun stopDownload(episodeNumber: String) {
-        activeDownloads.remove(episodeNumber)
+        AnimeDownloader.stopDownload(media.id, episodeNumber)
         downloadedEpisodes.add(episodeNumber)
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
@@ -264,7 +263,7 @@ class EpisodeAdapter(
     }
 
     fun purgeDownload(episodeNumber: String) {
-        activeDownloads.remove(episodeNumber)
+        AnimeDownloader.stopDownload(media.id, episodeNumber)
         downloadedEpisodes.remove(episodeNumber)
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
@@ -317,7 +316,7 @@ class EpisodeAdapter(
             binding.itemDownload.setOnClickListener {
                 if (0 <= bindingAdapterPosition && bindingAdapterPosition < arr.size) {
                     val episodeNumber = arr[bindingAdapterPosition].number
-                    if (activeDownloads.contains(episodeNumber)) {
+                    if(AnimeDownloader.isDownloading(media.id, episodeNumber)){
                         fragment.onAnimeEpisodeStopDownloadClick(episodeNumber)
                         return@setOnClickListener
                     } else if (downloadedEpisodes.contains(episodeNumber)) {
@@ -377,13 +376,11 @@ class EpisodeAdapter(
                 else
                     binding.itemDownloadStatus.visibility = View.VISIBLE
                 binding.itemDownloadStatus.text = progress
-                //Log.d("AnimeDownloader", "Downloading ${desc?.substring(0, 10)}\", progress: $progress")
             } else {
-                //Log.d("AnimeDownloader", "No progress\n${desc?.substring(0, 10)}")
                 binding.itemDownloadStatus.visibility = View.GONE
                 binding.itemDownloadStatus.text = ""
             }
-            if (activeDownloads.contains(episodeNumber)) {
+            if(AnimeDownloader.isDownloading(media.id, episodeNumber)){
                 // Show spinner
                 binding.itemDownload.setImageResource(R.drawable.ic_sync)
                 startOrContinueRotation(episodeNumber) {
@@ -416,7 +413,7 @@ class EpisodeAdapter(
                 scope.launch {
                     // Add chapter number to active coroutines set
                     activeCoroutines.add(episodeNumber)
-                    while (activeDownloads.contains(episodeNumber)) {
+                    while(AnimeDownloader.isDownloading(media.id, episodeNumber)){
                         binding.itemDownload.animate().rotationBy(360f).setDuration(1000)
                             .setInterpolator(
                                 LinearInterpolator()

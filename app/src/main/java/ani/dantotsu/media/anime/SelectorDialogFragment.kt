@@ -326,8 +326,9 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     Intent(AnimeWatchFragment.ACTION_DOWNLOAD_STARTED).apply {
                                         putExtra(
                                             AnimeWatchFragment.EXTRA_EPISODE_NUMBER,
-                                            episode.number
+                                            episode.number,
                                         )
+                                        putExtra("mediaId", media?.id)
                                     }
                                 activity.sendBroadcast(intent)
 
