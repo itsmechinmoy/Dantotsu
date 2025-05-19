@@ -1358,7 +1358,7 @@ class ExoplayerView :
         val showProgressDialog =
             if (PrefManager.getVal(PrefName.AskIndividualPlayer)) {
                 PrefManager.getCustomVal(
-                    "${media.id}_ProgressDialog",
+                    "${media.id}_progressDialog",
                     true,
                 )
             } else {
