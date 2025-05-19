@@ -399,16 +399,15 @@ class AnimeDownloaderService : Service() {
                         task.getTaskName(),
                         task.video.file.url
                     ).apply()
-                    downloadsManager.addDownload(
-                        DownloadedType(
-                            task.title,
-                            task.episode,
-                            MediaType.ANIME,
-                        )
+                    val downloadType = DownloadedType(
+                        task.title,
+                        task.episode,
+                        MediaType.ANIME,
                     )
-
+                    downloadsManager.addDownload(downloadType)
+                    val size = downloadsManager.getSize(downloadType)
                     currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
-                    broadcastDownloadFinished(task.episode, task.sourceMedia?.id)
+                    broadcastDownloadFinished(task.episode, task.sourceMedia?.id, size)
                 } else throw Exception("Download failed")
 
             } catch (e: Exception) {
@@ -532,10 +531,11 @@ class AnimeDownloaderService : Service() {
         sendBroadcast(intent)
     }
 
-    private fun broadcastDownloadFinished(episodeNumber: String, mediaId: Int?) {
+    private fun broadcastDownloadFinished(episodeNumber: String, mediaId: Int?, size: Double?) {
         val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_FINISHED).apply {
             putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, episodeNumber)
             putExtra("mediaId", mediaId)
+            putExtra("size", size)
         }
         sendBroadcast(intent)
     }

@@ -15,10 +15,8 @@ import ani.dantotsu.connections.updateProgress
 import ani.dantotsu.databinding.ItemEpisodeCompactBinding
 import ani.dantotsu.databinding.ItemEpisodeGridBinding
 import ani.dantotsu.databinding.ItemEpisodeListBinding
-import ani.dantotsu.download.DownloadsManager.Companion.getDirSize
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaNameAdapter
-import ani.dantotsu.media.MediaType
 import ani.dantotsu.setAnimation
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.util.customAlertDialog
@@ -26,9 +24,6 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.model.GlideUrl
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.ln
-import kotlin.math.pow
-import android.util.Log
 import android.widget.NumberPicker
 import ani.dantotsu.currContext
 import ani.dantotsu.download.anime.AnimeDownloader
@@ -235,19 +230,13 @@ class EpisodeAdapter(
     }
 
     @OptIn(UnstableApi::class)
-    fun stopDownload(episodeNumber: String) {
+    fun addToDownloadedEpisodes(episodeNumber: String, size: Double) {
         AnimeDownloader.stopDownload(media.id, episodeNumber)
         downloadedEpisodes.add(episodeNumber)
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
-            val size = try {
-                bytesToHuman(getDirSize(context, MediaType.ANIME, media.mainName(), episodeNumber))
-            } catch (e: Exception) {
-                null
-            }
-
-            arr[position].downloadProgress = "Downloaded" + if (size != null) ": ($size)" else ""
+            arr[position].downloadProgress = "Downloaded" + ": (${"%.1f".format(size)} MB)"
             notifyItemChanged(position)
         }
     }
@@ -434,15 +423,6 @@ class EpisodeAdapter(
 
     fun updateType(t: Int) {
         type = t
-    }
-
-    private fun bytesToHuman(bytes: Long): String? {
-        if (bytes < 0) return null
-        val unit = 1000
-        if (bytes < unit) return "$bytes B"
-        val exp = (ln(bytes.toDouble()) / ln(unit.toDouble())).toInt()
-        val pre = ("KMGTPE")[exp - 1]
-        return String.format("%.1f %sB", bytes / unit.toDouble().pow(exp.toDouble()), pre)
     }
 }
 
