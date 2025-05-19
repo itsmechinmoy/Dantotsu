@@ -22,6 +22,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.xdrop.fuzzywuzzy.FuzzySearch
 import java.io.Serializable
+import kotlin.math.ln
+import kotlin.math.pow
 
 class DownloadsManager(private val context: Context) {
     private val gson = Gson()
@@ -68,6 +70,26 @@ class DownloadsManager(private val context: Context) {
             }
         }
         saveDownloads()
+    }
+
+    fun getSize(downloadedType: DownloadedType): Double {
+        val index = downloadsList.indexOfFirst { it.titleName == downloadedType.titleName && it.chapterName == downloadedType.chapterName }
+        if (index == -1) return 0.0
+        if(downloadedType.size == null) {
+            val episodeSize = bytesToDouble(
+                getDirSize(
+                    context,
+                    MediaType.ANIME,
+                    downloadedType.titleName,
+                    downloadedType.chapterName
+                )
+            )
+            downloadsList[index].size = episodeSize
+            saveDownloads()
+            return episodeSize
+        }
+        else
+            return downloadedType.size ?: 0.0
     }
 
     fun removeMedia(title: String, type: MediaType) {
@@ -402,6 +424,7 @@ data class DownloadedType(
     private val title: String? = null,
     @Deprecated("use pChapter instead")
     private val chapter: String? = null,
+    var size: Double? = null,
     val scanlator: String = "Unknown"
 ) : Serializable {
     val titleName: String
@@ -410,4 +433,11 @@ data class DownloadedType(
         get() = chapter ?: pChapter.findValidName()
     val uniqueName: String
         get() = "$chapterName-${scanlator}"
+}
+
+private fun bytesToDouble(bytes: Long): Double {
+    if (bytes < 0) return 0.0
+    val unit = 1000
+    val exp = (ln(bytes.toDouble()) / ln(unit.toDouble())).toInt()
+    return bytes / unit.toDouble().pow(exp.toDouble())
 }

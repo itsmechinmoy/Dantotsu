@@ -22,7 +22,6 @@ import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.util.Log
 import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.GridLayoutManager
@@ -652,8 +651,9 @@ class AnimeWatchFragment : Fragment() {
                 ACTION_DOWNLOAD_FINISHED -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
                     val mediaId = intent.getIntExtra("mediaId", -1)
+                    val size = intent.getDoubleExtra("size", 0.0)
                     if (mediaId != media.id) return
-                    chapterNumber?.let { episodeAdapter.stopDownload(it) }
+                    chapterNumber?.let { episodeAdapter.addToDownloadedEpisodes(it, size) }
                 }
 
                 ACTION_DOWNLOAD_FAILED -> {
@@ -708,7 +708,7 @@ class AnimeWatchFragment : Fragment() {
         episodeAdapter.notifyItemRangeInserted(0, arr.size)
         for (download in downloadManager.animeDownloadedTypes) {
             if (media.compareName(download.titleName)) {
-                episodeAdapter.stopDownload(download.chapterName)
+                episodeAdapter.addToDownloadedEpisodes(download.chapterName, downloadManager.getSize(download))
             }
         }
     }
