@@ -1380,7 +1380,7 @@ class ExoplayerView :
                 setCancelable(false)
                 setPosButton(R.string.yes) {
                     PrefManager.setCustomVal(
-                        "${media.id}_ProgressDialog",
+                        "${media.id}_progressDialog",
                         false,
                     )
                     PrefManager.setCustomVal(
@@ -1391,7 +1391,7 @@ class ExoplayerView :
                 }
                 setNegButton(R.string.no) {
                     PrefManager.setCustomVal(
-                        "${media.id}_ProgressDialog",
+                        "${media.id}_progressDialog",
                         false,
                     )
                     PrefManager.setCustomVal(
