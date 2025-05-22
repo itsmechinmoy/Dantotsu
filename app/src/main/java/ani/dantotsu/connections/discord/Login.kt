@@ -47,9 +47,9 @@ class Login : AppCompatActivity() {
                         view.evaluateJavascript(
                             """
                     (function() {
-                        const wreq = (webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m).find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken();
-                        return wreq;
-                    })()
+    const m = []; webpackChunkdiscord_app.push([[""], {}, e => {for (let c in e.c)m.push(e.c[c])}]);
+    return m.find(n => n?.exports?.default?.getToken !== void 0)?.exports?.default?.getToken();
+})()
                 """.trimIndent()
                         ) { result ->
                             login(result.trim('"'))
