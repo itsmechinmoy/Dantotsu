@@ -419,13 +419,19 @@
         </LinearLayout>
 
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
+    <FrameLayout
+        android:id="@+id/mediaBottomBarContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_weight="0"
+        android:background="?attr/colorSurface"
+        android:layout_gravity="center_horizontal|bottom">
 
     <nl.joery.animatedbottombar.AnimatedBottomBar
         android:id="@+id/mediaBottomBar"
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:layout_gravity="center_horizontal|bottom"
-        android:layout_weight="0"
         android:background="?attr/colorSurface"
         android:padding="0dp"
         app:abb_animationInterpolator="@anim/over_shoot"
@@ -438,5 +444,6 @@
         app:itemTextAppearanceActive="@style/NavBarText"
         app:itemTextAppearanceInactive="@style/NavBarText"
         app:itemTextColor="@color/tab_layout_icon" />
+    </FrameLayout>
 
 </LinearLayout>
