@@ -11,7 +11,11 @@ import com.lagradost.nicehttp.addGenericDns
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkHelper.Companion.defaultUserAgentProvider
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -85,12 +89,42 @@ object Mapper : ResponseParser {
     }
 }
 
-fun <A, B> Collection<A>.asyncMap(f: suspend (A) -> B): List<B> = runBlocking {
-    map { async { f(it) } }.map { it.await() }
+/**
+ * Performs parallel processing of collection items without blocking threads.
+ * Each operation runs in its own coroutine on the specified dispatcher.
+ *
+ * @param dispatcher The CoroutineDispatcher to use for parallel operations (defaults to IO)
+ * @param f The suspend function to apply to each item
+ * @return List of results in the same order as the original collection
+ */
+suspend fun <A, B> Collection<A>.asyncMap(
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    f: suspend (A) -> B
+): List<B> = coroutineScope {
+    map { item ->
+        async(dispatcher) {
+            f(item)
+        }
+    }.awaitAll()
 }
 
-fun <A, B> Collection<A>.asyncMapNotNull(f: suspend (A) -> B?): List<B> = runBlocking {
-    map { async { f(it) } }.mapNotNull { it.await() }
+/**
+ * Performs parallel processing of collection items without blocking threads,
+ * filtering out null results.
+ *
+ * @param dispatcher The CoroutineDispatcher to use for parallel operations (defaults to IO)
+ * @param f The suspend function to apply to each item
+ * @return List of non-null results in the same order as the original collection
+ */
+suspend fun <A, B> Collection<A>.asyncMapNotNull(
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    f: suspend (A) -> B?
+): List<B> = coroutineScope {
+    map { item ->
+        async(dispatcher) {
+            f(item)
+        }
+    }.mapNotNull { it.await() }
 }
 
 fun logError(e: Throwable, post: Boolean = true, snackbar: Boolean = true) {
