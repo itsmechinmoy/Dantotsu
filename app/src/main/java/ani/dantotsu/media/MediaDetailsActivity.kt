@@ -139,7 +139,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         val navBarBottomMargin = if (resources.configuration.orientation ==
             Configuration.ORIENTATION_LANDSCAPE
         ) 0 else navBarHeight
-        navBar.setPadding(
+        binding.mediaBottomBarContainer.setPadding(
             navBar.paddingLeft,
             navBar.paddingTop,
             navBar.paddingRight + navBarRightMargin,
