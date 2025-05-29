@@ -335,7 +335,7 @@ class EpisodeAdapter(
                             setMessage("Enter the number of episodes to download")
                             val input = NumberPicker(currContext())
                             input.minValue = 1
-                            input.maxValue = 20
+                            input.maxValue = itemCount - bindingAdapterPosition
                             input.value = 1
                             setCustomView(input)
                             setPosButton(R.string.ok) {
