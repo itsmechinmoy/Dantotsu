@@ -334,7 +334,7 @@ class AnimeWatchAdapter(
                     setPosButton("OK") {
                         if (run) fragment.onIconPressed(style, reversed)
                         if (downloadNo.text != "0") {
-                            fragment.multiDownload(downloadNo.text.toString().toInt())
+                            fragment.multiDownload(n = downloadNo.text.toString().toInt())
                         }
                         if (refresh) fragment.loadEpisodes(source, true)
                     }

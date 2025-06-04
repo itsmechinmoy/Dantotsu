@@ -327,7 +327,28 @@ class EpisodeAdapter(
                 if (0 <= bindingAdapterPosition && bindingAdapterPosition < arr.size) {
                     val episodeNumber = arr[bindingAdapterPosition].number
                     if (downloadedEpisodes.contains(episodeNumber)) {
-                        fragment.fixDownload(episodeNumber)
+                        //fragment.fixDownload(episodeNumber)
+                        fragment.requireContext().customAlertDialog().apply {
+                            setTitle("Multi Episode Deleter")
+                            setMessage("Enter the number of episodes to delete")
+                            val input = NumberPicker(currContext())
+                            input.minValue = 1
+                            input.maxValue = itemCount - bindingAdapterPosition
+                            input.value = 1
+                            setCustomView(input)
+                            setPosButton(R.string.ok) {
+                                binding.root.context.customAlertDialog().apply {
+                                    setTitle("Delete Episodes")
+                                    setMessage("Are you sure you want to delete Episodes $episodeNumber -> ${episodeNumber.toInt() + input.value.toInt() - 1}?")
+                                    setPosButton(R.string.yes) {
+                                        fragment.multiDelete(episodeNumber, input.value)
+                                    }
+                                    setNegButton(R.string.no)
+                                }.show()
+                            }
+                            setNegButton(R.string.cancel)
+                            show()
+                        }
                     }
                     else {
                         fragment.requireContext().customAlertDialog().apply {
@@ -339,7 +360,7 @@ class EpisodeAdapter(
                             input.value = 1
                             setCustomView(input)
                             setPosButton(R.string.ok) {
-                                fragment.multiDownload(input.value, episodeNumber)
+                                fragment.multiDownload(episodeNumber, input.value)
                             }
                             setNegButton(R.string.cancel)
                             show()
