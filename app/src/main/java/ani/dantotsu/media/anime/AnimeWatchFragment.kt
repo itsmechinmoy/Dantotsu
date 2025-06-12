@@ -318,10 +318,9 @@ class AnimeWatchFragment : Fragment() {
 
     //implement Multi download
     fun multiDownload(episodeNumber: String? = null, n: Int) {
-        // Get last viewed episode
         val selected = media.userProgress
         val episodes = media.anime?.episodes?.values?.toList()
-        // Filter by selected language
+
         val progressEpisodeIndex =
             if(episodeNumber == null){
                 (episodes?.indexOfFirst {
@@ -334,13 +333,10 @@ class AnimeWatchFragment : Fragment() {
                 } ?: 0)
             }
 
-
         if (progressEpisodeIndex < 0 || n < 1 || episodes == null) return
 
-        // Calculate the end index
         val endIndex = minOf(progressEpisodeIndex + n, episodes.size)
 
-        // Make sure there are enough episodes
         val listOfEpisodesToDownload = episodes.subList(progressEpisodeIndex, endIndex)
 
         val episodesToDownload: ArrayList<String> = arrayListOf()
@@ -352,17 +348,13 @@ class AnimeWatchFragment : Fragment() {
     }
 
     fun multiDelete(episodeNumber: String? = null, n: Int){
-        // Get last viewed episode
         val episodes = media.anime?.episodes?.values?.toList()
-        // Filter by selected language
         val progressEpisodeIndex = episodes?.indexOfFirst { it.number == episodeNumber } ?: 0
 
         if (progressEpisodeIndex < 0 || n < 1 || episodes == null) return
 
-        // Calculate the end index
         val endIndex = minOf(progressEpisodeIndex + n, episodes.size)
 
-        // Make sure there are enough episodes
         val episodesToDelete = episodes.subList(progressEpisodeIndex, endIndex)
 
         for (episode in episodesToDelete) {
