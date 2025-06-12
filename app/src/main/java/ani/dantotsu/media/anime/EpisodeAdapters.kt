@@ -339,7 +339,7 @@ class EpisodeAdapter(
                             setPosButton(R.string.ok) {
                                 binding.root.context.customAlertDialog().apply {
                                     setTitle("Delete Episodes")
-                                    setMessage("Are you sure you want to delete Episodes $episodeNumber -> ${episodeNumber.toInt() + input.value.toInt() - 1}?")
+                                    setMessage("Are you sure you want to delete Episodes $episodeNumber -> ${arr[bindingAdapterPosition + input.value - 1].number}?")
                                     setPosButton(R.string.yes) {
                                         fragment.multiDelete(episodeNumber, input.value)
                                     }
