@@ -30,22 +30,21 @@ class OfflineMangaParser : MangaParser() {
         //get all of the folder names and add them to the list
         val chapters = mutableListOf<MangaChapter>()
         if (directory?.exists() == true) {
-            directory.listFiles().forEach {
+            var fileNames = directory.listFiles().filter { it.isDirectory }.map { it.name }
+            fileNames.forEach {
                 val scanlator = downloadManager.mangaDownloadedTypes.find { items ->
                     items.titleName == mangaLink &&
-                            items.chapterName == it.name
+                            items.chapterName == it
                 }?.scanlator ?: "Unknown"
-                if (it.isDirectory) {
-                    val chapter = MangaChapter(
-                        it.name!!,
-                        "$mangaLink/${it.name}",
-                        it.name,
-                        null,
-                        scanlator,
-                        SChapter.create()
-                    )
-                    chapters.add(chapter)
-                }
+                val chapter = MangaChapter(
+                    it!!,
+                    "$mangaLink/$it",
+                    it,
+                    null,
+                    scanlator,
+                    SChapter.create()
+                )
+                chapters.add(chapter)
             }
         }
         chapters.addAll(loadChaptersCompat(mangaLink, extra, sManga))
