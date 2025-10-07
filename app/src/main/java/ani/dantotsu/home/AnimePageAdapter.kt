@@ -148,7 +148,7 @@ class AnimePageAdapter : RecyclerView.Adapter<AnimePageAdapter.AnimePageViewHold
             )
         }
 
-        binding.animeIncludeList.isVisible = Anilist.userid != null
+        binding.animeIncludeList.isVisible = Anilist.token != null
 
         binding.animeIncludeList.isChecked = PrefManager.getVal(PrefName.PopularAnimeList)
 

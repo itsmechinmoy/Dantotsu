@@ -139,7 +139,7 @@ class MangaPageAdapter : RecyclerView.Adapter<MangaPageAdapter.MangaPageViewHold
             )
         }
 
-        binding.mangaIncludeList.isVisible = Anilist.userid != null
+        binding.mangaIncludeList.isVisible = Anilist.token != null
 
         binding.mangaIncludeList.isChecked = PrefManager.getVal(PrefName.PopularMangaList)
 
