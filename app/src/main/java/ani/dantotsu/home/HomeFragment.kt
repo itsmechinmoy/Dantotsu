@@ -50,6 +50,7 @@ import ani.dantotsu.statusBarHeight
 import ani.dantotsu.util.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
@@ -502,8 +503,7 @@ class HomeFragment : Fragment() {
 
                     val initHomePage = async(Dispatchers.IO) { model.initHomePage() }
                     val initUserStatus = async(Dispatchers.IO) { model.initUserStatus() }
-                    initHomePage.await()
-                    initUserStatus.await()
+                    awaitAll(initHomePage,initUserStatus)
 
                     withContext(Dispatchers.Main) {
                         model.empty.postValue(empty)

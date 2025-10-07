@@ -33,16 +33,15 @@ object Discord {
 
     fun removeSavedToken(context: Context) {
         PrefManager.removeVal(PrefName.DiscordToken)
-
+        token = null
+        userid = null
+        avatar = null
         tryWith(true) {
             val dir = File(context.filesDir?.parentFile, "app_webview")
             if (dir.deleteRecursively())
                 toast(context.getString(R.string.discord_logout_success))
         }
     }
-
-    private var rpc: RPC? = null
-
 
     fun warning(context: Context) = CustomBottomDialog().apply {
         title = context.getString(R.string.warning)

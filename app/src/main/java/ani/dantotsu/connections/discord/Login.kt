@@ -2,6 +2,7 @@ package ani.dantotsu.connections.discord
 
 import android.annotation.SuppressLint
 import android.app.Application.getProcessName
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.webkit.WebResourceRequest
@@ -36,31 +37,43 @@ class Login : AppCompatActivity() {
         }
         WebView.setWebContentsDebuggingEnabled(true)
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+
+                view?.evaluateJavascript(
+                    """
+            (function() { 
+                window.LOCAL = localStorage;
+                localStorage.removeItem = function(key) { 
+                    return true; 
+                };
+            })();
+            """.trimIndent()
+                ) {}
+            }
+
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?
             ): Boolean {
-                // Check if the URL is the one expected after a successful login
-                if (request?.url.toString() != "https://discord.com/login") {
-                    // Delay the script execution to ensure the page is fully loaded
+                val currentUrl = request?.url.toString()
+                android.util.Log.d("WebView", "Navigating to: $currentUrl")
+
+                if (currentUrl != "https://discord.com/login") {
                     view?.postDelayed({
                         view.evaluateJavascript(
                             """
-                    (function() {
-    const m = []; webpackChunkdiscord_app.push([[""], {}, e => {for (let c in e.c)m.push(e.c[c])}]);
-    return m.find(n => n?.exports?.default?.getToken !== void 0)?.exports?.default?.getToken();
-})()
-                """.trimIndent()
+                    (function() { 
+                        var token = window.LOCAL ? window.LOCAL.getItem('token') : null;
+                        return token;
+                    })();
+                    """.trimIndent()
                         ) { result ->
                             login(result.trim('"'))
                         }
                     }, 2000)
                 }
                 return super.shouldOverrideUrlLoading(view, request)
-            }
-
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
             }
         }
 

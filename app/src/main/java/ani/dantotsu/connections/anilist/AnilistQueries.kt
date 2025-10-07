@@ -476,7 +476,7 @@ class AnilistQueries {
                     0,
                     User(
                         Anilist.userid!!,
-                        Anilist.username!!,
+                        Anilist.username ?: "",
                         Anilist.avatar,
                         Anilist.bg,
                         activity = listOf()
