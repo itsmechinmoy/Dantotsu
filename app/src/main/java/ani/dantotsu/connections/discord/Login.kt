@@ -14,6 +14,7 @@ import ani.dantotsu.R
 import ani.dantotsu.connections.discord.Discord.saveToken
 import ani.dantotsu.startMainActivity
 import ani.dantotsu.themes.ThemeManager
+import org.json.JSONObject
 
 class Login : AppCompatActivity() {
 
@@ -39,16 +40,8 @@ class Login : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-
                 view?.evaluateJavascript(
-                    """
-            (function() { 
-                window.LOCAL = localStorage;
-                localStorage.removeItem = function(key) { 
-                    return true; 
-                };
-            })();
-            """.trimIndent()
+                    """window.LOCAL_STORAGE = localStorage""".trimIndent()
                 ) {}
             }
 
@@ -64,12 +57,14 @@ class Login : AppCompatActivity() {
                         view.evaluateJavascript(
                             """
                     (function() { 
-                        var token = window.LOCAL ? window.LOCAL.getItem('token') : null;
-                        return token;
+                        return window.LOCAL_STORAGE.getItem('token');
                     })();
                     """.trimIndent()
                         ) { result ->
-                            login(result.trim('"'))
+                            val token = result?.let {
+                                JSONObject("{\"token\":$it}").getString("token")
+                            } ?: ""
+                            login( token.trim('"'))
                         }
                     }, 2000)
                 }
