@@ -14,9 +14,11 @@ import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
+import org.json.JSONObject
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
+import androidx.core.net.toUri
 
 object Anilist {
     val query: AnilistQueries = AnilistQueries()
@@ -250,9 +252,9 @@ object Anilist {
         try {
             CustomTabsIntent.Builder().build().launchUrl(
                 context,
-                Uri.parse("https://anilist.co/api/v2/oauth/authorize?client_id=$clientID&response_type=token")
+                "https://anilist.co/api/v2/oauth/authorize?client_id=$clientID&response_type=token".toUri()
             )
-        } catch (e: ActivityNotFoundException) {
+        } catch (_: ActivityNotFoundException) {
             openLinkInBrowser("https://anilist.co/api/v2/oauth/authorize?client_id=$clientID&response_type=token")
         }
     }
@@ -321,9 +323,22 @@ object Anilist {
                     toast("Rate limited. Try after $retry seconds")
                     throw Exception("Rate limited after $retry seconds")
                 }
+                if (json.code == 403) {
+                    val obj = try {
+                        JSONObject(json.text)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val message = obj?.optJSONArray("errors")?.let { errors ->
+                        if (errors.length() > 0) errors.getJSONObject(0).getString("message") else "Forbidden (error 403)"
+                    } ?: "Forbidden (error 403)"
+                    if (!show) snackString("Error fetching Anilist data: $message")
+                    throw Exception(message)
+                }
                 if (!json.text.startsWith("{")) {
                     throw Exception(currContext()?.getString(R.string.anilist_down)+ " (error: ${json.code})")
                 }
+
                 json.parsed()
             } else null
         } catch (e: Exception) {
