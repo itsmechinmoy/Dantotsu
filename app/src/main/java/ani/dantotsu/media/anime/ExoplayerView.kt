@@ -1295,11 +1295,13 @@ class ExoplayerView :
 
         val speedsName = speeds.map { "${it}x" }.toTypedArray()
         // var curSpeed = loadData("${media.id}_speed", this) ?: settings.defaultSpeed
-        var curSpeed =
-            PrefManager.getCustomVal(
-                "${media.id}_speed",
-                PrefManager.getVal<Int>(PrefName.DefaultSpeed),
-            )
+        val speedsLength = speeds.size
+        val savedIndex = PrefManager.getCustomVal(
+            "${media.id}_speed",
+            PrefManager.getVal<Int>(PrefName.DefaultSpeed),
+        )
+        var curSpeed = savedIndex.coerceIn(0, speedsLength - 1)
+
 
         playbackParameters = PlaybackParameters(speeds[curSpeed])
         var speed: Float
