@@ -177,23 +177,25 @@ object AppUpdater {
     }
 
     private fun compareVersion(version: String): Boolean {
+
+
         return when (BuildConfig.BUILD_TYPE) {
             "debug" -> BuildConfig.VERSION_NAME != version
             "alpha" -> false
             else -> {
-                fun toDouble(list: List<String>): Double {
-                    return list.mapIndexed { i: Int, s: String ->
+                fun toDoubleSafe(list: List<String>): Double {
+                    return list.mapIndexed { i, s ->
+                        val num = s.toDoubleOrNull() ?: 0.0
                         when (i) {
-                            0 -> s.toDouble() * 100
-                            1 -> s.toDouble() * 10
-                            2 -> s.toDouble()
-                            else -> s.toDoubleOrNull() ?: 0.0
+                            0 -> num * 100
+                            1 -> num * 10
+                            2 -> num
+                            else -> num
                         }
                     }.sum()
                 }
-
-                val new = toDouble(version.split("."))
-                val curr = toDouble(BuildConfig.VERSION_NAME.split("."))
+                val new = toDoubleSafe(version.split("."))
+                val curr = toDoubleSafe(BuildConfig.VERSION_NAME.split("."))
                 new > curr
             }
         }
