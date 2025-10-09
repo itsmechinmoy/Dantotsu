@@ -691,7 +691,7 @@ class AnilistQueries {
             val response =
                 executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1,perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries{ media { id bannerImage } } } } } """)
             val random = response?.data?.mediaListCollection?.lists?.mapNotNull {
-                it.entries?.mapNotNull { entry ->
+                it.entries?.filter {i -> i.media?.isAdult != true  }?.mapNotNull { entry ->
                     val imageUrl = entry.media?.bannerImage
                     if (imageUrl != null && imageUrl != "null") imageUrl
                     else null

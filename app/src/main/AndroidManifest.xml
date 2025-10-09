@@ -384,9 +384,12 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="content" />
                 <data android:scheme="file" />
-                <data android:mimeType="*/*" />
+
                 <data android:pathPattern=".*\\.ani" />
                 <data android:pathPattern=".*\\.sani" />
+
+                <data android:mimeType="application/x-ani" />
+                <data android:mimeType="application/x-sani" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
