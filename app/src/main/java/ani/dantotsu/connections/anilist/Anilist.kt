@@ -323,20 +323,28 @@ object Anilist {
                     toast("Rate limited. Try after $retry seconds")
                     throw Exception("Rate limited after $retry seconds")
                 }
-                if (json.code == 403) {
+
+                if (json.code == 403 || json.code == 400) {
                     val obj = try {
                         JSONObject(json.text)
                     } catch (_: Exception) {
                         null
                     }
                     val message = obj?.optJSONArray("errors")?.let { errors ->
-                        if (errors.length() > 0) errors.getJSONObject(0).getString("message") else "Forbidden (error 403)"
-                    } ?: "Forbidden (error 403)"
-                    if (!show) snackString("Error fetching Anilist data: $message")
+                        if (errors.length() > 0) errors.getJSONObject(0)
+                            .getString("message") else "Forbidden (error ${json.code})"
+                    } ?: "Forbidden (error ${json.code})"
+
+                    if (message.contains("Invalid token")) {
+                        if (!show) snackString("Anilist token expired, please login again")
+                    } else {
+                        if (!show) snackString("Error fetching Anilist data: $message")
+                    }
+
                     throw Exception(message)
                 }
                 if (!json.text.startsWith("{")) {
-                    throw Exception(currContext()?.getString(R.string.anilist_down)+ " (error: ${json.code})")
+                    throw Exception(currContext()?.getString(R.string.anilist_down) + " (error: ${json.code})")
                 }
 
                 json.parsed()
