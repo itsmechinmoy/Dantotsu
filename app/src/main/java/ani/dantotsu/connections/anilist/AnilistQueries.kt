@@ -1268,7 +1268,7 @@ class AnilistQueries {
             return page?.airingSchedules?.mapNotNull { i ->
                 i.media?.takeIf { !idArr.contains(it.id) }?.let {
                     val shouldAdd = when {
-                        !listOnly && it.countryOfOrigin == "JP" && adultOnly && it.isAdult == true -> true
+                        !listOnly && adultOnly && it.isAdult == true -> true
                         !listOnly && !adultOnly && it.countryOfOrigin == "JP" && it.isAdult == false -> true
                         listOnly && it.mediaListEntry != null -> true
                         else -> false
