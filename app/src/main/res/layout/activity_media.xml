@@ -356,7 +356,7 @@
         <nl.joery.animatedbottombar.AnimatedBottomBar
             android:id="@+id/mediaBottomBar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="72dp"
             android:layout_gravity="center_horizontal|top"
             android:background="?attr/colorSurface"
             android:padding="0dp"

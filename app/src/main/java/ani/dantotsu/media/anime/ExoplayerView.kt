@@ -2421,7 +2421,7 @@ class ExoplayerView :
                 ) &&
                 (if (media.isAdult) PrefManager.getVal(PrefName.UpdateForHPlayer) else true)
             ) {
-                if (episode0) {
+                if (episode0 && !episodeEnd) {
                     updateProgress(media, "0")
                 } else {
                     media.anime!!.selectedEpisode?.apply {
