@@ -199,8 +199,6 @@ class PlayerSettingsActivity :
         }
         binding.playerSettingsAskChapterZero.isChecked =
             PrefManager.getVal(PrefName.ChapterZeroPlayer)
-        binding.playerSettingsAskChapterZero.isEnabled =
-            !binding.playerSettingsAskUpdateProgress.isChecked
         binding.playerSettingsAskChapterZero.setOnCheckedChangeListener { _, isChecked ->
             PrefManager.setVal(PrefName.ChapterZeroPlayer, isChecked)
         }
