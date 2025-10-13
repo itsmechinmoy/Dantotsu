@@ -4,10 +4,12 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.connections.github.Contributors
 import ani.dantotsu.databinding.BottomSheetDevelopersBinding
+import kotlinx.coroutines.launch
 
 class DevelopersDialogFragment : BottomSheetDialogFragment() {
     private var _binding: BottomSheetDevelopersBinding? = null
@@ -24,8 +26,22 @@ class DevelopersDialogFragment : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        binding.devsRecyclerView.adapter = DevelopersAdapter(Contributors().getContributors())
-        binding.devsRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+
+        binding.devsProgressBar.visibility = View.VISIBLE
+        binding.devsRecyclerView.visibility = View.GONE
+
+        lifecycleScope.launch {
+            try {
+                val contributors = Contributors().getContributors()
+                binding.devsRecyclerView.adapter = DevelopersAdapter(contributors)
+                binding.devsRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+                binding.devsRecyclerView.visibility = View.VISIBLE
+                binding.devsProgressBar.visibility = View.GONE
+            } catch (e: Exception) {
+                e.printStackTrace()
+                binding.devsProgressBar.visibility = View.GONE
+            }
+        }
     }
 
     override fun onDestroy() {

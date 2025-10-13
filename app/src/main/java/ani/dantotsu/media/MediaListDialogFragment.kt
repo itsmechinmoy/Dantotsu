@@ -76,13 +76,15 @@ class MediaListDialogFragment : BottomSheetDialogFragment() {
                 var total: Int? = null
                 binding.mediaListProgress.setText(if (media!!.userProgress != null) media!!.userProgress.toString() else "")
                 if (media!!.anime != null) if (media!!.anime!!.totalEpisodes != null) {
-                    total = media!!.anime!!.totalEpisodes!!;binding.mediaListProgress.filters =
+                    total = media!!.anime!!.totalEpisodes!!;
+                    binding.mediaListProgress.filters =
                         arrayOf(
                             InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
                             LengthFilter(total.toString().length)
                         )
                 } else if (media!!.manga != null) if (media!!.manga!!.totalChapters != null) {
-                    total = media!!.manga!!.totalChapters!!;binding.mediaListProgress.filters =
+                    total = media!!.manga!!.totalChapters!!;
+                    binding.mediaListProgress.filters =
                         arrayOf(
                             InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
                             LengthFilter(total.toString().length)
@@ -157,11 +159,11 @@ class MediaListDialogFragment : BottomSheetDialogFragment() {
                         if (progressBackup != null) binding.mediaListProgress.setText(progressBackup)
                         if (startBackupDate != null) {
                             binding.mediaListStart.setText(startBackupDate.toString())
-                            start.date = startBackupDate!!
+                            start.date = startBackupDate
                         }
                         if (endBackupDate != null) {
                             binding.mediaListEnd.setText(endBackupDate.toString())
-                            end.date = endBackupDate!!
+                            end.date = endBackupDate
                         }
                     }
                 }
