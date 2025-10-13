@@ -26,16 +26,30 @@
         android:textSize="20sp"
         android:textStyle="bold" />
 
-    <ani.dantotsu.FadingEdgeRecyclerView
-        android:id="@+id/devsRecyclerView"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:clipToPadding="false"
-        android:padding="16dp"
-        android:requiresFadingEdge="vertical"
-        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        tools:itemCount="10"
-        tools:listitem="@layout/item_developer"
-        tools:orientation="vertical" />
+        android:layout_weight="1">
+
+        <ani.dantotsu.FadingEdgeRecyclerView
+            android:id="@+id/devsRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:padding="16dp"
+            android:requiresFadingEdge="vertical"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            tools:itemCount="10"
+            tools:listitem="@layout/item_developer"
+            tools:orientation="vertical"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/devsProgressBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+
+    </FrameLayout>
 
 </LinearLayout>
