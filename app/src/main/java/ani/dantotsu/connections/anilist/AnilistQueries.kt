@@ -872,7 +872,7 @@ class AnilistQueries {
         if (genres.checkGenreTime(genre)) {
             try {
                 val genreQuery =
-                    """{ Page(perPage: 10){media(genre:"$genre", sort: TRENDING_DESC, type: ANIME, countryOfOrigin:"JP") {id bannerImage title{english romaji userPreferred} } } }"""
+                    """{ Page(perPage: 10){media(genre:"$genre", sort: TRENDING_DESC, type: ANIME, countryOfOrigin:"JP") {id bannerImage inAdult title{english romaji userPreferred} } } }"""
                 executeQuery<Query.Page>(genreQuery, force = true)?.data?.page?.media?.forEach {
                     if (genres.checkId(it.id) && it.bannerImage != null) {
                         genres[genre] = Genre(

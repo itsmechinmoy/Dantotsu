@@ -159,6 +159,7 @@ import kotlin.math.log2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import androidx.core.view.isVisible
 
 
 var statusBarHeight = 0
@@ -289,7 +290,43 @@ fun ViewGroup.setBaseline(navBar: AnimatedBottomBar) {
     clipToPadding = false
     setPadding(paddingLeft, paddingTop, paddingRight, navBarHeight + navBar.measuredHeight)
 }
+fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, extraPaddingBottom: Int = 0) {
+    fun updateLayout() {
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val navBarHeight = if (navBar.isVisible) navBar.measuredHeight else 0
 
+        clipToPadding = false
+
+        if (isLandscape) {
+            setPadding(
+                paddingLeft,
+                paddingTop,
+                paddingRight,
+                34
+            )
+            updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                bottomMargin = 364.dp.toInt()
+            }
+        } else {
+            setPadding(
+                paddingLeft,
+                paddingTop,
+                paddingRight,
+                navBarHeight + extraPaddingBottom
+            )
+        }
+    }
+
+    post { updateLayout() }
+
+    navBar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        post { updateLayout() }
+    }
+
+    rootView.viewTreeObserver.addOnGlobalLayoutListener {
+        post { updateLayout() }
+    }
+}
 /**
  * Sets clipToPadding false and sets the combined height of navigation bars as bottom padding.
  *
