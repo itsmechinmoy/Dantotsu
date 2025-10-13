@@ -9,41 +9,45 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.decodeFromJsonElement
 
 class Contributors {
 
     suspend fun getContributors(): Array<Developer> {
-        var developers = arrayOf<Developer>()
+        val developers = mutableListOf<Developer>()
 
         try {
-            val repo = getAppString(R.string.repo)
-            val res = client.get("https://api.github.com/repos/$repo/contributors")
-                .parsed<JsonArray>().map {
-                    Mapper.json.decodeFromJsonElement<GithubResponse>(it)
-                }
-            res.forEach {
-                if (it.login == "SunglassJerry") return@forEach
-                val role = when (it.login) {
+            val res =
+                client.get("https://git.rebelonion.dev/rebelonion/Dantotsu/activity/contributors/data")
+            val json = Json { ignoreUnknownKeys = true }
+            val usersMap: Map<String, UserData> = json.decodeFromString(res.text)
+
+            usersMap.values.filterNot { it.login == null  || it.login.isEmpty() }.forEach { user ->
+                if (user.name == "SunglassJerry") return@forEach
+
+                val role = when (user.name) {
                     "rebelonion" -> "Owner & Maintainer"
                     "sneazy-ibo" -> "Contributor & Comment Moderator"
                     "WaiWhat" -> "Icon Designer"
-                    "itsmechinmoy" -> "Discord and Telegram Admin/Helper, Comment Moderator & Translator"
+                    "itsmechinmoy" -> "Discord & Telegram Admin/Helper, Comment Moderator & Translator"
                     else -> "Contributor"
                 }
-                developers = developers.plus(
+
+                developers.add(
                     Developer(
-                        it.login,
-                        it.avatarUrl,
-                        role,
-                        it.htmlUrl
+                        name = user.name ?: "" ,
+                        pfp = "https://git.rebelonion.dev${user.pfp}",
+                        role = role,
+                        url = "https://git.rebelonion.dev${user.url}"
                     )
                 )
             }
+
         } catch (e: Exception) {
             e.printStackTrace()
-            developers = developers.plus(
+            developers.add(
                 Developer(
                     "Git repo is down",
                     "https://cdn-icons-png.flaticon.com/512/561/561127.png",
@@ -53,8 +57,8 @@ class Contributors {
             )
         }
 
-        developers = developers.plus(
-            arrayOf(
+        developers.addAll(
+            listOf(
                 Developer(
                     "MarshMeadow",
                     "https://avatars.githubusercontent.com/u/88599122?v=4",
@@ -114,23 +118,22 @@ class Contributors {
                     "https://s4.anilist.co/file/anilistcdn/user/avatar/large/b6183359-9os7zUhYdF64.jpg",
                     "Comment Moderator and Arabic Translator",
                     "https://anilist.co/user/6183359"
-                ),
+                )
             )
         )
 
-
-        return developers
-
+        return developers.toTypedArray()
     }
 
-
     @Serializable
-    data class GithubResponse(
-        @SerialName("login")
-        val login: String,
-        @SerialName("avatar_url")
-        val avatarUrl: String,
-        @SerialName("html_url")
-        val htmlUrl: String
+    data class UserData(
+        val name: String?,
+        val login: String?,
+        @SerialName("avatar_link")
+        val pfp: String?,
+        @SerialName("home_link")
+        val url: String?,
+        @SerialName("total_commits")
+        val commits: Int?,
     )
 }
