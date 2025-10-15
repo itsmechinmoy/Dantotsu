@@ -1,17 +1,10 @@
 package ani.dantotsu.connections.github
 
-import ani.dantotsu.Mapper
-import ani.dantotsu.R
 import ani.dantotsu.client
-import ani.dantotsu.getAppString
 import ani.dantotsu.settings.Developer
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.decodeFromJsonElement
 
 class Contributors {
 
