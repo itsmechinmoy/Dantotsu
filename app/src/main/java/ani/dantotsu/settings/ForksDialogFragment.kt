@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.R
@@ -24,6 +25,7 @@ class ForksDialogFragment : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        binding.devsProgressBar.isVisible = false
         binding.devsTitle.setText(R.string.forks)
         binding.devsRecyclerView.adapter = DevelopersAdapter(
             arrayOf(
@@ -33,6 +35,12 @@ class ForksDialogFragment : BottomSheetDialogFragment() {
                     "MrBoomDeveloper",
                     "https://github.com/MrBoomDeveloper/Awery"
                 ),
+                Developer(
+                    "Dartotsu",
+                    "https://avatars.githubusercontent.com/u/99584765?s=48&v=4",
+                    "aayush262",
+                    "https://github.com/aayush2622/Dartotsu"
+                )
             )
         )
         binding.devsRecyclerView.layoutManager = LinearLayoutManager(requireContext())
