@@ -285,7 +285,7 @@ class AnimeWatchAdapter(
                 }
 
                 //implement Multi download
-                downloadNo.text = "0"
+                downloadNo.setText("0")
                 mediaDownloadTop.setOnClickListener {
                     // Alert dialog asking for the number of Episodes to download
                     fragment.requireContext().customAlertDialog().apply {
@@ -297,7 +297,7 @@ class AnimeWatchAdapter(
                         input.value = 1
                         setCustomView(input)
                         setPosButton(R.string.ok) {
-                            downloadNo.text = "${input.value}"
+                            downloadNo.setText("${input.value}")
                         }
                         setNegButton(R.string.cancel)
                         show()
@@ -333,7 +333,7 @@ class AnimeWatchAdapter(
                     setCustomView(dialogBinding.root)
                     setPosButton("OK") {
                         if (run) fragment.onIconPressed(style, reversed)
-                        if (downloadNo.text != "0") {
+                        if (downloadNo.text.toString() != "0") {
                             fragment.multiDownload(n = downloadNo.text.toString().toInt())
                         }
                         if (refresh) fragment.loadEpisodes(source, true)
