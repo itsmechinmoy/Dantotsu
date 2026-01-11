@@ -24,6 +24,7 @@ import ani.dantotsu.R
 import ani.dantotsu.defaultHeaders
 import ani.dantotsu.download.DownloadedType
 import ani.dantotsu.download.DownloadsManager
+import ani.dantotsu.download.anime.AnimeDownloader
 import ani.dantotsu.download.anime.AnimeDownloaderService
 import ani.dantotsu.download.anime.AnimeServiceDataSingleton
 import ani.dantotsu.media.Media
@@ -75,33 +76,7 @@ object Helper {
         val downloadCheck = downloadsManager
             .queryDownload(title, episode, MediaType.ANIME)
 
-        if (downloadCheck) {
-            context.customAlertDialog().apply {
-                setTitle("Download Exists")
-                setMessage("A download for this episode already exists. Do you want to overwrite it?")
-                setPosButton(R.string.yes) {
-                    PrefManager.getAnimeDownloadPreferences().edit()
-                        .remove(animeDownloadTask.getTaskName())
-                        .apply()
-                    downloadsManager.removeDownload(
-                        DownloadedType(
-                            title,
-                            episode,
-                            MediaType.ANIME
-                        )
-                    ) {
-                        AnimeServiceDataSingleton.downloadQueue.offer(animeDownloadTask)
-                        if (!AnimeServiceDataSingleton.isServiceRunning) {
-                            val intent = Intent(context, AnimeDownloaderService::class.java)
-                            ContextCompat.startForegroundService(context, intent)
-                            AnimeServiceDataSingleton.isServiceRunning = true
-                        }
-                    }
-                }
-                setNegButton(R.string.no)
-                show()
-            }
-        } else {
+        if (!downloadCheck && !AnimeDownloader.isDownloading(sourceMedia?.id ?: -1, episode)) {
             AnimeServiceDataSingleton.downloadQueue.offer(animeDownloadTask)
             if (!AnimeServiceDataSingleton.isServiceRunning) {
                 val intent = Intent(context, AnimeDownloaderService::class.java)
