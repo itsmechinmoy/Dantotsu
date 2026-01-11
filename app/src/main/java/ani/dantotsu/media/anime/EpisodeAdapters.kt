@@ -220,6 +220,9 @@ class EpisodeAdapter(
     private val downloadedEpisodes = mutableSetOf<String>()
 
     fun startDownload(episodeNumber: String) {
+        if (downloadedEpisodes.contains(episodeNumber) ||
+            AnimeDownloader.isDownloading(media.id, episodeNumber))
+                return
         AnimeDownloader.startDownload(media.id, episodeNumber)
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
