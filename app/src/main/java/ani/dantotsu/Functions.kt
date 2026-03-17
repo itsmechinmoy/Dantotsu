@@ -288,39 +288,26 @@ fun Activity.setNavigationTheme() {
 fun ViewGroup.setBaseline(view: View, includeSystemNavBar: Boolean = true) {
     fun updateLayout() {
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val totalBottomHeight = if (view.isVisible) view.measuredHeight else 0
+        // In landscape, sidebars are vertical. We shouldn't use their height as bottom padding.
+        val isVerticalSidebar = view.height > view.width && isLandscape
+        val baselineHeight = if (view.isVisible && !isVerticalSidebar) view.measuredHeight else 0
 
         clipToPadding = false
 
-        if (isLandscape) {
-            setPadding(
-                paddingLeft,
-                paddingTop,
-                paddingRight,
-                34
-            )
-            updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                bottomMargin = 364.dp.toInt()
-            }
-        } else {
-            setPadding(
-                paddingLeft,
-                paddingTop,
-                paddingRight,
-                (if (includeSystemNavBar) navBarHeight else 0) + totalBottomHeight
-            )
+        setPadding(
+            paddingLeft,
+            paddingTop,
+            paddingRight,
+            (if (includeSystemNavBar) navBarHeight else 0) + baselineHeight
+        )
+        updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            bottomMargin = 0
         }
     }
 
     post { updateLayout() }
-
-    view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-        post { updateLayout() }
-    }
-
-    rootView.viewTreeObserver.addOnGlobalLayoutListener {
-        post { updateLayout() }
-    }
+    view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> post { updateLayout() } }
+    rootView.viewTreeObserver.addOnGlobalLayoutListener { post { updateLayout() } }
 }
 
 fun ViewGroup.setBaseline(navBar: AnimatedBottomBar) {
@@ -330,20 +317,19 @@ fun ViewGroup.setBaseline(navBar: AnimatedBottomBar) {
 fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, extraPaddingBottom: Int) {
     fun updateLayout() {
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val barHeight = if (navBar.isVisible) navBar.measuredHeight else 0
+        val isVerticalSidebar = navBar.height > navBar.width && isLandscape
+        val barHeight = if (navBar.isVisible && !isVerticalSidebar) navBar.measuredHeight else 0
 
         clipToPadding = false
 
-        if (isLandscape) {
-            setPadding(paddingLeft, paddingTop, paddingRight, 34)
-            updateLayoutParams<ViewGroup.MarginLayoutParams> { bottomMargin = 364.dp.toInt() }
-        } else {
-            setPadding(
-                paddingLeft,
-                paddingTop,
-                paddingRight,
-                navBarHeight + barHeight + extraPaddingBottom
-            )
+        setPadding(
+            paddingLeft,
+            paddingTop,
+            paddingRight,
+            (if (isLandscape) navBarHeight else navBarHeight + barHeight) + extraPaddingBottom
+        )
+        updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            bottomMargin = 0
         }
     }
 
@@ -353,25 +339,22 @@ fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, extraPaddingBottom: Int) {
 }
 
 fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, overlayView: View) {
-    // This is now handled by passing the parent container of both to setBaseline(View)
-    // or we can keep this for compatibility but make it use the new logic
     fun updateLayout() {
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val barHeight = if (navBar.isVisible) navBar.measuredHeight else 0
+        val isVerticalSidebar = navBar.height > navBar.width && isLandscape
+        val barHeight = if (navBar.isVisible && !isVerticalSidebar) navBar.measuredHeight else 0
         val overlayHeight = if (overlayView.isVisible) overlayView.measuredHeight else 0
 
         clipToPadding = false
 
-        if (isLandscape) {
-            setPadding(paddingLeft, paddingTop, paddingRight, 34)
-            updateLayoutParams<ViewGroup.MarginLayoutParams> { bottomMargin = 364.dp.toInt() }
-        } else {
-            setPadding(
-                paddingLeft,
-                paddingTop,
-                paddingRight,
-                navBarHeight + barHeight + overlayHeight
-            )
+        setPadding(
+            paddingLeft,
+            paddingTop,
+            paddingRight,
+            (if (isLandscape) navBarHeight else navBarHeight + barHeight) + overlayHeight
+        )
+        updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            bottomMargin = 0
         }
     }
 
