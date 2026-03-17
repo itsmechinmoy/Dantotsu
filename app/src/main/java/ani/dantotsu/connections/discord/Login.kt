@@ -1,4 +1,4 @@
-package ani.dantotsu.connections.discord
+﻿package ani.dantotsu.connections.discord
 
 import android.annotation.SuppressLint
 import android.app.Application.getProcessName
@@ -10,11 +10,16 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import ani.dantotsu.R
 import ani.dantotsu.connections.discord.Discord.saveToken
-import ani.dantotsu.startMainActivity
+import ani.dantotsu.MainActivity
 import ani.dantotsu.themes.ThemeManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 
 class Login : AppCompatActivity() {
 
@@ -33,6 +38,7 @@ class Login : AppCompatActivity() {
 
         webView.apply {
             settings.javaScriptEnabled = true
+            @Suppress("DEPRECATION")
             settings.databaseEnabled = true
             settings.domStorageEnabled = true
         }
@@ -50,21 +56,19 @@ class Login : AppCompatActivity() {
                 request: WebResourceRequest?
             ): Boolean {
                 val currentUrl = request?.url.toString()
-                android.util.Log.d("WebView", "Navigating to: $currentUrl")
-
                 if (currentUrl != "https://discord.com/login") {
                     view?.postDelayed({
                         view.evaluateJavascript(
                             """
-                    (function() { 
-                        return window.LOCAL_STORAGE.getItem('token');
-                    })();
-                    """.trimIndent()
+                            (function() {
+                                return window.LOCAL_STORAGE.getItem('token');
+                            })();
+                            """.trimIndent()
                         ) { result ->
                             val token = result?.let {
                                 JSONObject("{\"token\":$it}").getString("token")
                             } ?: ""
-                            login( token.trim('"'))
+                            login(token.trim('"'))
                         }
                     }, 2000)
                 }
@@ -81,10 +85,26 @@ class Login : AppCompatActivity() {
             finish()
             return
         }
-        Toast.makeText(this, "Logged in successfully", Toast.LENGTH_SHORT).show()
-        finish()
-        saveToken(token)
-        startMainActivity(this@Login)
-    }
 
+        // Pre-fetch OAuth2 Bearer token for Headless RPC ΓÇô best effort only.
+        // Whether it succeeds or fails, we always save the token and go home.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching {
+                TokenManager(
+                    authToken = token,
+                    filesDir = File(filesDir, "discord")
+                ).getToken()
+            } // ignore result
+
+            withContext(Dispatchers.Main) {
+                saveToken(token)   // updates both disk and Discord.token in-memory
+                Toast.makeText(this@Login, "Logged in successfully", Toast.LENGTH_SHORT).show()
+                val intent = android.content.Intent(this@Login, MainActivity::class.java).apply {
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(intent)
+                finish()
+            }
+        }
+    }
 }

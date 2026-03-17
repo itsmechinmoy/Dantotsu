@@ -104,8 +104,7 @@ import ani.dantotsu.circularReveal
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.connections.discord.Discord
-import ani.dantotsu.connections.discord.DiscordService
-import ani.dantotsu.connections.discord.DiscordServiceRunningSingleton
+import ani.dantotsu.connections.discord.RPCManager
 import ani.dantotsu.connections.discord.RPC
 import ani.dantotsu.connections.updateProgress
 import ani.dantotsu.databinding.ActivityExoplayerBinding
@@ -1423,31 +1422,39 @@ class ExoplayerView :
         val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled)
         if ((isOnline(context) && !offline) && Discord.token != null && !incognito && rpcenabled) {
             lifecycleScope.launch {
-                val discordMode = PrefManager.getCustomVal("discord_mode", "dantotsu")
-                val buttons =
-                    when (discordMode) {
-                        "nothing" ->
-                            mutableListOf(
-                                RPC.Link(getString(R.string.view_anime), media.shareLink ?: ""),
-                            )
+                val linkService = PrefManager.getVal(PrefName.DiscordLinkService, "ANILIST")
+                val buttons = when (linkService) {
+                    "NOTHING" -> mutableListOf()
 
-                        "dantotsu" ->
-                            mutableListOf(
-                                RPC.Link(getString(R.string.view_anime), media.shareLink ?: ""),
-                                RPC.Link("Watch on Dantotsu", getString(R.string.dantotsu)),
-                            )
+                    "DANTOTSU" -> mutableListOf(
+                        RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
+                    )
 
-                        "anilist" -> {
-                            val userId = PrefManager.getVal<String>(PrefName.AnilistUserId)
-                            val anilistLink = "https://anilist.co/user/$userId/"
+                    "ANILIST" -> mutableListOf(
+                        RPC.Link("View Anime", "https://anilist.co/anime/${media.id}/"),
+                        RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
+                    )
+
+                    "MAL" -> {
+                        val malId = media.idMAL
+                        if (malId != null) {
                             mutableListOf(
-                                RPC.Link(getString(R.string.view_anime), media.shareLink ?: ""),
-                                RPC.Link("View My AniList", anilistLink),
+                                RPC.Link("View on MyAnimeList", "https://myanimelist.net/anime/$malId"),
+                                RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
+                            )
+                        } else {
+                            mutableListOf(
+                                RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
                             )
                         }
-
-                        else -> mutableListOf()
                     }
+
+                    else -> mutableListOf(
+                        RPC.Link("View Anime", "https://anilist.co/anime/${media.id}/"),
+                        RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
+                    )
+                }
+
                 val startTimestamp = Calendar.getInstance()
                 val durationInSeconds =
                     if (exoPlayer.duration != C.TIME_UNSET) (exoPlayer.duration / 1000).toInt() else 1440
@@ -1457,37 +1464,29 @@ class ExoplayerView :
                         timeInMillis = startTimestamp.timeInMillis
                         add(Calendar.SECOND, durationInSeconds)
                     }
-                val presence =
-                    RPC.createPresence(
-                        RPC.Companion.RPCData(
-                            applicationId = Discord.application_Id,
-                            type = RPC.Type.WATCHING,
-                            activityName = media.userPreferredName,
-                            details =
-                                ep.title?.takeIf { it.isNotEmpty() } ?: getString(
-                                    R.string.episode_num,
-                                    ep.number,
-                                ),
-                            startTimestamp = startTimestamp.timeInMillis,
-                            stopTimestamp = endTimestamp.timeInMillis,
-                            state = "Episode : ${ep.number}/${media.anime?.totalEpisodes ?: "??"}",
-                            largeImage =
-                                media.cover?.let {
-                                    RPC.Link(
-                                        media.userPreferredName,
-                                        it,
-                                    )
-                                },
-                            smallImage = RPC.Link("Dantotsu", Discord.small_Image),
-                            buttons = buttons,
+                val rpcData = RPC.Companion.RPCData(
+                    applicationId = Discord.application_Id,
+                    type = RPC.Type.WATCHING,
+                    activityName = media.userPreferredName,
+                    details =
+                        ep.title?.takeIf { it.isNotEmpty() } ?: getString(
+                            R.string.episode_num,
+                            ep.number,
                         ),
-                    )
-                val intent =
-                    Intent(context, DiscordService::class.java).apply {
-                        putExtra("presence", presence)
-                    }
-                DiscordServiceRunningSingleton.running = true
-                startService(intent)
+                    startTimestamp = startTimestamp.timeInMillis,
+                    stopTimestamp = endTimestamp.timeInMillis,
+                    state = "Episode : ${ep.number}/${media.anime?.totalEpisodes ?: "??"}",
+                    largeImage =
+                        media.cover?.let {
+                            RPC.Link(
+                                media.userPreferredName,
+                                it,
+                            )
+                        },
+                    smallImage = RPC.Link("Dantotsu", Discord.small_Image),
+                    buttons = buttons,
+                )
+                RPCManager.setPresence(context, rpcData)
             }
         }
     }
@@ -2006,11 +2005,7 @@ class ExoplayerView :
         exoPlayer.release()
         VideoCache.release()
         mediaSession?.release()
-        if (DiscordServiceRunningSingleton.running) {
-            val stopIntent = Intent(this, DiscordService::class.java)
-            DiscordServiceRunningSingleton.running = false
-            stopService(stopIntent)
-        }
+        RPCManager.clearPresence(this)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

@@ -1,7 +1,11 @@
-package ani.dantotsu.connections.discord
+﻿package ani.dantotsu.connections.discord
 
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
+import android.webkit.CookieManager
+import android.webkit.WebStorage
 import android.widget.TextView
 import ani.dantotsu.R
 import ani.dantotsu.others.CustomBottomDialog
@@ -19,16 +23,14 @@ object Discord {
     var userid: String? = null
     var avatar: String? = null
 
-
     fun getSavedToken(): Boolean {
-        token = PrefManager.getVal(
-            PrefName.DiscordToken, null as String?
-        )
+        token = PrefManager.getVal(PrefName.DiscordToken, null as String?)
         return token != null
     }
 
-    fun saveToken(token: String) {
-        PrefManager.setVal(PrefName.DiscordToken, token)
+    fun saveToken(newToken: String) {
+        PrefManager.setVal(PrefName.DiscordToken, newToken)
+        token = newToken  // keep in-memory token in sync
     }
 
     fun removeSavedToken(context: Context) {
@@ -36,10 +38,19 @@ object Discord {
         token = null
         userid = null
         avatar = null
+        RPCManager.reset()
         tryWith(true) {
-            val dir = File(context.filesDir?.parentFile, "app_webview")
-            if (dir.deleteRecursively())
+            // Clear the actual Discord tokens cached by TokenManager
+            val discordDir = File(context.filesDir, "discord")
+            if (discordDir.deleteRecursively())
                 toast(context.getString(R.string.discord_logout_success))
+                
+            // Clear WebView cookies and storage on the main thread so auto-login doesn't happen
+            Handler(Looper.getMainLooper()).post {
+                CookieManager.getInstance().removeAllCookies(null)
+                CookieManager.getInstance().flush()
+                WebStorage.getInstance().deleteAllData()
+            }
         }
     }
 
@@ -72,4 +83,8 @@ object Discord {
         "mp:external/9NqpMxXs4ZNQtMG42L7hqINW92GqqDxgxS9Oh0Sp880/%3Fsize%3D48%26quality%3Dlossless%26name%3DDantotsu/https/cdn.discordapp.com/emojis/1167344924874784828.gif"
     const val small_Image_AniList: String =
         "https://anilist.co/img/icons/android-chrome-512x512.png"
+    const val small_Image_MAL: String =
+        "https://cdn.myanimelist.net/img/sp/icon/apple-touch-icon-256.png"
+    const val small_Image_Simkl: String =
+        "https://eu.simkl.in/img_favicon/v2/favicon-192x192.png"
 }
