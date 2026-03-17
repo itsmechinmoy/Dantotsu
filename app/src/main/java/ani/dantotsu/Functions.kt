@@ -285,15 +285,10 @@ fun Activity.setNavigationTheme() {
  *
  * When nesting multiple scrolling views, only call this method on the inner most scrolling view.
  */
-fun ViewGroup.setBaseline(navBar: AnimatedBottomBar) {
-    navBar.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-    clipToPadding = false
-    setPadding(paddingLeft, paddingTop, paddingRight, navBarHeight + navBar.measuredHeight)
-}
-fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, extraPaddingBottom: Int = 0) {
+fun ViewGroup.setBaseline(view: View, includeSystemNavBar: Boolean = true) {
     fun updateLayout() {
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val navBarHeight = if (navBar.isVisible) navBar.measuredHeight else 0
+        val totalBottomHeight = if (view.isVisible) view.measuredHeight else 0
 
         clipToPadding = false
 
@@ -312,14 +307,14 @@ fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, extraPaddingBottom: Int = 0
                 paddingLeft,
                 paddingTop,
                 paddingRight,
-                navBarHeight + extraPaddingBottom
+                (if (includeSystemNavBar) navBarHeight else 0) + totalBottomHeight
             )
         }
     }
 
     post { updateLayout() }
 
-    navBar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+    view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
         post { updateLayout() }
     }
 
@@ -327,21 +322,63 @@ fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, extraPaddingBottom: Int = 0
         post { updateLayout() }
     }
 }
-/**
- * Sets clipToPadding false and sets the combined height of navigation bars as bottom padding.
- *
- * When nesting multiple scrolling views, only call this method on the inner most scrolling view.
- */
+
+fun ViewGroup.setBaseline(navBar: AnimatedBottomBar) {
+    setBaseline(navBar as View)
+}
+
+fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, extraPaddingBottom: Int) {
+    fun updateLayout() {
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val barHeight = if (navBar.isVisible) navBar.measuredHeight else 0
+
+        clipToPadding = false
+
+        if (isLandscape) {
+            setPadding(paddingLeft, paddingTop, paddingRight, 34)
+            updateLayoutParams<ViewGroup.MarginLayoutParams> { bottomMargin = 364.dp.toInt() }
+        } else {
+            setPadding(
+                paddingLeft,
+                paddingTop,
+                paddingRight,
+                navBarHeight + barHeight + extraPaddingBottom
+            )
+        }
+    }
+
+    post { updateLayout() }
+    navBar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> post { updateLayout() } }
+    rootView.viewTreeObserver.addOnGlobalLayoutListener { post { updateLayout() } }
+}
+
 fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, overlayView: View) {
-    navBar.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-    overlayView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-    clipToPadding = false
-    setPadding(
-        paddingLeft,
-        paddingTop,
-        paddingRight,
-        navBarHeight + navBar.measuredHeight + overlayView.measuredHeight
-    )
+    // This is now handled by passing the parent container of both to setBaseline(View)
+    // or we can keep this for compatibility but make it use the new logic
+    fun updateLayout() {
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val barHeight = if (navBar.isVisible) navBar.measuredHeight else 0
+        val overlayHeight = if (overlayView.isVisible) overlayView.measuredHeight else 0
+
+        clipToPadding = false
+
+        if (isLandscape) {
+            setPadding(paddingLeft, paddingTop, paddingRight, 34)
+            updateLayoutParams<ViewGroup.MarginLayoutParams> { bottomMargin = 364.dp.toInt() }
+        } else {
+            setPadding(
+                paddingLeft,
+                paddingTop,
+                paddingRight,
+                navBarHeight + barHeight + overlayHeight
+            )
+        }
+    }
+
+    post { updateLayout() }
+    navBar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> post { updateLayout() } }
+    overlayView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> post { updateLayout() } }
+    rootView.viewTreeObserver.addOnGlobalLayoutListener { post { updateLayout() } }
 }
 
 fun Activity.reloadActivity() {

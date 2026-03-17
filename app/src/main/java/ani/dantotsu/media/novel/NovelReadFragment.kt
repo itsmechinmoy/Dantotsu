@@ -31,6 +31,7 @@ import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.media.novel.novelreader.NovelReaderActivity
 import ani.dantotsu.navBarHeight
+import ani.dantotsu.setBaseline
 import ani.dantotsu.parsers.ShowResponse
 import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
@@ -214,7 +215,12 @@ class NovelReadFragment : Fragment(),
             ContextCompat.RECEIVER_EXPORTED
         )
 
-        binding.mediaSourceRecycler.updatePadding(bottom = binding.mediaSourceRecycler.paddingBottom + navBarHeight)
+        val baselineAnchor = (activity as MediaDetailsActivity).binding.mediaBottomBarContainer ?: (activity as MediaDetailsActivity).binding.commentMessageContainer
+        baselineAnchor?.let {
+            val includeSystemPaddings = it != (activity as MediaDetailsActivity).binding.mediaBottomBarContainer
+            binding.mediaSourceRecycler.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
+            binding.mediaSourceRecycler.clipToPadding = false
+        }
 
         binding.mediaSourceRecycler.layoutManager = LinearLayoutManager(requireContext())
         model.scrolledToTop.observe(viewLifecycleOwner) {

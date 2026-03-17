@@ -229,7 +229,6 @@
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:id= "@+id/mediaViewPagerContainer"
-        android:paddingBottom="82dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <androidx.viewpager2.widget.ViewPager2
@@ -241,9 +240,11 @@
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/mediaBottomBarContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center|bottom"
+        android:background="?attr/colorSurface"
         android:orientation="vertical">
 
         <LinearLayout
@@ -251,7 +252,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
-            android:background="@color/nav_bg"
+            android:background="@null"
             android:orientation="vertical"
             android:windowSoftInputMode="adjustResize">
 
@@ -358,9 +359,9 @@
         <nl.joery.animatedbottombar.AnimatedBottomBar
             android:id="@+id/mediaBottomBar"
             android:layout_width="match_parent"
-            android:layout_height="72dp"
+            android:layout_height="64dp"
             android:layout_gravity="center_horizontal|top"
-            android:background="?attr/colorSurface"
+            android:background="@android:color/transparent"
             android:padding="0dp"
             app:abb_animationInterpolator="@anim/over_shoot"
             app:abb_indicatorAppearance="round"

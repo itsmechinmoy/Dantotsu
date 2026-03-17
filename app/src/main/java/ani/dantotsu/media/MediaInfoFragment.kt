@@ -40,6 +40,7 @@ import ani.dantotsu.displayTimer
 import ani.dantotsu.isOnline
 import ani.dantotsu.loadImage
 import ani.dantotsu.navBarHeight
+import ani.dantotsu.setBaseline
 import ani.dantotsu.profile.User
 import ani.dantotsu.px
 import ani.dantotsu.setSafeOnClickListener
@@ -85,7 +86,14 @@ class MediaInfoFragment : Fragment() {
             PrefManager.getVal(PrefName.OfflineMode) || !isOnline(requireContext())
         binding.mediaInfoProgressBar.isGone = loaded
         binding.mediaInfoContainer.isVisible = loaded
-        binding.mediaInfoContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> { bottomMargin += 128f.px + navBarHeight }
+        val activity = requireActivity() as MediaDetailsActivity
+        val baselineAnchor = activity.binding.mediaBottomBarContainer ?: activity.binding.commentMessageContainer
+        baselineAnchor?.let {
+            // If it's the unified container, it already has navBarHeight padding, so don't include it again.
+            val includeSystemPaddings = it != activity.binding.mediaBottomBarContainer
+            binding.mediaInfoScroll.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
+            binding.mediaInfoScroll.clipToPadding = false
+        }
 
         model.scrolledToTop.observe(viewLifecycleOwner) {
             if (it) binding.mediaInfoScroll.scrollTo(0, 0)
