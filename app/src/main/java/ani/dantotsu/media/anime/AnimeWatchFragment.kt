@@ -50,7 +50,9 @@ import ani.dantotsu.others.LanguageMapper
 import ani.dantotsu.parsers.AnimeParser
 import ani.dantotsu.parsers.AnimeSources
 import ani.dantotsu.parsers.HAnimeSources
+import ani.dantotsu.setBaseline
 import ani.dantotsu.setNavigationTheme
+import ani.dantotsu.toPx
 import ani.dantotsu.settings.extensionprefs.AnimeSourcePreferencesFragment
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -161,7 +163,7 @@ class AnimeWatchFragment : Fragment() {
 
                 val position = gridLayoutManager.findFirstVisibleItemPosition()
                 if (position > 2) {
-                    binding.ScrollTop.translationY = -navBarHeight.toFloat()
+                    binding.ScrollTop.translationY = -(navBarHeight + 12.toPx).toFloat()
                     binding.ScrollTop.visibility = View.VISIBLE
                 } else {
                     binding.ScrollTop.visibility = View.GONE
