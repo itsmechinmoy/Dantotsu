@@ -45,6 +45,7 @@ import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.media.manga.mangareader.ChapterLoaderDialog
 import ani.dantotsu.navBarHeight
+import ani.dantotsu.setBaseline
 import ani.dantotsu.notifications.subscription.SubscriptionHelper
 import ani.dantotsu.notifications.subscription.SubscriptionHelper.Companion.saveSubscription
 import ani.dantotsu.others.LanguageMapper
@@ -123,7 +124,12 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
             ContextCompat.RECEIVER_EXPORTED
         )
 
-        binding.mediaSourceRecycler.updatePadding(bottom = binding.mediaSourceRecycler.paddingBottom + navBarHeight)
+        val baselineAnchor = (activity as MediaDetailsActivity).binding.mediaBottomBarContainer ?: (activity as MediaDetailsActivity).binding.commentMessageContainer
+        baselineAnchor?.let {
+            val includeSystemPaddings = it != (activity as MediaDetailsActivity).binding.mediaBottomBarContainer
+            binding.mediaSourceRecycler.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
+            binding.mediaSourceRecycler.clipToPadding = false
+        }
         screenWidth = resources.displayMetrics.widthPixels.dp
 
         var maxGridSize = (screenWidth / 100f).roundToInt()
