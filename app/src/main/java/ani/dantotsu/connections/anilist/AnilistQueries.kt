@@ -1402,18 +1402,22 @@ Page(page:$page,perPage:50) {
         var hasNextPage = true
         val yearMedia = mutableMapOf<String, ArrayList<Media>>()
         var page = 0
+        val seenMediaIds = hashSetOf<Int>()
         while (hasNextPage) {
             page++
             hasNextPage =
                 executeQuery<Query.Studio>(query(page), force = true)?.data?.studio?.media?.let {
                     it.edges?.forEach { i ->
                         i.node?.apply {
-                            val status = status.toString()
-                            val year = startDate?.year?.toString() ?: "TBA"
-                            val title = if (status != "CANCELLED") year else status
-                            if (!yearMedia.containsKey(title))
-                                yearMedia[title] = arrayListOf()
-                            yearMedia[title]?.add(Media(this))
+                            if (id !in seenMediaIds) {
+                                seenMediaIds.add(id)
+                                val status = status.toString()
+                                val year = startDate?.year?.toString() ?: "TBA"
+                                val title = if (status != "CANCELLED") year else status
+                                if (!yearMedia.containsKey(title))
+                                    yearMedia[title] = arrayListOf()
+                                yearMedia[title]?.add(Media(this))
+                            }
                         }
                     }
                     it.pageInfo?.hasNextPage == true
