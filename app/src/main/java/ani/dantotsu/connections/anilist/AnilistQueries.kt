@@ -122,7 +122,7 @@ class AnilistQueries {
 
                         media.trailer = fetchedMedia.trailer?.let { i ->
                             if (i.site != null && i.site.toString() == "youtube")
-                                "https://www.youtube.com/embed/${i.id.toString().trim('"')}"
+                                i.id.toString().trim('"')
                             else null
                         }
 
