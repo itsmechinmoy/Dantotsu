@@ -1,4 +1,4 @@
-﻿package ani.dantotsu.connections.discord
+package ani.dantotsu.connections.discord
 
 import android.annotation.SuppressLint
 import android.app.Application.getProcessName
@@ -20,7 +20,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
-
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 class Login : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -95,6 +98,29 @@ class Login : AppCompatActivity() {
                     filesDir = File(filesDir, "discord")
                 ).getToken()
             } // ignore result
+            
+            runCatching {
+                val client = OkHttpClient()
+                val request = Request.Builder()
+                    .url("https://discord.com/api/v9/users/@me")
+                    .header("Authorization", token)
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        response.body?.string()?.let { jsonString ->
+                            val json = JSONObject(jsonString)
+                            val id = json.optString("id")
+                            val username = json.optString("username")
+                            val avatar = json.optString("avatar")
+                            
+                            PrefManager.setVal(PrefName.DiscordId, id)
+                            PrefManager.setVal(PrefName.DiscordUserName, username)
+                            PrefManager.setVal(PrefName.DiscordAvatar, avatar)
+                        }
+                    }
+                }
+            }
 
             withContext(Dispatchers.Main) {
                 saveToken(token)   // updates both disk and Discord.token in-memory
@@ -106,5 +132,10 @@ class Login : AppCompatActivity() {
                 finish()
             }
         }
+    }
+
+    override fun onDestroy() {
+        findViewById<WebView>(R.id.discordWebview)?.destroy()
+        super.onDestroy()
     }
 }

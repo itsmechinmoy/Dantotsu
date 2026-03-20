@@ -1422,37 +1422,10 @@ class ExoplayerView :
         val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled)
         if ((isOnline(context) && !offline) && Discord.token != null && !incognito && rpcenabled) {
             lifecycleScope.launch {
-                val linkService = PrefManager.getVal(PrefName.DiscordLinkService, "ANILIST")
-                val buttons = when (linkService) {
-                    "NOTHING" -> mutableListOf()
-
-                    "DANTOTSU" -> mutableListOf(
-                        RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
-                    )
-
-                    "ANILIST" -> mutableListOf(
-                        RPC.Link("View Anime", "https://anilist.co/anime/${media.id}/"),
-                        RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
-                    )
-
-                    "MAL" -> {
-                        val malId = media.idMAL
-                        if (malId != null) {
-                            mutableListOf(
-                                RPC.Link("View on MyAnimeList", "https://myanimelist.net/anime/$malId"),
-                                RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
-                            )
-                        } else {
-                            mutableListOf(
-                                RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
-                            )
-                        }
-                    }
-
-                    else -> mutableListOf(
-                        RPC.Link("View Anime", "https://anilist.co/anime/${media.id}/"),
-                        RPC.Link("Watch on Dantotsu", "https://dantotsuapp.netlify.app/")
-                    )
+                val buttons = mutableListOf<RPC.Link>()
+                buttons.add(RPC.Link("View Anime", "https://anilist.co/anime/${media.id}/"))
+                media.idMAL?.let {
+                    buttons.add(RPC.Link("View on MyAnimeList", "https://myanimelist.net/anime/$it"))
                 }
 
                 val startTimestamp = Calendar.getInstance()
