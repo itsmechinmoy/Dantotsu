@@ -17,7 +17,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
-import java.util.concurrent.TimeUnit
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import kotlin.io.encoding.Base64
@@ -39,11 +38,7 @@ class TokenManager(
     val ifUnauthorized: Throwable? = null,
     val testAccessToken: suspend (String) -> Unit = {},
 ) {
-    val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
+    val client = DiscordHttpClient.instance
     val mutex = Mutex()
     var accessToken: String? = null
     private var tokenExpiresAt: Long = 0L

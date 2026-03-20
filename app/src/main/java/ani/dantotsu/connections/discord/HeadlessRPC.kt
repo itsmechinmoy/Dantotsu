@@ -16,7 +16,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 /**
  * Discord Headless Sessions RPC client.
@@ -31,11 +30,7 @@ class HeadlessRPC(
     filesDir: File,
     ifUnauthorized: Throwable? = null,
 ) {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val client = DiscordHttpClient.instance
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     val tokenManager = TokenManager(

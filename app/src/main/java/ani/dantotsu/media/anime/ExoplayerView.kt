@@ -1428,34 +1428,27 @@ class ExoplayerView :
                     buttons.add(RPC.Link("View on MyAnimeList", "https://myanimelist.net/anime/$it"))
                 }
 
-                val startTimestamp = Calendar.getInstance()
-                val durationInSeconds =
-                    if (exoPlayer.duration != C.TIME_UNSET) (exoPlayer.duration / 1000).toInt() else 1440
+                val now = java.lang.System.currentTimeMillis()
+                val currentPosMs = if (exoPlayer.currentPosition > 0) exoPlayer.currentPosition else 0L
+                val safeDurationMs = if (exoPlayer.duration > 0 && exoPlayer.duration != C.TIME_UNSET) exoPlayer.duration else 1440000L // default 24 mins
+                
+                // If paused, we don't send timestamps so the timer stops
+                val isPaused = !isPlayerPlaying
+                val startTimestamp = if (isPaused) null else now - currentPosMs
+                val endTimestamp = if (isPaused) null else (now - currentPosMs) + safeDurationMs
+                
+                val stateText = "Episode : ${ep.number}/${media.anime?.totalEpisodes ?: "??"}"
+                val finalState = if (isPaused) "Paused - $stateText" else stateText
 
-                val endTimestamp =
-                    Calendar.getInstance().apply {
-                        timeInMillis = startTimestamp.timeInMillis
-                        add(Calendar.SECOND, durationInSeconds)
-                    }
                 val rpcData = RPC.Companion.RPCData(
                     applicationId = Discord.application_Id,
                     type = RPC.Type.WATCHING,
                     activityName = media.userPreferredName,
-                    details =
-                        ep.title?.takeIf { it.isNotEmpty() } ?: getString(
-                            R.string.episode_num,
-                            ep.number,
-                        ),
-                    startTimestamp = startTimestamp.timeInMillis,
-                    stopTimestamp = endTimestamp.timeInMillis,
-                    state = "Episode : ${ep.number}/${media.anime?.totalEpisodes ?: "??"}",
-                    largeImage =
-                        media.cover?.let {
-                            RPC.Link(
-                                media.userPreferredName,
-                                it,
-                            )
-                        },
+                    details = ep.title?.takeIf { it.isNotEmpty() } ?: getString(R.string.episode_num, ep.number),
+                    startTimestamp = startTimestamp,
+                    stopTimestamp = endTimestamp,
+                    state = finalState,
+                    largeImage = media.cover?.let { RPC.Link(media.userPreferredName, it) },
                     smallImage = RPC.Link("Dantotsu", Discord.small_Image),
                     buttons = buttons,
                 )
@@ -2075,6 +2068,18 @@ class ExoplayerView :
                     .load(if (isPlaying) R.drawable.anim_play_to_pause else R.drawable.anim_pause_to_play)
                     .into(exoPlay)
             }
+            discordRPC()
+        }
+    }
+
+    override fun onPositionDiscontinuity(
+        oldPosition: Player.PositionInfo,
+        newPosition: Player.PositionInfo,
+        reason: Int
+    ) {
+        super.onPositionDiscontinuity(oldPosition, newPosition, reason)
+        if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) {
+            discordRPC()
         }
     }
 
