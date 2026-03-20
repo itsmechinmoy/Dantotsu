@@ -490,6 +490,11 @@ class HomeFragment : Fragment() {
 
                     var empty = true
                     val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
+                    var homeLayoutOrder: List<Int> = PrefManager.getVal(PrefName.HomeLayoutOrder)
+
+                    if (homeLayoutOrder.isEmpty()) {
+                        homeLayoutOrder = (0..6).toList()
+                    }
 
                     withContext(Dispatchers.Main) {
                         homeLayoutShow.indices.forEach { i ->
@@ -497,6 +502,17 @@ class HomeFragment : Fragment() {
                                 empty = false
                             } else {
                                 containers[i].visibility = View.GONE
+                            }
+                        }
+
+                        var insertIndex = binding.homeContainer.indexOfChild(binding.homeHiddenItemsContainer) + 1
+                        
+                        homeLayoutOrder.forEach { i ->
+                            val container = containers.getOrNull(i)
+                            if (container != null) {
+                                binding.homeContainer.removeView(container)
+                                binding.homeContainer.addView(container, insertIndex)
+                                insertIndex++
                             }
                         }
                     }
