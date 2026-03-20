@@ -36,9 +36,6 @@ object RPCManager {
     private var debounceJob: Job? = null
     private const val DEBOUNCE_MS = 500L
 
-    /** Auto-clear job — clears stale presence after 2 minutes of no updates. */
-    private var autoClearJob: Job? = null
-    private const val AUTO_CLEAR_MS = 2 * 60 * 1000L
 
     // ΓöÇΓöÇΓöÇ Public API ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
@@ -50,7 +47,6 @@ object RPCManager {
      */
     fun setPresence(context: Context, data: RPC.Companion.RPCData) {
         // Cancel any pending auto-clear since we're updating presence
-        autoClearJob?.cancel()
 
         // Debounce: only the last call within 500ms actually fires
         debounceJob?.cancel()
@@ -61,15 +57,12 @@ object RPCManager {
                 ensureHeadlessRpc(context)?.newActivity(buildDiscordActivity(data))
                 Logger.log("RPCManager: Headless RPC update succeeded.")
             }.onFailure { e ->
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Logger.log("RPCManager: HeadlessRPC failed \u2013 ${e.message}")
             }
 
             // Schedule auto-clear: if no new setPresence comes within 2 min, clear
-            autoClearJob = scope.launch {
-                delay(AUTO_CLEAR_MS)
-                Logger.log("RPCManager: Auto-clearing stale presence after ${AUTO_CLEAR_MS / 1000}s")
-                headlessRpc?.runCatching { clear() }
-            }
+
         }
     }
 
@@ -79,7 +72,6 @@ object RPCManager {
     fun clearPresence(context: Context) {
         Logger.log("RPCManager: Clearing presence...")
         debounceJob?.cancel()
-        autoClearJob?.cancel()
         scope.launch {
             headlessRpc?.runCatching { clear() }
         }
@@ -90,7 +82,6 @@ object RPCManager {
      */
     fun reset() {
         debounceJob?.cancel()
-        autoClearJob?.cancel()
         headlessRpc?.stop()
         headlessRpc = null
     }
@@ -152,7 +143,9 @@ object RPCManager {
             }
             
             primaryTracker?.let {
-                buttons.add(DiscordActivity.Button(label = it.label, url = it.url))
+                if (it.url.isValidUrl()) {
+                    buttons.add(DiscordActivity.Button(label = it.label, url = it.url))
+                }
             }
 
             // Button 2: User Profile Link
@@ -166,8 +159,10 @@ object RPCManager {
                 else -> null to null
             }
 
-            userProfileUrl?.let {
-                buttons.add(DiscordActivity.Button(label = profileLabel ?: "View Profile", url = it))
+            userProfileUrl?.let { url ->
+                if (url.isValidUrl()) {
+                    buttons.add(DiscordActivity.Button(label = profileLabel ?: "View Profile", url = url))
+                }
             }
         }
 
@@ -196,4 +191,12 @@ object RPCManager {
             buttons = buttons.take(2).takeIf { it.isNotEmpty() },
         )
     }
+
+    /** Validate that a URL is a proper http/https link. */
+    private fun String?.isValidUrl(): Boolean {
+        return this != null && isNotEmpty() &&
+                (startsWith("http://") || startsWith("https://"))
+    }
+
+
 }
