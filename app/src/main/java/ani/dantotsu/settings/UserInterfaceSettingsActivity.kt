@@ -14,6 +14,14 @@ import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.util.customAlertDialog
+import android.view.LayoutInflater
+import android.view.View
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.materialswitch.MaterialSwitch
 
 class UserInterfaceSettingsActivity : AppCompatActivity() {
     lateinit var binding: ActivityUserInterfaceSettingsBinding
@@ -36,26 +44,71 @@ class UserInterfaceSettingsActivity : AppCompatActivity() {
         }
 
         binding.uiSettingsHomeLayout.setOnClickListener {
-            val set = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout).toMutableList()
+            val currentVisibility = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout).toMutableList()
+            var currentOrder = PrefManager.getVal<List<Int>>(PrefName.HomeLayoutOrder).toMutableList()
             val views = resources.getStringArray(R.array.home_layouts)
-            customAlertDialog().apply {
-                setTitle(getString(R.string.home_layout_show))
-                multiChoiceItems(
-                    items = views,
-                    checkedItems = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout)
-                        .toBooleanArray()
-                ) { selectedItems ->
-                    for (i in selectedItems.indices) {
-                        set[i] = selectedItems[i]
-                    }
-                }
-                setPosButton(R.string.ok) {
-                    PrefManager.setVal(PrefName.HomeLayout, set)
-                    restartApp()
-                }
-                show()
+
+            if (currentOrder.isEmpty()) {
+                currentOrder = (0..6).toMutableList()
             }
 
+            val displayList = mutableListOf(7)
+            displayList.addAll(currentOrder.filter { it != 7 })
+
+            val recyclerView = RecyclerView(this).apply {
+                layoutManager = LinearLayoutManager(this@UserInterfaceSettingsActivity)
+                setPadding(0, 32, 0, 0)
+                clipToPadding = false
+            }
+            val adapter = HomeLayoutAdapter(displayList, views, currentVisibility)
+            recyclerView.adapter = adapter
+
+            val itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+                ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+            ) {
+                override fun onMove(
+                    recyclerView: RecyclerView,
+                    viewHolder: RecyclerView.ViewHolder,
+                    target: RecyclerView.ViewHolder
+                ): Boolean {
+                    val fromPos = viewHolder.bindingAdapterPosition
+                    val toPos = target.bindingAdapterPosition
+
+                    if (fromPos == 0 || toPos == 0) return false
+
+                    val item = displayList.removeAt(fromPos)
+                    displayList.add(toPos, item)
+                    adapter.notifyItemMoved(fromPos, toPos)
+                    return true
+                }
+
+                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+                override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                    super.clearView(recyclerView, viewHolder)
+                    viewHolder.itemView.elevation = 0f
+                }
+
+                override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+                    super.onSelectedChanged(viewHolder, actionState)
+                    if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                        viewHolder?.itemView?.elevation = 8f
+                    }
+                }
+            })
+            itemTouchHelper.attachToRecyclerView(recyclerView)
+
+            customAlertDialog().apply {
+                setTitle(getString(R.string.home_layout_show))
+                setCustomView(recyclerView)
+                setPosButton(R.string.ok) {
+                    PrefManager.setVal(PrefName.HomeLayout, currentVisibility)
+                    PrefManager.setVal(PrefName.HomeLayoutOrder, displayList.drop(1))
+                    restartApp()
+                }
+                setNegButton(R.string.cancel, null)
+                show()
+            }
         }
 
         binding.uiSettingsSmallView.isChecked = PrefManager.getVal(PrefName.SmallView)
@@ -124,5 +177,42 @@ class UserInterfaceSettingsActivity : AppCompatActivity() {
             PrefManager.setVal(PrefName.BlurSampling, value)
             restartApp()
         }
+    }
+
+    inner class HomeLayoutAdapter(
+        private val displayList: MutableList<Int>,
+        private val views: Array<String>,
+        private val currentVisibility: MutableList<Boolean>
+    ) : RecyclerView.Adapter<HomeLayoutAdapter.ViewHolder>() {
+
+        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val dragHandle: ImageView = view.findViewById(R.id.itemHomeLayoutDragHandle)
+            val title: TextView = view.findViewById(R.id.itemHomeLayoutTitle)
+            val switch: MaterialSwitch = view.findViewById(R.id.itemHomeLayoutSwitch)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_home_layout, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val originalIndex = displayList[position]
+            holder.title.text = views[originalIndex]
+            
+            holder.switch.setOnCheckedChangeListener(null)
+            holder.switch.isChecked = currentVisibility[originalIndex]
+            holder.switch.setOnCheckedChangeListener { _, isChecked ->
+                currentVisibility[originalIndex] = isChecked
+            }
+
+            if (position == 0) {
+                holder.dragHandle.visibility = View.INVISIBLE
+            } else {
+                holder.dragHandle.visibility = View.VISIBLE
+            }
+        }
+
+        override fun getItemCount(): Int = displayList.size
     }
 }
