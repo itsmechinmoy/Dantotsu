@@ -17,6 +17,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import java.util.concurrent.TimeUnit
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import kotlin.io.encoding.Base64
@@ -38,19 +39,38 @@ class TokenManager(
     val ifUnauthorized: Throwable? = null,
     val testAccessToken: suspend (String) -> Unit = {},
 ) {
-    val client = OkHttpClient()
+    val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
     val mutex = Mutex()
     var accessToken: String? = null
+    private var tokenExpiresAt: Long = 0L
 
     fun clear() {
         accessToken = null
+        tokenExpiresAt = 0L
         filesDir.resolve("discord_access.txt").delete()
         filesDir.resolve("discord_refresh.txt").delete()
+        filesDir.resolve("discord_expiry.txt").delete()
     }
 
     suspend fun getToken() = mutex.withLock {
-        if (accessToken == null) runCatching {
+        val isExpired = tokenExpiresAt > 0L && System.currentTimeMillis() > tokenExpiresAt
+        if (accessToken == null || isExpired) runCatching {
+            if (isExpired) {
+                Logger.log("TokenManager: Token expired, proactively refreshing...")
+                throw IllegalStateException("Token expired")
+            }
             accessToken = filesDir.resolve("discord_access.txt").readText()
+            tokenExpiresAt = runCatching {
+                filesDir.resolve("discord_expiry.txt").readText().toLong()
+            }.getOrDefault(0L)
+            if (tokenExpiresAt > 0L && System.currentTimeMillis() > tokenExpiresAt) {
+                Logger.log("TokenManager: Cached token expired, refreshing...")
+                throw IllegalStateException("Cached token expired")
+            }
             testAccessToken(accessToken!!)
             Logger.log("TokenManager: Used cached Discord access token")
         }.onFailure {
@@ -71,6 +91,16 @@ class TokenManager(
         accessToken!!
     }
 
+    /** Returns the token expiry timestamp (millis), or 0 if unknown. */
+    fun getTokenExpiresAt(): Long {
+        if (tokenExpiresAt == 0L) {
+            tokenExpiresAt = runCatching {
+                filesDir.resolve("discord_expiry.txt").readText().toLong()
+            }.getOrDefault(0L)
+        }
+        return tokenExpiresAt
+    }
+
     private fun saveTokens(response: TokenResponse) {
         val accessFile = filesDir.resolve("discord_access.txt")
         accessFile.parentFile?.mkdirs()
@@ -79,6 +109,13 @@ class TokenManager(
         
         response.refreshToken?.let {
             filesDir.resolve("discord_refresh.txt").writeText(it)
+        }
+
+        // Track expiry: refresh 1 minute early to avoid edge-case failures
+        response.expiresIn?.let {
+            tokenExpiresAt = System.currentTimeMillis() + (it * 1000) - 60_000
+            filesDir.resolve("discord_expiry.txt").writeText(tokenExpiresAt.toString())
+            Logger.log("TokenManager: Token expires at $tokenExpiresAt (in ${it}s, refreshing 60s early)")
         }
     }
 

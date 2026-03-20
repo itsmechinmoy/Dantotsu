@@ -13,7 +13,9 @@ import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -30,6 +32,14 @@ object RPCManager {
     /** Lazily created HeadlessRPC instance; reset on user logout. */
     private var headlessRpc: HeadlessRPC? = null
 
+    /** Debounce job — only the last setPresence within 500ms fires. */
+    private var debounceJob: Job? = null
+    private const val DEBOUNCE_MS = 500L
+
+    /** Auto-clear job — clears stale presence after 2 minutes of no updates. */
+    private var autoClearJob: Job? = null
+    private const val AUTO_CLEAR_MS = 2 * 60 * 1000L
+
     // ΓöÇΓöÇΓöÇ Public API ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     /**
@@ -39,13 +49,26 @@ object RPCManager {
      * @param data    The presence data built by the calling screen
      */
     fun setPresence(context: Context, data: RPC.Companion.RPCData) {
-        scope.launch {
+        // Cancel any pending auto-clear since we're updating presence
+        autoClearJob?.cancel()
+
+        // Debounce: only the last call within 500ms actually fires
+        debounceJob?.cancel()
+        debounceJob = scope.launch {
+            delay(DEBOUNCE_MS)
             Logger.log("RPCManager: Attempting to use Headless RPC...")
             runCatching {
                 ensureHeadlessRpc(context)?.newActivity(buildDiscordActivity(data))
                 Logger.log("RPCManager: Headless RPC update succeeded.")
             }.onFailure { e ->
-                Logger.log("RPCManager: HeadlessRPC failed ΓÇô ${e.message}")
+                Logger.log("RPCManager: HeadlessRPC failed \u2013 ${e.message}")
+            }
+
+            // Schedule auto-clear: if no new setPresence comes within 2 min, clear
+            autoClearJob = scope.launch {
+                delay(AUTO_CLEAR_MS)
+                Logger.log("RPCManager: Auto-clearing stale presence after ${AUTO_CLEAR_MS / 1000}s")
+                headlessRpc?.runCatching { clear() }
             }
         }
     }
@@ -55,6 +78,8 @@ object RPCManager {
      */
     fun clearPresence(context: Context) {
         Logger.log("RPCManager: Clearing presence...")
+        debounceJob?.cancel()
+        autoClearJob?.cancel()
         scope.launch {
             headlessRpc?.runCatching { clear() }
         }
@@ -64,8 +89,17 @@ object RPCManager {
      * Call this when the user logs out of Discord to release all resources.
      */
     fun reset() {
+        debounceJob?.cancel()
+        autoClearJob?.cancel()
         headlessRpc?.stop()
         headlessRpc = null
+    }
+
+    /**
+     * Returns the token expiry timestamp in millis, or 0 if unknown/not logged in.
+     */
+    fun getTokenExpiresAt(): Long {
+        return headlessRpc?.tokenManager?.getTokenExpiresAt() ?: 0L
     }
 
     // ΓöÇΓöÇΓöÇ Private helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ

@@ -16,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * Discord Headless Sessions RPC client.
@@ -30,7 +31,11 @@ class HeadlessRPC(
     filesDir: File,
     ifUnauthorized: Throwable? = null,
 ) {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     val tokenManager = TokenManager(
@@ -120,15 +125,21 @@ class HeadlessRPC(
                 
                 if (resp.code == 429) {
                     val retryAfter = resp.header("Retry-After")?.toLongOrNull() ?: 5L
-                    Logger.log("HeadlessRPC: Rate limited (429). Retrying after $retryAfter seconds.")
-                    kotlinx.coroutines.delay(retryAfter * 1000 + 500)
+                    val backoffMs = (retryAfter * 1000 + 500) * (retryCount + 1)
+                    Logger.log("HeadlessRPC: Rate limited (429). Backing off ${backoffMs}ms (attempt ${retryCount + 1}/3)")
+                    kotlinx.coroutines.delay(backoffMs)
                     retryCount++
                     continue
                 }
 
                 if (!resp.isSuccessful) {
                     Logger.log("HeadlessRPC: POST failed: ${resp.code} $respBody")
-                    if (resp.code == 401) tokenManager.clear()
+                    if (resp.code == 401 && retryCount == 0) {
+                        Logger.log("HeadlessRPC: 401 — clearing token and retrying with fresh token")
+                        tokenManager.clear()
+                        retryCount++
+                        continue
+                    }
                     throw IllegalStateException("headless-sessions POST failed: ${resp.code} $respBody")
                 }
 
