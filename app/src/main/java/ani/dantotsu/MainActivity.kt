@@ -340,9 +340,10 @@ class MainActivity : AppCompatActivity() {
                         val id = intent.extras?.getInt("mediaId", 0)
                         val isMAL = intent.extras?.getBoolean("mal") ?: false
                         val cont = intent.extras?.getBoolean("continue") ?: false
+                        val mediaType = intent.extras?.getString("mediaType")
                         if (id != null && id != 0) {
                             val media = withContext(Dispatchers.IO) {
-                                Anilist.query.getMedia(id, isMAL)
+                                Anilist.query.getMedia(id, isMAL, mediaType)
                             }
                             if (media != null) {
                                 media.cameFromContinue = cont
