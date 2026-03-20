@@ -3,6 +3,10 @@ package ani.dantotsu.connections.discord
 import ani.dantotsu.connections.discord.models.DiscordActivity
 import ani.dantotsu.connections.discord.models.DiscordSession
 import ani.dantotsu.util.Logger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -12,8 +16,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
  * Discord Headless Sessions RPC client.
@@ -49,13 +51,14 @@ class HeadlessRPC(
 
     /** Session token returned by the headless sessions API; passed on subsequent updates */
     private var activityToken: String? = null
+    private val mutex = Mutex()
 
     /** Send (or update) a rich presence activity. */
-    suspend fun newActivity(activity: DiscordActivity?) {
+    suspend fun newActivity(activity: DiscordActivity?) = mutex.withLock {
         if (activity == null) {
             Logger.log("HeadlessRPC: Activity is null, calling deleteSession")
-            deleteSession()
-            return
+            deleteSessionInternal()
+            return@withLock
         }
         Logger.log("HeadlessRPC: Sending new activity to Discord...")
         postSession(
@@ -67,51 +70,78 @@ class HeadlessRPC(
     }
 
     /** Delete the current headless session (clears Discord status). */
-    suspend fun deleteSession() = withContext(Dispatchers.IO) {
-        val sessionToken = activityToken ?: return@withContext
-        val bearer = tokenManager.getToken()
-        val resp = client.newCall(
-            Request.Builder()
-                .url("https://discord.com/api/v10/users/@me/headless-sessions/delete")
-                .header("Authorization", "Bearer $bearer")
-                .post(
-                    """{"token":"$sessionToken"}"""
-                        .toRequestBody("application/json".toMediaType())
-                )
-                .build()
-        ).execute()
-        if (!resp.isSuccessful) {
-            // If session already gone, just reset
-            Logger.log("HeadlessRPC: deleteSession failed: ${resp.code} ${resp.body?.string()}")
-        } else {
-            Logger.log("HeadlessRPC: deleteSession succeeded")
+    suspend fun deleteSession() = mutex.withLock {
+        deleteSessionInternal()
+    }
+
+    private suspend fun deleteSessionInternal() = withContext(Dispatchers.IO) {
+        val sessionToken = activityToken ?: run {
+            Logger.log("HeadlessRPC: No active session token to delete.")
+            return@withContext
+        }
+        try {
+            val bearer = tokenManager.getToken()
+            val resp = client.newCall(
+                Request.Builder()
+                    .url("https://discord.com/api/v10/users/@me/headless-sessions/delete")
+                    .header("Authorization", "Bearer $bearer")
+                    .post(
+                        """{"token":"$sessionToken"}"""
+                            .toRequestBody("application/json".toMediaType())
+                    )
+                    .build()
+            ).execute()
+            if (!resp.isSuccessful) {
+                Logger.log("HeadlessRPC: deleteSession failed: ${resp.code} ${resp.body?.string()}")
+            } else {
+                Logger.log("HeadlessRPC: deleteSession succeeded")
+            }
+        } catch (e: Exception) {
+            Logger.log("HeadlessRPC: deleteSession Network Error - ${e.message}")
         }
         activityToken = null
     }
 
     private suspend fun postSession(session: DiscordSession) = withContext(Dispatchers.IO) {
-        val bearer = tokenManager.getToken()
-        val body = json.encodeToString(DiscordSession.serializer(), session)
-        val resp = client.newCall(
-            Request.Builder()
-                .url("https://discord.com/api/v10/users/@me/headless-sessions")
-                .header("Authorization", "Bearer $bearer")
-                .post(body.toRequestBody("application/json".toMediaType()))
-                .build()
-        ).execute()
+        try {
+            var retryCount = 0
+            while (retryCount < 3) {
+                val bearer = tokenManager.getToken()
+                val body = json.encodeToString(DiscordSession.serializer(), session)
+                val resp = client.newCall(
+                    Request.Builder()
+                        .url("https://discord.com/api/v10/users/@me/headless-sessions")
+                        .header("Authorization", "Bearer $bearer")
+                        .post(body.toRequestBody("application/json".toMediaType()))
+                        .build()
+                ).execute()
 
-        val respBody = resp.body?.string() ?: ""
-        if (!resp.isSuccessful) {
-            Logger.log("HeadlessRPC: POST failed: ${resp.code} $respBody")
-            // If 401, clear cached token so it's re-acquired next time
-            if (resp.code == 401) tokenManager.clear()
-            throw IllegalStateException("headless-sessions POST failed: ${resp.code} $respBody")
-        }
+                val respBody = resp.body?.string() ?: ""
+                
+                if (resp.code == 429) {
+                    val retryAfter = resp.header("Retry-After")?.toLongOrNull() ?: 5L
+                    Logger.log("HeadlessRPC: Rate limited (429). Retrying after $retryAfter seconds.")
+                    kotlinx.coroutines.delay(retryAfter * 1000 + 500)
+                    retryCount++
+                    continue
+                }
 
-        Logger.log("HeadlessRPC: POST succeeded! Saving activity token")
-        runCatching {
-            val responseJson = json.decodeFromString<JsonObject>(respBody)
-            activityToken = responseJson["token"]?.jsonPrimitive?.content
+                if (!resp.isSuccessful) {
+                    Logger.log("HeadlessRPC: POST failed: ${resp.code} $respBody")
+                    if (resp.code == 401) tokenManager.clear()
+                    throw IllegalStateException("headless-sessions POST failed: ${resp.code} $respBody")
+                }
+
+                Logger.log("HeadlessRPC: POST succeeded! Saving activity token")
+                runCatching {
+                    val responseJson = json.decodeFromString<JsonObject>(respBody)
+                    activityToken = responseJson["token"]?.jsonPrimitive?.content
+                }
+                break
+            }
+        } catch (e: Exception) {
+            Logger.log("HeadlessRPC: postSession Network Error - ${e.message}")
+            throw e
         }
     }
 

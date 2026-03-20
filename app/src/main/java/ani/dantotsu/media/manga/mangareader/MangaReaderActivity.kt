@@ -410,37 +410,10 @@ class MangaReaderActivity : AppCompatActivity() {
                 val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled)
                 if ((isOnline(context) && !offline) && Discord.token != null && !incognito && rpcenabled) {
                     lifecycleScope.launch {
-                        val linkService = PrefManager.getVal(PrefName.DiscordLinkService, "ANILIST")
-                        val buttons = when (linkService) {
-                            "NOTHING" -> mutableListOf()
-
-                            "DANTOTSU" -> mutableListOf(
-                                RPC.Link("Read on Dantotsu", "https://dantotsuapp.netlify.app/")
-                            )
-
-                            "ANILIST" -> mutableListOf(
-                                RPC.Link("View Manga", "https://anilist.co/manga/${media.id}/"),
-                                RPC.Link("Read on Dantotsu", "https://dantotsuapp.netlify.app/")
-                            )
-
-                            "MAL" -> {
-                                val malId = media.idMAL
-                                if (malId != null) {
-                                    mutableListOf(
-                                        RPC.Link("View on MyAnimeList", "https://myanimelist.net/manga/$malId"),
-                                        RPC.Link("Read on Dantotsu", "https://dantotsuapp.netlify.app/")
-                                    )
-                                } else {
-                                    mutableListOf(
-                                        RPC.Link("Read on Dantotsu", "https://dantotsuapp.netlify.app/")
-                                    )
-                                }
-                            }
-
-                            else -> mutableListOf(
-                                RPC.Link("View Manga", "https://anilist.co/manga/${media.id}/"),
-                                RPC.Link("Read on Dantotsu", "https://dantotsuapp.netlify.app/")
-                            )
+                        val buttons = mutableListOf<RPC.Link>()
+                        buttons.add(RPC.Link("View Manga", "https://anilist.co/manga/${media.id}/"))
+                        media.idMAL?.let {
+                            buttons.add(RPC.Link("View on MyAnimeList", "https://myanimelist.net/manga/$it"))
                         }
                         val rpcData = RPC.Companion.RPCData(
                             applicationId = Discord.application_Id,
@@ -448,7 +421,7 @@ class MangaReaderActivity : AppCompatActivity() {
                             activityName = media.userPreferredName,
                             details = chap.title?.takeIf { it.isNotEmpty() }
                                 ?: getString(R.string.chapter_num, chap.number),
-                            state = "${chap.number}/${media.manga?.totalChapters ?: "??"}",
+                            state = "Chapter : ${chap.number}/${media.manga?.totalChapters ?: "??"}",
                             largeImage = media.cover?.let { cover ->
                                 RPC.Link(
                                     media.userPreferredName,

@@ -72,6 +72,7 @@ object MAL {
                 res = refreshToken()
                     ?: throw Exception(currContext()?.getString(R.string.refreshing_token_failed))
             token = res.accessToken
+            username = PrefManager.getVal(PrefName.MALUserName, null as String?)
             return@tryWithSuspend true
         } ?: false
     }

@@ -93,35 +93,53 @@ object RPCManager {
                 (data.state?.contains("Reading", ignoreCase = true) == true ||
                         data.state?.contains("Chapter", ignoreCase = true) == true)
 
-        var iconService = if (isManga) {
-            PrefManager.getVal(PrefName.DiscordIconServiceManga, "DANTOTSU")
+        val mode = if (isManga) PrefManager.getVal(PrefName.DiscordRPCModeManga, "dantotsu") else PrefManager.getVal(PrefName.DiscordRPCModeAnime, "dantotsu")
+        val useIconPref = if (isManga) PrefManager.getVal<Boolean>(PrefName.DiscordRPCShowIconManga, true) else PrefManager.getVal<Boolean>(PrefName.DiscordRPCShowIconAnime, true)
+
+        // Select Small Icon based on mode
+        val (smallIconUrl, smallIconText) = if (useIconPref && mode != "nothing") {
+            when (mode) {
+                "anilist" -> Discord.small_Image_AniList to "AniList"
+                "mal" -> Discord.small_Image_MAL to "MyAnimeList"
+                else -> Discord.small_Image to "Dantotsu"
+            }
         } else {
-            PrefManager.getVal(PrefName.DiscordIconService, "DANTOTSU")
+            null to null
         }
-        if (isManga && iconService == "SIMKL") {
-            val anilistToken = PrefManager.getVal(PrefName.AnilistToken, "")
-            val malToken = MAL.token
-            iconService = when {
-                anilistToken.isNotEmpty() -> "ANILIST"
-                malToken != null -> "MAL"
-                else -> "DANTOTSU"
+
+        // Build Buttons based on mode
+        val buttons = mutableListOf<DiscordActivity.Button>()
+        if (mode != "nothing") {
+            // Button 1: Media Link (Primary Tracker)
+            val trackers = runCatching { data.buttons.filter { it.url.contains("anilist.co") || it.url.contains("myanimelist.net") } }.getOrDefault(emptyList())
+            val primaryTracker = when (mode) {
+                "mal" -> trackers.find { it.url.contains("myanimelist.net") } ?: trackers.find { it.url.contains("anilist.co") }
+                else -> trackers.find { it.url.contains("anilist.co") } ?: trackers.find { it.url.contains("myanimelist.net") }
+            }
+            
+            primaryTracker?.let {
+                buttons.add(DiscordActivity.Button(label = it.label, url = it.url))
+            }
+
+            // Button 2: User Profile Link
+            val anilistUser = PrefManager.getVal(PrefName.AnilistUserName, "")
+            val malUser = MAL.username ?: PrefManager.getVal(PrefName.MALUserName, "")
+            
+            val (userProfileUrl, profileLabel) = when (mode) {
+                "mal" -> (if (malUser.isNotEmpty()) "https://myanimelist.net/profile/$malUser" else null) to "View Profile"
+                "anilist" -> (if (anilistUser.isNotEmpty()) "https://anilist.co/user/$anilistUser/" else null) to "View Profile"
+                "dantotsu" -> (if (anilistUser.isNotEmpty()) "https://dantotsu.app/u/$anilistUser" else null) to "Dantotsu Profile"
+                else -> null to null
+            }
+
+            userProfileUrl?.let {
+                buttons.add(DiscordActivity.Button(label = profileLabel ?: "View Profile", url = it))
             }
         }
 
-        val (smallIconUrl, smallIconText) = when (iconService) {
-            "ANILIST" -> Discord.small_Image_AniList to "AniList"
-            "MAL" -> Discord.small_Image_MAL to "MyAnimeList"
-            "SIMKL" -> Discord.small_Image_Simkl to "Simkl"
-            else -> Discord.small_Image to "Dantotsu"
-        }
-
-        val buttons = data.buttons.take(2).map { link ->
-            DiscordActivity.Button(label = link.label, url = link.url)
-        }.takeIf { it.isNotEmpty() }
-
         return DiscordActivity(
             applicationId = data.applicationId,
-            name = data.activityName,
+            name = data.activityName?.takeIf { it.isNotBlank() } ?: "Dantotsu",
             platform = "android", // Required by Discord
             type = data.type?.ordinal,
             statusDisplayType = 0,
@@ -141,7 +159,7 @@ object RPCManager {
                     end = data.stopTimestamp
                 )
             else null,
-            buttons = buttons,
+            buttons = buttons.take(2).takeIf { it.isNotEmpty() },
         )
     }
 }

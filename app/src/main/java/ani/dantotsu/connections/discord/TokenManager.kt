@@ -45,6 +45,7 @@ class TokenManager(
     fun clear() {
         accessToken = null
         filesDir.resolve("discord_access.txt").delete()
+        filesDir.resolve("discord_refresh.txt").delete()
     }
 
     suspend fun getToken() = mutex.withLock {
@@ -52,21 +53,41 @@ class TokenManager(
             accessToken = filesDir.resolve("discord_access.txt").readText()
             testAccessToken(accessToken!!)
             Logger.log("TokenManager: Used cached Discord access token")
-        }.getOrElse {
-            Logger.log("TokenManager: Cached token invalid/missing, creating new access token via PKCE")
-            accessToken = createAccessToken()
-            val file = filesDir.resolve("discord_access.txt")
-            file.parentFile?.mkdirs()
-            file.writeText(accessToken!!)
-            Logger.log("TokenManager: New access token saved to disk")
+        }.onFailure {
+            Logger.log("TokenManager: Cached token invalid/missing, attempting refresh or PKCE")
+            runCatching {
+                val refreshFile = filesDir.resolve("discord_refresh.txt")
+                if (!refreshFile.exists()) throw IllegalStateException("No refresh token cached")
+                val response = refreshOAuthToken(refreshFile.readText())
+                saveTokens(response)
+                Logger.log("TokenManager: Token refreshed successfully via refresh_token")
+            }.onFailure {
+                // fallback to PKCE
+                val response = createAccessToken()
+                saveTokens(response)
+                Logger.log("TokenManager: New access token saved to disk via PKCE logic")
+            }
         }
         accessToken!!
+    }
+
+    private fun saveTokens(response: TokenResponse) {
+        val accessFile = filesDir.resolve("discord_access.txt")
+        accessFile.parentFile?.mkdirs()
+        accessToken = response.accessToken
+        accessFile.writeText(accessToken!!)
+        
+        response.refreshToken?.let {
+            filesDir.resolve("discord_refresh.txt").writeText(it)
+        }
     }
 
     @Serializable
     data class TokenResponse(
         @SerialName("access_token")
         val accessToken: String? = null,
+        @SerialName("refresh_token")
+        val refreshToken: String? = null,
         @SerialName("token_type")
         val tokenType: String? = null,
         @SerialName("expires_in")
@@ -74,7 +95,7 @@ class TokenManager(
         val scope: String? = null,
     )
 
-    private suspend fun createAccessToken(): String = withContext(Dispatchers.IO) {
+    private suspend fun createAccessToken(): TokenResponse = withContext(Dispatchers.IO) {
         val codeVerifier = generateCodeVerifier()
         val challenge = generateCodeChallenge(codeVerifier)
 
@@ -141,6 +162,31 @@ class TokenManager(
         val response = Json { ignoreUnknownKeys = true }.decodeFromString<TokenResponse>(tokenBody ?: throw IllegalStateException("Empty token response"))
         Logger.log("TokenManager: Successfully obtained Discord Bearer token!")
         response.accessToken ?: throw IllegalStateException("No access_token in response: $tokenBody")
+        response
+    }
+
+    private suspend fun refreshOAuthToken(refreshToken: String): TokenResponse = withContext(Dispatchers.IO) {
+        val tokenResp = client.newCall(
+            Request.Builder()
+                .url("https://discord.com/api/v10/oauth2/token")
+                .post(
+                    FormBody.Builder()
+                        .add("client_id", CLIENT_ID)
+                        .add("grant_type", "refresh_token")
+                        .add("refresh_token", refreshToken)
+                        .build()
+                )
+                .build()
+        ).execute()
+
+        val tokenBody = tokenResp.body?.string()
+        if (!tokenResp.isSuccessful) {
+            throw IllegalStateException("Refresh failed: ${tokenResp.code} $tokenBody")
+        }
+            
+        val response = Json { ignoreUnknownKeys = true }.decodeFromString<TokenResponse>(tokenBody ?: "")
+        response.accessToken ?: throw IllegalStateException("No access_token in refresh response: $tokenBody")
+        response
     }
 
     private val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
