@@ -48,7 +48,7 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
             Anilist.sortBy[6] -> R.drawable.ic_round_assist_walker_24
             else -> R.drawable.ic_round_filter_alt_24
         }
-        binding.filterTextView.setCompoundDrawablesWithIntrinsicBounds(filterDrawable, 0, 0, 0)
+        binding.searchFilter.setIconResource(filterDrawable)
     }
 
     @SuppressLint("ClickableViewAccessibility")
