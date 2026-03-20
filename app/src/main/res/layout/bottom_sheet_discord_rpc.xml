@@ -284,5 +284,18 @@
             android:textColor="?attr/colorOnBackground"
             app:thumbTint="@color/button_switch_track" />
 
+        <TextView
+            android:id="@+id/tokenExpiryStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="8dp"
+            android:fontFamily="@font/poppins"
+            android:textColor="#b9bbbe"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:text="Token expires in 6d 23h"
+            tools:visibility="visible" />
+
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
