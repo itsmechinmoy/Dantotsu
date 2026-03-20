@@ -91,57 +91,51 @@
         android:paddingStart="16dp"
         android:paddingEnd="16dp">
 
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/searchByImage"
+            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
+            android:layout_height="36dp"
             android:layout_gravity="center"
-            android:padding="8dp"
-            app:boxStrokeColor="@color/text_input_layout_stroke_color"
-            app:cardBackgroundColor="@color/nav_bg"
-            app:cardCornerRadius="16dp"
-            app:contentPadding="4dp"
-            app:contentPaddingLeft="8dp"
-            app:contentPaddingRight="8dp"
-            tools:ignore="ContentDescription,TextContrastCheck">
+            android:layout_marginEnd="8dp"
+            android:fontFamily="@font/poppins_bold"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="@string/image"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="13sp"
+            app:backgroundTint="@color/nav_bg"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_round_search_24"
+            app:iconPadding="4dp"
+            app:iconSize="20dp"
+            app:iconTint="?attr/colorPrimary"
+            tools:ignore="ContentDescription,TextContrastCheck" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:drawablePadding="4dp"
-                android:fontFamily="@font/poppins_bold"
-                android:text="@string/image"
-                android:textColor="?attr/colorPrimary"
-                app:drawableStartCompat="@drawable/ic_round_search_24"
-                app:drawableTint="?attr/colorPrimary" />
-        </androidx.cardview.widget.CardView>
-
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/clearHistory"
+            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
+            android:layout_height="36dp"
             android:layout_gravity="center"
-            android:padding="8dp"
-            app:boxStrokeColor="@color/text_input_layout_stroke_color"
-            app:cardBackgroundColor="@color/nav_bg"
-            app:cardCornerRadius="16dp"
-            app:contentPadding="4dp"
-            app:contentPaddingLeft="8dp"
-            app:contentPaddingRight="8dp"
-            tools:ignore="ContentDescription,TextContrastCheck">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:drawablePadding="4dp"
-                android:fontFamily="@font/poppins_bold"
-                android:text="@string/clear_history"
-                android:textColor="?attr/colorPrimary"
-                app:drawableStartCompat="@drawable/ic_round_history_24"
-                app:drawableTint="?attr/colorPrimary" />
-        </androidx.cardview.widget.CardView>
+            android:layout_marginEnd="8dp"
+            android:fontFamily="@font/poppins_bold"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="@string/clear_history"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="13sp"
+            app:backgroundTint="@color/nav_bg"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_round_history_24"
+            app:iconPadding="4dp"
+            app:iconSize="20dp"
+            app:iconTint="?attr/colorPrimary"
+            tools:ignore="ContentDescription,TextContrastCheck" />
 
         <ani.dantotsu.FadingEdgeRecyclerView
             android:id="@+id/searchChipRecycler"
@@ -162,32 +156,27 @@
             app:spanCount="6"
             tools:listitem="@layout/item_chip" />
 
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/searchFilter"
+            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
+            android:layout_height="36dp"
             android:layout_gravity="center"
-            android:padding="8dp"
-            app:boxStrokeColor="@color/text_input_layout_stroke_color"
-            app:cardBackgroundColor="@color/nav_bg"
-            app:cardCornerRadius="16dp"
-            app:contentPadding="4dp"
-            app:contentPaddingLeft="8dp"
-            app:contentPaddingRight="8dp"
-            tools:ignore="ContentDescription,TextContrastCheck">
-
-            <TextView
-                android:id="@+id/filterTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:drawablePadding="4dp"
-                android:fontFamily="@font/poppins_bold"
-                android:text="@string/filter"
-                android:textColor="?attr/colorPrimary"
-                app:drawableStartCompat="@drawable/ic_round_filter_alt_24"
-                app:drawableTint="?attr/colorPrimary" />
-        </androidx.cardview.widget.CardView>
+            android:fontFamily="@font/poppins_bold"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="@string/filter"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="13sp"
+            app:backgroundTint="@color/nav_bg"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_round_filter_alt_24"
+            app:iconPadding="4dp"
+            app:iconSize="20dp"
+            app:iconTint="?attr/colorPrimary"
+            tools:ignore="ContentDescription,TextContrastCheck" />
 
     </LinearLayout>
 
