@@ -31,6 +31,7 @@ import ani.dantotsu.themes.ThemeManager
 import io.noties.markwon.Markwon
 import io.noties.markwon.SoftBreakAddsNewLinePlugin
 import kotlinx.coroutines.launch
+import ani.dantotsu.util.customAlertDialog
 
 class SettingsAccountActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsAccountsBinding
@@ -71,9 +72,17 @@ class SettingsAccountActivity : AppCompatActivity() {
                 if (Anilist.token != null) {
                     settingsAnilistLogin.setText(R.string.logout)
                     settingsAnilistLogin.setOnClickListener {
-                        Anilist.removeSavedToken()
-                        restartMainActivity.isEnabled = true
-                        reload()
+                        context.customAlertDialog().apply {
+                            setTitle(R.string.logout)
+                            setMessage(R.string.logout_confirm)
+                            setPosButton(R.string.yes) {
+                                Anilist.removeSavedToken()
+                                restartMainActivity.isEnabled = true
+                                reload()
+                            }
+                            setNegButton(R.string.no)
+                            show()
+                        }
                     }
                     settingsAnilistUsername.visibility = View.VISIBLE
                     settingsAnilistUsername.text = Anilist.username
@@ -94,9 +103,17 @@ class SettingsAccountActivity : AppCompatActivity() {
                     if (MAL.token != null) {
                         settingsMALLogin.setText(R.string.logout)
                         settingsMALLogin.setOnClickListener {
-                            MAL.removeSavedToken()
-                            restartMainActivity.isEnabled = true
-                            reload()
+                            context.customAlertDialog().apply {
+                                setTitle(R.string.logout)
+                                setMessage(R.string.logout_confirm)
+                                setPosButton(R.string.yes) {
+                                    MAL.removeSavedToken()
+                                    restartMainActivity.isEnabled = true
+                                    reload()
+                                }
+                                setNegButton(R.string.no)
+                                show()
+                            }
                         }
                         settingsMALUsername.visibility = View.VISIBLE
                         settingsMALUsername.text = MAL.username
@@ -143,9 +160,17 @@ class SettingsAccountActivity : AppCompatActivity() {
                         username ?: Discord.token?.replace(Regex("."), "*")
                     settingsDiscordLogin.setText(R.string.logout)
                     settingsDiscordLogin.setOnClickListener {
-                        Discord.removeSavedToken(context)
-                        restartMainActivity.isEnabled = true
-                        reload()
+                        context.customAlertDialog().apply {
+                            setTitle(R.string.logout)
+                            setMessage(R.string.logout_confirm)
+                            setPosButton(R.string.yes) {
+                                Discord.removeSavedToken(context)
+                                restartMainActivity.isEnabled = true
+                                reload()
+                            }
+                            setNegButton(R.string.no)
+                            show()
+                        }
                     }
 
                     settingsPresenceSwitcher.visibility = View.VISIBLE
