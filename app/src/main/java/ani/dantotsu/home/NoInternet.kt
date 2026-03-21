@@ -23,6 +23,7 @@ import ani.dantotsu.download.anime.OfflineAnimeFragment
 import ani.dantotsu.download.manga.OfflineMangaFragment
 import ani.dantotsu.initActivity
 import ani.dantotsu.navBarHeight
+import ani.dantotsu.offline.LocalFragment
 import ani.dantotsu.offline.OfflineFragment
 import ani.dantotsu.selectedOption
 import ani.dantotsu.settings.saving.PrefManager
@@ -108,6 +109,7 @@ class NoInternet : AppCompatActivity() {
         override fun createFragment(position: Int): Fragment {
             return when (position) {
                 0 -> OfflineAnimeFragment()
+                1 -> LocalFragment()
                 2 -> OfflineMangaFragment()
                 else -> OfflineFragment()
             }

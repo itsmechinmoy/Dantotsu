@@ -169,6 +169,13 @@ class MangaChapterAdapter(
                 binding.itemChapterTitle.visibility = View.GONE
                 binding.itemChapterTitle.text = ""
             }
+
+            if (media.format == "LOCAL") {
+                binding.itemDownload.visibility = View.GONE
+                return
+            }
+            binding.itemDownload.visibility = View.VISIBLE
+
             if (activeDownloads.contains(chapterNumber)) {
                 // Show spinner
                 binding.itemDownload.setImageResource(R.drawable.ic_sync)
