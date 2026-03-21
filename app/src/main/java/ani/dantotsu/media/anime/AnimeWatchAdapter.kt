@@ -300,6 +300,10 @@ class AnimeWatchAdapter(
 
                 //implement Multi download
                 downloadNo.setText("0")
+                if (media.format == "LOCAL") {
+                    animeDownloadContainer.visibility = View.GONE
+                    mediaWebviewContainer.visibility = View.GONE
+                }
                 mediaDownloadTop.setOnClickListener {
                     // Alert dialog asking for the number of Episodes to download
                     fragment.requireContext().customAlertDialog().apply {

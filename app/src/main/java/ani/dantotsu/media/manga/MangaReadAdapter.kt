@@ -265,9 +265,14 @@ class MangaReadAdapter(
 
                 // Multi download
                 //downloadNo.text = "0"
-                mediaDownloadTop.setOnClickListener {
-                    fragment.requireContext().customAlertDialog().apply {
-                        setTitle("Multi Chapter Downloader")
+                if (media.format == "LOCAL") {
+                    animeDownloadContainer.visibility = View.GONE
+                    mediaWebviewContainer.visibility = View.GONE
+                } else {
+                    mediaDownloadTop.visibility = View.VISIBLE
+                    mediaDownloadTop.setOnClickListener {
+                        fragment.requireContext().customAlertDialog().apply {
+                            setTitle("Multi Chapter Downloader")
                         setMessage("Enter the number of chapters to download")
                         val input = View.inflate(currContext(), R.layout.dialog_layout, null)
                         val editText = input.findViewById<EditText>(R.id.downloadNo)
@@ -284,6 +289,7 @@ class MangaReadAdapter(
                         setNegButton(R.string.cancel)
                         show()
                     }
+                }
                 }
                 resetProgress.setOnClickListener {
                     fragment.requireContext().customAlertDialog().apply {

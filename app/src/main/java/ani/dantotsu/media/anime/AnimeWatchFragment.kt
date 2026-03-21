@@ -179,6 +179,11 @@ class AnimeWatchFragment : Fragment() {
             if (it != null) {
                 media = it
                 media.selected = model.loadSelected(media)
+                if (media.format == "LOCAL") {
+                    val localSourceIndex = AnimeSources.list.indexOfFirst { parser -> parser.name == "Local" }
+                        .takeIf { parserIndex -> parserIndex >= 0 } ?: 0
+                    media.selected!!.sourceIndex = localSourceIndex
+                }
 
                 subscribed =
                     SubscriptionHelper.getSubscriptions().containsKey(media.id)
@@ -210,9 +215,10 @@ class AnimeWatchFragment : Fragment() {
                     lifecycleScope.launch(Dispatchers.IO) {
                         val offline =
                             !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
-                        if (offline) {
+                        val isLocal = model.watchSources!!.list.getOrNull(media.selected!!.sourceIndex)?.name == "Local"
+                        if (offline && !isLocal) {
                             media.selected!!.sourceIndex = model.watchSources!!.list.lastIndex
-                        } else {
+                        } else if (!offline && !isLocal) {
                             val kitsuEpisodes = async { model.loadKitsuEpisodes(media) }
                             val anifyEpisodes = async { model.loadAnifyEpisodes(media.id) }
                             val fillerEpisodes = async { model.loadFillerEpisodes(media) }
