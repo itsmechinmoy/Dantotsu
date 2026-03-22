@@ -90,7 +90,9 @@ class LocalMangaSource(
         } else {
             0L
         }
-        val localMangaDir = baseDir.findFile("localmanga") ?: baseDir
+        
+        val localDir = baseDir.findFile("local") ?: baseDir
+        val localMangaDir = localDir.findFile("manga") ?: localDir
 
         var mangaDirs = localMangaDir.listFiles()
             .filter { it.isDirectory && !it.name.orEmpty().startsWith('.') }
@@ -480,26 +482,18 @@ class LocalMangaSource(
 
         fun getBaseDirectory(context: Context): DocumentFile? {
             val uriString = ani.dantotsu.settings.saving.PrefManager
-                .getVal<String>(ani.dantotsu.settings.saving.PrefName.LocalMangaDir)
+                .getVal<String>(ani.dantotsu.settings.saving.PrefName.LocalDir)
             if (uriString.isBlank()) return null
             val uri = Uri.parse(uriString)
             return DocumentFile.fromTreeUri(context, uri)
         }
 
-        fun createBaseDirectories(context: Context, rootUri: Uri): DocumentFile? {
-            val root = DocumentFile.fromTreeUri(context, rootUri) ?: return null
-            // Create localmanga subfolder if it doesn't exist
-            val dir = root.findFile("localmanga") ?: root.createDirectory("localmanga")
-            if (dir?.findFile(".nomedia") == null) {
-                dir?.createFile("", ".nomedia")
-            }
-            return dir
-        }
-
         private fun getMangaDir(mangaUrl: String, context: Context): DocumentFile? {
             val baseDir = getBaseDirectory(context) ?: return null
-            return baseDir.findFile(mangaUrl)?.takeIf { it.isDirectory }
-                ?: baseDir.findFile("localmanga")?.findFile(mangaUrl)?.takeIf { it.isDirectory }
+            val localDir = baseDir.findFile("local") ?: baseDir
+            val localMangaDir = localDir.findFile("manga") ?: localDir
+            return localMangaDir.findFile(mangaUrl)?.takeIf { it.isDirectory }
+                ?: baseDir.findFile(mangaUrl)?.takeIf { it.isDirectory }
         }
     }
 }

@@ -65,7 +65,9 @@ class LocalAnimeSource(
         } else {
             0L
         }
-        val localAnimeDir = baseDir.findFile("localanime") ?: baseDir
+        
+        val localDir = baseDir.findFile("local") ?: baseDir
+        val localAnimeDir = localDir.findFile("anime") ?: localDir
 
         var animeDirs = localAnimeDir.listFiles()
             .filter { it.isDirectory && !it.name.orEmpty().startsWith('.') }
@@ -281,26 +283,18 @@ class LocalAnimeSource(
 
         fun getBaseDirectory(context: Context): DocumentFile? {
             val uriString = ani.dantotsu.settings.saving.PrefManager
-                .getVal<String>(ani.dantotsu.settings.saving.PrefName.LocalAnimeDir)
+                .getVal<String>(ani.dantotsu.settings.saving.PrefName.LocalDir)
             if (uriString.isBlank()) return null
             val uri = Uri.parse(uriString)
             return DocumentFile.fromTreeUri(context, uri)
         }
 
-        fun createBaseDirectories(context: Context, rootUri: Uri): DocumentFile? {
-            val root = DocumentFile.fromTreeUri(context, rootUri) ?: return null
-            // Create localanime subfolder
-            val dir = root.findFile("localanime") ?: root.createDirectory("localanime")
-            if (dir?.findFile(".nomedia") == null) {
-                dir?.createFile("", ".nomedia")
-            }
-            return dir
-        }
-
         private fun getAnimeDir(animeUrl: String, context: Context): DocumentFile? {
             val baseDir = getBaseDirectory(context) ?: return null
-            return baseDir.findFile(animeUrl)?.takeIf { it.isDirectory }
-                ?: baseDir.findFile("localanime")?.findFile(animeUrl)?.takeIf { it.isDirectory }
+            val localDir = baseDir.findFile("local") ?: baseDir
+            val localAnimeDir = localDir.findFile("anime") ?: localDir
+            return localAnimeDir.findFile(animeUrl)?.takeIf { it.isDirectory }
+                ?: baseDir.findFile(animeUrl)?.takeIf { it.isDirectory }
         }
     }
 }

@@ -70,7 +70,8 @@ class LocalNovelSource(
             0L
         }
 
-        val localNovelDir = baseDir.findFile("localnovel") ?: baseDir
+        val localDir = baseDir.findFile("local") ?: baseDir
+        val localNovelDir = localDir.findFile("novel") ?: localDir
 
         var novelDirs = localNovelDir.listFiles()
             .filter { it.isDirectory && !it.name.orEmpty().startsWith('.') }
@@ -245,7 +246,8 @@ class LocalNovelSource(
 
     private fun getNovelDir(novelUrl: String, context: Context): DocumentFile? {
         val baseDir = getBaseDirectory(context) ?: return null
-        val localNovelDir = baseDir.findFile("localnovel") ?: baseDir
+        val localDir = baseDir.findFile("local") ?: baseDir
+        val localNovelDir = localDir.findFile("novel") ?: localDir
         return localNovelDir.findFile(novelUrl)
     }
 
@@ -255,26 +257,11 @@ class LocalNovelSource(
         private val LATEST_THRESHOLD = TimeUnit.DAYS.toMillis(7)
 
         fun getBaseDirectory(context: Context): DocumentFile? {
-            val uriStr = PrefManager.getVal<String>(PrefName.LocalNovelDir)
+            val uriStr = PrefManager.getVal<String>(PrefName.LocalDir)
             if (uriStr.isEmpty()) return null
             return try {
                 DocumentFile.fromTreeUri(context, android.net.Uri.parse(uriStr))
             } catch (e: Exception) {
-                null
-            }
-        }
-
-        fun createBaseDirectories(context: Context, rootUri: android.net.Uri): DocumentFile? {
-            return try {
-                val rootDir = DocumentFile.fromTreeUri(context, rootUri) ?: return null
-                var localNovelDir = rootDir.findFile("localnovel")
-                if (localNovelDir == null) {
-                    localNovelDir = rootDir.createDirectory("localnovel")
-                }
-                localNovelDir?.findFile(".nomedia") ?: localNovelDir?.createFile("", ".nomedia")
-                localNovelDir
-            } catch (e: Exception) {
-                Logger.log("Failed to create localnovel directory: ${e.message}")
                 null
             }
         }

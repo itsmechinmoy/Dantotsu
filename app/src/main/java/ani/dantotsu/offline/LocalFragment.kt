@@ -84,31 +84,18 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             )
-            if (currentMode == LocalMediaType.ANIME) {
-                val localAnimeDir = LocalAnimeSource.createBaseDirectories(requireContext(), uri)
-                PrefManager.setVal(PrefName.LocalAnimeDir, uri.toString())
-                if (localAnimeDir != null) {
-                    snackString("Folder created! Add anime folders inside 'localanime' and refresh.")
-                } else {
-                    snackString("Folder selected! Scanning for anime...")
-                }
-            } else if (currentMode == LocalMediaType.MANGA) {
-                val localMangaDir = LocalMangaSource.createBaseDirectories(requireContext(), uri)
-                PrefManager.setVal(PrefName.LocalMangaDir, uri.toString())
-                if (localMangaDir != null) {
-                    snackString("Folder created! Add manga folders inside 'localmanga' and refresh.")
-                } else {
-                    snackString("Folder selected! Scanning for manga...")
-                }
-            } else {
-                val localNovelDir = tachiyomi.source.local.entries.novel.LocalNovelSource.createBaseDirectories(requireContext(), uri)
-                PrefManager.setVal(PrefName.LocalNovelDir, uri.toString())
-                if (localNovelDir != null) {
-                    snackString("Folder created! Add novel folders inside 'localnovel' and refresh.")
-                } else {
-                    snackString("Folder selected! Scanning for novels...")
-                }
+            val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(requireContext(), uri)
+            var localDir = docFile?.findFile("local")
+            if (localDir == null) {
+                localDir = docFile?.createDirectory("local")
             }
+            localDir?.findFile("anime") ?: localDir?.createDirectory("anime")
+            localDir?.findFile("manga") ?: localDir?.createDirectory("manga")
+            localDir?.findFile("novel") ?: localDir?.createDirectory("novel")
+            localDir?.findFile(".nomedia") ?: localDir?.createFile("", ".nomedia")
+            
+            PrefManager.setVal(PrefName.LocalDir, uri.toString())
+            snackString("Master 'local' folder selected/created! Place anime, manga, and novels in their respective subfolders and refresh.")
             scanLocal()
         }
     }
@@ -345,7 +332,7 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
     private fun updateEmptyState() {
         when (currentMode) {
             LocalMediaType.ANIME -> {
-                val dirSet = PrefManager.getVal<String>(PrefName.LocalAnimeDir).isNotBlank()
+                val dirSet = PrefManager.getVal<String>(PrefName.LocalDir).isNotBlank()
                 if (!dirSet) {
                     noAnimeText.text = "Tap the folder icon to select your local anime folder"
                     noAnimeText.visibility = View.VISIBLE
@@ -360,7 +347,7 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                 }
             }
             LocalMediaType.MANGA -> {
-                val dirSet = PrefManager.getVal<String>(PrefName.LocalMangaDir).isNotBlank()
+                val dirSet = PrefManager.getVal<String>(PrefName.LocalDir).isNotBlank()
                 if (!dirSet) {
                     noAnimeText.text = "Tap the folder icon to select your local manga folder"
                     noAnimeText.visibility = View.VISIBLE
@@ -375,7 +362,7 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                 }
             }
             LocalMediaType.NOVEL -> {
-                val dirSet = PrefManager.getVal<String>(PrefName.LocalNovelDir).isNotBlank()
+                val dirSet = PrefManager.getVal<String>(PrefName.LocalDir).isNotBlank()
                 if (!dirSet) {
                     noAnimeText.text = "Tap the folder icon to select your local novel folder"
                     noAnimeText.visibility = View.VISIBLE
