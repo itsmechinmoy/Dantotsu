@@ -16,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import ani.dantotsu.settings.saving.PrefManager
 
 /**
  * Discord Headless Sessions RPC client.
@@ -50,13 +51,16 @@ class HeadlessRPC(
     )
 
     /** Session token returned by the headless sessions API; passed on subsequent updates */
-    private var activityToken: String? = null
+    internal var activityToken: String? = null
     private val mutex = Mutex()
 
     /** Send (or update) a rich presence activity. */
     suspend fun newActivity(activity: DiscordActivity?) = mutex.withLock {
         if (activity == null) {
             Logger.log("HeadlessRPC: Activity is null, calling deleteSession")
+            if (activityToken != null) {
+                runCatching { postSession(DiscordSession(activities = emptyList(), token = activityToken)) }
+            }
             deleteSessionInternal()
             return@withLock
         }
@@ -100,6 +104,7 @@ class HeadlessRPC(
             Logger.log("HeadlessRPC: deleteSession Network Error - ${e.message}")
         }
         activityToken = null
+        PrefManager.removeCustomVal("discord_activity_token")
     }
 
     private suspend fun postSession(session: DiscordSession) = withContext(Dispatchers.IO) {
@@ -142,6 +147,7 @@ class HeadlessRPC(
                 runCatching {
                     val responseJson = json.decodeFromString<JsonObject>(respBody)
                     activityToken = responseJson["token"]?.jsonPrimitive?.content
+                    PrefManager.setCustomVal("discord_activity_token", activityToken)
                 }
                 break
             }
@@ -168,8 +174,11 @@ class HeadlessRPC(
     fun stop() {
         tokenManager.clear()
         activityToken = null
+        PrefManager.removeCustomVal("discord_activity_token")
     }
 
-    /** Alias for deleteSession ΓÇô clear the current activity. */
-    suspend fun clear() = deleteSession()
+    /** Clear the current activity by deleting the session. */
+    suspend fun clear() = mutex.withLock {
+        deleteSessionInternal()
+    }
 }
