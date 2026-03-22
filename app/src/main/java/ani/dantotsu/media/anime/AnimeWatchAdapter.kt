@@ -130,27 +130,29 @@ class AnimeWatchAdapter(
             }
         }
 
+        val displayNames = watchSources.names.filter { it != "Local" }
         binding.mediaSource.setAdapter(
             ArrayAdapter(
                 fragment.requireContext(),
                 R.layout.item_dropdown,
-                watchSources.names
+                displayNames
             )
         )
         binding.mediaSourceTitle.isSelected = true
         binding.mediaSource.setOnItemClickListener { _, _, i, _ ->
-            fragment.onSourceChange(i).apply {
+            val actualIndex = watchSources.names.indexOf(displayNames[i])
+            fragment.onSourceChange(actualIndex).apply {
                 binding.mediaSourceTitle.text = showUserText
                 showUserTextListener = { MainScope().launch { binding.mediaSourceTitle.text = it } }
                 changing = true
                 binding.animeSourceDubbed.isChecked = selectDub
                 changing = false
                 binding.animeSourceDubbedCont.isVisible = isDubAvailableSeparately()
-                source = i
-                setLanguageList(0, i)
+                source = actualIndex
+                setLanguageList(0, actualIndex)
             }
             subscribeButton(false)
-            fragment.loadEpisodes(i, false)
+            fragment.loadEpisodes(actualIndex, false)
         }
 
         binding.mediaSourceLanguage.setOnItemClickListener { _, _, i, _ ->
