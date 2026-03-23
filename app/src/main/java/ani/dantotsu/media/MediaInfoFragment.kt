@@ -3,6 +3,7 @@ package ani.dantotsu.media
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
@@ -165,6 +166,39 @@ class MediaInfoFragment : Fragment() {
                                     ),
                                     null
                                 )
+                            }
+                        }
+                    }
+                    // Show producers as a chip group (same style as External Links)
+                    if (!media.anime.producers.isNullOrEmpty()) {
+                        val validProducers = media.anime.producers!!.filter { it.id != "null" }
+                        if (validProducers.isNotEmpty()) {
+                            val bind = ItemTitleChipgroupBinding.inflate(
+                                LayoutInflater.from(context),
+                                binding.mediaInfoContainer,
+                                false
+                            )
+                            bind.itemTitle.text = getString(R.string.producers)
+                            binding.mediaInfoContainer.addView(bind.root, 1)
+
+                            validProducers.forEach { producer ->
+                                val chip = ItemChipBinding.inflate(
+                                    LayoutInflater.from(context),
+                                    bind.itemChipGroup,
+                                    false
+                                ).root
+                                chip.text = producer.name ?: ""
+                                chip.setSafeOnClickListener {
+                                    ContextCompat.startActivity(
+                                        requireActivity(),
+                                        Intent(activity, StudioActivity::class.java).putExtra(
+                                            "studio",
+                                            producer as Serializable
+                                        ),
+                                        null
+                                    )
+                                }
+                                bind.itemChipGroup.addView(chip)
                             }
                         }
                     }
@@ -469,6 +503,30 @@ class MediaInfoFragment : Fragment() {
                             )
                         }
                         chip.setOnLongClickListener { copyToClipboard(media.tags[position]);true }
+                        bind.itemChipGroup.addView(chip)
+                    }
+                    parent.addView(bind.root)
+                }
+
+                if (!media.externalLinks.isNullOrEmpty() && !offline) {
+                    val bind = ItemTitleChipgroupBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    )
+                    bind.itemTitle.setText(R.string.external_links)
+                    for (link in media.externalLinks!!) {
+                        val url = link.url ?: continue
+                        val chip = ItemChipBinding.inflate(
+                            LayoutInflater.from(context),
+                            bind.itemChipGroup,
+                            false
+                        ).root
+                        chip.text = link.site
+                        chip.setSafeOnClickListener {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        }
+                        chip.setOnLongClickListener { copyToClipboard(url); true }
                         bind.itemChipGroup.addView(chip)
                     }
                     parent.addView(bind.root)

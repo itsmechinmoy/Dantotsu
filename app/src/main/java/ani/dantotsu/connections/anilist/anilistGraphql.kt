@@ -328,7 +328,20 @@ fun fullMediaInformation(id: Int) = """
       nodes {
         id
         name
+        isAnimationStudio
         siteUrl
+        isFavourite
+        favourites
+      }
+    }
+    producers: studios(isMain: false) {
+      nodes {
+        id
+        name
+        isAnimationStudio
+        siteUrl
+        isFavourite
+        favourites
       }
     }
     description
@@ -404,8 +417,13 @@ fun fullMediaInformation(id: Int) = """
       }
     }
     externalLinks {
+      id
       url
       site
+      type
+      icon
+      color
+      language
     }
   }
   Page(page: 1) {
