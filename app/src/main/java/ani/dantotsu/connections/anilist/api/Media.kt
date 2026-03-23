@@ -121,6 +121,9 @@ data class Media(
     // The companies who produced the media
     @SerialName("studios") var studios: StudioConnection?,
 
+    // The producers of the media
+    @SerialName("producers") var producers: StudioConnection?,
+
     // If the media is marked as favourite by the current authenticated user
     @SerialName("isFavourite") var isFavourite: Boolean?,
 
