@@ -136,7 +136,23 @@ class MangaChapterAdapter(
                     continue
                 } else {
                     fragment.onMangaChapterDownloadClick(chapter)
-                    startDownload(chapter.uniqueNumber())
+                }
+            }
+        }
+    }
+
+    fun deleteNChaptersFrom(position: Int, n: Int){
+        //delete next n chapters
+        if (position < 0 || position >= arr.size) return
+        for (i in 0..<n) {
+            if (position + i < arr.size) {
+                val chapter = arr[position + i]
+                val chapterNumber = chapter.uniqueNumber()
+                if(activeDownloads.contains(chapterNumber)){
+                    fragment.onMangaChapterStopDownloadClick(chapter)
+                }
+                else if (downloadedChapters.contains(chapterNumber)) {
+                    fragment.onMangaChapterRemoveDownloadClick(chapter)
                 }
             }
         }
@@ -223,29 +239,55 @@ class MangaChapterAdapter(
                         return@setOnClickListener
                     } else {
                         fragment.onMangaChapterDownloadClick(chapter)
-                        startDownload(chapter.uniqueNumber())
                     }
                 }
             }
             binding.itemDownload.setOnLongClickListener {
-                //Alert dialog asking for the number of chapters to download
-                it.context.customAlertDialog().apply {
-                    setTitle("Multi Chapter Downloader")
-                    setMessage("Enter the number of chapters to download")
-                    val input = NumberPicker(currContext())
-                    input.minValue = 1
-                    input.maxValue = itemCount - bindingAdapterPosition
-                    input.value = 1
-                    setCustomView(input)
-                    setPosButton("OK") {
-                        downloadNChaptersFrom(bindingAdapterPosition, input.value)
+                if (0 <= bindingAdapterPosition && bindingAdapterPosition < arr.size){
+                    val chapterNumber = arr[bindingAdapterPosition].uniqueNumber()
+                    if(activeDownloads.contains(chapterNumber) || downloadedChapters.contains(chapterNumber)){
+                        fragment.requireContext().customAlertDialog().apply {
+                            setTitle("Multi Chapter Deleter")
+                            setMessage("Enter the number of chapters to delete")
+                            val input = NumberPicker(currContext())
+                            input.minValue = 1
+                            input.maxValue = itemCount - bindingAdapterPosition
+                            input.value = 1
+                            setCustomView(input)
+                            setPosButton(R.string.ok) {
+                                binding.root.context.customAlertDialog().apply {
+                                    setTitle("Delete Chapters")
+                                    setMessage("Are you sure you want to delete the next ${input.value} chapters?")
+                                    setPosButton(R.string.yes) {
+                                        deleteNChaptersFrom(bindingAdapterPosition, input.value)
+                                    }
+                                    setNegButton(R.string.no)
+                                }.show()
+                            }
+                            setNegButton(R.string.cancel)
+                            show()
+                        }
                     }
-                    setNegButton("Cancel")
-                    show()
+                    else{
+                        //Alert dialog asking for the number of chapters to download
+                        it.context.customAlertDialog().apply {
+                            setTitle("Multi Chapter Downloader")
+                            setMessage("Enter the number of chapters to download")
+                            val input = NumberPicker(currContext())
+                            input.minValue = 1
+                            input.maxValue = itemCount - bindingAdapterPosition
+                            input.value = 1
+                            setCustomView(input)
+                            setPosButton("OK") {
+                                downloadNChaptersFrom(bindingAdapterPosition, input.value)
+                            }
+                            setNegButton("Cancel")
+                            show()
+                        }
+                    }
                 }
                 true
             }
-
         }
     }
 
