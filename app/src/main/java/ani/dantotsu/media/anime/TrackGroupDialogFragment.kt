@@ -73,8 +73,9 @@ class TrackGroupDialogFragment(
                         "[${pair.second}] ${pair.first}"
                 } else when (val language = trackGroup.getTrackFormat(0).language?.lowercase()) {
                     null -> {
+                        val label = trackGroup.getTrackFormat(0).label
                         binding.subtitleTitle.text =
-                            getString(R.string.unknown_track, "Track $position")
+                            if (!label.isNullOrBlank()) label else getString(R.string.unknown_track, "Track $position")
                     }
 
                     "none" -> {
@@ -82,6 +83,7 @@ class TrackGroupDialogFragment(
                     }
 
                     else -> {
+                        val format = trackGroup.getTrackFormat(0)
                         val locale = if (language.contains("-")) {
                             val parts = language.split("-")
                             try {
@@ -97,8 +99,16 @@ class TrackGroupDialogFragment(
                             }
                         }
                         binding.subtitleTitle.text = locale?.let {
-                            "[${it.language}] ${it.displayName}"
-                        } ?: getString(R.string.unknown_track, language)
+                            val label = format.label
+                            if (!label.isNullOrBlank()) {
+                                "[${it.language}] $label"
+                            } else {
+                                "[${it.language}] ${it.displayName}"
+                            }
+                        } ?: run {
+                            val label = format.label
+                            if (!label.isNullOrBlank()) label else getString(R.string.unknown_track, language)
+                        }
                     }
                 }
                 if (trackGroup.isSelected) {
