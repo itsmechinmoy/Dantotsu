@@ -548,7 +548,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
     fun onMangaChapterStopDownloadClick(i: MangaChapter) {
         val cancelIntent = Intent().apply {
             action = MangaDownloaderService.ACTION_CANCEL_DOWNLOAD
-            putExtra(MangaDownloaderService.EXTRA_CHAPTER, i)
+            putExtra(MangaDownloaderService.EXTRA_CHAPTER, i.number)
         }
         requireContext().sendBroadcast(cancelIntent)
 

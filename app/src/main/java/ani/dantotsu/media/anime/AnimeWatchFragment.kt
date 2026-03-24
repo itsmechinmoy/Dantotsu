@@ -316,6 +316,52 @@ class AnimeWatchFragment : Fragment() {
         }
     }
 
+    //implement Multi download
+    fun multiDownload(episodeNumber: String? = null, n: Int) {
+        val selected = media.userProgress
+        val episodes = media.anime?.episodes?.values?.toList()
+
+        val progressEpisodeIndex =
+            if(episodeNumber == null){
+                (episodes?.indexOfFirst {
+                    MediaNameAdapter.findEpisodeNumber(it.number)?.toInt() == selected
+                } ?: 0) + 1
+            }
+            else{
+                (episodes?.indexOfFirst {
+                    it.number == episodeNumber
+                } ?: 0)
+            }
+
+        if (progressEpisodeIndex < 0 || n < 1 || episodes == null) return
+
+        val endIndex = minOf(progressEpisodeIndex + n, episodes.size)
+
+        val listOfEpisodesToDownload = episodes.subList(progressEpisodeIndex, endIndex)
+
+        val episodesToDownload: ArrayList<String> = arrayListOf()
+        listOfEpisodesToDownload.forEach {
+            episodesToDownload.add(it.number)
+        }
+
+        onAnimeEpisodesDownload(episodesToDownload)
+    }
+
+    fun multiDelete(episodeNumber: String? = null, n: Int){
+        val episodes = media.anime?.episodes?.values?.toList()
+        val progressEpisodeIndex = episodes?.indexOfFirst { it.number == episodeNumber } ?: 0
+
+        if (progressEpisodeIndex < 0 || n < 1 || episodes == null) return
+
+        val endIndex = minOf(progressEpisodeIndex + n, episodes.size)
+
+        val episodesToDelete = episodes.subList(progressEpisodeIndex, endIndex)
+
+        for (episode in episodesToDelete) {
+            onAnimeEpisodeRemoveDownloadClick(episode.number)
+        }
+    }
+
     fun onSourceChange(i: Int): AnimeParser {
         media.anime?.episodes = null
         reload()
@@ -456,16 +502,16 @@ class AnimeWatchFragment : Fragment() {
         model.onEpisodeClick(media, i, requireActivity().supportFragmentManager)
     }
 
-    fun onAnimeEpisodeDownloadClick(i: String) {
+    fun onAnimeEpisodesDownload(episodesToDownload: ArrayList<String>) {
         activity?.let {
             if (!hasDirAccess(it)) {
                 (it as MediaDetailsActivity).accessAlertDialog(it.launcher) { success ->
                     if (success) {
                         model.onEpisodeClick(
-                            media,
-                            i,
-                            requireActivity().supportFragmentManager,
-                            isDownload = true
+                            media =  media,
+                            manager =  requireActivity().supportFragmentManager,
+                            isDownload = true,
+                            episodes = episodesToDownload
                         )
                     } else {
                         snackString(getString(R.string.download_permission_required))
@@ -473,10 +519,10 @@ class AnimeWatchFragment : Fragment() {
                 }
             } else {
                 model.onEpisodeClick(
-                    media,
-                    i,
-                    requireActivity().supportFragmentManager,
-                    isDownload = true
+                    media =  media,
+                    manager =  requireActivity().supportFragmentManager,
+                    isDownload = true,
+                    episodes = episodesToDownload
                 )
             }
         }
@@ -608,16 +654,23 @@ class AnimeWatchFragment : Fragment() {
             when (intent.action) {
                 ACTION_DOWNLOAD_STARTED -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
+                    val mediaId = intent.getIntExtra("mediaId", -1)
+                    if (mediaId != media.id) return
                     chapterNumber?.let { episodeAdapter.startDownload(it) }
                 }
 
                 ACTION_DOWNLOAD_FINISHED -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
-                    chapterNumber?.let { episodeAdapter.stopDownload(it) }
+                    val mediaId = intent.getIntExtra("mediaId", -1)
+                    val size = intent.getDoubleExtra("size", 0.0)
+                    if (mediaId != media.id) return
+                    chapterNumber?.let { episodeAdapter.addToDownloadedEpisodes(it, size) }
                 }
 
                 ACTION_DOWNLOAD_FAILED -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
+                    val mediaId = intent.getIntExtra("mediaId", -1)
+                    if (mediaId != media.id) return
                     chapterNumber?.let {
                         episodeAdapter.purgeDownload(it)
                     }
@@ -626,6 +679,8 @@ class AnimeWatchFragment : Fragment() {
                 ACTION_DOWNLOAD_PROGRESS -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
                     val progress = intent.getIntExtra("progress", 0)
+                    val mediaId = intent.getIntExtra("mediaId", -1)
+                    if (mediaId != media.id) return
                     chapterNumber?.let {
                         episodeAdapter.updateDownloadProgress(it, progress)
                     }
@@ -664,7 +719,7 @@ class AnimeWatchFragment : Fragment() {
         episodeAdapter.notifyItemRangeInserted(0, arr.size)
         for (download in downloadManager.animeDownloadedTypes) {
             if (media.compareName(download.titleName)) {
-                episodeAdapter.stopDownload(download.chapterName)
+                episodeAdapter.addToDownloadedEpisodes(download.chapterName, downloadManager.getSize(download))
             }
         }
     }

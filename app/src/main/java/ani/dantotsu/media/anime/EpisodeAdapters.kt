@@ -15,10 +15,8 @@ import ani.dantotsu.connections.updateProgress
 import ani.dantotsu.databinding.ItemEpisodeCompactBinding
 import ani.dantotsu.databinding.ItemEpisodeGridBinding
 import ani.dantotsu.databinding.ItemEpisodeListBinding
-import ani.dantotsu.download.DownloadsManager.Companion.getDirSize
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaNameAdapter
-import ani.dantotsu.media.MediaType
 import ani.dantotsu.setAnimation
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.util.customAlertDialog
@@ -26,8 +24,9 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.model.GlideUrl
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.ln
-import kotlin.math.pow
+import android.widget.NumberPicker
+import ani.dantotsu.currContext
+import ani.dantotsu.download.anime.AnimeDownloader
 
 fun handleProgress(cont: LinearLayout, bar: View, empty: View, mediaId: Int, ep: String) {
     val curr = PrefManager.getNullableCustomVal("${mediaId}_${ep}", null, Long::class.java)
@@ -218,33 +217,29 @@ class EpisodeAdapter(
     }
 
     override fun getItemCount(): Int = arr.size
-
-    private val activeDownloads = mutableSetOf<String>()
     private val downloadedEpisodes = mutableSetOf<String>()
 
     fun startDownload(episodeNumber: String) {
-        activeDownloads.add(episodeNumber)
+        if (downloadedEpisodes.contains(episodeNumber) ||
+            AnimeDownloader.isDownloading(media.id, episodeNumber))
+                return
+        AnimeDownloader.startDownload(media.id, episodeNumber)
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
+            arr[position].downloadProgress = ""
             notifyItemChanged(position)
         }
     }
 
     @OptIn(UnstableApi::class)
-    fun stopDownload(episodeNumber: String) {
-        activeDownloads.remove(episodeNumber)
+    fun addToDownloadedEpisodes(episodeNumber: String, size: Double) {
+        AnimeDownloader.stopDownload(media.id, episodeNumber)
         downloadedEpisodes.add(episodeNumber)
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
-            val size = try {
-                bytesToHuman(getDirSize(context, MediaType.ANIME, media.mainName(), episodeNumber))
-            } catch (e: Exception) {
-                null
-            }
-
-            arr[position].downloadProgress = "Downloaded" + if (size != null) ": ($size)" else ""
+            arr[position].downloadProgress = "Downloaded" + ": (${"%.1f".format(size)} MB)"
             notifyItemChanged(position)
         }
     }
@@ -260,7 +255,7 @@ class EpisodeAdapter(
     }
 
     fun purgeDownload(episodeNumber: String) {
-        activeDownloads.remove(episodeNumber)
+        AnimeDownloader.stopDownload(media.id, episodeNumber)
         downloadedEpisodes.remove(episodeNumber)
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
@@ -313,7 +308,7 @@ class EpisodeAdapter(
             binding.itemDownload.setOnClickListener {
                 if (0 <= bindingAdapterPosition && bindingAdapterPosition < arr.size) {
                     val episodeNumber = arr[bindingAdapterPosition].number
-                    if (activeDownloads.contains(episodeNumber)) {
+                    if(AnimeDownloader.isDownloading(media.id, episodeNumber)){
                         fragment.onAnimeEpisodeStopDownloadClick(episodeNumber)
                         return@setOnClickListener
                     } else if (downloadedEpisodes.contains(episodeNumber)) {
@@ -327,7 +322,7 @@ class EpisodeAdapter(
                         }.show()
                         return@setOnClickListener
                     } else {
-                        fragment.onAnimeEpisodeDownloadClick(episodeNumber)
+                        fragment.onAnimeEpisodesDownload(arrayListOf(episodeNumber))
                     }
                 }
             }
@@ -335,7 +330,44 @@ class EpisodeAdapter(
                 if (0 <= bindingAdapterPosition && bindingAdapterPosition < arr.size) {
                     val episodeNumber = arr[bindingAdapterPosition].number
                     if (downloadedEpisodes.contains(episodeNumber)) {
-                        fragment.fixDownload(episodeNumber)
+                        //fragment.fixDownload(episodeNumber)
+                        fragment.requireContext().customAlertDialog().apply {
+                            setTitle("Multi Episode Deleter")
+                            setMessage("Enter the number of episodes to delete")
+                            val input = NumberPicker(currContext())
+                            input.minValue = 1
+                            input.maxValue = itemCount - bindingAdapterPosition
+                            input.value = 1
+                            setCustomView(input)
+                            setPosButton(R.string.ok) {
+                                binding.root.context.customAlertDialog().apply {
+                                    setTitle("Delete Episodes")
+                                    setMessage("Are you sure you want to delete Episodes $episodeNumber -> ${arr[bindingAdapterPosition + input.value - 1].number}?")
+                                    setPosButton(R.string.yes) {
+                                        fragment.multiDelete(episodeNumber, input.value)
+                                    }
+                                    setNegButton(R.string.no)
+                                }.show()
+                            }
+                            setNegButton(R.string.cancel)
+                            show()
+                        }
+                    }
+                    else {
+                        fragment.requireContext().customAlertDialog().apply {
+                            setTitle("Multi Episode Downloader")
+                            setMessage("Enter the number of episodes to download")
+                            val input = NumberPicker(currContext())
+                            input.minValue = 1
+                            input.maxValue = itemCount - bindingAdapterPosition
+                            input.value = 1
+                            setCustomView(input)
+                            setPosButton(R.string.ok) {
+                                fragment.multiDownload(episodeNumber, input.value)
+                            }
+                            setNegButton(R.string.cancel)
+                            show()
+                        }
                     }
                 }
 
@@ -352,13 +384,16 @@ class EpisodeAdapter(
         fun bind(episodeNumber: String, progress: String?, desc: String?) {
             if (progress != null) {
                 binding.itemEpisodeDesc.visibility = View.GONE
-                binding.itemDownloadStatus.visibility = View.VISIBLE
+                if(progress == "")
+                    binding.itemDownloadStatus.visibility = View.GONE
+                else
+                    binding.itemDownloadStatus.visibility = View.VISIBLE
                 binding.itemDownloadStatus.text = progress
             } else {
                 binding.itemDownloadStatus.visibility = View.GONE
                 binding.itemDownloadStatus.text = ""
             }
-            if (activeDownloads.contains(episodeNumber)) {
+            if(AnimeDownloader.isDownloading(media.id, episodeNumber)){
                 // Show spinner
                 binding.itemDownload.setImageResource(R.drawable.ic_sync)
                 startOrContinueRotation(episodeNumber) {
@@ -391,7 +426,7 @@ class EpisodeAdapter(
                 scope.launch {
                     // Add chapter number to active coroutines set
                     activeCoroutines.add(episodeNumber)
-                    while (activeDownloads.contains(episodeNumber)) {
+                    while(AnimeDownloader.isDownloading(media.id, episodeNumber)){
                         binding.itemDownload.animate().rotationBy(360f).setDuration(1000)
                             .setInterpolator(
                                 LinearInterpolator()
@@ -412,15 +447,6 @@ class EpisodeAdapter(
 
     fun updateType(t: Int) {
         type = t
-    }
-
-    private fun bytesToHuman(bytes: Long): String? {
-        if (bytes < 0) return null
-        val unit = 1000
-        if (bytes < unit) return "$bytes B"
-        val exp = (ln(bytes.toDouble()) / ln(unit.toDouble())).toInt()
-        val pre = ("KMGTPE")[exp - 1]
-        return String.format("%.1f %sB", bytes / unit.toDouble().pow(exp.toDouble()), pre)
     }
 }
 
