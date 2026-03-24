@@ -130,10 +130,16 @@ dependencies {
     implementation "androidx.mediarouter:mediarouter:1.7.0"
 // Media3 extension
     implementation "com.github.anilbeesetti.nextlib:nextlib-media3ext:0.8.4"
+// Libass for ASS/SSA subtitle rendering
+    implementation "io.github.peerless2012:ass-media:0.4.0-beta01"
+    implementation "io.github.peerless2012:ass-kt:0.4.0-beta01"
+    implementation "androidx.media3:media3-effect:$exo_version"
+
 
 //  UI
     implementation 'com.google.android.material:material:1.12.0'
-    implementation 'com.github.RepoDevil:AnimatedBottomBar:7fcb9af'
+    implementation files('libs/AnimatedBottomBar-7fcb9af.aar')
+    implementation 'com.google.android.flexbox:flexbox:3.0.0'
     implementation 'com.flaviofaria:kenburnsview:1.0.7'
     implementation 'com.davemorrissey.labs:subsampling-scale-image-view-androidx:3.10.0'
     implementation 'com.alexvasilkov:gesture-views:2.8.3'

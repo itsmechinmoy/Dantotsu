@@ -76,6 +76,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -157,7 +158,13 @@ import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.material.slider.Slider
 import com.lagradost.nicehttp.ignoreAllSSLErrors
+import io.github.peerless2012.ass.media.AssHandler
+import io.github.peerless2012.ass.media.AssHandlerConfig
+import io.github.peerless2012.ass.media.kt.withAssMkvSupport
+import io.github.peerless2012.ass.media.kt.withAssSupport
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
+import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
+import io.github.peerless2012.ass.media.type.AssRenderType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -227,6 +234,9 @@ class ExoplayerView :
     private lateinit var videoInfo: TextView
     private lateinit var episodeTitle: Spinner
     private lateinit var customSubtitleView: Xubtitle
+    private var assHandler: AssHandler? = null
+    private var assSubtitleView: io.github.peerless2012.ass.media.widget.AssSubtitleView? = null
+    private lateinit var assMediaSourceFactory: DefaultMediaSourceFactory
 
     private var orientationListener: OrientationEventListener? = null
 
@@ -1671,6 +1681,33 @@ class ExoplayerView :
                 setCacheWriteDataSinkFactory(null)
             }
 
+        // Set up libass for ASS/SSA subtitle rendering.
+        // We use OVERLAY_OPEN_GL to render subtitles in a dedicated hardware-accelerated
+        // TextureView via a background HandlerThread.
+        if (assHandler == null) {
+            Logger.log("Libass: Creating AssHandler with OVERLAY_OPEN_GL")
+            assHandler = AssHandler(
+                AssRenderType.OVERLAY_OPEN_GL,
+                AssHandlerConfig(glyphSize = 2048, cacheSize = 256)
+            )
+            // Inject the dedicated AssSubtitleTextureView into the video frame hierarchy.
+            Logger.log("Libass: Injecting AssSubtitleView into exo_content_frame")
+            val contentFrame = playerView.findViewById<androidx.media3.ui.AspectRatioFrameLayout>(androidx.media3.ui.R.id.exo_content_frame)
+            val assView = io.github.peerless2012.ass.media.widget.AssSubtitleView(this, assHandler!!)
+            assView.layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            contentFrame?.addView(assView)
+            assSubtitleView = assView
+        }
+        val handler = assHandler!!
+        val assSubtitleParserFactory = AssSubtitleParserFactory(handler)
+        val extractorsFactory = DefaultExtractorsFactory()
+            .withAssMkvSupport(assSubtitleParserFactory, handler)
+        assMediaSourceFactory = DefaultMediaSourceFactory(cacheFactory, extractorsFactory)
+        assMediaSourceFactory.setSubtitleParserFactory(assSubtitleParserFactory)
+
         val mimeType =
             when (video?.format) {
                 VideoType.M3U8 -> MimeTypes.APPLICATION_M3U8
@@ -1804,7 +1841,7 @@ class ExoplayerView :
                     }
                 }.toTypedArray()
         val videoMediaSource =
-            DefaultMediaSourceFactory(cacheFactory)
+            assMediaSourceFactory
                 .createMediaSource(mediaItem)
         mediaSource = MergingMediaSource(videoMediaSource, *audioSources)
 
@@ -1892,32 +1929,66 @@ class ExoplayerView :
             } else {
                 DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
             }
-        val renderersFactory =
-            NextRenderersFactory(this)
-                .setEnableDecoderFallback(true)
-                .setExtensionRendererMode(decoder)
+        val activityContext: android.content.Context = this
+        // We use NextRenderersFactory to provide FFmpeg video/audio rendering when
+        // Additional Codec Support is enabled. Since we now use OVERLAY_OPEN_GL,
+        // it doesn't matter that FfmpegVideoRenderer bypasses the video effects pipeline.
+        val baseRenderersFactory =
+            object : NextRenderersFactory(activityContext) {
+                @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+                override fun buildTextRenderers(
+                    context: android.content.Context,
+                    output: androidx.media3.exoplayer.text.TextOutput,
+                    outputLooper: android.os.Looper,
+                    extensionRendererMode: Int,
+                    out: java.util.ArrayList<androidx.media3.exoplayer.Renderer>
+                ) {
+                    out.add(androidx.media3.exoplayer.text.TextRenderer(output, outputLooper))
+                    try {
+                        val clazz = Class.forName("io.github.anilbeesetti.nextlib.media3ext.renderer.NextTextRenderer")
+                        val ctor = clazz.getConstructor(
+                            androidx.media3.exoplayer.text.TextOutput::class.java,
+                            android.os.Looper::class.java
+                        )
+                        out.add(ctor.newInstance(output, outputLooper) as androidx.media3.exoplayer.Renderer)
+                    } catch (e: Exception) {
+                    }
+                }
+            }.apply {
+                setEnableDecoderFallback(true)
+                setExtensionRendererMode(decoder)
+            }
+
+        val handler = assHandler!!
+        Logger.log("Libass: Calling baseRenderersFactory.withAssSupport()")
+        val renderersFactory = baseRenderersFactory.withAssSupport(handler)
 
         exoPlayer =
             ExoPlayer
                 .Builder(this, renderersFactory)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(cacheFactory))
+                .setMediaSourceFactory(assMediaSourceFactory)
                 .setTrackSelector(trackSelector)
                 .setLoadControl(loadControl)
                 .build()
-                .apply {
-                    playWhenReady = true
-                    this.playbackParameters = this@ExoplayerView.playbackParameters
-                    setMediaSource(mediaSource)
-                    prepare()
-                    PrefManager
-                        .getCustomVal(
-                            "${media.id}_${media.anime!!.selectedEpisode}_max",
-                            Long.MAX_VALUE,
-                        ).takeIf { it != Long.MAX_VALUE }
-                        ?.let { if (it <= playbackPosition) playbackPosition = max(0, it - 5) }
-                    seekTo(playbackPosition)
-                }
         playerView.player = exoPlayer
+
+        // init() must be called before prepare() so it receives onTracksChanged.
+        Logger.log("Libass: Calling handler.init(exoPlayer)")
+        handler.init(exoPlayer)
+
+        exoPlayer.apply {
+            playWhenReady = true
+            this.playbackParameters = this@ExoplayerView.playbackParameters
+            setMediaSource(mediaSource)
+            prepare()
+            PrefManager
+                .getCustomVal(
+                    "${media.id}_${media.anime!!.selectedEpisode}_max",
+                    Long.MAX_VALUE,
+                ).takeIf { it != Long.MAX_VALUE }
+                ?.let { if (it <= playbackPosition) playbackPosition = max(0, it - 5) }
+            seekTo(playbackPosition)
+        }
 
         exoPlayer.addListener(
             object : Player.Listener {
@@ -1926,6 +1997,14 @@ class ExoplayerView :
                 var lastPosition: Long = 0
 
                 override fun onCues(cueGroup: CueGroup) {
+                    val libassActive = assHandler?.hasTracks() == true || subtitle?.type == SubtitleType.ASS
+                    if (libassActive) {
+                        exoSubtitleView.visibility = View.GONE
+                        customSubtitleView.visibility = View.GONE
+                        customSubtitleView.text = ""
+                        return
+                    }
+
                     if (PrefManager.getVal<Boolean>(PrefName.TextviewSubtitles)) {
                         exoSubtitleView.visibility = View.GONE
                         customSubtitleView.visibility = View.VISIBLE
@@ -2003,6 +2082,7 @@ class ExoplayerView :
         playbackPosition = exoPlayer.currentPosition
         disappeared = false
         functionstarted = false
+        exoSubtitleView.removeAllViews()
         exoPlayer.release()
         VideoCache.release()
         mediaSession?.release()
