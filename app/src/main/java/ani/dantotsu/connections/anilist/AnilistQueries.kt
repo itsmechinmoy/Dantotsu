@@ -288,14 +288,30 @@ class AnilistQueries {
 
                             fetchedMedia.studios?.nodes?.apply {
                                 if (isNotEmpty()) {
-                                    val firstStudio = get(0)
+                                    val animStudio = firstOrNull { it.isAnimationStudio == true }
+                                    val studioNode = animStudio ?: get(0)
                                     media.anime.mainStudio = Studio(
-                                        firstStudio.id.toString(),
-                                        firstStudio.name ?: "N/A",
-                                        firstStudio.isFavourite ?: false,
-                                        firstStudio.favourites ?: 0,
+                                        studioNode.id.toString(),
+                                        studioNode.name ?: "N/A",
+                                        studioNode.isFavourite ?: false,
+                                        studioNode.favourites ?: 0,
                                         null
                                     )
+                                }
+                            }
+
+                            // Map non-main studios (isMain: false) as producers
+                            fetchedMedia.producers?.nodes?.apply {
+                                if (isNotEmpty()) {
+                                    media.anime.producers = map {
+                                        Studio(
+                                            it.id.toString(),
+                                            it.name ?: "N/A",
+                                            it.isFavourite ?: false,
+                                            it.favourites ?: 0,
+                                            null
+                                        )
+                                    } as ArrayList<Studio>
                                 }
                             }
 
@@ -330,6 +346,11 @@ class AnilistQueries {
                                 )
                             }
                         }
+
+                        if (!fetchedMedia.externalLinks.isNullOrEmpty()) {
+                            media.externalLinks = ArrayList(fetchedMedia.externalLinks!!)
+                        }
+
                         media.shareLink = fetchedMedia.siteUrl
                     }
 

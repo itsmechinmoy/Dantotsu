@@ -15,6 +15,7 @@ data class Anime(
     var ed: ArrayList<String> = arrayListOf(),
 
     var mainStudio: Studio? = null,
+    var producers: ArrayList<Studio>? = null,
     var author: Author? = null,
 
     var youtube: String? = null,
