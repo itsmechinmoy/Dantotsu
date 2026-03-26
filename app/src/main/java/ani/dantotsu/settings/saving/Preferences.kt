@@ -82,6 +82,13 @@ enum class PrefName(val data: Pref) {
             listOf(true, false, false, true, false, false, true, true)
         )
     ),
+    HomeLayoutOrder(
+        Pref(
+            Location.UI,
+            List::class,
+            listOf(0, 1, 2, 3, 4, 5, 6)
+        )
+    ),
     BannerAnimations(Pref(Location.UI, Boolean::class, true)),
     LayoutAnimations(Pref(Location.UI, Boolean::class, true)),
     TrendingScroller(Pref(Location.UI, Boolean::class, true)),

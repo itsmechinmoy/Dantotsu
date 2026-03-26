@@ -421,7 +421,7 @@
             <LinearLayout
                 android:id="@+id/homeContinueWatchingContainer"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -516,7 +516,7 @@
             <LinearLayout
                 android:id="@+id/homeFavAnimeContainer"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -609,7 +609,7 @@
             <LinearLayout
                 android:id="@+id/homePlannedAnimeContainer"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -705,7 +705,7 @@
             <LinearLayout
                 android:id="@+id/homeContinueReadingContainer"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -801,7 +801,7 @@
             <LinearLayout
                 android:id="@+id/homeFavMangaContainer"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -893,7 +893,7 @@
             <LinearLayout
                 android:id="@+id/homePlannedMangaContainer"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -990,7 +990,7 @@
             <LinearLayout
                 android:id="@+id/homeRecommendedContainer"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
 

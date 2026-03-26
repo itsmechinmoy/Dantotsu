@@ -552,6 +552,10 @@ class AnilistQueries {
             queries.add("""recommendationPlannedQueryManga: ${recommendationPlannedQuery("MANGA")}""")
         }
 
+        if (queries.isEmpty()) {
+            return mutableMapOf("hidden" to arrayListOf())
+        }
+
         val query = "{${queries.joinToString(",")}}"
         val response = executeQuery<Query.HomePageMedia>(query, show = true)
         val returnMap = mutableMapOf<String, ArrayList<Media>>()
