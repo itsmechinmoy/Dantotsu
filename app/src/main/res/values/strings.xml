@@ -137,6 +137,8 @@
     <string name="end_date">End Date</string>
     <string name="source">Source</string>
     <string name="main_studio">Studio</string>
+    <string name="producers">Producers</string>
+    <string name="external_links">External Links</string>
     <string name="genres">Genres</string>
     <string name="description">Synopsis</string>
     <string name="characters">Characters</string>
