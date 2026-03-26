@@ -43,8 +43,7 @@ import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.connections.discord.Discord
-import ani.dantotsu.connections.discord.DiscordService
-import ani.dantotsu.connections.discord.DiscordServiceRunningSingleton
+import ani.dantotsu.connections.discord.RPCManager
 import ani.dantotsu.connections.discord.RPC
 import ani.dantotsu.connections.updateProgress
 import ani.dantotsu.currContext
@@ -167,11 +166,7 @@ class MangaReaderActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         mangaCache.clear()
-        if (DiscordServiceRunningSingleton.running) {
-            DiscordServiceRunningSingleton.running = false
-            val stopIntent = Intent(this, DiscordService::class.java)
-            stopService(stopIntent)
-        }
+        RPCManager.clearPresence(this)
         super.onDestroy()
     }
 
@@ -415,50 +410,27 @@ class MangaReaderActivity : AppCompatActivity() {
                 val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled)
                 if ((isOnline(context) && !offline) && Discord.token != null && !incognito && rpcenabled) {
                     lifecycleScope.launch {
-                        val discordMode = PrefManager.getCustomVal("discord_mode", "dantotsu")
-                        val buttons = when (discordMode) {
-                            "nothing" -> mutableListOf(
-                                RPC.Link(getString(R.string.view_manga), media.shareLink ?: ""),
-                            )
-
-                            "dantotsu" -> mutableListOf(
-                                RPC.Link(getString(R.string.view_manga), media.shareLink ?: ""),
-                                RPC.Link("Read on Dantotsu", getString(R.string.dantotsu))
-                            )
-
-                            "anilist" -> {
-                                val userId = PrefManager.getVal<String>(PrefName.AnilistUserId)
-                                val anilistLink = "https://anilist.co/user/$userId/"
-                                mutableListOf(
-                                    RPC.Link(getString(R.string.view_manga), media.shareLink ?: ""),
-                                    RPC.Link("View My AniList", anilistLink)
+                        val buttons = mutableListOf<RPC.Link>()
+                        buttons.add(RPC.Link("View Manga", "https://anilist.co/manga/${media.id}/"))
+                        media.idMAL?.let {
+                            buttons.add(RPC.Link("View on MyAnimeList", "https://myanimelist.net/manga/$it"))
+                        }
+                        val rpcData = RPC.Companion.RPCData(
+                            applicationId = Discord.application_Id,
+                            type = RPC.Type.WATCHING,
+                            activityName = media.userPreferredName,
+                            details = chap.title?.takeIf { it.isNotEmpty() }
+                                ?: getString(R.string.chapter_num, chap.number),
+                            state = "Chapter : ${chap.number}/${media.manga?.totalChapters ?: "??"}",
+                            largeImage = media.cover?.let { cover ->
+                                RPC.Link(
+                                    media.userPreferredName,
+                                    cover
                                 )
-                            }
-
-                            else -> mutableListOf()
-                        }
-                        val presence = RPC.createPresence(
-                            RPC.Companion.RPCData(
-                                applicationId = Discord.application_Id,
-                                type = RPC.Type.WATCHING,
-                                activityName = media.userPreferredName,
-                                details = chap.title?.takeIf { it.isNotEmpty() }
-                                    ?: getString(R.string.chapter_num, chap.number),
-                                state = "${chap.number}/${media.manga?.totalChapters ?: "??"}",
-                                largeImage = media.cover?.let { cover ->
-                                    RPC.Link(
-                                        media.userPreferredName,
-                                        cover
-                                    )
-                                },
-                                buttons = buttons
-                            )
+                            },
+                            buttons = buttons
                         )
-                        val intent = Intent(context, DiscordService::class.java).apply {
-                            putExtra("presence", presence)
-                        }
-                        DiscordServiceRunningSingleton.running = true
-                        startService(intent)
+                        RPCManager.setPresence(context, rpcData)
                     }
                 }
             }
