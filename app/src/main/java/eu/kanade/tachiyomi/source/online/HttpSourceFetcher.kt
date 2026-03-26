@@ -12,10 +12,10 @@ fun HttpSource.fetchAllImageUrlsFromPageList(pages: List<Page>): Observable<Page
 private fun HttpSource.fetchRemainingImageUrlsFromPageList(pages: List<Page>): Observable<Page> {
     return Observable.from(pages)
         .filter { it.imageUrl.isNullOrEmpty() }
-        .concatMap { getImageUrl(it) }
+        .concatMap { getImageUrl2(it) }
 }
 
-private fun HttpSource.getImageUrl(page: Page): Observable<Page> {
+private fun HttpSource.getImageUrl2(page: Page): Observable<Page> {
     page.status = Page.State.LOAD_PAGE
     return fetchImageUrl(page)
         .doOnError { page.status = Page.State.ERROR }

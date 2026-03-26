@@ -14,7 +14,7 @@ fun AnimeSource.icon(): Drawable? = Injekt.get<AnimeExtensionManager>().getAppIc
 
 fun AnimeSource.getPreferenceKey(): String = "source_$id"
 
-fun AnimeSource.toSourceData(): AnimeSourceData = AnimeSourceData(id = id, lang = lang, name = name)
+fun AnimeSource.toSourceData(): AnimeSourceData = AnimeSourceData(id = id, lang = "", name = name)
 
 fun AnimeSource.getNameForAnimeInfo(): String {
     val preferences = Injekt.get<SourcePreferences>()

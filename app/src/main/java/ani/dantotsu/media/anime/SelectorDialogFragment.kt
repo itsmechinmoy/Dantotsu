@@ -666,15 +666,15 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     var subtitleToDownload: Subtitle? = null
                     requireActivity().customAlertDialog().apply {
                         setTitle(R.string.download_subtitle)
-                        singleChoiceItems(subtitleNames.toTypedArray()) { which ->
+                        singleChoiceItems(subtitleNames.toTypedArray(),  dismissOnSelect = false) { which ->
                             subtitleToDownload = subtitles[which]
                         }
                         setPosButton(R.string.download) {
-                            scope.launch {
+                            scope.launch(Dispatchers.IO) {
                                 if (subtitleToDownload != null) {
                                     SubtitleDownloader.downloadSubtitle(
                                         requireContext(),
-                                        subtitleToDownload!!.file.url,
+                                        subtitleToDownload.file.url,
                                         DownloadedType(
                                             media!!.mainName(),
                                             media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!.number,

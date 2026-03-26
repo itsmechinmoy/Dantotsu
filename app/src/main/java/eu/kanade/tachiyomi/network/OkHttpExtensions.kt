@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.network
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.okio.decodeFromBufferedSource
 import kotlinx.serialization.serializer
@@ -59,6 +58,15 @@ fun Call.asObservable(): Observable<Response> {
     }
 }
 
+fun Call.asObservableSuccess(): Observable<Response> {
+    return asObservable().doOnNext { response ->
+        if (!response.isSuccessful) {
+            response.close()
+            throw HttpException(response.code)
+        }
+    }
+}
+
 // Based on https://github.com/gildor/kotlin-coroutines-okhttp
 @OptIn(ExperimentalCoroutinesApi::class)
 private suspend fun Call.await(callStack: Array<StackTraceElement>): Response {
@@ -96,6 +104,9 @@ suspend fun Call.await(): Response {
     return await(callStack)
 }
 
+/**
+ * @since extensions-lib 1.5
+ */
 suspend fun Call.awaitSuccess(): Response {
     val callStack = Exception().stackTrace.run { copyOfRange(1, size) }
     val response = await(callStack)
@@ -106,18 +117,10 @@ suspend fun Call.awaitSuccess(): Response {
     return response
 }
 
-fun Call.asObservableSuccess(): Observable<Response> {
-    return asObservable().doOnNext { response ->
-        if (!response.isSuccessful) {
-            response.close()
-            throw HttpException(response.code)
-        }
-    }
-}
-
 fun OkHttpClient.newCachelessCallWithProgress(request: Request, listener: ProgressListener): Call {
     val progressClient = newBuilder()
         .cache(null)
+        .callTimeout(30, java.util.concurrent.TimeUnit.HOURS)
         .addNetworkInterceptor { chain ->
             val originalResponse = chain.proceed(chain.request())
             originalResponse.newBuilder()
@@ -135,7 +138,6 @@ inline fun <reified T> Response.parseAs(): T {
 }
 
 context(Json)
-@OptIn(ExperimentalSerializationApi::class)
 fun <T> decodeFromJsonResponse(
     deserializer: DeserializationStrategy<T>,
     response: Response,
@@ -145,4 +147,11 @@ fun <T> decodeFromJsonResponse(
     }
 }
 
+/**
+ * Exception that handles HTTP codes considered not successful by OkHttp.
+ * Use it to have a standardized error message in the app across the extensions.
+ *
+ * @since extensions-lib 1.5
+ * @param code [Int] the HTTP status code
+ */
 class HttpException(val code: Int) : IllegalStateException("HTTP error $code")

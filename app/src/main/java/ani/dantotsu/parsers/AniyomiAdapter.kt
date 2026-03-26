@@ -9,13 +9,16 @@ import ani.dantotsu.media.manga.MangaCache
 import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
+import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.NO_HOSTER_LIST
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
+import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -211,7 +214,6 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         }
         return true
     }
-
     override suspend fun loadVideoServers(
         episodeLink: String,
         extra: Map<String, String>?,
@@ -222,28 +224,138 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         } catch (e: Exception) {
             sourceLanguage = 0
             extension.sources[sourceLanguage]
-        } as? AnimeHttpSource ?: (extension.sources[sourceLanguage] as? AnimeCatalogueSource
-            ?: return emptyList())
+        } as? AnimeHttpSource ?: return emptyList()
 
         return try {
-            // TODO(1.6): Remove else block when dropping support for ext lib <1.6
-            if ((source as AnimeHttpSource).javaClass.declaredMethods.any { it.name == "getHosterList" }){
-                val hosters = source.getHosterList(sEpisode)
-                val allVideos = hosters.flatMap { hoster ->
-                    val videos = source.getVideoList(hoster)
-                    videos.map { it.copy(videoTitle = "${hoster.hosterName} - ${it.videoTitle}") }
-                }
-                allVideos.map { videoToVideoServer(it) }
-            } else {
-                val videos = source.getVideoList(sEpisode)
-                videos.map { videoToVideoServer(it) }
-            }
+            val videos = getVideoList(source,sEpisode)
+
+            videos.map { videoToVideoServer(it) }
         } catch (e: Exception) {
             Logger.log("Exception occurred: ${e.message}")
             emptyList()
         }
     }
+    suspend fun getVideoList(
+        source: AnimeHttpSource,
+        episode: SEpisode
+    ): List<Video> {
 
+        val hasHosters = checkHasHosters(source)
+
+        val directVideos = if (!hasHosters) {
+            runCatching {
+                source.getVideoList(episode)
+            }.getOrElse { emptyList() }
+        } else {
+            emptyList()
+        }
+
+        val hosterVideos = if (hasHosters) {
+            val hosters = runCatching {
+                source.getHosterList(episode)
+            }.getOrElse { emptyList() }
+
+            coroutineScope {
+                hosters.map { hoster ->
+                    async(Dispatchers.IO) {
+
+                        val videos = when {
+                            !hoster.videoList.isNullOrEmpty() -> hoster.videoList
+                            else -> runCatching {
+                                source.getVideoList(hoster)
+                            }.getOrElse { emptyList() }
+                        }
+
+                        videos.map { video ->
+                            val resolved = resolveVideo(source, video)
+
+                            val title = if (
+                                hoster.hosterName.isBlank() ||
+                                hoster.hosterName == NO_HOSTER_LIST
+                            ) {
+                                resolved.videoTitle
+                            } else {
+                                "${hoster.hosterName} - ${resolved.videoTitle}"
+                            }
+
+                            resolved.copy(
+                                videoTitle = title,
+                                initialized = true
+                            )
+                        }
+                    }
+                }.awaitAll().flatten()
+            }
+        } else {
+            emptyList()
+        }
+
+        val resolvedDirect = coroutineScope {
+            directVideos.map {
+                async(Dispatchers.IO) {
+                    resolveVideo(source, it)
+                }
+            }.awaitAll()
+        }
+
+        return source.run {
+            (resolvedDirect + hosterVideos)
+                .distinctBy { it.videoUrl }
+                .filter { it.videoUrl.isNotEmpty() && it.videoUrl != "null" }
+                .sortVideos()
+        }
+    }
+
+    private fun checkHasHosters(source: AnimeHttpSource): Boolean {
+        var current: Class<in AnimeHttpSource> = source.javaClass
+
+        while (true) {
+            if (current == ParsedAnimeHttpSource::class.java ||
+                current == AnimeHttpSource::class.java ||
+                current == AnimeSource::class.java
+            ) {
+                return false
+            }
+
+            if (current.declaredMethods.any {
+                    it.name in listOf(
+                        "getHosterList",
+                        "hosterListRequest",
+                        "hosterListParse"
+                    )
+                }
+            ) {
+                return true
+            }
+
+            current = current.superclass ?: return false
+        }
+    }
+
+    private suspend fun resolveVideo(
+        source: AnimeHttpSource,
+        video: Video
+    ): Video {
+        if (video.initialized && video.videoUrl.isNotEmpty() && video.videoUrl != "null") {
+            return video
+        }
+
+        val resolved = runCatching {
+            source.resolveVideo(video)
+        }.getOrNull()
+
+        if (resolved != null) return resolved
+
+        if (video.videoUrl == "null" || video.videoUrl.isEmpty()) {
+            val newUrl = runCatching {
+                source.getVideoUrl(video)
+            }.getOrNull()
+
+            return video.copy(videoUrl = newUrl ?: video.videoUrl)
+        }
+
+        return video
+    }
 
     override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor {
         return VideoServerPassthrough(server)
