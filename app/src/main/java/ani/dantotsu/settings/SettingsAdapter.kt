@@ -60,7 +60,18 @@ class SettingsAdapter(private val settings: ArrayList<Settings>) :
                     settings.onLongClick?.invoke()
                     true
                 }
-                b.settingsLayout.visibility = if (settings.isVisible) View.VISIBLE else View.GONE
+                if (settings.isVisible) {
+                    b.settingsLayout.visibility = View.VISIBLE
+                    b.settingsLayout.layoutParams = RecyclerView.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        topMargin = (24 * b.root.context.resources.displayMetrics.density).toInt()
+                    }
+                } else {
+                    b.settingsLayout.visibility = View.GONE
+                    b.settingsLayout.layoutParams = RecyclerView.LayoutParams(0, 0)
+                }
                 b.settingsIconRight.visibility =
                     if (settings.isActivity) View.VISIBLE else View.GONE
                 b.attachView.visibility = if (settings.attach != null) View.VISIBLE else View.GONE
@@ -86,7 +97,18 @@ class SettingsAdapter(private val settings: ArrayList<Settings>) :
                     settings.onLongClick?.invoke()
                     true
                 }
-                b.settingsLayout.visibility = if (settings.isVisible) View.VISIBLE else View.GONE
+                if (settings.isVisible) {
+                    b.settingsLayout.visibility = View.VISIBLE
+                    b.settingsLayout.layoutParams = RecyclerView.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        topMargin = (24 * b.root.context.resources.displayMetrics.density).toInt()
+                    }
+                } else {
+                    b.settingsLayout.visibility = View.GONE
+                    b.settingsLayout.layoutParams = RecyclerView.LayoutParams(0, 0)
+                }
                 settings.attachToSwitch?.invoke(b)
             }
         }

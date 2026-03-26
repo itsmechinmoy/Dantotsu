@@ -132,10 +132,9 @@ class SearchActivity : AppCompatActivity() {
                         results = mutableListOf(),
                         hasNextPage = false
                     )
-
-                    characterResult = model.characterSearchResults
-                    characterAdaptor = CharacterAdapter(model.characterSearchResults.results)
                 }
+                characterResult = model.characterSearchResults
+                characterAdaptor = CharacterAdapter(model.characterSearchResults.results)
             }
 
             SearchType.STUDIO -> {
@@ -146,10 +145,9 @@ class SearchActivity : AppCompatActivity() {
                         results = mutableListOf(),
                         hasNextPage = false
                     )
-
-                    studioResult = model.studioSearchResults
-                    studioAdaptor = StudioAdapter(model.studioSearchResults.results)
                 }
+                studioResult = model.studioSearchResults
+                studioAdaptor = StudioAdapter(model.studioSearchResults.results)
             }
 
             SearchType.STAFF -> {
@@ -160,10 +158,9 @@ class SearchActivity : AppCompatActivity() {
                         results = mutableListOf(),
                         hasNextPage = false
                     )
-
-                    staffResult = model.staffSearchResults
-                    staffAdaptor = AuthorAdapter(model.staffSearchResults.results)
                 }
+                staffResult = model.staffSearchResults
+                staffAdaptor = AuthorAdapter(model.staffSearchResults.results)
             }
 
             SearchType.USER -> {
@@ -174,10 +171,9 @@ class SearchActivity : AppCompatActivity() {
                         results = mutableListOf(),
                         hasNextPage = false
                     )
-
-                    userResult = model.userSearchResults
-                    usersAdapter = UsersAdapter(model.userSearchResults.results, grid = true)
                 }
+                userResult = model.userSearchResults
+                usersAdapter = UsersAdapter(model.userSearchResults.results, grid = true)
             }
         }
 
@@ -268,8 +264,9 @@ class SearchActivity : AppCompatActivity() {
                         }
 
                         val prev = model.aniMangaSearchResults.results.size
-                        model.aniMangaSearchResults.results.addAll(it.results)
-                        mediaAdaptor.notifyItemRangeInserted(prev, it.results.size)
+                        val newResults = it.results.distinctBy { it.id }.filter { newItem -> model.aniMangaSearchResults.results.none { oldItem -> oldItem.id == newItem.id } }
+                        model.aniMangaSearchResults.results.addAll(newResults)
+                        mediaAdaptor.notifyItemRangeInserted(prev, newResults.size)
 
                         progressAdapter.bar?.isVisible = it.hasNextPage
                     }
@@ -286,8 +283,9 @@ class SearchActivity : AppCompatActivity() {
                         }
 
                         val prev = model.characterSearchResults.results.size
-                        model.characterSearchResults.results.addAll(it.results)
-                        characterAdaptor.notifyItemRangeInserted(prev, it.results.size)
+                        val newResults = it.results.distinctBy { it.id }.filter { newItem -> model.characterSearchResults.results.none { oldItem -> oldItem.id == newItem.id } }
+                        model.characterSearchResults.results.addAll(newResults)
+                        characterAdaptor.notifyItemRangeInserted(prev, newResults.size)
 
                         progressAdapter.bar?.isVisible = it.hasNextPage
                     }
@@ -304,8 +302,9 @@ class SearchActivity : AppCompatActivity() {
                         }
 
                         val prev = model.studioSearchResults.results.size
-                        model.studioSearchResults.results.addAll(it.results)
-                        studioAdaptor.notifyItemRangeInserted(prev, it.results.size)
+                        val newResults = it.results.distinctBy { it.id }.filter { newItem -> model.studioSearchResults.results.none { oldItem -> oldItem.id == newItem.id } }
+                        model.studioSearchResults.results.addAll(newResults)
+                        studioAdaptor.notifyItemRangeInserted(prev, newResults.size)
 
                         progressAdapter.bar?.isVisible = it.hasNextPage
                     }
@@ -322,8 +321,9 @@ class SearchActivity : AppCompatActivity() {
                         }
 
                         val prev = model.staffSearchResults.results.size
-                        model.staffSearchResults.results.addAll(it.results)
-                        staffAdaptor.notifyItemRangeInserted(prev, it.results.size)
+                        val newResults = it.results.distinctBy { it.id }.filter { newItem -> model.staffSearchResults.results.none { oldItem -> oldItem.id == newItem.id } }
+                        model.staffSearchResults.results.addAll(newResults)
+                        staffAdaptor.notifyItemRangeInserted(prev, newResults.size)
 
                         progressAdapter.bar?.isVisible = it.hasNextPage
                     }
@@ -340,8 +340,9 @@ class SearchActivity : AppCompatActivity() {
                         }
 
                         val prev = model.userSearchResults.results.size
-                        model.userSearchResults.results.addAll(it.results)
-                        usersAdapter.notifyItemRangeInserted(prev, it.results.size)
+                        val newResults = it.results.distinctBy { it.id }.filter { newItem -> model.userSearchResults.results.none { oldItem -> oldItem.id == newItem.id } }
+                        model.userSearchResults.results.addAll(newResults)
+                        usersAdapter.notifyItemRangeInserted(prev, newResults.size)
 
                         progressAdapter.bar?.isVisible = it.hasNextPage
                     }
