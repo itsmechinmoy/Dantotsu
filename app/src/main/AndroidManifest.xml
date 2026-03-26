@@ -302,9 +302,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:scheme="dantotsu" />
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-                <data android:host="discord.dantotsu.com" />
+                <data android:host="discord" />
             </intent-filter>
         </activity>
         <activity
@@ -462,6 +460,7 @@
         <service
             android:name=".connections.discord.DiscordService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
         <service
             android:name="androidx.media3.exoplayer.scheduler.PlatformScheduler$PlatformSchedulerService"

@@ -462,6 +462,19 @@
     <string name="discord_rich_presence">Discord Rich Presence</string>
     <string name="stream_on_dantotsu">Stream on Dantotsu</string>
     <string name="view_my_anilist">View My AniList</string>
+    <string name="view_my_mal">View My MAL</string>
+    <string name="discord_preview">Preview</string>
+    <string name="discord_playing_game">Playing a game</string>
+    <string name="discord_just_now">Just Now</string>
+    <string name="discord_select_service">Select Icon Service &amp; Links</string>
+    <string name="discord_dantotsu_mode">Dantotsu Mode</string>
+    <string name="discord_anilist_mode">AniList Mode</string>
+    <string name="discord_mal_mode">MAL Mode</string>
+    <string name="discord_anime_presence">Anime Presence</string>
+    <string name="discord_manga_presence">Manga Presence</string>
+    <string name="discord_no_tracker_link">No Tracker Link (Hidden)</string>
+    <string name="view_profile_in_dantotsu">Dantotsu Profile</string>
+    <string name="discord_view_profile">View Profile</string>
 
     <string name="jobless_message">DAMN! YOU TRULY ARE JOBLESS\nYOU REACHED THE END</string>
     <string name="file_manager_not_found">Couldn\'t find a File Manager to open SD card</string>
@@ -565,7 +578,7 @@
 
     <string name="read_on_dantotsu">Read on Dantotsu</string>
     <string name="watch_on_dantotsu">Watch on Dantotsu</string>
-    <string name="view_profile_in_dantotsu">View Profile in Dantotsu</string>
+
     <string name="continue_episode">Continue : Episode %1$s%2$s\n%3$s</string>
     <string name="filler_tag"> - Filler</string>
     <string name="continue_chapter">Continue : %1$s\n%2$s</string>
