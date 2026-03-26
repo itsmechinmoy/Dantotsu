@@ -86,9 +86,10 @@ class AnilistQueries {
         return true
     }
 
-    suspend fun getMedia(id: Int, mal: Boolean = false): Media? {
+    suspend fun getMedia(id: Int, mal: Boolean = false, type: String? = null): Media? {
+        val typeArg = if (type != null) "type: $type," else ""
         val response = executeQuery<Query.Media>(
-            """{Media(${if (!mal) "id:" else "idMal:"}$id){id idMal status chapters episodes nextAiringEpisode{episode}type meanScore isAdult isFavourite format bannerImage coverImage{large}title{english romaji userPreferred}mediaListEntry{progress private score(format:POINT_100)status}}}""",
+            """{Media($typeArg${if (!mal) "id:" else "idMal:"}$id){id idMal status chapters episodes nextAiringEpisode{episode}type meanScore isAdult isFavourite format bannerImage coverImage{large}title{english romaji userPreferred}mediaListEntry{progress private score(format:POINT_100)status}}}""",
             force = true
         )
         val fetchedMedia = response?.data?.media ?: return null
@@ -122,7 +123,7 @@ class AnilistQueries {
 
                         media.trailer = fetchedMedia.trailer?.let { i ->
                             if (i.site != null && i.site.toString() == "youtube")
-                                "https://www.youtube.com/embed/${i.id.toString().trim('"')}"
+                                i.id.toString().trim('"')
                             else null
                         }
 
@@ -1402,18 +1403,22 @@ Page(page:$page,perPage:50) {
         var hasNextPage = true
         val yearMedia = mutableMapOf<String, ArrayList<Media>>()
         var page = 0
+        val seenMediaIds = hashSetOf<Int>()
         while (hasNextPage) {
             page++
             hasNextPage =
                 executeQuery<Query.Studio>(query(page), force = true)?.data?.studio?.media?.let {
                     it.edges?.forEach { i ->
                         i.node?.apply {
-                            val status = status.toString()
-                            val year = startDate?.year?.toString() ?: "TBA"
-                            val title = if (status != "CANCELLED") year else status
-                            if (!yearMedia.containsKey(title))
-                                yearMedia[title] = arrayListOf()
-                            yearMedia[title]?.add(Media(this))
+                            if (id !in seenMediaIds) {
+                                seenMediaIds.add(id)
+                                val status = status.toString()
+                                val year = startDate?.year?.toString() ?: "TBA"
+                                val title = if (status != "CANCELLED") year else status
+                                if (!yearMedia.containsKey(title))
+                                    yearMedia[title] = arrayListOf()
+                                yearMedia[title]?.add(Media(this))
+                            }
                         }
                     }
                     it.pageInfo?.hasNextPage == true

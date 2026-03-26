@@ -23,9 +23,10 @@ class UrlMedia : Activity() {
                 isMAL = data?.host != "anilist.co"
                 id = data?.pathSegments?.getOrNull(1)?.toIntOrNull()
             } else loadMedia = id
+            val mediaType = type?.uppercase()
             startMainActivity(
                 this,
-                bundleOf("mediaId" to id, "mal" to isMAL, "continue" to continueMedia)
+                bundleOf("mediaId" to id, "mal" to isMAL, "continue" to continueMedia, "mediaType" to mediaType)
             )
         } else {
             val username = data.pathSegments?.getOrNull(1)

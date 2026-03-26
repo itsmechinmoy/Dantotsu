@@ -62,9 +62,9 @@ internal object ExtensionLoader {
     private const val XX_METADATA_HAS_README = ".hasReadme"
     private const val XX_METADATA_HAS_CHANGELOG = ".hasChangelog"
     const val ANIME_LIB_VERSION_MIN = 12
-    const val ANIME_LIB_VERSION_MAX = 15
+    const val ANIME_LIB_VERSION_MAX = 16
 
-    const val MANGA_LIB_VERSION_MIN = 1.2
+    const val MANGA_LIB_VERSION_MIN = 1.4
     const val MANGA_LIB_VERSION_MAX = 1.5
 
     val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or

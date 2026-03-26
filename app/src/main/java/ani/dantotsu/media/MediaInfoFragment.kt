@@ -334,9 +334,137 @@ class MediaInfoFragment : Fragment() {
                     bind.mediaInfoTrailer.apply {
                         visibility = View.VISIBLE
                         settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.databaseEnabled = true
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        }
+                        settings.userAgentString = null
                         isSoundEffectsEnabled = true
                         webChromeClient = MyChrome()
-                        loadUrl(media.trailer!!)
+
+                        val trailerId = media.trailer!!
+                        
+                        addJavascriptInterface(object {
+                            @android.webkit.JavascriptInterface
+                            fun loadVideo() {
+                                val trailerHtml = """
+                                    <!DOCTYPE html>
+                                    <html>
+                                    <head>
+                                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                        <style>
+                                            * { 
+                                                margin: 0; 
+                                                padding: 0; 
+                                                box-sizing: border-box;
+                                                -webkit-tap-highlight-color: transparent;
+                                            }
+                                            html, body { 
+                                                width: 100%; 
+                                                height: 100%; 
+                                                background: #000; 
+                                                overflow: hidden;
+                                            }
+                                            iframe {
+                                                width: 100%;
+                                                height: 100%;
+                                                border: none;
+                                                display: block;
+                                            }
+                                        </style>
+                                    </head>
+                                    <body>
+                                        <iframe 
+                                            src="https://www.youtube-nocookie.com/embed/$trailerId?autoplay=1&rel=0&modestbranding=1&controls=1&fs=0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            frameborder="0">
+                                        </iframe>
+                                    </body>
+                                    </html>
+                                """.trimIndent()
+                                context.let {
+                                     (it as? android.app.Activity)?.runOnUiThread {
+                                         loadDataWithBaseURL("https://www.youtube-nocookie.com", trailerHtml, "text/html", "utf-8", null)
+                                     }
+                                }
+                            }
+                        }, "Android")
+
+                        val placeholderHtml = """
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                <style>
+                                    * { 
+                                        margin: 0; 
+                                        padding: 0; 
+                                        box-sizing: border-box;
+                                        -webkit-tap-highlight-color: transparent;
+                                        -webkit-touch-callout: none;
+                                        -webkit-user-select: none;
+                                        user-select: none;
+                                    }
+                                    body, html { 
+                                        width: 100%; 
+                                        height: 100%; 
+                                        background: #000;
+                                        overflow: hidden;
+                                    }
+                                    .thumbnail-container {
+                                        position: relative;
+                                        width: 100%;
+                                        height: 100%;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        background: #000;
+                                    }
+                                    .thumbnail {
+                                        width: 100%;
+                                        height: 100%;
+                                        object-fit: contain;
+                                    }
+                                    .play-button {
+                                        position: absolute;
+                                        width: 68px;
+                                        height: 48px;
+                                        background: rgba(255, 0, 0, 0.8);
+                                        border-radius: 12px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        transition: transform 0.2s;
+                                    }
+                                    .thumbnail-container:active .play-button {
+                                        transform: scale(0.95);
+                                    }
+                                    .play-icon {
+                                        width: 0;
+                                        height: 0;
+                                        border-left: 20px solid white;
+                                        border-top: 12px solid transparent;
+                                        border-bottom: 12px solid transparent;
+                                        margin-left: 4px;
+                                    }
+                                </style>
+                            </head>
+                            <body>
+                                <div class="thumbnail-container" onclick="Android.loadVideo()">
+                                    <img class="thumbnail" src="https://img.youtube.com/vi/$trailerId/maxresdefault.jpg"
+                                         onerror="this.src='https://img.youtube.com/vi/$trailerId/hqdefault.jpg'" alt="Trailer">
+                                    <div class="play-button">
+                                        <div class="play-icon"></div>
+                                    </div>
+                                </div>
+                            </body>
+                            </html>
+                        """.trimIndent()
+                        loadDataWithBaseURL("https://www.youtube-nocookie.com", placeholderHtml, "text/html", "utf-8", null)
                     }
                     parent.addView(bind.root)
                 }
