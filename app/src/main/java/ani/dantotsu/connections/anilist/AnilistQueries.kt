@@ -523,7 +523,7 @@ class AnilistQueries {
     }
 
     private fun continueMediaQuery(type: String, status: String): String {
-        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status , sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
+        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status , sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status updatedAt media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
     }
 
     suspend fun initHomePage(): Map<String, ArrayList<Media>> {
@@ -618,11 +618,16 @@ class AnilistQueries {
                 list.reversed().forEach { id ->
                     subMap[id]?.let { returnArray.add(it) }
                 }
-                subMap.values.forEach {
-                    if (!returnArray.contains(it)) returnArray.add(it)
-                }
+
+                subMap.values
+                    .filter { it !in returnArray }
+                    .sortedByDescending { it.userUpdatedAt ?: 0L }
+                    .forEach { returnArray.add(it) }
+
             } else {
-                returnArray.addAll(subMap.values)
+                returnArray.addAll(
+                    subMap.values.sortedByDescending { it.userUpdatedAt ?: 0L }
+                )
             }
             returnMap["current$type"] = returnArray
         }
@@ -703,7 +708,31 @@ class AnilistQueries {
             returnMap["recommendations"] = list
         }
 
-        returnMap["hidden"] = removedMedia.distinctBy { it.id }.toCollection(arrayListOf())
+        val allOrders = listOf(
+            "continueAnimeList",
+            "continueAnimePlannedList",
+            "continueMangaList",
+            "continueMangaPlannedList"
+        ).flatMap {
+            PrefManager.getNullableCustomVal(it, listOf<Int>(), List::class.java) as List<*>
+        }
+
+        val hiddenList = removedMedia.distinctBy { it.id }
+        val sortedHidden = arrayListOf<Media>()
+
+        if (allOrders.isNotEmpty()) {
+            allOrders.reversed().forEach { id ->
+                hiddenList.find { it.id == id }?.let { sortedHidden.add(it) }
+            }
+            hiddenList
+                .filter { it !in sortedHidden }
+                .sortedByDescending { it.userUpdatedAt ?: 0L }
+                .forEach { sortedHidden.add(it) }
+        } else {
+            sortedHidden.addAll(hiddenList.sortedByDescending { it.userUpdatedAt ?: 0L })
+        }
+
+        returnMap["hidden"] = sortedHidden
         return returnMap
     }
 

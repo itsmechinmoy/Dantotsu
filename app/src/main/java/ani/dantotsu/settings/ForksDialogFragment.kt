@@ -27,6 +27,7 @@ class ForksDialogFragment : BottomSheetDialogFragment() {
         super.onViewCreated(view, savedInstanceState)
         binding.devsProgressBar.isVisible = false
         binding.devsTitle.setText(R.string.forks)
+        binding.devsRecyclerView.isVisible = true
         binding.devsRecyclerView.adapter = DevelopersAdapter(
             arrayOf(
                 Developer(

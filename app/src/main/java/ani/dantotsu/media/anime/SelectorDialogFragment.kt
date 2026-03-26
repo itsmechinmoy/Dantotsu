@@ -595,7 +595,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             )
 
         override fun onBindViewHolder(holder: StreamViewHolder, position: Int) {
-            val extractor = links[position]
+            val extractor = links.getOrNull(position) ?: return
             holder.binding.streamName.text = ""//extractor.server.name
             holder.binding.streamName.visibility = View.GONE
 
