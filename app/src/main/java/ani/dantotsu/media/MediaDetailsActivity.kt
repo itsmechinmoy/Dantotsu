@@ -4,7 +4,6 @@ import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.res.Configuration
-import android.graphics.Color
 import android.os.Bundle
 import android.text.SpannableStringBuilder
 import android.view.GestureDetector
@@ -13,8 +12,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
-import androidx.activity.SystemBarStyle
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -22,10 +19,8 @@ import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
 import androidx.core.text.bold
 import androidx.core.text.color
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
 import androidx.core.view.marginBottom
-import androidx.core.view.setPadding
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updateMargins
 import androidx.fragment.app.Fragment
@@ -50,6 +45,7 @@ import ani.dantotsu.media.comments.CommentsFragment
 import ani.dantotsu.media.manga.MangaReadFragment
 import ani.dantotsu.media.novel.NovelReadFragment
 import ani.dantotsu.navBarHeight
+import ani.dantotsu.setBaseline
 import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.others.AndroidBug5497Workaround
 import ani.dantotsu.others.ImageViewDialog
@@ -117,37 +113,14 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
 
 
 
-        binding.mediaViewPager.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            bottomMargin = navBarHeight
+        binding.mediaBottomBarContainer?.let {
+            it.setPadding(0, 0, 0, navBarHeight)
         }
-        val oldMargin = binding.mediaViewPager.marginBottom
-        AndroidBug5497Workaround.assistActivity(this) {
-            if (it) {
-                binding.mediaViewPager.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                    bottomMargin = 0
-                }
-                navBar.visibility = View.GONE
-            } else {
-                binding.mediaViewPager.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                    bottomMargin = oldMargin
-                }
-                navBar.visibility = View.VISIBLE
-            }
-        }
-        val navBarRightMargin = if (resources.configuration.orientation ==
-            Configuration.ORIENTATION_LANDSCAPE
-        ) navBarHeight else 0
-        val navBarBottomMargin = if (resources.configuration.orientation ==
-            Configuration.ORIENTATION_LANDSCAPE
-        ) 0 else navBarHeight
 
-        navBar.setPadding(
-            navBar.paddingLeft,
-            navBar.paddingTop,
-            navBar.paddingRight + navBarRightMargin,
-            navBar.paddingBottom
-        )
-        navBar.updateLayoutParams<ViewGroup.MarginLayoutParams> { bottomMargin += navBarBottomMargin }
+        AndroidBug5497Workaround.assistActivity(this) { keyboardVisible ->
+            // Optionally hide nav bar when keyboard is visible
+            navBar.visibility = if (keyboardVisible) View.GONE else View.VISIBLE
+        }
         binding.mediaBanner.updateLayoutParams { height += statusBarHeight }
         binding.mediaBannerNoKen.updateLayoutParams { height += statusBarHeight }
         binding.mediaClose.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
@@ -370,8 +343,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             )
             anime = false
         }
-        val comment = PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 2
-        selected = media.selected!!.window.coerceIn(0, if (comment) 2 else 3)
+        selected = if (PrefManager.getVal<Int>(PrefName.CommentsEnabled) != 1 && media.selected!!.window == 2) 1 else media.selected!!.window
         binding.mediaTitle.translationX = -screenWidth
 
         val infoTab = navBar.createTab(R.drawable.ic_round_info_24, R.string.info, R.id.info)
@@ -393,11 +365,16 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             model.continueMedia = PrefManager.getVal(PrefName.ContinueMedia)
             selected = 1
         }
-        if (intent.getStringExtra("FRAGMENT_TO_LOAD") != null) selected = 2
+        if (intent.getStringExtra("FRAGMENT_TO_LOAD") != null && PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1) selected = 2
         if (viewPager.currentItem != selected) viewPager.post {
             viewPager.setCurrentItem(selected, false)
         }
         binding.commentInputLayout.isVisible = selected == 2
+
+        // Ensure that if we are returning from the comments tab, we go back to the media content tab
+        if (selected == 2 && PrefManager.getVal<Int>(PrefName.CommentsEnabled) != 1) {
+            selected = 1
+        }
         navBar.selectTabAt(selected)
         navBar.setOnTabSelectListener(object : AnimatedBottomBar.OnTabSelectListener {
             override fun onTabSelected(
@@ -442,7 +419,14 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     override fun onResume() {
         if (::navBar.isInitialized)
             navBar.selectTabAt(selected)
+
+        // Explicitly set visibility of key UI elements on resume
+        binding.mediaAppBar.visibility = View.VISIBLE
+        binding.mediaViewPager.visibility = View.VISIBLE
+        binding.mediaCover.visibility = View.VISIBLE
+        binding.mediaClose.visibility = View.VISIBLE
         super.onResume()
+        binding.root.requestLayout()
     }
 
     private enum class SupportedMedia {
@@ -459,7 +443,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     ) :
         FragmentStateAdapter(fragmentManager, lifecycle) {
 
-        override fun getItemCount(): Int = 3
+        override fun getItemCount(): Int = if (PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1) 3 else 2
 
         override fun createFragment(position: Int): Fragment = when (position) {
             0 -> MediaInfoFragment()
@@ -469,14 +453,18 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                 SupportedMedia.NOVEL -> NovelReadFragment()
             }
 
-            2 -> {
-                val fragment = CommentsFragment()
-                val bundle = Bundle()
-                bundle.putInt("mediaId", media.id)
-                bundle.putString("mediaName", media.mainName())
-                if (commentId != -1) bundle.putInt("commentId", commentId)
-                fragment.arguments = bundle
-                fragment
+            2 -> { // Index 2
+                if (PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1) {
+                    val fragment = CommentsFragment()
+                    val bundle = Bundle()
+                    bundle.putInt("mediaId", media.id)
+                    bundle.putString("mediaName", media.mainName())
+                    if (commentId != -1) bundle.putInt("commentId", commentId)
+                    fragment.arguments = bundle
+                    fragment
+                } else {
+                    MediaInfoFragment() // Fallback to Info tab if comments are disabled
+                }
             }
 
             else -> MediaInfoFragment()

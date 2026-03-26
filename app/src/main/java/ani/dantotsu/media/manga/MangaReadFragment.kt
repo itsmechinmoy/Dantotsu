@@ -45,6 +45,7 @@ import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.media.manga.mangareader.ChapterLoaderDialog
 import ani.dantotsu.navBarHeight
+import ani.dantotsu.setBaseline
 import ani.dantotsu.notifications.subscription.SubscriptionHelper
 import ani.dantotsu.notifications.subscription.SubscriptionHelper.Companion.saveSubscription
 import ani.dantotsu.others.LanguageMapper
@@ -58,6 +59,7 @@ import ani.dantotsu.settings.extensionprefs.MangaSourcePreferencesFragment
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
+import ani.dantotsu.toPx
 import ani.dantotsu.util.StoragePermissions.Companion.accessAlertDialog
 import ani.dantotsu.util.StoragePermissions.Companion.hasDirAccess
 import ani.dantotsu.util.customAlertDialog
@@ -123,7 +125,12 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
             ContextCompat.RECEIVER_EXPORTED
         )
 
-        binding.mediaSourceRecycler.updatePadding(bottom = binding.mediaSourceRecycler.paddingBottom + navBarHeight)
+        val baselineAnchor = (activity as MediaDetailsActivity).binding.mediaBottomBarContainer ?: (activity as MediaDetailsActivity).binding.commentMessageContainer
+        baselineAnchor?.let {
+            val includeSystemPaddings = it != (activity as MediaDetailsActivity).binding.mediaBottomBarContainer
+            binding.mediaSourceRecycler.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
+            binding.mediaSourceRecycler.clipToPadding = false
+        }
         screenWidth = resources.displayMetrics.widthPixels.dp
 
         var maxGridSize = (screenWidth / 100f).roundToInt()
@@ -158,7 +165,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
 
                 val position = gridLayoutManager.findFirstVisibleItemPosition()
                 if (position > 2) {
-                    binding.ScrollTop.translationY = -navBarHeight.toFloat()
+                    binding.ScrollTop.translationY = -(navBarHeight + 12.toPx).toFloat()
                     binding.ScrollTop.visibility = View.VISIBLE
                 } else {
                     binding.ScrollTop.visibility = View.GONE

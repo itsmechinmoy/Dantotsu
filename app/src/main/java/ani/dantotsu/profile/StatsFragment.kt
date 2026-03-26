@@ -53,7 +53,7 @@ class StatsFragment :
 
         user = arguments?.getSerializableCompat<Query.UserProfile>("user") as Query.UserProfile
 
-        binding.statisticList.setBaseline(activity.navBar)
+        binding.statisticList.setBaseline(activity.binding.profileNavBarContainer!!)
 
         binding.statisticList.adapter = adapter
         binding.statisticList.recycledViewPool.setMaxRecycledViews(0, 0)
@@ -121,7 +121,7 @@ class StatsFragment :
         super.onResume()
         if (this::binding.isInitialized) {
             binding.statisticList.visibility = View.VISIBLE
-            binding.statisticList.setBaseline(activity.navBar)
+            binding.statisticList.setBaseline(activity.binding.profileNavBarContainer!!)
             binding.root.requestLayout()
             if (!loadedFirstTime) {
                 activity.lifecycleScope.launch {

@@ -125,6 +125,7 @@
         android:id="@+id/statisticList"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipToPadding="false"
         android:nestedScrollingEnabled="true"
         android:orientation="vertical"
         tools:listitem="@layout/item_chart" />

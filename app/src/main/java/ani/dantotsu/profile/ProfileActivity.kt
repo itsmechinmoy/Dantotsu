@@ -57,21 +57,14 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
         super.onCreate(savedInstanceState)
         ThemeManager(this).applyTheme()
         initActivity(this)
+        if (savedInstanceState != null) {
+            selected = savedInstanceState.getInt("selectedTab", 0)
+        }
         binding = ActivityProfileBinding.inflate(layoutInflater)
         setContentView(binding.root)
         val context = this
         screenWidth = resources.displayMetrics.widthPixels.toFloat()
         navBar = binding.profileNavBar
-        val navBarRightMargin = if (resources.configuration.orientation ==
-            Configuration.ORIENTATION_LANDSCAPE
-        ) navBarHeight else 0
-        val navBarBottomMargin = if (resources.configuration.orientation ==
-            Configuration.ORIENTATION_LANDSCAPE
-        ) 0 else navBarHeight
-        navBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            rightMargin = navBarRightMargin
-            bottomMargin = navBarBottomMargin
-        }
         val feedTab = navBar.createTab(R.drawable.ic_round_filter_24, "Feed")
         val profileTab = navBar.createTab(R.drawable.ic_round_person_24, "Profile")
         val statsTab = navBar.createTab(R.drawable.ic_stats_24, "Stats")
@@ -95,9 +88,6 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
             }
 
             withContext(Dispatchers.Main) {
-                binding.profileViewPager.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                    bottomMargin = navBarHeight
-                }
                 binding.profileViewPager.adapter =
                     ViewPagerAdapter(supportFragmentManager, lifecycle, user)
                 binding.profileViewPager.setOffscreenPageLimit(3)
@@ -311,15 +301,11 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        val rightMargin = if (resources.configuration.orientation ==
-            Configuration.ORIENTATION_LANDSCAPE
-        ) navBarHeight else 0
-        val bottomMargin = if (resources.configuration.orientation ==
-            Configuration.ORIENTATION_LANDSCAPE
-        ) 0 else navBarHeight
-        val params: ViewGroup.MarginLayoutParams =
-            navBar.layoutParams as ViewGroup.MarginLayoutParams
-        params.updateMargins(right = rightMargin, bottom = bottomMargin)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("selectedTab", selected)
     }
 
     override fun onResume() {
