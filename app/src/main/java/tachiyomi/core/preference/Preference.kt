@@ -4,6 +4,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
+inline fun <reified T, R : T> Preference<T>.getAndSet(crossinline block: (T) -> R) =
+    set(block(get()))
+
 interface Preference<T> {
 
     fun key(): String
@@ -22,6 +25,3 @@ interface Preference<T> {
 
     fun stateIn(scope: CoroutineScope): StateFlow<T>
 }
-
-inline fun <reified T, R : T> Preference<T>.getAndSet(crossinline block: (T) -> R) =
-    set(block(get()))

@@ -28,6 +28,7 @@ class AlertDialogBuilder(private val context: Context) {
     private var onDismiss: (() -> Unit)? = null
     private var onCancel: (() -> Unit)? = null
     private var cancelable: Boolean = true
+    private var dismissOnSelect: Boolean = true
     fun setCancelable(cancelable: Boolean): AlertDialogBuilder {
         this.cancelable = cancelable
         return this
@@ -134,11 +135,14 @@ class AlertDialogBuilder(private val context: Context) {
     fun singleChoiceItems(
         items: Array<String>,
         selectedItemIndex: Int = -1,
-        onItemSelected: (Int) -> Unit
+        dismissOnSelect: Boolean = true,
+        onItemSelected: (Int) -> Unit,
+
     ): AlertDialogBuilder {
         this.items = items
         this.selectedItemIndex = selectedItemIndex
         this.onItemSelected = onItemSelected
+        this.dismissOnSelect = dismissOnSelect
         return this
     }
 
@@ -165,7 +169,9 @@ class AlertDialogBuilder(private val context: Context) {
                 builder.setSingleChoiceItems(items, selectedItemIndex) { dialog, which ->
                     selectedItemIndex = which
                     onItemSelected?.invoke(which)
-                    dialog.dismiss()
+                    if (dismissOnSelect) {
+                        dialog.dismiss()
+                    }
                 }
             } else if (checkedItems != null && onItemsSelected != null) {
                 builder.setMultiChoiceItems(items, checkedItems) { _, which, isChecked ->
