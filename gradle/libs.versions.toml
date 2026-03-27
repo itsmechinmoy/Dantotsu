@@ -1,0 +1,186 @@
+[versions]
+kotlin = "2.3.10"
+ksp = "2.3.6"
+agp = "9.0.1"
+
+firebase-bom = "33.13.0"
+glide = "4.16.0"
+exo = "1.6.1"
+markwon = "4.6.2"
+groupie = "2.10.1"
+nextlib = "0.8.4"
+ass = "0.4.0-beta01"
+
+[libraries]
+
+# Firebase
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics-ktx" }
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics-ktx" }
+
+# AndroidX Core
+androidx-core = "androidx.core:core-ktx:1.16.0"
+androidx-appcompat = "androidx.appcompat:appcompat:1.7.0"
+androidx-activity = "androidx.activity:activity-ktx:1.10.1"
+androidx-fragment = "androidx.fragment:fragment-ktx:1.8.6"
+androidx-browser = "androidx.browser:browser:1.8.0"
+androidx-swipe = "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
+androidx-legacy = "androidx.legacy:legacy-support-v4:1.0.0"
+
+androidx-work = "androidx.work:work-runtime-ktx:2.10.1"
+androidx-preference = "androidx.preference:preference-ktx:1.2.1"
+androidx-webkit = "androidx.webkit:webkit:1.13.0"
+androidx-biometric = "androidx.biometric:biometric:1.1.0"
+mediarouter = "androidx.mediarouter:mediarouter:1.7.0"
+paging = "androidx.paging:paging-runtime-ktx:3.3.6"
+
+# Kotlin
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk7", version.ref = "kotlin" }
+
+# Networking / misc
+gson = "com.google.code.gson:gson:2.10.1"
+nicehttp = "com.github.Blatzar:NiceHttp:0.4.4"
+serialization-json = "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3"
+serialization-okio = "org.jetbrains.kotlinx:kotlinx-serialization-json-okio:1.7.3"
+storage = "com.anggrayudi:storage:1.5.5"
+jsoup = "org.jsoup:jsoup:1.18.1"
+quickjs = "app.cash.quickjs:quickjs-android:0.9.2"
+natsort = "com.github.gpanther:java-nat-sort:natural-comparator-1.1"
+unifile = "com.github.tachiyomiorg:unifile:17bec43"
+
+# Glide
+glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }
+glide-ksp = { module = "com.github.bumptech.glide:ksp", version.ref = "glide" }
+glide-okhttp = { module = "com.github.bumptech.glide:okhttp3-integration", version.ref = "glide" }
+glide-transform = "jp.wasabeef:glide-transformations:4.3.0"
+
+# Media3 / Exo
+media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "exo" }
+media3-ui = { module = "androidx.media3:media3-ui", version.ref = "exo" }
+media3-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "exo" }
+media3-dash = { module = "androidx.media3:media3-exoplayer-dash", version.ref = "exo" }
+media3-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "exo" }
+media3-session = { module = "androidx.media3:media3-session", version.ref = "exo" }
+media3-cast = { module = "androidx.media3:media3-cast", version.ref = "exo" }
+media3-effect = { module = "androidx.media3:media3-effect", version.ref = "exo" }
+
+# Extra Media
+nextlib = { module = "com.github.anilbeesetti.nextlib:nextlib-media3ext", version.ref = "nextlib" }
+ass-media = { module = "io.github.peerless2012:ass-media", version.ref = "ass" }
+ass-kt = { module = "io.github.peerless2012:ass-kt", version.ref = "ass" }
+
+# UI
+material = "com.google.android.material:material:1.12.0"
+flexbox = "com.google.android.flexbox:flexbox:3.0.0"
+kenburns = "com.flaviofaria:kenburnsview:1.0.7"
+subsampling = "com.davemorrissey.labs:subsampling-scale-image-view-androidx:3.10.0"
+gesture = "com.alexvasilkov:gesture-views:2.8.3"
+ebook = "com.github.VipulOG:ebook-reader:0.1.6"
+dialogs = "com.github.eltos:simpledialogfragments:v3.7"
+charts = "com.github.AAChartModel:AAChartCore-Kotlin:7.2.3"
+
+# Markwon
+markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
+markwon-editor = { module = "io.noties.markwon:editor", version.ref = "markwon" }
+markwon-strike = { module = "io.noties.markwon:ext-strikethrough", version.ref = "markwon" }
+markwon-tables = { module = "io.noties.markwon:ext-tables", version.ref = "markwon" }
+markwon-tasklist = { module = "io.noties.markwon:ext-tasklist", version.ref = "markwon" }
+markwon-html = { module = "io.noties.markwon:html", version.ref = "markwon" }
+markwon-glide = { module = "io.noties.markwon:image-glide", version.ref = "markwon" }
+
+# Groupie
+groupie = { module = "com.github.lisawray.groupie:groupie", version.ref = "groupie" }
+groupie-vb = { module = "com.github.lisawray.groupie:groupie-viewbinding", version.ref = "groupie" }
+
+# Rx / misc
+rxjava = "io.reactivex:rxjava:1.3.8"
+rxandroid = "io.reactivex:rxandroid:1.2.1"
+rxrelay = "com.jakewharton.rxrelay:rxrelay:1.2.0"
+flowreactive = "ru.beryukhov:flowreactivenetwork:1.0.4"
+fuzzy = "me.xdrop:fuzzywuzzy:1.4.0"
+voyager = "ca.gosyer:voyager-navigator:1.0.0-rc07"
+logcat = "com.squareup.logcat:logcat:0.1"
+injekt = "uy.kohesive.injekt:injekt-core:1.16.+"
+
+# OkHttp
+okhttp = "com.squareup.okhttp3:okhttp:5.0.0-alpha.14"
+okhttp-logging = "com.squareup.okhttp3:logging-interceptor:5.0.0-alpha.14"
+okhttp-brotli = "com.squareup.okhttp3:okhttp-brotli:5.0.0-alpha.14"
+okhttp-doh = "com.squareup.okhttp3:okhttp-dnsoverhttps:5.0.0-alpha.14"
+okio = "com.squareup.okio:okio:3.9.1"
+
+[plugins]
+android = { id = "com.android.application", version.ref = "agp" }
+serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+google = { id = "com.google.gms.google-services", version = "4.4.1" }
+crashlytics = { id = "com.google.firebase.crashlytics", version = "3.0.6" }
+
+[bundles]
+
+firebase = ["firebase-analytics", "firebase-crashlytics"]
+
+androidx = [
+    "androidx-core",
+    "androidx-appcompat",
+    "androidx-activity",
+    "androidx-fragment",
+    "androidx-browser",
+    "androidx-swipe",
+    "androidx-legacy",
+    "androidx-work",
+    "androidx-preference",
+    "androidx-webkit",
+    "androidx-biometric",
+    "paging"
+]
+
+glide = ["glide", "glide-okhttp", "glide-transform"]
+
+media3 = [
+    "media3-exoplayer",
+    "media3-ui",
+    "media3-hls",
+    "media3-dash",
+    "media3-okhttp",
+    "media3-session",
+    "media3-cast",
+    "media3-effect",
+    "nextlib"
+]
+
+subtitles = ["ass-media", "ass-kt"]
+
+markwon = [
+    "markwon-core",
+    "markwon-editor",
+    "markwon-strike",
+    "markwon-tables",
+    "markwon-tasklist",
+    "markwon-html",
+    "markwon-glide"
+]
+
+groupie = ["groupie", "groupie-vb"]
+
+okhttp = ["okhttp", "okhttp-logging", "okhttp-brotli", "okhttp-doh"]
+
+rx = ["rxjava", "rxandroid", "rxrelay"]
+
+misc = [
+    "gson",
+    "nicehttp",
+    "serialization-json",
+    "serialization-okio",
+    "storage",
+    "jsoup",
+    "quickjs",
+    "natsort",
+    "unifile",
+    "flowreactive",
+    "fuzzy",
+    "voyager",
+    "logcat",
+    "injekt"
+]
