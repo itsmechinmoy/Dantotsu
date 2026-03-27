@@ -73,6 +73,7 @@
         android:theme="@style/Theme.Dantotsu"
         android:usesCleartextTraffic="true"
         tools:ignore="AllowBackup"
+        android:hardwareAccelerated="false"
         tools:targetApi="tiramisu">
 
         <receiver
