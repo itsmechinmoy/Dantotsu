@@ -2,11 +2,10 @@ package ani.dantotsu
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.Application
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
-import androidx.multidex.MultiDex
-import androidx.multidex.MultiDexApplication
 import ani.dantotsu.addons.download.DownloadAddonManager
 import ani.dantotsu.addons.torrent.TorrentAddonManager
 import ani.dantotsu.aniyomi.anime.custom.AppModule
@@ -43,17 +42,12 @@ import uy.kohesive.injekt.api.get
 
 
 @SuppressLint("StaticFieldLeak")
-class App : MultiDexApplication() {
+class App : Application() {
     private lateinit var animeExtensionManager: AnimeExtensionManager
     private lateinit var mangaExtensionManager: MangaExtensionManager
     private lateinit var novelExtensionManager: NovelExtensionManager
     private lateinit var torrentAddonManager: TorrentAddonManager
     private lateinit var downloadAddonManager: DownloadAddonManager
-
-    override fun attachBaseContext(base: Context?) {
-        super.attachBaseContext(base)
-        MultiDex.install(this)
-    }
 
     init {
         instance = this
