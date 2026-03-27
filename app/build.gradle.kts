@@ -67,9 +67,10 @@ android {
             manifestPlaceholders["icon_placeholder"] = "@mipmap/ic_launcher"
             manifestPlaceholders["icon_placeholder_round"] = "@mipmap/ic_launcher_round"
             isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-gson.pro",
                 "proguard-rules.pro"
             )
         }
