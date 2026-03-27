@@ -181,6 +181,9 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import androidx.core.net.toUri
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.text.TextOutput
+import androidx.media3.exoplayer.text.TextRenderer
 
 @UnstableApi
 @SuppressLint("ClickableViewAccessibility")
@@ -1441,12 +1444,12 @@ class ExoplayerView :
                 val now = java.lang.System.currentTimeMillis()
                 val currentPosMs = if (exoPlayer.currentPosition > 0) exoPlayer.currentPosition else 0L
                 val safeDurationMs = if (exoPlayer.duration > 0 && exoPlayer.duration != C.TIME_UNSET) exoPlayer.duration else 1440000L // default 24 mins
-                
+
                 // If paused, we don't send timestamps so the timer stops
                 val isPaused = !isPlayerPlaying
                 val startTimestamp = if (isPaused) null else now - currentPosMs
                 val endTimestamp = if (isPaused) null else (now - currentPosMs) + safeDurationMs
-                
+
                 val stateText = "Episode : ${ep.number}/${media.anime?.totalEpisodes ?: "??"}"
                 val finalState = if (isPaused) "Paused - $stateText" else stateText
 
@@ -1900,22 +1903,21 @@ class ExoplayerView :
         // it doesn't matter that FfmpegVideoRenderer bypasses the video effects pipeline.
         val baseRenderersFactory =
             object : NextRenderersFactory(activityContext) {
-                @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
                 override fun buildTextRenderers(
-                    context: android.content.Context,
-                    output: androidx.media3.exoplayer.text.TextOutput,
-                    outputLooper: android.os.Looper,
+                    context: Context,
+                    output: TextOutput,
+                    outputLooper: Looper,
                     extensionRendererMode: Int,
-                    out: java.util.ArrayList<androidx.media3.exoplayer.Renderer>
+                    out: ArrayList<Renderer>
                 ) {
-                    out.add(androidx.media3.exoplayer.text.TextRenderer(output, outputLooper))
+                    out.add(TextRenderer(output, outputLooper))
                     try {
                         val clazz = Class.forName("io.github.anilbeesetti.nextlib.media3ext.renderer.NextTextRenderer")
                         val ctor = clazz.getConstructor(
-                            androidx.media3.exoplayer.text.TextOutput::class.java,
-                            android.os.Looper::class.java
+                            TextOutput::class.java,
+                            Looper::class.java
                         )
-                        out.add(ctor.newInstance(output, outputLooper) as androidx.media3.exoplayer.Renderer)
+                        out.add(ctor.newInstance(output, outputLooper) as Renderer)
                     } catch (e: Exception) {
                     }
                 }

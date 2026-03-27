@@ -24,9 +24,9 @@ class CookieCatcher : AppCompatActivity() {
 
         //get url from intent
         val url = intent.getStringExtra("url") ?: getString(R.string.cursed_yt)
-        val headers: Map<String, String> =
-            intent.getSerializableExtraCompat("headers") as? Map<String, String> ?: emptyMap()
-
+        val headers = intent
+            .getSerializableExtraCompat<HashMap<String, String>>("headers")
+            ?: hashMapOf()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val process = Application.getProcessName()
             if (packageName != process) WebView.setDataDirectorySuffix(process)
@@ -45,16 +45,7 @@ class CookieCatcher : AppCompatActivity() {
         }
         WebView.setWebContentsDebuggingEnabled(true)
         webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(
-                view: WebView?,
-                request: WebResourceRequest?
-            ): Boolean {
-                return super.shouldOverrideUrlLoading(view, request)
-            }
 
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-            }
         }
 
         webView.loadUrl(url, headers)
