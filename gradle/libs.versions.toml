@@ -9,7 +9,7 @@ exo = "1.6.1"
 markwon = "4.6.2"
 groupie = "2.10.1"
 nextlib = "0.8.4"
-ass = "0.4.0-beta01"
+ass = "0.4.0"
 
 [libraries]
 
