@@ -12,10 +12,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.updateLayoutParams
 import androidx.core.widget.addTextChangedListener
+import androidx.lifecycle.lifecycleScope
 import ani.dantotsu.R
 import ani.dantotsu.databinding.ActivityPlayerSettingsBinding
 import ani.dantotsu.initActivity
 import ani.dantotsu.media.Media
+import ani.dantotsu.media.anime.VideoCache
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.others.Xpandable
 import ani.dantotsu.others.getSerialized
@@ -31,6 +33,8 @@ import com.google.android.material.slider.Slider.OnChangeListener
 import eltos.simpledialogfragment.SimpleDialog
 import eltos.simpledialogfragment.color.SimpleColorWheelDialog
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PlayerSettingsActivity :
     AppCompatActivity(),
@@ -304,6 +308,67 @@ class PlayerSettingsActivity :
                 ) { count ->
                     PrefManager.setVal(PrefName.Resize, count)
                 }
+                show()
+            }
+        }
+
+        // Online Subtitles
+        binding.playerSettingsOnlineSubtitles.isChecked = PrefManager.getVal(PrefName.OnlineSubtitlesEnabled)
+        binding.playerSettingsOnlineSubtitles.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setVal(PrefName.OnlineSubtitlesEnabled, isChecked)
+            binding.playerSettingsOnlineProviders.isEnabled = isChecked
+            binding.playerSettingsOnlineLanguages.isEnabled = isChecked
+        }
+        binding.playerSettingsOnlineProviders.isEnabled = binding.playerSettingsOnlineSubtitles.isChecked
+        binding.playerSettingsOnlineLanguages.isEnabled = binding.playerSettingsOnlineSubtitles.isChecked
+
+        val allProviders = arrayOf("Wyzie", "Stremio")
+        val allProviderLabels = arrayOf("Wyzie", "Stremio")
+        binding.playerSettingsOnlineProviders.setOnClickListener {
+            val currentProviders = PrefManager.getVal<Set<String>>(PrefName.OnlineSubtitleProviders)
+            val checkedItems = BooleanArray(allProviders.size) { index ->
+                currentProviders.contains(allProviders[index])
+            }
+
+            customAlertDialog().apply {
+                setTitle("Subtitle Providers")
+                multiChoiceItems(allProviderLabels, checkedItems) { checked ->
+                    val selected = mutableSetOf<String>()
+                    checked.forEachIndexed { index, isChecked ->
+                        if (isChecked) selected.add(allProviders[index])
+                    }
+                    PrefManager.setVal(PrefName.OnlineSubtitleProviders, selected)
+                }
+                setPosButton("Done", null)
+                show()
+            }
+        }
+
+        val allLanguages = arrayOf(
+            "en", "ar", "pt", "es", "id", "fr", "ru", "zh", "ja", "tr", "it", "de", "pl", "th", "vi", "ko"
+        )
+        val allFullLanguages = arrayOf(
+             "English", "Arabic", "Portuguese", "Spanish", "Indonesian", "French", "Russian",
+             "Chinese", "Japanese", "Turkish", "Italian", "German", "Polish", "Thai",
+             "Vietnamese", "Korean"
+        )
+
+        binding.playerSettingsOnlineLanguages.setOnClickListener {
+            val currentLanguages = PrefManager.getVal<Set<String>>(PrefName.OnlineSubtitleLanguages)
+            val checkedItems = BooleanArray(allLanguages.size) { index ->
+                currentLanguages.contains(allLanguages[index])
+            }
+
+            customAlertDialog().apply {
+                setTitle("Online Languages")
+                multiChoiceItems(allFullLanguages, checkedItems) { checked ->
+                    val selected = mutableSetOf<String>()
+                    checked.forEachIndexed { index, isChecked ->
+                        if (isChecked) selected.add(allLanguages[index])
+                    }
+                    PrefManager.setVal(PrefName.OnlineSubtitleLanguages, selected)
+                }
+                setPosButton("Done", null)
                 show()
             }
         }

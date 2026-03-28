@@ -88,6 +88,7 @@ data class Media(
     var streamingEpisodes: List<MediaStreamingEpisode>? = null,
     var idKitsu: String? = null,
     var externalLinks: ArrayList<MediaExternalLink>? = null,
+    var idIMDB: String? = null,
 
     var cameFromContinue: Boolean = false
 ) : Serializable {

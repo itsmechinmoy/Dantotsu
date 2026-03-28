@@ -58,6 +58,7 @@ enum class PrefName(val data: Pref) {
     AniMangaSearchDirect(Pref(Location.General, Boolean::class, true)),
 
     //User Interface
+    EpisodeMetadataSource(Pref(Location.UI, Int::class, 0)),
     UseOLED(Pref(Location.UI, Boolean::class, false)),
     UseCustomTheme(Pref(Location.UI, Boolean::class, false)),
     CustomThemeInt(Pref(Location.UI, Int::class, Color.parseColor("#6200EE"))),
@@ -108,6 +109,9 @@ enum class PrefName(val data: Pref) {
     CursedSpeeds(Pref(Location.Player, Boolean::class, false)),
     Resize(Pref(Location.Player, Int::class, 0)),
     Subtitles(Pref(Location.Player, Boolean::class, true)),
+    OnlineSubtitlesEnabled(Pref(Location.Player, Boolean::class, true)),
+    OnlineSubtitleProviders(Pref(Location.Player, Set::class, setOf("Wyzie", "Stremio"))),
+    OnlineSubtitleLanguages(Pref(Location.Player, Set::class, setOf("English"))),
     TextviewSubtitles(Pref(Location.Player, Boolean::class, false)),
     SubLanguage(Pref(Location.Player, Int::class, 9)),
     PrimaryColor(Pref(Location.Player, Int::class, Color.WHITE)),

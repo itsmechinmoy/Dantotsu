@@ -19,6 +19,7 @@ object Jikan {
         var page = 0
         val eps = mutableMapOf<String, Episode>()
         while (hasNextPage) {
+            if (page > 0) kotlinx.coroutines.delay(1000)
             page++
             val res = query<EpisodeResponse>("anime/$malId/episodes?page=$page")
             res?.data?.forEach {
@@ -27,6 +28,7 @@ object Jikan {
                     ep, title = it.title,
                     //Personal revenge with 34566 :prayge:
                     filler = if (malId != 34566) it.filler else true,
+                    date = it.aired?.substringBefore("T")
                 )
             }
             hasNextPage = res?.pagination?.hasNextPage == true
@@ -45,6 +47,7 @@ object Jikan {
             val malID: Int,
             val title: String? = null,
             val filler: Boolean,
+            val aired: String? = null,
             //            val recap: Boolean,
         )
 

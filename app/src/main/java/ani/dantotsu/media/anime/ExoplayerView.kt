@@ -83,6 +83,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.session.MediaSession
@@ -97,6 +98,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import androidx.mediarouter.app.MediaRouteButton
 import ani.dantotsu.GesturesListener
+import ani.dantotsu.media.EpisodeMapper
 import ani.dantotsu.NoPaddingArrayAdapter
 import ani.dantotsu.R
 import ani.dantotsu.addons.download.DownloadAddonManager
@@ -107,6 +109,7 @@ import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.connections.discord.Discord
 import ani.dantotsu.connections.discord.RPCManager
 import ani.dantotsu.connections.discord.RPC
+import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.connections.updateProgress
 import ani.dantotsu.databinding.ActivityExoplayerBinding
 import ani.dantotsu.defaultHeaders
@@ -127,6 +130,7 @@ import ani.dantotsu.media.SubtitleDownloader
 import ani.dantotsu.okHttpClient
 import ani.dantotsu.others.AniSkip
 import ani.dantotsu.others.AniSkip.getType
+import ani.dantotsu.others.IdMappers
 import ani.dantotsu.others.LanguageMapper
 import ani.dantotsu.others.ResettableTimer
 import ani.dantotsu.others.Xubtitle
@@ -150,6 +154,8 @@ import ani.dantotsu.tryWithSuspend
 import ani.dantotsu.util.Logger
 import ani.dantotsu.util.customAlertDialog
 import com.anggrayudi.storage.file.extension
+import java.io.File
+import kotlinx.coroutines.withContext
 import com.bumptech.glide.Glide
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
@@ -181,6 +187,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import androidx.core.net.toUri
+import ani.dantotsu.connections.subtitles.StremioSubtitles
+import ani.dantotsu.connections.subtitles.StremioSub
 import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.text.TextRenderer
@@ -252,7 +260,7 @@ class ExoplayerView :
 
         private const val DEFAULT_MIN_BUFFER_MS = 600000
         private const val DEFAULT_MAX_BUFFER_MS = 600000
-        private const val BUFFER_FOR_PLAYBACK_MS = 2500
+        private const val BUFFER_FOR_PLAYBACK_MS = 2000   // 2s: faster start, still safe on 4G
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5000
     }
 
@@ -282,10 +290,17 @@ class ExoplayerView :
 
     private val handler = Handler(Looper.getMainLooper())
     val model: MediaDetailsViewModel by viewModels()
+    private val getContent = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: android.net.Uri? ->
+        uri?.let { applyLocalSubtitle(it) }
+    }
 
     private var isTimeStampsLoaded = false
     private var isSeeking = false
     private var isFastForwarding = false
+
+    // Subtitle label to select the next time onTracksChanged fires (after setMediaItem+prepare).
+    // Volatile so it is safely read from the Player.Listener callback thread.
+    @Volatile private var pendingSubtitleLabel: String? = null
 
     var rotation = 0
 
@@ -437,7 +452,11 @@ class ExoplayerView :
 
         val textElevation =
             PrefManager.getVal<Float>(PrefName.SubBottomMargin) / 50 * resources.displayMetrics.heightPixels
-        textView.translationY = -textElevation
+
+        // Add offset to move subtitles slightly down for better alignment
+        // This helps align online subtitles with local subtitles
+        val positionOffset = 10f // Increased to 120f to push subtitles very close to bottom edge
+        textView.translationY = -textElevation + positionOffset
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -473,6 +492,10 @@ class ExoplayerView :
         exoSubtitle = playerView.findViewById(R.id.exo_sub)
         exoAudioTrack = playerView.findViewById(R.id.exo_audio)
         exoSubtitleView = playerView.findViewById(androidx.media3.ui.R.id.exo_subtitles)
+        // Adjust bottom padding to absolute edge
+        // 0.0f (0%) pushes subtitles to the very bottom
+        exoSubtitleView?.setBottomPaddingFraction(0.0f)
+
         exoRotate = playerView.findViewById(R.id.exo_rotate)
         exoSpeed = playerView.findViewById(androidx.media3.ui.R.id.exo_playback_speed)
         exoScreen = playerView.findViewById(R.id.exo_screen)
@@ -1141,6 +1164,9 @@ class ExoplayerView :
                     exoPlayer.currentPosition,
                 )
                 val prev = episodeArr[currentEpisodeIndex]
+                // Clear transient subtitle caches for the episode we are leaving
+                val leavingEpisodeId = "${media.id}-${episodeArr[currentEpisodeIndex]}"
+                clearTransientSubtitleCache(leavingEpisodeId)
                 isTimeStampsLoaded = false
                 episodeLength = 0f
                 media.anime!!.selectedEpisode = episodeArr[index]
@@ -1574,8 +1600,27 @@ class ExoplayerView :
 
         // Subtitles
         hasExtSubtitles = ext.subtitles.isNotEmpty()
-        if (hasExtSubtitles) {
-            exoSubtitle.isVisible = hasExtSubtitles
+
+        // Fix: Fetch IMDB ID and Episode Mapping asynchronously if missing (needed for online subtitles)
+        if (isOnline(this)) {
+             lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                 try {
+                     if (media.idIMDB == null) {
+                         media.idIMDB = IdMappers.getImdbId(media.id)
+                     }
+                     // Prefetch episode mapping so SubtitleDialogFragment doesn't have visual label pop
+                     val selectedEpisodeStr = media.anime?.selectedEpisode ?: "1"
+                     val episodeNum = selectedEpisodeStr.toIntOrNull() ?: 1
+                     val currentEpisode = media.anime?.episodes?.get(selectedEpisodeStr)
+                     EpisodeMapper.mapEpisode(media, episodeNum, currentEpisode)
+                 } catch (e: Exception) {
+                     e.printStackTrace()
+                 }
+             }
+        }
+
+        if (hasExtSubtitles || media.idIMDB != null) {
+            exoSubtitle.isVisible = true
             exoSubtitle.setOnClickListener {
                 subClick()
             }
@@ -1601,6 +1646,7 @@ class ExoplayerView :
                                 },
                             ).setId("69")
                             .setLanguage(subtitle.language)
+                            .setLabel(subtitle.language)
                             .build()
                 }
             } else {
@@ -1618,9 +1664,16 @@ class ExoplayerView :
                             },
                         ).setId("69")
                         .setLanguage(subtitle.language)
+                        .setLabel(subtitle.language)
                         .build()
             }
         }
+
+        // 2. Online Subtitles (Stremio/Wyzie)
+        // Auto-fetch removed for Lazy Loading.
+        // Subtitles are now fetched only when the user opens the Subtitle Dialog.
+        // The "Online Subtitles" button availability is handled by SubtitleDialogFragment.
+
 
         lifecycleScope.launch(Dispatchers.IO) {
             ext.onVideoPlayed(video)
@@ -1633,6 +1686,13 @@ class ExoplayerView :
                     ignoreAllSSLErrors()
                     followRedirects(true)
                     followSslRedirects(true)
+                    // Tune for HLS: more parallel connections, explicit timeouts
+                    connectionPool(
+                        okhttp3.ConnectionPool(10, 5, java.util.concurrent.TimeUnit.MINUTES)
+                    )
+                    connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                    writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
                 }.build()
         val httpDataSourceFactory =
             OkHttpDataSource.Factory(httpClient).apply {
@@ -1646,7 +1706,7 @@ class ExoplayerView :
             CacheDataSource.Factory().apply {
                 setCache(VideoCache.getInstance(this@ExoplayerView))
                 setUpstreamDataSourceFactory(defaultDataSourceFactory)
-                setCacheWriteDataSinkFactory(null)
+                // Enable disk cache writes so segments are reused across seeks and sessions
             }
 
         // Set up libass for ASS/SSA subtitle rendering.
@@ -1876,6 +1936,11 @@ class ExoplayerView :
     }
 
     private fun buildExoplayer() {
+        // Clear any leftover subtitle text from the previous episode immediately
+        customSubtitleView.text = ""
+        customSubtitleView.visibility = View.GONE
+        exoSubtitleView.visibility = View.GONE
+
         // Player
         val loadControl =
             DefaultLoadControl
@@ -1886,7 +1951,10 @@ class ExoplayerView :
                     DEFAULT_MAX_BUFFER_MS,
                     BUFFER_FOR_PLAYBACK_MS,
                     BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
-                ).build()
+                )
+                .setTargetBufferBytes(androidx.media3.common.C.LENGTH_UNSET) // auto-size by device RAM
+                .setPrioritizeTimeOverSizeThresholds(true) // prefer filling time over quality cap
+                .build()
 
         hideSystemBars()
 
@@ -2084,12 +2152,496 @@ class ExoplayerView :
     }
 
     private fun subClick() {
+        Logger.log("subClick: Opening subtitle dialog")
         PrefManager.setCustomVal(
             "${media.id}_${media.anime!!.selectedEpisode}",
             exoPlayer.currentPosition,
         )
         model.saveSelected(media.id, media.selected!!)
-        SubtitleDialogFragment().show(supportFragmentManager, "dialog")
+        val dialog = SubtitleDialogFragment()
+        Logger.log("subClick: Showing dialog")
+        dialog.show(supportFragmentManager, "dialog")
+    }
+
+    fun requestLocalSubtitle() {
+        getContent.launch(
+            arrayOf(
+                "application/x-subrip",
+                "text/vtt",
+                "text/x-ssa",
+                "application/x-ass",
+                "text/plain",
+                "application/octet-stream"
+            )
+        )
+    }
+
+    /**
+     * Public entry point for re-applying a cached local subtitle from its stored URI string.
+     * Called from SubtitleDialogFragment when a user re-selects a "[Local]" entry.
+     * Always performs a full re-add: sets the pending label so onTracksChanged will select
+     * the track as soon as ExoPlayer reports it as available.
+     */
+    fun reApplyLocalSubtitle(uriString: String) {
+        android.util.Log.d("LocalSubDebug", "reApplyLocalSubtitle called with: $uriString")
+        try {
+            val uri = android.net.Uri.parse(uriString)
+            android.util.Log.d("LocalSubDebug", "reApplyLocalSubtitle: parsed URI=$uri, calling applyLocalSubtitle")
+            applyLocalSubtitle(uri)
+        } catch (e: Exception) {
+            android.util.Log.e("LocalSubDebug", "reApplyLocalSubtitle: EXCEPTION - ${e.message}", e)
+            e.printStackTrace()
+        }
+    }
+
+
+    private fun applyLocalSubtitle(uri: android.net.Uri) {
+        try {
+            val label = "Local Subtitle"
+            val contentResolver = applicationContext.contentResolver
+
+            // --- Step 1: Determine MIME type ---
+            val rawMime = contentResolver.getType(uri)
+            val uriStr = uri.toString().lowercase()
+            val finalMimeType = when {
+                rawMime == "application/octet-stream" || rawMime == null -> when {
+                    uriStr.contains(".vtt") -> MimeTypes.TEXT_VTT
+                    uriStr.contains(".ssa") || uriStr.contains(".ass") -> MimeTypes.TEXT_SSA
+                    uriStr.contains(".ttml") || uriStr.contains(".xml") -> MimeTypes.APPLICATION_TTML
+                    else -> MimeTypes.APPLICATION_SUBRIP
+                }
+                else -> rawMime
+            }
+            android.util.Log.d("LocalSubDebug", "applyLocalSubtitle: uri=$uri mime=$finalMimeType")
+
+            // --- Step 2: Read subtitle bytes ---
+            val subtitleBytes = try {
+                if (uri.scheme == "file") {
+                    java.io.File(uri.path!!).readBytes()
+                } else {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("LocalSubDebug", "applyLocalSubtitle: failed to read URI $uri", e)
+                null
+            }
+
+            if (subtitleBytes == null) {
+                android.util.Log.e("LocalSubDebug", "applyLocalSubtitle: subtitleBytes null, aborting")
+                snackString("Failed to read subtitle file")
+                return
+            }
+
+            // --- Step 3: Write to a stable cache file (file:// is reliable for SingleSampleMediaSource) ---
+            val ext = when (finalMimeType) {
+                MimeTypes.TEXT_VTT -> "vtt"
+                MimeTypes.TEXT_SSA -> "ass"
+                MimeTypes.APPLICATION_TTML -> "ttml"
+                else -> "srt"
+            }
+            val cacheFile = File(cacheDir, "local_sub_${uri.toString().hashCode()}.$ext")
+
+            if (finalMimeType == MimeTypes.TEXT_SSA) {
+                val cleaned = stripAssPositioning(subtitleBytes.toString(Charsets.UTF_8))
+                cacheFile.writeText(cleaned)
+            } else {
+                cacheFile.writeBytes(subtitleBytes)
+            }
+
+            val finalSubUri = android.net.Uri.fromFile(cacheFile)
+            android.util.Log.d("LocalSubDebug", "applyLocalSubtitle: cacheFile=$cacheFile mime=$finalMimeType")
+
+            val stableId = "local_sub_${uri.toString().hashCode()}"
+
+            // --- Step 4: Get existing subtitle configs from current media item ---
+            val currentMediaItem = exoPlayer.currentMediaItem
+            android.util.Log.d("LocalSubDebug", "applyLocalSubtitle: currentMediaItem=${currentMediaItem?.mediaId ?: "NULL"}, playerState=${exoPlayer.playbackState}")
+            if (currentMediaItem == null) {
+                android.util.Log.e("LocalSubDebug", "applyLocalSubtitle: currentMediaItem NULL, aborting")
+                return
+            }
+            val existingSubtitles = currentMediaItem.localConfiguration
+                ?.subtitleConfigurations?.toMutableList() ?: mutableListOf()
+            android.util.Log.d("LocalSubDebug", "applyLocalSubtitle: existingSubtitles ids=${existingSubtitles.map { it.id }}")
+
+            val alreadyAdded = existingSubtitles.any { it.id == stableId }
+            android.util.Log.d("LocalSubDebug", "applyLocalSubtitle: alreadyAdded=$alreadyAdded")
+            if (alreadyAdded) {
+                android.util.Log.d("LocalSubDebug", "applyLocalSubtitle: already present, pendingLabel + selectNow")
+                pendingSubtitleLabel = label
+                selectSubtitleTrack("", label)
+                return
+            }
+
+            // --- Step 5: Build SubtitleConfiguration ---
+            // KEY FIX: Do NOT use SELECTION_FLAG_DEFAULT — it causes ExoPlayer to silently
+            // merge/drop the track alongside HLS manifest subtitles.
+            // DO add setLanguage("und") — matches the working online subtitle config.
+            val subConfig = MediaItem.SubtitleConfiguration.Builder(finalSubUri)
+                .setMimeType(finalMimeType)
+                .setLanguage("und")
+                .setLabel(label)
+                .setId(stableId)
+                .build()
+
+            existingSubtitles.add(subConfig)
+
+            // --- Step 6: Save to ViewModel cache ---
+            val mediaId = media.id
+            val episodeId = media.anime?.selectedEpisode ?: "1"
+            val newLocalSub = Subtitle(
+                language = "[Local] ${uri.lastPathSegment ?: "Custom"}",
+                url = uri.toString()
+            )
+            model.saveLocalSubtitle("$mediaId-$episodeId", newLocalSub)
+            PrefManager.setCustomVal("subLang_$mediaId", newLocalSub.language)
+
+            // --- Step 7: Apply via setMediaItem — same path as the working online subtitle ---
+            val newMediaItem = currentMediaItem.buildUpon()
+                .setSubtitleConfigurations(existingSubtitles)
+                .build()
+
+            android.util.Log.d("LocalSubDebug", "applyLocalSubtitle: pendingLabel='$label', setMediaItem+prepare, uri=$finalSubUri")
+            pendingSubtitleLabel = label
+            val currentPos = exoPlayer.currentPosition
+            exoPlayer.setMediaItem(newMediaItem, currentPos)
+            exoPlayer.prepare()
+            android.util.Log.d("LocalSubDebug", "applyLocalSubtitle: prepare() called")
+
+        } catch (e: Exception) {
+            android.util.Log.e("LocalSubDebug", "applyLocalSubtitle: EXCEPTION ${e.message}", e)
+            snackString("Failed to load subtitle: ${e.message}")
+        }
+    }
+
+    private fun stripAssPositioning(assContent: String): String {
+        android.util.Log.d("ExoplayerView", "stripAssPositioning: Stripping positioning from ASS subtitle")
+
+        // Split into lines
+        val lines = assContent.lines().toMutableList()
+        var inEvents = false
+        var inStyles = false
+        val styleFormatMap = mutableMapOf<String, Int>()
+
+        for (i in lines.indices) {
+            val line = lines[i]
+            val trimmedLine = line.trim()
+
+            // Track sections
+            if (trimmedLine.equals("[Events]", ignoreCase = true)) {
+                inEvents = true
+                inStyles = false
+                continue
+            } else if (trimmedLine.equals("[V4+ Styles]", ignoreCase = true) ||
+                       trimmedLine.equals("[V4 Styles]", ignoreCase = true)) {
+                inStyles = true
+                inEvents = false
+                continue
+            } else if (trimmedLine.startsWith("[") && trimmedLine.endsWith("]")) {
+                inEvents = false
+                inStyles = false
+                continue
+            }
+
+            // Process Style section
+            if (inStyles) {
+                if (trimmedLine.startsWith("Format:", ignoreCase = true)) {
+                    // Parse format definition: Format: Name, Fontname, ...
+                    val parts = trimmedLine.substringAfter(":").split(",")
+                    styleFormatMap.clear()
+                    parts.forEachIndexed { index, name ->
+                        styleFormatMap[name.trim().lowercase()] = index
+                    }
+                } else if (trimmedLine.startsWith("Style:", ignoreCase = true) && styleFormatMap.isNotEmpty()) {
+                    // Start after "Style:"
+                    val styleContent = trimmedLine.substringAfter("Style:")
+                    val parts = styleContent.split(",").toMutableList()
+
+                    // Fix Alignment -> 2 (Bottom Center)
+                    val alignIdx = styleFormatMap["alignment"]
+                    if (alignIdx != null && alignIdx < parts.size) {
+                        parts[alignIdx] = "2"
+                    }
+
+                    // Fix MarginV -> 0 (Vertical Margin)
+                    val marginVIdx = styleFormatMap["marginv"]
+                    if (marginVIdx != null && marginVIdx < parts.size) {
+                        parts[marginVIdx] = "0" // 0 margin for absolute bottom positioning
+                    }
+
+                    lines[i] = "Style: ${parts.joinToString(",")}"
+                }
+            }
+
+            // Process dialogue lines in [Events] section
+            if (inEvents && (trimmedLine.startsWith("Dialogue:", ignoreCase = true) ||
+                             trimmedLine.startsWith("Comment:", ignoreCase = true))) {
+                var modifiedLine = line
+
+                // Remove \pos(x,y) - positioning
+                modifiedLine = modifiedLine.replace(Regex("\\\\pos\\([^)]*\\)"), "")
+
+                // Remove \move(x1,y1,x2,y2) - movement
+                modifiedLine = modifiedLine.replace(Regex("\\\\move\\([^)]*\\)"), "")
+
+                // Remove \an alignment tags (don't replace, just remove to use Style alignment)
+                modifiedLine = modifiedLine.replace(Regex("\\\\an[1-9]"), "")
+
+                // Remove \a alignment tags (old style)
+                modifiedLine = modifiedLine.replace(Regex("\\\\a[1-9]+"), "")
+
+                // Remove \org (rotation origin)
+                modifiedLine = modifiedLine.replace(Regex("\\\\org\\([^)]*\\)"), "")
+
+                lines[i] = modifiedLine
+            }
+        }
+
+        val result = lines.joinToString("\n")
+        android.util.Log.d("ExoplayerView", "stripAssPositioning: Done")
+        return result
+    }
+
+    /**
+     * Clears the online and local subtitle caches for the given episodeId.
+     * Removes ViewModel in-memory caches and deletes the physical subtitle files
+     * from cacheDir. Source subtitles (from the extractor) are unaffected.
+     * Called on episode change and player exit.
+     */
+    private fun clearTransientSubtitleCache(episodeId: String) {
+        model.clearFetchedSubtitles(episodeId)
+        model.clearLocalSubtitles(episodeId)
+        try {
+            cacheDir.listFiles()?.forEach { file ->
+                if (file.name.startsWith("online_subtitle_") || file.name.startsWith("local_sub_")) {
+                    file.delete()
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ExoplayerView", "clearTransientSubtitleCache: error deleting files - ${e.message}")
+        }
+    }
+
+    fun applyOnlineSubtitle(subtitle: ani.dantotsu.connections.subtitles.StremioSub) {
+        android.util.Log.d("ExoplayerView", "=== applyOnlineSubtitle CALLED ===")
+        android.util.Log.d("ExoplayerView", "applyOnlineSubtitle: lang=${subtitle.lang}, url=${subtitle.url}")
+
+        // Download subtitle content first, then apply
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                android.util.Log.d("ExoplayerView", "applyOnlineSubtitle: Downloading subtitle from ${subtitle.url}")
+
+                // Download subtitle content
+                val client = okhttp3.OkHttpClient()
+                val request = okhttp3.Request.Builder()
+                    .url(subtitle.url)
+                    .build()
+
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    withContext(Dispatchers.Main) {
+                        android.util.Log.e("ExoplayerView", "applyOnlineSubtitle: Download failed with code ${response.code}")
+                        snackString("Failed to download subtitle: HTTP ${response.code}")
+                    }
+                    return@launch
+                }
+
+                val subtitleContent = response.body?.string()
+                if (subtitleContent.isNullOrEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        android.util.Log.e("ExoplayerView", "applyOnlineSubtitle: Subtitle content is empty")
+                        snackString("Subtitle file is empty")
+                    }
+                    return@launch
+                }
+
+                android.util.Log.d("ExoplayerView", "applyOnlineSubtitle: Downloaded ${subtitleContent.length} bytes")
+
+                // Detect format from content
+                val detectedFormat = when {
+                    subtitleContent.trimStart().startsWith("WEBVTT") -> "VTT"
+                    subtitleContent.contains("[Script Info]") || subtitleContent.contains("\\[Events\\]") -> "ASS"
+                    subtitleContent.contains("<tt ") || subtitleContent.contains("<tt>") -> "TTML"
+                    else -> "SRT"
+                }
+
+                android.util.Log.d("ExoplayerView", "applyOnlineSubtitle: Detected format: $detectedFormat")
+
+                // Strip positioning from ASS files
+                val cleanedContent = if (detectedFormat == "ASS") {
+                    stripAssPositioning(subtitleContent)
+                } else {
+                    subtitleContent
+                }
+
+                // Use appropriate MIME type
+                val mimeType = when (detectedFormat) {
+                    "VTT" -> MimeTypes.TEXT_VTT
+                    "ASS" -> MimeTypes.TEXT_SSA
+                    "TTML" -> MimeTypes.APPLICATION_TTML
+                    else -> MimeTypes.APPLICATION_SUBRIP
+                }
+
+                val extension = when (detectedFormat) {
+                    "VTT" -> "vtt"
+                    "ASS" -> "ass"
+                    "TTML" -> "ttml"
+                    else -> "srt"
+                }
+
+                android.util.Log.d("ExoplayerView", "applyOnlineSubtitle: Using MIME type: $mimeType, extension: $extension")
+
+                val cacheDir = this@ExoplayerView.cacheDir
+                val subtitleFile = File(cacheDir, "online_subtitle_${subtitle.id}.$extension")
+                subtitleFile.writeText(cleanedContent)
+
+                android.util.Log.d("ExoplayerView", "applyOnlineSubtitle: Saved to ${subtitleFile.absolutePath}")
+
+                // Apply on main thread
+                withContext(Dispatchers.Main) {
+                    applySubtitleFromFile(subtitleFile, subtitle.lang, mimeType)
+                }
+
+            } catch (e: Exception) {
+                android.util.Log.e("ExoplayerView", "applyOnlineSubtitle: ERROR - ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    snackString("Failed to load subtitle: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun applySubtitleFromFile(file: File, lang: String, mimeType: String) {
+        try {
+            val label = "Online: $lang"
+            val subUri = android.net.Uri.fromFile(file)
+
+            android.util.Log.d("ExoplayerView", "applySubtitleFromFile: URI=$subUri, MIME=$mimeType, label=$label")
+
+            val subConfig = MediaItem.SubtitleConfiguration.Builder(subUri)
+                .setMimeType(mimeType)
+                .setLanguage(lang)
+                .setLabel(label)
+                .setId(file.name)
+                .build()
+
+            val currentMediaItem = exoPlayer.currentMediaItem ?: return
+            val existingSubtitles = currentMediaItem.localConfiguration?.subtitleConfigurations?.toMutableList() ?: mutableListOf()
+
+            val alreadyExists = existingSubtitles.any { it.id == file.name }
+            if (alreadyExists) {
+                android.util.Log.d("ExoplayerView", "applySubtitleFromFile: Subtitle already exists, selecting via pendingLabel")
+                // Even though track already exists in the media item, we may need
+                // to wait for onTracksChanged to fire to reliably select it.
+                pendingSubtitleLabel = label
+                // If tracks are already reported by ExoPlayer, try immediately too.
+                selectSubtitleTrack(lang, label)
+                return
+            }
+
+            existingSubtitles.add(subConfig)
+            android.util.Log.d("ExoplayerView", "applySubtitleFromFile: Added subtitle, total: ${existingSubtitles.size}")
+
+            val newMediaItem = currentMediaItem.buildUpon()
+                .setSubtitleConfigurations(existingSubtitles)
+                .build()
+
+            // Register label to select once onTracksChanged fires after prepare()
+            pendingSubtitleLabel = label
+
+            val currentPos = exoPlayer.currentPosition
+            exoPlayer.setMediaItem(newMediaItem, currentPos)
+            exoPlayer.prepare()
+
+        } catch (e: Exception) {
+            android.util.Log.e("ExoplayerView", "applySubtitleFromFile: ERROR - ${e.message}", e)
+            snackString("Failed to apply subtitle: ${e.message}")
+        }
+    }
+
+
+    // Map ISO 639-2 codes (from Stremio API) to language names
+    private fun mapLanguageCode(isoCode: String): String = when (isoCode.lowercase()) {
+        "eng" -> "english"
+        "spa" -> "spanish"
+        "fra" -> "french"
+        "deu" -> "german"
+        "ita" -> "italian"
+        "por" -> "portuguese"
+        "rus" -> "russian"
+        "jpn" -> "japanese"
+        "zho", "chi" -> "chinese"
+        "ara" -> "arabic"
+        "hin" -> "hindi"
+        "kor" -> "korean"
+        "pol" -> "polish"
+        "tur" -> "turkish"
+        "hun" -> "hungarian"
+        "ron" -> "romanian"
+        "ell" -> "greek"
+        "cze" -> "czech"
+        "swe" -> "swedish"
+        "dan" -> "danish"
+        "fin" -> "finnish"
+        "nor" -> "norwegian"
+        "nld" -> "dutch"
+        "tha" -> "thai"
+        "vie" -> "vietnamese"
+        "ind" -> "indonesian"
+        "ukr" -> "ukrainian"
+        "heb" -> "hebrew"
+        "bul" -> "bulgarian"
+        "hrv" -> "croatian"
+        "slk" -> "slovak"
+        "slv" -> "slovenian"
+        else -> isoCode
+    }
+
+    private fun selectSubtitleTrack(langCode: String, targetLabel: String? = null) {
+        android.util.Log.d("ExoplayerView", "selectSubtitleTrack: Looking for lang=$langCode, targetLabel=$targetLabel")
+
+        val mappedLang = mapLanguageCode(langCode)
+        android.util.Log.d("ExoplayerView", "selectSubtitleTrack: Mapped '$langCode' to '$mappedLang'")
+
+        try {
+            val tracks = exoPlayer.currentTracks
+            android.util.Log.d("ExoplayerView", "selectSubtitleTrack: Total track groups: ${tracks.groups.size}")
+
+            for (groupIndex in 0 until tracks.groups.size) {
+                val group = tracks.groups[groupIndex]
+
+                if (group.type == TRACK_TYPE_TEXT) {
+                    android.util.Log.d("ExoplayerView", "selectSubtitleTrack: Found TEXT group at index $groupIndex with ${group.length} tracks")
+
+                    for (trackIndex in 0 until group.length) {
+                        val format = group.getTrackFormat(trackIndex)
+                        val trackLang = format.language?.lowercase() ?: ""
+                        val trackLabel = format.label ?: ""
+                        android.util.Log.d("ExoplayerView", "selectSubtitleTrack: Track $trackIndex - lang=$trackLang, label=$trackLabel")
+
+                        // PRIORITY 1: Match by specific Label (e.g., "Online: eng")
+                        if (targetLabel != null && trackLabel == targetLabel) {
+                            android.util.Log.d("ExoplayerView", "selectSubtitleTrack: FOUND matching track by label! Selecting index $trackIndex")
+                            onSetTrackGroupOverride(group, TRACK_TYPE_TEXT, trackIndex)
+                            snackString("Subtitle loaded: $trackLabel")
+                            return
+                        }
+
+                        // PRIORITY 2: Fallback to matching language code if no label provided
+                        if (targetLabel == null && (trackLang == mappedLang || trackLang == langCode || trackLang.startsWith(langCode) || trackLang.startsWith(mappedLang))) {
+                            android.util.Log.d("ExoplayerView", "selectSubtitleTrack: FOUND matching track by language! Selecting index $trackIndex")
+                            onSetTrackGroupOverride(group, TRACK_TYPE_TEXT, trackIndex)
+                            snackString("Subtitle loaded: ${mappedLang.replaceFirstChar { it.uppercase() }}")
+                            return
+                        }
+                    }
+                }
+            }
+            android.util.Log.d("ExoplayerView", "selectSubtitleTrack: No matching track found for lang=$langCode, targetLabel=$targetLabel")
+        } catch (e: Exception) {
+            android.util.Log.e("ExoplayerView", "selectSubtitleTrack: ERROR - ${e.message}", e)
+            e.printStackTrace()
+        }
     }
 
     override fun onPause() {
@@ -2167,12 +2719,22 @@ class ExoplayerView :
 
     override fun onRenderedFirstFrame() {
         super.onRenderedFirstFrame()
+
         PrefManager.setCustomVal(
             "${media.id}_${media.anime!!.selectedEpisode}_max",
             exoPlayer.duration,
         )
-        val height = (exoPlayer.videoFormat ?: return).height
-        val width = (exoPlayer.videoFormat ?: return).width
+
+        val format = exoPlayer.videoFormat ?: return
+        var height = format.height
+        var width = format.width
+        val rotation = format.rotationDegrees
+
+        if (rotation == 90 || rotation == 270) {
+            val temp = width
+            width = height
+            height = temp
+        }
 
         aspectRatio = Rational(width, height)
 
@@ -2365,6 +2927,35 @@ class ExoplayerView :
         )
 
     override fun onTracksChanged(tracks: Tracks) {
+        // Consume any pending subtitle label set by applyLocalSubtitle / applySubtitleFromFile.
+        // This fires reliably once ExoPlayer has parsed all tracks after setMediaItem+prepare.
+        val pendingLabel = pendingSubtitleLabel
+        android.util.Log.d("LocalSubDebug", "onTracksChanged: pendingLabel=$pendingLabel, totalGroups=${tracks.groups.size}")
+        if (pendingLabel != null) {
+            var matched = false
+            tracks.groups.forEachIndexed { groupIndex, group ->
+                android.util.Log.d("LocalSubDebug", "onTracksChanged: group[$groupIndex] type=${group.type}, length=${group.length}")
+                if (group.type == TRACK_TYPE_TEXT) {
+                    for (trackIndex in 0 until group.length) {
+                        val trackLabel = group.getTrackFormat(trackIndex).label
+                        android.util.Log.d("LocalSubDebug", "onTracksChanged: TEXT track[$trackIndex] label='$trackLabel', isSupported=${group.isTrackSupported(trackIndex, true)}")
+                        if (trackLabel == pendingLabel) {
+                            android.util.Log.d("LocalSubDebug", "onTracksChanged: MATCH FOUND for '$pendingLabel' at group=$groupIndex track=$trackIndex, selecting")
+                            pendingSubtitleLabel = null
+                            matched = true
+                            onSetTrackGroupOverride(group, TRACK_TYPE_TEXT, trackIndex)
+                            snackString("Subtitle loaded: $pendingLabel")
+                            break
+                        }
+                    }
+                }
+                if (matched) return@forEachIndexed
+            }
+            if (!matched) {
+                android.util.Log.w("LocalSubDebug", "onTracksChanged: NO MATCH found for '$pendingLabel' — will retry on next onTracksChanged")
+            }
+        }
+
         val audioTracks: ArrayList<Tracks.Group> = arrayListOf()
         val subTracks: ArrayList<Tracks.Group> = arrayListOf(dummyTrack)
         tracks.groups.forEach {
@@ -2530,6 +3121,10 @@ class ExoplayerView :
 
         if (isInitialized) {
             updateAniProgress()
+            // Clear transient subtitle caches (online + local) on player exit
+            val episodeId = "${media.id}-${media.anime?.selectedEpisode ?: ""}"
+            clearTransientSubtitleCache(episodeId)
+            
             disappeared = false
             functionstarted = false
             releasePlayer()
@@ -2542,7 +3137,7 @@ class ExoplayerView :
     // Cast
     private fun cast() {
         val videoURL = video?.file?.url ?: return
-        val subtitleUrl = if (!hasExtSubtitles) video!!.file.url else subtitle!!.file.url
+        val subtitleUrl = if (!hasExtSubtitles || subtitle == null) video!!.file.url else subtitle!!.file.url
         val shareVideo = Intent(Intent.ACTION_VIEW)
         shareVideo.setDataAndType(videoURL.toUri(), "video/*")
         shareVideo.setPackage("com.instantbits.cast.webvideo")
