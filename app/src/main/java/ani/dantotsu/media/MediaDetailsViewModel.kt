@@ -7,6 +7,7 @@ import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.currContext
@@ -82,10 +83,30 @@ class MediaDetailsViewModel : ViewModel() {
             media.postValue(Anilist.query.mediaDetails(m))
         }
         loading = false
+        // Prefetch IMDB ID asynchronously to cache it before the player opens
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (m.idIMDB == null) {
+                    m.idIMDB = ani.dantotsu.others.IdMappers.getImdbId(m.id)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     fun setMedia(m: Media) {
         media.postValue(m)
+        // Prefetch IMDB ID asynchronously to cache it before the player opens
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (m.idIMDB == null) {
+                    m.idIMDB = ani.dantotsu.others.IdMappers.getImdbId(m.id)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     val responses = MutableLiveData<List<ShowResponse>?>(null)
@@ -368,6 +389,40 @@ class MediaDetailsViewModel : ViewModel() {
                 novelSources[i]?.loadBook(novel.link, novel.extra) ?: return@tryWithSuspend
             )
         }
+    }
+
+    private val fetchedOnlineSubtitles = mutableMapOf<String, List<Any>>()
+
+    fun saveFetchedSubtitles(id: String, subs: List<Any>) {
+        fetchedOnlineSubtitles[id] = subs
+    }
+
+    fun getFetchedSubtitles(id: String): List<Any>? {
+        return fetchedOnlineSubtitles[id]
+    }
+
+    fun clearFetchedSubtitles(id: String) {
+        fetchedOnlineSubtitles.remove(id)
+    }
+
+    private val localSubtitlesMap = mutableMapOf<String, MutableList<Any>>()
+
+    fun saveLocalSubtitle(id: String, sub: Any) {
+        val list = localSubtitlesMap.getOrPut(id) { mutableListOf() }
+        val isDuplicate = list.any { existing ->
+            existing is ani.dantotsu.parsers.Subtitle &&
+            sub is ani.dantotsu.parsers.Subtitle &&
+            existing.file.url == sub.file.url
+        }
+        if (!isDuplicate) list.add(sub)
+    }
+
+    fun getLocalSubtitles(id: String): List<Any> {
+        return localSubtitlesMap[id] ?: emptyList()
+    }
+
+    fun clearLocalSubtitles(id: String) {
+        localSubtitlesMap.remove(id)
     }
 
 }

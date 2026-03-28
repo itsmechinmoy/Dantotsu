@@ -82,6 +82,20 @@
             android:textSize="14sp"
             app:lineHeight="14sp" />
 
+        <TextView
+            android:id="@+id/itemEpisodeDate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2sp"
+            android:alpha="0.5"
+            android:fontFamily="@font/poppins_bold"
+            android:maxLines="1"
+            android:textColor="@color/bg_white"
+            android:textSize="10sp"
+            android:visibility="gone"
+            tools:text="2026-01-09"
+            tools:visibility="visible" />
+
     </LinearLayout>
 
     <LinearLayout
@@ -124,4 +138,21 @@
         app:srcCompat="@drawable/ic_round_remove_red_eye_24"
         app:tint="?attr/colorOnBackground"
         tools:ignore="ContentDescription" />
+
+    <TextView
+        android:id="@+id/itemEpisodeRating"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/bg_trans_black"
+        android:fontFamily="@font/poppins_bold"
+        android:paddingHorizontal="4dp"
+        android:paddingVertical="2dp"
+        android:textColor="@android:color/white"
+        android:textSize="10sp"
+        android:visibility="gone"
+        tools:text="★ 6.9"
+        tools:visibility="visible" />
 </androidx.cardview.widget.CardView>

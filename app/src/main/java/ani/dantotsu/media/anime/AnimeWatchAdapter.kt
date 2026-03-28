@@ -220,6 +220,20 @@ class AnimeWatchAdapter(
                     sortText.text = if (reversed) "Down to Up" else "Up to Down"
                     run = true
                 }
+
+                var metadataApi = PrefManager.getVal<Int>(PrefName.EpisodeMetadataSource) // 0 or 1
+                metadataApiText.text = if (metadataApi == 0) "Kitsu" else "AniZip"
+                metadataApiTop.setOnClickListener {
+                    metadataApi = if (metadataApi == 0) 1 else 0
+                    metadataApiText.text = if (metadataApi == 0) "Kitsu" else "AniZip"
+                    PrefManager.setVal(PrefName.EpisodeMetadataSource, metadataApi)
+                    
+                    if (metadataApi == 0) {
+                        fragment.loadKitsuEpisodesAsync()
+                    }
+                    refresh = true
+                }
+                
                 // Grids
                 var selected = when (style) {
                     0 -> mediaSourceList

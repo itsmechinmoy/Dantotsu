@@ -151,6 +151,87 @@
 
             </ani.dantotsu.others.Xpandable>
 
+
+
+            <ani.dantotsu.others.Xpandable
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="32dp"
+                    android:text="Online Subtitles"
+                    android:textColor="?attr/colorSecondary"
+                    app:drawableEndCompat="@drawable/ic_round_arrow_drop_down_24"
+                    tools:ignore="TextContrastCheck" />
+
+                <!-- Online Subtitles Section -->
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/playerSettingsOnlineSubtitles"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:checked="true"
+                    android:drawableStart="@drawable/ic_download_24"
+                    android:drawablePadding="16dp"
+                    android:elegantTextHeight="false"
+                    android:fontFamily="@font/poppins_bold"
+                    android:minHeight="64dp"
+                    android:paddingHorizontal="32dp"
+                    android:text="Online Subtitles"
+                    android:textAlignment="viewStart"
+                    android:textColor="@color/bg_opp"
+                    app:cornerRadius="0dp"
+                    app:drawableTint="?attr/colorPrimary"
+                    app:showText="false"
+                    app:thumbTint="@color/button_switch_track" />
+
+                <Button
+                    android:id="@+id/playerSettingsOnlineProviders"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:layout_marginBottom="8dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingHorizontal="32dp"
+                    android:text="Subtitle Providers"
+                    android:textAlignment="viewStart"
+                    android:textAllCaps="false"
+                    android:textColor="@color/bg_opp"
+                    app:cornerRadius="0dp"
+                    app:icon="@drawable/ic_round_view_list_24"
+                    app:iconPadding="16dp"
+                    app:iconSize="24dp" />
+
+                <Button
+                    android:id="@+id/playerSettingsOnlineLanguages"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:layout_marginBottom="8dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingHorizontal="32dp"
+                    android:text="Online Languages (Wyzie only)"
+                    android:textAlignment="viewStart"
+                    android:textAllCaps="false"
+                    android:textColor="@color/bg_opp"
+                    app:cornerRadius="0dp"
+                    app:icon="@drawable/ic_round_translate_24"
+                    app:iconPadding="16dp"
+                    app:iconSize="24dp" />
+
+
+            </ani.dantotsu.others.Xpandable>
+
             <ani.dantotsu.others.Xpandable
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
