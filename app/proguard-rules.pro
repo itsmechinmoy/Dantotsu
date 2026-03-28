@@ -61,7 +61,10 @@
 -keep class org.jsoup.** { *; }
 -keepclassmembers class org.jsoup.nodes.Document { *; }
 
-
+# Keep WorkManager database
+-keep class androidx.work.impl.WorkDatabase_Impl { *; }
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
 
 # @Serializable and @Polymorphic are used at runtime for polymorphic serialization.
 -keepattributes RuntimeVisibleAnnotations,AnnotationDefault
