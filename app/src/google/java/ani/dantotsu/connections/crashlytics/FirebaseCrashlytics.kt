@@ -28,7 +28,7 @@ class FirebaseCrashlytics : CrashlyticsInterface {
     }
 
     override fun setCrashlyticsCollectionEnabled(enabled: Boolean) {
-        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(enabled)
+        FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = enabled
     }
 
 }
