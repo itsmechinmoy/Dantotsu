@@ -4,7 +4,7 @@ ksp = "2.3.6"
 agp = "9.0.1"
 
 firebase-bom = "33.13.0"
-glide = "4.16.0"
+glide = "5.0.5"
 exo = "1.6.1"
 markwon = "4.6.2"
 groupie = "2.10.1"
