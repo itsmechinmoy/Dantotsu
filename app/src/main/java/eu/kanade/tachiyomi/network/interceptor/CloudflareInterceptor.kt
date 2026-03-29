@@ -26,7 +26,7 @@ class CloudflareInterceptor(
     private val executor = ContextCompat.getMainExecutor(context)
 
     override fun shouldIntercept(response: Response): Boolean {
-        // Check if Cloudflare anti-bot is on
+        if (response.request.url.host.contains("anilist.co")) return false
         return response.code in ERROR_CODES && response.header("Server") in SERVER_CHECK
     }
 
