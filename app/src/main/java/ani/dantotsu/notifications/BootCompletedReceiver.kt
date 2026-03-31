@@ -8,6 +8,7 @@ import android.os.Build
 import ani.dantotsu.notifications.TaskScheduler.TaskType
 import ani.dantotsu.notifications.anilist.AnilistNotificationWorker
 import ani.dantotsu.notifications.comment.CommentNotificationWorker
+import ani.dantotsu.notifications.subscription.SubscriptionNotificationWorker
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
@@ -24,6 +25,8 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     CommentNotificationWorker.checkIntervals[PrefManager.getVal(PrefName.CommentNotificationInterval)]
                 val anilistInterval =
                     AnilistNotificationWorker.checkIntervals[PrefManager.getVal(PrefName.AnilistNotificationInterval)]
+                val subscriptionInterval =
+                    SubscriptionNotificationWorker.checkIntervals[PrefManager.getVal(PrefName.SubscriptionNotificationInterval)]
                 scheduler.scheduleRepeatingTask(
                     TaskType.COMMENT_NOTIFICATION,
                     commentInterval
@@ -31,6 +34,10 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 scheduler.scheduleRepeatingTask(
                     TaskType.ANILIST_NOTIFICATION,
                     anilistInterval
+                )
+                scheduler.scheduleRepeatingTask(
+                    TaskType.SUBSCRIPTION_NOTIFICATION,
+                    subscriptionInterval
                 )
             }
         }
