@@ -279,6 +279,31 @@ object Anilist {
 
     }
 
+    /**
+     * Decodes the JWT token and returns the number of days until expiry.
+     * Returns null if the token is missing or cannot be decoded.
+     * Returns a negative number if the token is already expired.
+     */
+    fun getTokenExpiryDays(): Long? {
+        val t = token ?: return null
+        return try {
+            val parts = t.split(".")
+            if (parts.size != 3) return null
+            val payload = android.util.Base64.decode(
+                parts[1].replace('-', '+').replace('_', '/'),
+                android.util.Base64.NO_PADDING or android.util.Base64.URL_SAFE
+            )
+            val json = JSONObject(String(payload))
+            if (!json.has("exp")) return null
+            val expSeconds = json.getLong("exp")
+            val nowSeconds = System.currentTimeMillis() / 1000
+            (expSeconds - nowSeconds) / 86400
+        } catch (e: Exception) {
+            Logger.log("getTokenExpiryDays error: ${e.message}")
+            null
+        }
+    }
+
     suspend inline fun <reified T : Any> executeQuery(
         query: String,
         variables: String = "",
@@ -356,4 +381,3 @@ object Anilist {
         }
     }
 }
-
