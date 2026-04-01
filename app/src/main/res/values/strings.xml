@@ -13,7 +13,7 @@
     <string name="discord" translatable="false">https://discord.gg/4HPZ5nAWwM</string>
     <string name="github" translatable="false">https://github.com/rebelonion/Dantotsu</string>
     <string name="telegram" translatable="false" tools:ignore="Typos">https://t.me/+gzBCQExtLQo1YTNh </string>
-    <string name="coffee" translatable="false">https://www.buymeacoffee.com/rebelonion</string>
+    <string name="coffee" translatable="false">https://github.com/sponsors/rebelonion</string>
 
     <string name="anilist_link">https://anilist.co/user/%1$s/</string>
     <string name="myanilist_link">https://myanimelist.net/profile/%1$s/</string>
