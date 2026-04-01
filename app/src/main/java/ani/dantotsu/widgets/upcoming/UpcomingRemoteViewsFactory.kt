@@ -35,11 +35,28 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         fillWidgetItems()
     }
 
-    private fun timeUntil(timeUntil: Long): String {
+    private fun formatTime(timeUntil: Long): String {
         val days = timeUntil / (1000 * 60 * 60 * 24)
         val hours = (timeUntil % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
         val minutes = ((timeUntil % (1000 * 60 * 60 * 24)) % (1000 * 60 * 60)) / (1000 * 60)
-        return "$days days $hours hours $minutes minutes"
+        
+        return if (timeUntil >= 0) {
+            buildString {
+                if (days > 0) append("$days day${if (days > 1) "s" else ""} ")
+                if (hours > 0 || days > 0) append("$hours hour${if (hours > 1) "s" else ""} ")
+                append("$minutes minute${if (minutes > 1) "s" else ""}")
+            }.trim()
+        } else {
+            val elapsedDays = -days
+            val elapsedHours = -hours
+            val elapsedMinutes = -minutes
+            buildString {
+                append("Aired ")
+                if (elapsedDays > 0) append("$elapsedDays day${if (elapsedDays > 1) "s" else ""} ")
+                if (elapsedHours > 0 || elapsedDays > 0) append("$elapsedHours hour${if (elapsedHours > 1) "s" else ""} ")
+                append("$elapsedMinutes minute${if (elapsedMinutes > 1) "s" else ""} ago")
+            }.trim()
+        }
     }
 
     override fun onDataSetChanged() {
@@ -47,7 +64,6 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         Logger.log("UpcomingRemoteViewsFactory onDataSetChanged")
         widgetItems.clear()
         fillWidgetItems()
-
     }
 
     private fun fillWidgetItems() {
@@ -56,18 +72,41 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         val prefs = context.getSharedPreferences(UpcomingWidget.PREFS_NAME, Context.MODE_PRIVATE)
         val lastUpdated = prefs.getLong(UpcomingWidget.LAST_UPDATE, 0)
         val serializedMedia = prefs.getString(UpcomingWidget.PREF_SERIALIZED_MEDIA, "")
-        if (System.currentTimeMillis() - lastUpdated > 1000 * 60 * 60 * 4 || serializedMedia.isNullOrEmpty()) {
+        val timeSinceLastUpdate = System.currentTimeMillis() - lastUpdated
+        val media = if (!serializedMedia.isNullOrEmpty()) deserializeMedia(serializedMedia) else null
+        var forceRefresh = false
+        
+        if (media != null) {
+            for (mediaItem in media) {
+                val timeUntilAiring = (mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0)
+                if (timeUntilAiring <= 0) {
+                    forceRefresh = true
+                    break
+                }
+            }
+        }
+
+        if (timeSinceLastUpdate > 1000 * 60 * 60 * 4 || serializedMedia.isNullOrEmpty() || forceRefresh) {
             runBlocking(Dispatchers.IO) {
+                Anilist.getSavedToken()
                 val upcoming = Anilist.query.getUpcomingAnime(userId)
-                upcoming.forEach {
-                    widgetItems.add(
-                        WidgetItem(
-                            it.userPreferredName,
-                            timeUntil(it.timeUntilAiring ?: 0),
-                            it.cover ?: "",
-                            it.id
-                        )
-                    )
+                val seen = mutableSetOf<Int>()
+                upcoming.forEach { mediaItem ->
+                    if (seen.add(mediaItem.id)) {
+                        val timeUntilAiring = mediaItem.timeUntilAiring ?: 0
+                        if (timeUntilAiring > 0) {
+                            val episodeNumber = mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
+                            widgetItems.add(
+                                WidgetItem(
+                                    title = mediaItem.userPreferredName,
+                                    countdown = formatTime(timeUntilAiring),
+                                    image = mediaItem.cover ?: "",
+                                    id = mediaItem.id,
+                                    episode = episodeNumber
+                                )
+                            )
+                        }
+                    }
                 }
                 prefs.edit().putLong(UpcomingWidget.LAST_UPDATE, System.currentTimeMillis()).apply()
                 val serialized = serializeMedia(upcoming)
@@ -81,18 +120,24 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
             }
         } else {
             refreshing = false
-            val timeSinceLastUpdate = System.currentTimeMillis() - lastUpdated
-            val media = deserializeMedia(serializedMedia)
             if (media != null) {
-                media.forEach {
-                    widgetItems.add(
-                        WidgetItem(
-                            it.userPreferredName,
-                            timeUntil(it.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0),
-                            it.cover ?: "",
-                            it.id
-                        )
-                    )
+                val seen = mutableSetOf<Int>()
+                media.forEach { mediaItem ->
+                    if (seen.add(mediaItem.id)) {
+                        val timeUntilAiring = (mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0)
+                        if (timeUntilAiring > 0) {
+                            val episodeNumber = mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
+                            widgetItems.add(
+                                WidgetItem(
+                                    title = mediaItem.userPreferredName,
+                                    countdown = formatTime(timeUntilAiring),
+                                    image = mediaItem.cover ?: "",
+                                    id = mediaItem.id,
+                                    episode = episodeNumber
+                                )
+                            )
+                        }
+                    }
                 }
             } else {
                 prefs.edit().putString(UpcomingWidget.PREF_SERIALIZED_MEDIA, "").apply()
@@ -101,24 +146,22 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
                 fillWidgetItems()
             }
         }
-
     }
 
     private fun serializeMedia(media: List<Media>): String? {
         return try {
             val gson = GsonBuilder()
                 .registerTypeAdapter(SChapter::class.java, InstanceCreator<SChapter> {
-                    SChapterImpl() // Provide an instance of SChapterImpl
+                    SChapterImpl()
                 })
                 .registerTypeAdapter(SAnime::class.java, InstanceCreator<SAnime> {
-                    SAnimeImpl() // Provide an instance of SAnimeImpl
+                    SAnimeImpl()
                 })
                 .registerTypeAdapter(SEpisode::class.java, InstanceCreator<SEpisode> {
-                    SEpisodeImpl() // Provide an instance of SEpisodeImpl
+                    SEpisodeImpl()
                 })
                 .create()
-            val json = gson.toJson(media)
-            json
+            gson.toJson(media)
         } catch (e: Exception) {
             Logger.log("Error serializing media: $e")
             Logger.log(e)
@@ -130,17 +173,16 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         return try {
             val gson = GsonBuilder()
                 .registerTypeAdapter(SChapter::class.java, InstanceCreator<SChapter> {
-                    SChapterImpl() // Provide an instance of SChapterImpl
+                    SChapterImpl()
                 })
                 .registerTypeAdapter(SAnime::class.java, InstanceCreator<SAnime> {
-                    SAnimeImpl() // Provide an instance of SAnimeImpl
+                    SAnimeImpl()
                 })
                 .registerTypeAdapter(SEpisode::class.java, InstanceCreator<SEpisode> {
-                    SEpisodeImpl() // Provide an instance of SEpisodeImpl
+                    SEpisodeImpl()
                 })
                 .create()
-            val media = gson.fromJson(json, Array<Media>::class.java).toList()
-            media
+            gson.fromJson(json, Array<Media>::class.java).toList()
         } catch (e: Exception) {
             Logger.log("Error deserializing media: $e")
             Logger.log(e)
@@ -152,47 +194,49 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         widgetItems.clear()
     }
 
-    override fun getCount(): Int {
-        return widgetItems.size
-    }
+    override fun getCount(): Int = widgetItems.size
 
     override fun getViewAt(position: Int): RemoteViews {
         Logger.log("UpcomingRemoteViewsFactory getViewAt")
         val item = widgetItems[position]
         val titleTextColor = prefs.getInt(UpcomingWidget.PREF_TITLE_TEXT_COLOR, Color.WHITE)
-        val countdownTextColor =
-            prefs.getInt(UpcomingWidget.PREF_COUNTDOWN_TEXT_COLOR, Color.WHITE)
+        val countdownTextColor = prefs.getInt(UpcomingWidget.PREF_COUNTDOWN_TEXT_COLOR, Color.WHITE)
         val rv = RemoteViews(context.packageName, R.layout.item_upcoming_widget).apply {
             setTextViewText(R.id.text_show_title, item.title)
             setTextViewText(R.id.text_show_countdown, item.countdown)
+            
+            val episodeText = item.episode?.let { "Episode $it" } ?: ""
+            setTextViewText(R.id.text_show_episode, episodeText)
+            
             setTextColor(R.id.text_show_title, titleTextColor)
             setTextColor(R.id.text_show_countdown, countdownTextColor)
+            setTextColor(R.id.text_show_episode, countdownTextColor)
+            
             val bitmap = downloadImageAsBitmap(item.image)
             setImageViewBitmap(R.id.image_show_icon, bitmap)
+            
             val fillInIntent = Intent().apply {
                 putExtra("mediaId", item.id)
             }
             setOnClickFillInIntent(R.id.widget_item, fillInIntent)
         }
-
         return rv
     }
 
-    override fun getLoadingView(): RemoteViews {
-        return RemoteViews(context.packageName, R.layout.item_upcoming_widget)
-    }
+    override fun getLoadingView(): RemoteViews =
+        RemoteViews(context.packageName, R.layout.item_upcoming_widget)
 
-    override fun getViewTypeCount(): Int {
-        return 1
-    }
+    override fun getViewTypeCount(): Int = 1
 
-    override fun getItemId(p0: Int): Long {
-        return p0.toLong()
-    }
+    override fun getItemId(p0: Int): Long = p0.toLong()
 
-    override fun hasStableIds(): Boolean {
-        return true
-    }
+    override fun hasStableIds(): Boolean = true
 }
 
-data class WidgetItem(val title: String, val countdown: String, val image: String, val id: Int)
+data class WidgetItem(
+    val title: String,
+    val countdown: String,
+    val image: String,
+    val id: Int,
+    val episode: Int?
+)

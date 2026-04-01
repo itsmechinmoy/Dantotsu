@@ -36,6 +36,16 @@
             android:textSize="16sp" />
 
         <TextView
+            android:id="@+id/text_show_episode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins"
+            android:text=""
+            android:textColor="@color/bg_white"
+            android:textSize="12sp"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
             android:id="@+id/text_show_countdown"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

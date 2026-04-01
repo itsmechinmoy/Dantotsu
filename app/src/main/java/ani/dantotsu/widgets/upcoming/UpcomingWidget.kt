@@ -8,7 +8,9 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.SizeF
 import android.widget.RemoteViews
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
@@ -16,10 +18,6 @@ import ani.dantotsu.MainActivity
 import ani.dantotsu.R
 import ani.dantotsu.widgets.WidgetSizeProvider
 
-/**
- * Implementation of App Widget functionality.
- * App Widget Configuration implemented in [UpcomingWidgetConfigure]
- */
 class UpcomingWidget : AppWidgetProvider() {
     override fun onUpdate(
         context: Context,
@@ -62,13 +60,9 @@ class UpcomingWidget : AppWidgetProvider() {
     }
 
     companion object {
-        fun updateAppWidget(
-            context: Context,
-            appWidgetId: Int,
-        ): RemoteViews {
+        fun updateAppWidget(context: Context, appWidgetId: Int): RemoteViews {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val backgroundColor =
-                prefs.getInt(PREF_BACKGROUND_COLOR, Color.parseColor("#80000000"))
+            val backgroundColor = prefs.getInt(PREF_BACKGROUND_COLOR, Color.parseColor("#80000000"))
             val backgroundFade = prefs.getInt(PREF_BACKGROUND_FADE, Color.parseColor("#00000000"))
             val titleTextColor = prefs.getInt(PREF_TITLE_TEXT_COLOR, Color.WHITE)
             val countdownTextColor = prefs.getInt(PREF_COUNTDOWN_TEXT_COLOR, Color.WHITE)
@@ -77,6 +71,12 @@ class UpcomingWidget : AppWidgetProvider() {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
                 data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
             }
+
+            val intentTemplate = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("fromWidget", true)
+            }
+
             val gradientDrawable = ResourcesCompat.getDrawable(
                 context.resources,
                 R.drawable.linear_gradient_black,
@@ -92,11 +92,7 @@ class UpcomingWidget : AppWidgetProvider() {
                 height = 300
             }
 
-            val intentTemplate = Intent(context, MainActivity::class.java)
-            intentTemplate.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            intentTemplate.putExtra("fromWidget", true)
-
-            val views = RemoteViews(context.packageName, R.layout.upcoming_widget).apply {
+            fun buildViews(): RemoteViews = RemoteViews(context.packageName, R.layout.upcoming_widget).apply {
                 setImageViewBitmap(R.id.backgroundView, gradientDrawable.toBitmap(width, height))
                 setTextColor(R.id.text_show_title, titleTextColor)
                 setTextColor(R.id.text_show_countdown, countdownTextColor)
@@ -124,7 +120,17 @@ class UpcomingWidget : AppWidgetProvider() {
                     )
                 )
             }
-            return views
+
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                RemoteViews(
+                    mapOf(
+                        SizeF(0f, 0f) to buildViews(),
+                        SizeF(200f, 100f) to buildViews()
+                    )
+                )
+            } else {
+                buildViews()
+            }
         }
 
         const val PREFS_NAME = "ani.dantotsu.widgets.UpcomingWidget"

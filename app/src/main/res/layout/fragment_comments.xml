@@ -111,6 +111,18 @@
                     android:layout_marginBottom="32dp"
                     android:visibility="gone" />
             </FrameLayout>
+            <TextView
+                android:id="@+id/commentsOfflineText"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginTop="64dp"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="You need to have an internet connection to use comments"
+                android:textColor="?attr/colorOnBackground"
+                android:textSize="18sp"
+                android:fontFamily="@font/poppins_bold"
+                android:visibility="gone" />
         </LinearLayout>
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 </androidx.core.widget.NestedScrollView>
