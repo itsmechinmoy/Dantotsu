@@ -81,10 +81,12 @@ class CommentsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         activity = requireActivity() as MediaDetailsActivity
 
-        binding.commentsListContainer.setBaseline(
-            activity.navBar,
-            0
-        )
+        val baselineAnchor = activity.binding.mediaBottomBarContainer ?: activity.binding.commentMessageContainer
+        baselineAnchor?.let {
+            // If it's the unified container, it already has navBarHeight padding, so don't include it again.
+            val includeSystemPaddings = it != activity.binding.mediaBottomBarContainer
+            binding.commentsLayout.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
+        }
         //get the media id from the intent
         val mediaId = arguments?.getInt("mediaId") ?: -1
         mediaName = arguments?.getString("mediaName") ?: "unknown"
