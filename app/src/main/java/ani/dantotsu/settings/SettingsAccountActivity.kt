@@ -31,7 +31,6 @@ import ani.dantotsu.themes.ThemeManager
 import io.noties.markwon.Markwon
 import io.noties.markwon.SoftBreakAddsNewLinePlugin
 import kotlinx.coroutines.launch
-import ani.dantotsu.util.customAlertDialog
 
 class SettingsAccountActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsAccountsBinding
@@ -72,17 +71,9 @@ class SettingsAccountActivity : AppCompatActivity() {
                 if (Anilist.token != null) {
                     settingsAnilistLogin.setText(R.string.logout)
                     settingsAnilistLogin.setOnClickListener {
-                        context.customAlertDialog().apply {
-                            setTitle(R.string.logout)
-                            setMessage(R.string.logout_confirm)
-                            setPosButton(R.string.yes) {
-                                Anilist.removeSavedToken()
-                                restartMainActivity.isEnabled = true
-                                reload()
-                            }
-                            setNegButton(R.string.no)
-                            show()
-                        }
+                        Anilist.removeSavedToken()
+                        restartMainActivity.isEnabled = true
+                        reload()
                     }
                     settingsAnilistUsername.visibility = View.VISIBLE
                     settingsAnilistUsername.text = Anilist.username
@@ -96,6 +87,29 @@ class SettingsAccountActivity : AppCompatActivity() {
                         openLinkInBrowser(anilistLink)
                     }
 
+                    if (Anilist.bg != null) {
+                        settingsAnilistBanner.visibility = View.VISIBLE
+                        settingsAnilistScrim.visibility = View.VISIBLE
+                        settingsAnilistBanner.loadImage(Anilist.bg)
+                    } else {
+                        settingsAnilistBanner.visibility = View.GONE
+                        settingsAnilistScrim.visibility = View.GONE
+                    }
+                    
+                    val daysLeft = Anilist.getTokenExpiryDays()
+                    if (daysLeft != null) {
+                        settingsAnilistTokenExpiry.visibility = View.VISIBLE
+                        settingsAnilistTokenExpiry.text = when {
+                            daysLeft <= 0 -> "Reconnect Now"
+                            else -> "Reconnect in $daysLeft days"
+                        }
+                        settingsAnilistTokenExpiry.setOnClickListener {
+                            Anilist.loginIntent(context)
+                        }
+                    } else {
+                        settingsAnilistTokenExpiry.visibility = View.GONE
+                    }
+
                     settingsMALLoginRequired.visibility = View.GONE
                     settingsMALLogin.visibility = View.VISIBLE
                     settingsMALUsername.visibility = View.VISIBLE
@@ -103,17 +117,9 @@ class SettingsAccountActivity : AppCompatActivity() {
                     if (MAL.token != null) {
                         settingsMALLogin.setText(R.string.logout)
                         settingsMALLogin.setOnClickListener {
-                            context.customAlertDialog().apply {
-                                setTitle(R.string.logout)
-                                setMessage(R.string.logout_confirm)
-                                setPosButton(R.string.yes) {
-                                    MAL.removeSavedToken()
-                                    restartMainActivity.isEnabled = true
-                                    reload()
-                                }
-                                setNegButton(R.string.no)
-                                show()
-                            }
+                            MAL.removeSavedToken()
+                            restartMainActivity.isEnabled = true
+                            reload()
                         }
                         settingsMALUsername.visibility = View.VISIBLE
                         settingsMALUsername.text = MAL.username
@@ -133,6 +139,9 @@ class SettingsAccountActivity : AppCompatActivity() {
                 } else {
                     settingsAnilistAvatar.setImageResource(R.drawable.ic_round_person_24)
                     settingsAnilistUsername.visibility = View.GONE
+                    settingsAnilistTokenExpiry.visibility = View.GONE
+                    settingsAnilistBanner.visibility = View.GONE
+                    settingsAnilistScrim.visibility = View.GONE
                     settingsRecyclerView.visibility = View.GONE
                     settingsAnilistLogin.setText(R.string.login)
                     settingsAnilistLogin.setOnClickListener {
@@ -160,17 +169,9 @@ class SettingsAccountActivity : AppCompatActivity() {
                         username ?: Discord.token?.replace(Regex("."), "*")
                     settingsDiscordLogin.setText(R.string.logout)
                     settingsDiscordLogin.setOnClickListener {
-                        context.customAlertDialog().apply {
-                            setTitle(R.string.logout)
-                            setMessage(R.string.logout_confirm)
-                            setPosButton(R.string.yes) {
-                                Discord.removeSavedToken(context)
-                                restartMainActivity.isEnabled = true
-                                reload()
-                            }
-                            setNegButton(R.string.no)
-                            show()
-                        }
+                        Discord.removeSavedToken(context)
+                        restartMainActivity.isEnabled = true
+                        reload()
                     }
 
                     settingsPresenceSwitcher.visibility = View.VISIBLE
@@ -280,11 +281,5 @@ class SettingsAccountActivity : AppCompatActivity() {
 
     fun reload() {
         snackString(getString(R.string.restart_app_extra))
-        //snackString(R.string.restart_app_extra)
-        //?.setDuration(Snackbar.LENGTH_LONG)
-        //?.setAction(R.string.do_it) {
-        //startMainActivity(this@SettingsAccountActivity)
-        //} Disabled for now. Doesn't update the ADDRESS even after this
     }
 }
-

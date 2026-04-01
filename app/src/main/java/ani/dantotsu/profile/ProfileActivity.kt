@@ -183,6 +183,7 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
                     profileUserName.setOnClickListener {
                         copyToClipboard(profileUserName.text.toString(), true)
                     }
+
                     val bannerAnimations: ImageView =
                         if (PrefManager.getVal(PrefName.BannerAnimations)) profileBannerImage else profileBannerImageNoKen
 
