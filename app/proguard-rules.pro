@@ -60,6 +60,12 @@
     <init>(...);
 }
 
+#############################################
+# Firebase
+#############################################
+
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
 
 #############################################
 # Networking (OkHttp + Okio)
@@ -106,10 +112,18 @@
 -dontwarn com.oracle.svm.core.annotate.**
 
 
-#############################################
-# Firebase
-#############################################
 
--keep class com.google.firebase.** { *; }
--dontwarn com.google.firebase.**
+# Keep RxJava unsafe internals
+-keep class rx.internal.util.unsafe.** { *; }
 
+# Keep fields (VERY IMPORTANT)
+-keepclassmembers class rx.internal.util.unsafe.** {
+    long producerIndex;
+    long consumerIndex;
+}
+
+# Keep all rx internal operators (safe side)
+-keep class rx.internal.** { *; }
+
+# Prevent stripping Unsafe usage
+-dontwarn sun.misc.Unsafe
