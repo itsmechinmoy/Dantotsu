@@ -34,19 +34,25 @@ class SubtitleDownloader {
 
                         // Check if response is successful
                         if (response.isSuccessful) {
-                            val responseBody = response.body.string()
+                            val responseBody = response.peekBody(8192).string()
 
 
                             val subtitleType = getType(responseBody)
 
+                            response.close()
                             subtitleType
                         } else {
+                            response.close()
                             SubtitleType.UNKNOWN
                         }
                     } else {
                         val uri = url.toUri()
                         val file = uri.toFile()
-                        val fileBody = file.readText()
+                        val fileBody = file.inputStream().use { stream ->
+                            val buffer = ByteArray(8192)
+                            val bytesRead = stream.read(buffer)
+                            if (bytesRead > 0) String(buffer, 0, bytesRead) else ""
+                        }
                         val subtitleType = getType(fileBody)
                         subtitleType
                     }
