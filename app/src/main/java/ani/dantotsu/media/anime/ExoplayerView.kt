@@ -1716,7 +1716,6 @@ class ExoplayerView :
             Logger.log("Libass: Creating AssHandler with OVERLAY_OPEN_GL")
             assHandler = AssHandler(
                 AssRenderType.OVERLAY_OPEN_GL,
-                AssHandlerConfig(glyphSize = 2048, cacheSize = 256)
             )
             // Inject the dedicated AssSubtitleTextureView into the video frame hierarchy.
             Logger.log("Libass: Injecting AssSubtitleView into exo_content_frame")
