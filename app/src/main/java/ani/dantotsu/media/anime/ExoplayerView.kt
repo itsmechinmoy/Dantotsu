@@ -258,8 +258,8 @@ class ExoplayerView :
         var initialized = false
         lateinit var media: Media
 
-        private const val DEFAULT_MIN_BUFFER_MS = 600000
-        private const val DEFAULT_MAX_BUFFER_MS = 600000
+        private const val DEFAULT_MIN_BUFFER_MS = 30000
+        private const val DEFAULT_MAX_BUFFER_MS = 60000
         private const val BUFFER_FOR_PLAYBACK_MS = 2000   // 2s: faster start, still safe on 4G
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5000
     }
