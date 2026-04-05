@@ -109,6 +109,17 @@
                 android:textSize="10sp"
                 tools:ignore="HardcodedText,SmallSp" />
         </LinearLayout>
+<!--this thing is being changed in NotificationItem.kt for media and user card dynamically-->
+        <ImageView
+            android:id="@+id/notificationTypeIcon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center_vertical|end"
+            android:layout_marginEnd="16dp"
+            android:elevation="4dp"
+            app:tint="@android:color/white"
+            tools:ignore="ContentDescription"
+            tools:src="@drawable/ic_round_favorite_24" />
 
     </androidx.cardview.widget.CardView>
 </FrameLayout>
