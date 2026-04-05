@@ -47,12 +47,16 @@ import ani.dantotsu.px
 import ani.dantotsu.setSafeOnClickListener
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.media.mangaupdates.MangaAnimeUtil
+import ani.dantotsu.util.Logger
 import com.xwray.groupie.GroupieAdapter
 import io.noties.markwon.Markwon
 import io.noties.markwon.SoftBreakAddsNewLinePlugin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.Serializable
 import java.net.URLEncoder
 
@@ -80,6 +84,72 @@ class MediaInfoFragment : Fragment() {
         super.onDestroyView();_binding = null
     }
 
+    // Method to display anime adaptation
+    private fun displayAnimeAdaptation(adaptation: MangaAnimeUtil.AnimeAdaptation) {
+        if (adaptation.hasAdaptation) {
+            val adaptationText = buildString {
+                append("Start: ${adaptation.animeStart ?: "Unknown"}\n")
+                append("End: ${adaptation.animeEnd ?: "Ongoing"}")
+            }
+
+            binding.mediaAnimeAdaptation.text = adaptationText
+
+            binding.mediaAnimeAdaptationText.fadeIn()
+            binding.mediaAnimeAdaptation.fadeIn()
+        } else {
+            binding.mediaAnimeAdaptationText.fadeOut()
+            binding.mediaAnimeAdaptation.fadeOut()
+        }
+    }
+    private fun displayNextChapterPrediction(prediction: MangaAnimeUtil.NextRelease) {
+        if (prediction.error == null && prediction.nextReleaseDate != null) {
+            val dateFormat = java.text.SimpleDateFormat("d MMMM", java.util.Locale.US)
+
+            val predictionText = buildString {
+                append("Current: ${prediction.latestChapter ?: "Unknown"}\n")
+                append("${prediction.nextChapter ?: "Next chapter"} releases on ${
+                    dateFormat.format(prediction.nextReleaseDate)
+                }")
+            }
+
+            binding.mediaNextChapterPrediction.text = predictionText
+
+            binding.mediaNextChapterPredictionText.fadeIn()
+            binding.mediaNextChapterPrediction.fadeIn()
+        } else {
+            binding.mediaNextChapterPredictionText.fadeOut()
+            binding.mediaNextChapterPrediction.fadeOut()
+
+            if (prediction.error != null) {
+                Logger.log("Next chapter prediction error: ${prediction.error}")
+            }
+        }
+    }
+    fun View.fadeIn(duration: Long = 250) {
+        if (isVisible) return
+        alpha = 0f
+        translationY = 20f
+        visibility = View.VISIBLE
+        animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(duration)
+            .start()
+    }
+
+    fun View.fadeOut(duration: Long = 200) {
+        if (visibility != View.VISIBLE) return
+        animate()
+            .alpha(0f)
+            .translationY(20f)
+            .setDuration(duration)
+            .withEndAction {
+                visibility = View.GONE
+                alpha = 1f
+                translationY = 0f
+            }
+            .start()
+    }
     @SuppressLint("SetJavaScriptEnabled")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val model: MediaDetailsViewModel by activityViewModels()
@@ -89,7 +159,7 @@ class MediaInfoFragment : Fragment() {
         binding.mediaInfoContainer.isVisible = loaded
         val activity = requireActivity() as MediaDetailsActivity
         val baselineAnchor = activity.binding.mediaBottomBarContainer ?: activity.binding.commentMessageContainer
-        baselineAnchor?.let {
+        baselineAnchor.let {
             // If it's the unified container, it already has navBarHeight padding, so don't include it again.
             val includeSystemPaddings = it != activity.binding.mediaBottomBarContainer
             binding.mediaInfoScroll.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
@@ -276,6 +346,17 @@ class MediaInfoFragment : Fragment() {
                 val parent = _binding?.mediaInfoContainer!!
                 val screenWidth = resources.displayMetrics.run { widthPixels / density }
 
+                if (media.manga != null && !offline) {
+                    model.loadMangaExtras(media)
+
+                    model.adaptation.observe(viewLifecycleOwner) {
+                        it?.let { displayAnimeAdaptation(it) }
+                    }
+
+                    model.nextRelease.observe(viewLifecycleOwner) {
+                        it?.let { displayNextChapterPrediction(it) }
+                    }
+                }
                 if (media.synonyms.isNotEmpty()) {
                     val bind = ItemTitleChipgroupBinding.inflate(
                         LayoutInflater.from(context),

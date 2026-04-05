@@ -14,6 +14,7 @@ import ani.dantotsu.currContext
 import ani.dantotsu.media.anime.Episode
 import ani.dantotsu.media.anime.SelectorDialogFragment
 import ani.dantotsu.media.manga.MangaChapter
+import ani.dantotsu.media.mangaupdates.MangaAnimeUtil
 import ani.dantotsu.others.AniSkip
 import ani.dantotsu.others.Anify
 import ani.dantotsu.others.Jikan
@@ -35,6 +36,7 @@ import ani.dantotsu.util.Logger
 import com.bumptech.glide.load.resource.bitmap.BitmapTransformation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 class MediaDetailsViewModel : ViewModel() {
@@ -425,4 +427,32 @@ class MediaDetailsViewModel : ViewModel() {
         localSubtitlesMap.remove(id)
     }
 
+    val adaptation = MutableLiveData<MangaAnimeUtil.AnimeAdaptation?>()
+    val nextRelease = MutableLiveData<MangaAnimeUtil.NextRelease?>()
+    fun loadMangaExtras(media: Media) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val seriesDeferred = async {
+                    MangaAnimeUtil.getSeriesFromMedia(media)
+                }
+
+                val adaptationDeferred = async {
+                    MangaAnimeUtil.getAnimeAdaptation(seriesDeferred.await())
+                }
+
+                val nextReleaseDeferred = async {
+                    MangaAnimeUtil.getNextChapterPrediction(
+                        media,
+                        seriesDeferred.await()
+                    )
+                }
+
+                adaptation.postValue(adaptationDeferred.await())
+                nextRelease.postValue(nextReleaseDeferred.await())
+
+            } catch (e: Exception) {
+                Logger.log("MangaExtras error: $e")
+            }
+        }
+    }
 }

@@ -1119,5 +1119,7 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="privacy_policy_desc">Read our privacy policy</string>
     <string name="failed_to_load">Failed to load</string>
     <string name="studios">Studios</string>
+    <string name="next_chapter_prediction">Next Chapter Prediction</string>
+    <string name="anime_adaptation">Anime Adaptation</string>
 
 </resources>
