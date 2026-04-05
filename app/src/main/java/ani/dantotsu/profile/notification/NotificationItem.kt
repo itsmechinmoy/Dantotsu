@@ -1,7 +1,9 @@
 package ani.dantotsu.profile.notification
 
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import ani.dantotsu.R
 import ani.dantotsu.blurImage
 import ani.dantotsu.connections.anilist.api.Notification
@@ -87,6 +89,42 @@ class NotificationItem(
         return ItemNotificationBinding.bind(view)
     }
 
+    private fun getNotificationTypeIcon(notificationType: NotificationType): Int {
+        return when (notificationType) {
+            NotificationType.ACTIVITY_LIKE,
+            NotificationType.ACTIVITY_REPLY_LIKE,
+            NotificationType.THREAD_LIKE,
+            NotificationType.THREAD_COMMENT_LIKE -> R.drawable.ic_round_favorite_24
+
+            NotificationType.ACTIVITY_REPLY,
+            NotificationType.THREAD_COMMENT_REPLY,
+            NotificationType.COMMENT_REPLY -> R.drawable.ic_round_reply_24
+
+            NotificationType.ACTIVITY_MESSAGE -> R.drawable.ic_round_remove_red_eye_24
+
+            NotificationType.FOLLOWING -> R.drawable.ic_round_person_24
+            
+            NotificationType.ACTIVITY_MENTION,
+            NotificationType.THREAD_COMMENT_MENTION -> R.drawable.ic_round_comment_24
+
+            NotificationType.AIRING,
+            NotificationType.SUBSCRIPTION,
+            NotificationType.THREAD_SUBSCRIBED,
+            NotificationType.ACTIVITY_REPLY_SUBSCRIBED -> R.drawable.ic_round_notifications_active_24
+
+            NotificationType.RELATED_MEDIA_ADDITION -> R.drawable.ic_round_play_arrow_24
+
+            NotificationType.MEDIA_DATA_CHANGE,
+            NotificationType.MEDIA_MERGE -> R.drawable.ic_round_notifications_none_24
+
+            NotificationType.MEDIA_DELETION -> R.drawable.ic_round_delete_24
+
+            NotificationType.COMMENT_WARNING -> R.drawable.ic_round_notifications_active_24
+
+            NotificationType.DANTOTSU_UPDATE -> R.drawable.ic_round_notifications_active_24
+        }
+    }
+
     private fun image(
         user: Boolean = false,
         commentNotification: Boolean = false,
@@ -105,6 +143,12 @@ class NotificationItem(
         val textMarginStart = 125.toPx
 
         if (user) {
+            val iconParams = binding.notificationTypeIcon.layoutParams as FrameLayout.LayoutParams
+            iconParams.gravity = Gravity.TOP or Gravity.END
+            iconParams.topMargin = 8.toPx
+            iconParams.marginEnd = 12.toPx
+            binding.notificationTypeIcon.layoutParams = iconParams
+            
             binding.notificationCover.visibility = View.GONE
             binding.notificationCoverUser.visibility = View.VISIBLE
             binding.notificationCoverUserContainer.visibility = View.VISIBLE
@@ -117,9 +161,18 @@ class NotificationItem(
             }
             binding.notificationBannerImage.layoutParams.height = userHeight
             binding.notificationGradiant.layoutParams.height = userHeight
-            (binding.notificationTextContainer.layoutParams as ViewGroup.MarginLayoutParams).marginStart =
-                userHeight
+
+            val textParams = binding.notificationTextContainer.layoutParams as ViewGroup.MarginLayoutParams
+            textParams.marginStart = userHeight
+            textParams.marginEnd = 48.toPx
+            binding.notificationTextContainer.layoutParams = textParams
         } else {
+            val iconParams = binding.notificationTypeIcon.layoutParams as FrameLayout.LayoutParams
+            iconParams.gravity = Gravity.TOP or Gravity.END
+            iconParams.topMargin = 16.toPx
+            iconParams.marginEnd = 16.toPx
+            binding.notificationTypeIcon.layoutParams = iconParams
+            
             binding.notificationCover.visibility = View.VISIBLE
             binding.notificationCoverUser.visibility = View.VISIBLE
             binding.notificationCoverUserContainer.visibility = View.GONE
@@ -136,6 +189,7 @@ class NotificationItem(
             NotificationType.valueOf(notification.notificationType)
         binding.notificationText.text = ActivityItemBuilder.getContent(notification)
         binding.notificationDate.text = ActivityItemBuilder.getDateTime(notification.createdAt)
+        binding.notificationTypeIcon.setImageResource(getNotificationTypeIcon(notificationType))
 
         when (notificationType) {
             NotificationType.ACTIVITY_MESSAGE -> {
