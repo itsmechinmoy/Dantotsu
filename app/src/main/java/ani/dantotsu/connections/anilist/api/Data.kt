@@ -31,6 +31,18 @@ class Query {
     }
 
     @Serializable
+    data class MediaList(
+        @SerialName("data")
+        val data: Data?
+    ) {
+        @Serializable
+        data class Data(
+            @SerialName("Page")
+            val page: ani.dantotsu.connections.anilist.api.Page?
+        )
+    }
+
+    @Serializable
     data class Page(
         @SerialName("data")
         val data: Data?

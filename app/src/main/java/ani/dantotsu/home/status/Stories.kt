@@ -35,12 +35,14 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.util.AniMarkdown
+import ani.dantotsu.util.AnilistLinkParser
 import ani.dantotsu.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.lifecycleScope
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
@@ -315,6 +317,9 @@ class Stories @JvmOverloads constructor(
 
     @SuppressLint("ClickableViewAccessibility")
     private fun loadStory(story: Activity) {
+        binding.linkPreviewContainer.removeAllViews()
+        binding.linkPreviewContainer.visibility = GONE
+        
         val key = "activities"
         val set = PrefManager.getCustomVal<Set<Int>>(key, setOf()).plus((story.id))
         val newList = set.sorted().takeLast(200).toSet()
@@ -398,20 +403,26 @@ class Stories @JvmOverloads constructor(
             "TextActivity" -> {
                 visible(false)
                 if (!(context as android.app.Activity).isDestroyed) {
+                    val originalText = story.text ?: ""
+                    val anilistLinks = AnilistLinkParser.extractAnilistLinks(originalText)
+                    val htmlText = AniMarkdown.getBasicAniHTML(originalText)
+                    val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(htmlText)
                     val markwon = buildMarkwon(context, false)
-                    markwon.setMarkdown(
-                        binding.textActivity, AniMarkdown.getBasicAniHTML(story.text ?: "")
-                    )
+                    markwon.setMarkdown(binding.textActivity, cleanedHtml)
+                    addLinkPreviews(anilistLinks)
                 }
             }
 
             "MessageActivity" -> {
                 visible(false)
                 if (!(context as android.app.Activity).isDestroyed) {
+                    val originalMessage = story.message ?: ""
+                    val anilistLinks = AnilistLinkParser.extractAnilistLinks(originalMessage)
+                    val htmlMessage = AniMarkdown.getBasicAniHTML(originalMessage)
+                    val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(htmlMessage)
                     val markwon = buildMarkwon(context, false)
-                    markwon.setMarkdown(
-                        binding.textActivity, AniMarkdown.getBasicAniHTML(story.message ?: "")
-                    )
+                    markwon.setMarkdown(binding.textActivity, cleanedHtml)
+                    addLinkPreviews(anilistLinks)
                 }
             }
         }
@@ -463,6 +474,38 @@ class Stories @JvmOverloads constructor(
 
                 } else {
                     snackString("Failed to like activity")
+                }
+            }
+        }
+    }
+
+    private fun addLinkPreviews(links: List<AnilistLinkParser.AnilistLink>) {
+        binding.linkPreviewContainer.removeAllViews()
+        if (links.isEmpty()) {
+            binding.linkPreviewContainer.visibility = GONE
+            return
+        }
+        binding.linkPreviewContainer.visibility = VISIBLE
+        val mediaIds = links.map { it.id }.distinct()
+        val fragmentActivity = context as? FragmentActivity
+        if (fragmentActivity != null && mediaIds.isNotEmpty()) {
+            fragmentActivity.lifecycleScope.launch {
+                val mediaList = withContext(Dispatchers.IO) {
+                    Anilist.query.getMediaList(mediaIds)
+                }
+                val mediaMap = mediaList?.associateBy { it.id } ?: emptyMap()
+                withContext(Dispatchers.Main) {
+                    links.forEach { link ->
+                        val previewView = AnilistLinkPreviewView(context)
+                        val media = mediaMap[link.id]
+                        if (media != null) {
+                            previewView.setMediaData(media)
+                        } else {
+                            previewView.visibility = View.GONE
+                        }
+                        
+                        binding.linkPreviewContainer.addView(previewView)
+                    }
                 }
             }
         }
