@@ -47,8 +47,10 @@
         android:scrollbars="none">
 
         <LinearLayout
+            android:id="@+id/textActivityContent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:orientation="vertical"
             android:paddingHorizontal="16dp">
 
             <TextView
@@ -62,6 +64,14 @@
                 android:textColor="@color/bg_white"
                 android:textSize="18sp"
                 tools:ignore="HardcodedText" />
+
+ <!-- Don't worry about this people this is being controlled dynamically in AnilistLinkPreviewView.kt -->
+            <LinearLayout
+                android:id="@+id/linkPreviewContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:orientation="vertical" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 

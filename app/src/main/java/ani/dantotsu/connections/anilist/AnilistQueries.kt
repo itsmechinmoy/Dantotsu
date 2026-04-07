@@ -96,6 +96,20 @@ class AnilistQueries {
         return Media(fetchedMedia)
     }
 
+    suspend fun getMediaList(ids: List<Int>): List<Media>? {
+        if (ids.isEmpty()) return null
+        
+        val idsString = ids.joinToString(",")
+        val response = executeQuery<Query.MediaList>(
+            """{Page(page:1,perPage:50){media(id_in:[${idsString}],isAdult:false){id mediaListEntry{progress private score(format:POINT_100) status} idMal type isAdult popularity status(version:2) chapters episodes nextAiringEpisode{episode} meanScore isFavourite format bannerImage coverImage{large} title{english romaji userPreferred} startDate{year}}}}""",
+            force = true
+        )
+        val fetchedMediaList = response?.data?.page?.media ?: return null
+        return fetchedMediaList.map {
+            Media(it)
+        }
+    }
+
     fun mediaDetails(media: Media): Media {
         media.cameFromContinue = false
         runBlocking {

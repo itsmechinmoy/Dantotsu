@@ -44,6 +44,11 @@
         <item name="cornerSize">16dp</item>
     </style>
 
+    <style name="roundedImageViewSmall" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">8dp</item>
+    </style>
+
     <style name="MySnackbar" parent="Widget.MaterialComponents.Snackbar">
         <item name="android:layout_marginLeft">16dp</item>
         <item name="android:layout_marginRight">16dp</item>
