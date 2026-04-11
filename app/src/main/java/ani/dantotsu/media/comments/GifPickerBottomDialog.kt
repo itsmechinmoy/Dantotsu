@@ -6,15 +6,12 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.ImageView
-import android.widget.ProgressBar
-import android.widget.TextView
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.BottomSheetDialogFragment
-import ani.dantotsu.R
 import ani.dantotsu.client
+import ani.dantotsu.databinding.BottomSheetGifPickerBinding
+import ani.dantotsu.databinding.ItemGifBinding
 import ani.dantotsu.loadImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,11 +23,10 @@ import org.json.JSONObject
 
 class GifPickerBottomDialog : BottomSheetDialogFragment() {
 
+    private var _binding: BottomSheetGifPickerBinding? = null
+    private val binding get() = _binding!!
+
     private var onGifSelected: ((String) -> Unit)? = null
-    private lateinit var recycler: RecyclerView
-    private lateinit var searchInput: EditText
-    private lateinit var progressBar: ProgressBar
-    private lateinit var poweredBy: TextView
     private var searchJob: Job? = null
 
     private val apiKey = "29Hflu9yLfJoQy9uVbrSg5pPkaGgIr7CDDpx0bCtVxQFBTnNWXb4moqYsR70Yzzv"
@@ -45,26 +41,27 @@ class GifPickerBottomDialog : BottomSheetDialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        return inflater.inflate(R.layout.bottom_sheet_gif_picker, container, false)
+        _binding = BottomSheetGifPickerBinding.inflate(inflater, container, false)
+        return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        recycler = view.findViewById(R.id.gifRecycler)
-        searchInput = view.findViewById(R.id.gifSearchInput)
-        progressBar = view.findViewById(R.id.gifProgressBar)
-        poweredBy = view.findViewById(R.id.gifPoweredBy)
 
-        recycler.layoutManager = GridLayoutManager(context, 2)
+        binding.gifRecycler.layoutManager = GridLayoutManager(context, 2)
 
-        searchInput.addTextChangedListener(object : TextWatcher {
+        binding.gifSearchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
             override fun afterTextChanged(s: Editable?) {
                 searchJob?.cancel()
                 val query = s?.toString()?.trim() ?: ""
+
                 searchJob = CoroutineScope(Dispatchers.Main).launch {
-                    delay(400)
-                    if (query.isEmpty()) loadTrending() else searchGifs(query)
+                    delay(800)
+                    if (query.isEmpty()) loadTrending()
+                    else searchGifs(query)
                 }
             }
         })
@@ -73,8 +70,9 @@ class GifPickerBottomDialog : BottomSheetDialogFragment() {
     }
 
     private fun loadTrending() {
-        progressBar.visibility = View.VISIBLE
-        recycler.visibility = View.GONE
+        binding.gifProgressBar.visibility = View.VISIBLE
+        binding.gifRecycler.visibility = View.GONE
+
         CoroutineScope(Dispatchers.IO).launch {
             val gifs = try {
                 val response = client.get(
@@ -82,13 +80,15 @@ class GifPickerBottomDialog : BottomSheetDialogFragment() {
                     headers = mapOf("Content-Type" to "application/json")
                 )
                 parseGifs(response.text)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 emptyList()
             }
+
             withContext(Dispatchers.Main) {
-                progressBar.visibility = View.GONE
-                recycler.visibility = View.VISIBLE
-                recycler.adapter = GifAdapter(gifs) { url ->
+                binding.gifProgressBar.visibility = View.GONE
+                binding.gifRecycler.visibility = View.VISIBLE
+
+                binding.gifRecycler.adapter = GifAdapter(gifs) { url ->
                     onGifSelected?.invoke(url)
                     dismiss()
                 }
@@ -97,8 +97,9 @@ class GifPickerBottomDialog : BottomSheetDialogFragment() {
     }
 
     private fun searchGifs(query: String) {
-        progressBar.visibility = View.VISIBLE
-        recycler.visibility = View.GONE
+        binding.gifProgressBar.visibility = View.VISIBLE
+        binding.gifRecycler.visibility = View.GONE
+
         CoroutineScope(Dispatchers.IO).launch {
             val gifs = try {
                 val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
@@ -107,13 +108,15 @@ class GifPickerBottomDialog : BottomSheetDialogFragment() {
                     headers = mapOf("Content-Type" to "application/json")
                 )
                 parseGifs(response.text)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 emptyList()
             }
+
             withContext(Dispatchers.Main) {
-                progressBar.visibility = View.GONE
-                recycler.visibility = View.VISIBLE
-                recycler.adapter = GifAdapter(gifs) { url ->
+                binding.gifProgressBar.visibility = View.GONE
+                binding.gifRecycler.visibility = View.VISIBLE
+
+                binding.gifRecycler.adapter = GifAdapter(gifs) { url ->
                     onGifSelected?.invoke(url)
                     dismiss()
                 }
@@ -126,17 +129,25 @@ class GifPickerBottomDialog : BottomSheetDialogFragment() {
             val root = JSONObject(json)
             val results = root.getJSONArray("results")
             val urls = mutableListOf<String>()
+
             for (i in 0 until results.length()) {
                 val item = results.getJSONObject(i)
                 val formats = item.optJSONObject("media_formats")
                 val tinygif = formats?.optJSONObject("tinygif")
                 val url = tinygif?.optString("url") ?: item.optString("url")
+
                 if (url.isNotEmpty()) urls.add(url)
             }
+
             urls
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 
     class GifAdapter(
@@ -144,20 +155,23 @@ class GifPickerBottomDialog : BottomSheetDialogFragment() {
         private val onClick: (String) -> Unit
     ) : RecyclerView.Adapter<GifAdapter.GifViewHolder>() {
 
-        inner class GifViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val image: ImageView = view.findViewById(R.id.gifImage)
-        }
+        class GifViewHolder(val binding: ItemGifBinding) :
+            RecyclerView.ViewHolder(binding.root)
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GifViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_gif, parent, false)
-            return GifViewHolder(view)
+            val binding = ItemGifBinding.inflate(
+                LayoutInflater.from(parent.context),
+                parent,
+                false
+            )
+            return GifViewHolder(binding)
         }
 
         override fun onBindViewHolder(holder: GifViewHolder, position: Int) {
             val url = gifs[position]
-            holder.image.loadImage(url)
-            holder.itemView.setOnClickListener { onClick(url) }
+
+            holder.binding.gifImage.loadImage(url)
+            holder.binding.root.setOnClickListener { onClick(url) }
         }
 
         override fun getItemCount() = gifs.size
