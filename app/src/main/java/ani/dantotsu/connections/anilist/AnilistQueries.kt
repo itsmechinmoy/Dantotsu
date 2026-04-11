@@ -1623,7 +1623,7 @@ Page(page:$page,perPage:50) {
         var hasNextPage = true
         while (hasNextPage) {
             val response = executeQuery<Query.Page>(
-                """{Page(page:$page,perPage:50) {$standardPageInformation following(userId:${id},sort:[USERNAME]){id name avatar{large medium}bannerImage}}}""",
+                """{Page(page:$page,perPage:50) {$standardPageInformation following(userId:${id},sort:[USERNAME]){id name isFollowing isFollower avatar{large medium}bannerImage}}}""",
                 force = true
             )
             val pageData = response?.data?.page
@@ -1640,7 +1640,7 @@ Page(page:$page,perPage:50) {
         var hasNextPage = true
         while (hasNextPage) {
             val response = executeQuery<Query.Page>(
-                """{Page(page:$page,perPage:50) {$standardPageInformation followers(userId:${id},sort:[USERNAME]){id name avatar{large medium}bannerImage}}}""",
+                """{Page(page:$page,perPage:50) {$standardPageInformation followers(userId:${id},sort:[USERNAME]){id name isFollowing isFollower avatar{large medium}bannerImage}}}""",
                 force = true
             )
             val pageData = response?.data?.page
