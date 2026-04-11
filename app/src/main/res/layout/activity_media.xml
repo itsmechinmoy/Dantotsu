@@ -225,10 +225,10 @@
     </com.google.android.material.appbar.AppBarLayout>
 
     <LinearLayout
+        android:id="@+id/mediaViewPagerContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:id= "@+id/mediaViewPagerContainer"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <androidx.viewpager2.widget.ViewPager2
@@ -313,48 +313,43 @@
                     app:srcCompat="@drawable/ic_round_add_circle_24"
                     tools:ignore="ContentDescription,ImageContrastCheck" />
 
-                <FrameLayout
+
+                <EditText
+                    android:id="@+id/commentInput"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center_vertical"
+                    android:layout_gravity="start|center_vertical"
                     android:layout_marginStart="8dp"
                     android:layout_marginEnd="8dp"
-                    android:layout_weight="1">
+                    android:layout_weight="1"
+                    android:autofillHints="The One Piece is real"
+                    android:background="@drawable/card_outline"
+                    android:fontFamily="@font/poppins_semi_bold"
+                    android:hint="Add a comment..."
+                    android:inputType="textMultiLine"
+                    android:maxLength="300"
+                    android:maxLines="8"
+                    android:paddingStart="8dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="36dp"
+                    android:paddingBottom="8dp"
+                    android:textSize="12sp"
+                    tools:ignore="HardcodedText" />
 
-                    <EditText
-                        android:id="@+id/commentInput"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="start|center_vertical"
-                        android:autofillHints="The One Piece is real"
-                        android:background="@drawable/card_outline"
-                        android:fontFamily="@font/poppins_semi_bold"
-                        android:hint="Add a comment..."
-                        android:inputType="textMultiLine"
-                        android:maxLength="300"
-                        android:maxLines="8"
-                        android:paddingStart="8dp"
-                        android:paddingTop="8dp"
-                        android:paddingEnd="36dp"
-                        android:paddingBottom="8dp"
-                        android:textSize="12sp"
-                        tools:ignore="HardcodedText" />
-
-                    <ImageButton
-                        android:id="@+id/commentGif"
-                        android:layout_width="28dp"
-                        android:layout_height="28dp"
-                        android:layout_gravity="end|center_vertical"
-                        android:layout_marginEnd="4dp"
-                        android:alpha="0.5"
-                        android:background="?android:attr/selectableItemBackgroundBorderless"
-                        android:padding="2dp"
-                        android:src="@drawable/ic_round_gif_24"
-                        android:visibility="gone"
-                        app:tint="?attr/colorOnBackground"
-                        tools:ignore="ContentDescription"
-                        tools:visibility="visible" />
-                </FrameLayout>
+                <ImageButton
+                    android:id="@+id/commentGif"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:layout_marginEnd="4dp"
+                    android:alpha="0.5"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:padding="2dp"
+                    android:src="@drawable/ic_round_gif_24"
+                    android:visibility="gone"
+                    app:tint="?attr/colorOnBackground"
+                    tools:ignore="ContentDescription"
+                    tools:visibility="visible" />
 
                 <ImageButton
                     android:id="@+id/commentSpoiler"
@@ -364,7 +359,7 @@
                     android:layout_marginEnd="8dp"
                     android:alpha="0.5"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/ic_round_visibility_24"
+                    android:src="@drawable/ic_round_remove_red_eye_24"
                     android:visibility="gone"
                     app:tint="?attr/colorOnBackground"
                     tools:ignore="ContentDescription"
@@ -391,6 +386,7 @@
                     android:visibility="gone"
                     tools:ignore="ContentDescription"
                     tools:visibility="visible" />
+
             </LinearLayout>
         </LinearLayout>
 

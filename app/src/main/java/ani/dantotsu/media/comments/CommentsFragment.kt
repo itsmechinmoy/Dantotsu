@@ -455,8 +455,8 @@ class CommentsFragment : Fragment() {
             isSpoilerMode = !isSpoilerMode
             activity.binding.commentSpoiler.alpha = if (isSpoilerMode) 1f else 0.5f
             activity.binding.commentSpoiler.setImageResource(
-                if (isSpoilerMode) R.drawable.ic_round_visibility_off_24
-                else R.drawable.ic_round_visibility_24
+                if (isSpoilerMode) R.drawable.format_spoiler_24
+                else R.drawable.ic_round_remove_red_eye_24
             )
         }
 
@@ -859,7 +859,7 @@ class CommentsFragment : Fragment() {
             // Reset spoiler mode after sending
             isSpoilerMode = false
             activity.binding.commentSpoiler.alpha = 0.5f
-            activity.binding.commentSpoiler.setImageResource(R.drawable.ic_round_visibility_24)
+            activity.binding.commentSpoiler.setImageResource(R.drawable.ic_round_remove_red_eye_24)
         }
 
         activity.binding.commentInput.text.clear()

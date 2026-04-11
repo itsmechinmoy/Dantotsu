@@ -450,7 +450,7 @@ class Stories @JvmOverloads constructor(
             }
             true
         }
-        binding.androidStoriesLoadingView.visibility = View.GONE
+        binding.androidStoriesLoadingView.visibility = GONE
         timer.start()
     }
 
