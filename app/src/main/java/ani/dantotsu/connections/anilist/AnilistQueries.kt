@@ -1603,18 +1603,38 @@ Page(page:$page,perPage:50) {
         return """User(id:${id}){id favourites{${if (anime) "anime" else "manga"}(page:1){$standardPageInformation edges{favouriteOrder node{id idMal isAdult mediaListEntry{ progress private score(format:POINT_100) status } chapters isFavourite format episodes nextAiringEpisode{episode}meanScore isFavourite format startDate{year month day} title{english romaji userPreferred}type status(version:2)bannerImage coverImage{large}}}}}}"""
     }
 
-    suspend fun userFollowing(id: Int): Query.Following? {
-        return executeQuery<Query.Following>(
-            """{Page {following(userId:${id},sort:[USERNAME]){id name avatar{large medium}bannerImage}}}""",
-            force = true
-        )
+    suspend fun userFollowing(id: Int): List<ani.dantotsu.connections.anilist.api.User> {
+        val result = mutableListOf<ani.dantotsu.connections.anilist.api.User>()
+        var page = 1
+        var hasNextPage = true
+        while (hasNextPage) {
+            val response = executeQuery<Query.Page>(
+                """{Page(page:$page,perPage:50) {$standardPageInformation following(userId:${id},sort:[USERNAME]){id name avatar{large medium}bannerImage}}}""",
+                force = true
+            )
+            val pageData = response?.data?.page
+            pageData?.following?.let { result.addAll(it) }
+            hasNextPage = pageData?.pageInfo?.hasNextPage == true
+            page++
+        }
+        return result
     }
 
-    suspend fun userFollowers(id: Int): Query.Follower? {
-        return executeQuery<Query.Follower>(
-            """{Page {followers(userId:${id},sort:[USERNAME]){id name avatar{large medium}bannerImage}}}""",
-            force = true
-        )
+    suspend fun userFollowers(id: Int): List<ani.dantotsu.connections.anilist.api.User> {
+        val result = mutableListOf<ani.dantotsu.connections.anilist.api.User>()
+        var page = 1
+        var hasNextPage = true
+        while (hasNextPage) {
+            val response = executeQuery<Query.Page>(
+                """{Page(page:$page,perPage:50) {$standardPageInformation followers(userId:${id},sort:[USERNAME]){id name avatar{large medium}bannerImage}}}""",
+                force = true
+            )
+            val pageData = response?.data?.page
+            pageData?.followers?.let { result.addAll(it) }
+            hasNextPage = pageData?.pageInfo?.hasNextPage == true
+            page++
+        }
+        return result
     }
 
     suspend fun initProfilePage(id: Int): Query.ProfilePageMedia? {
