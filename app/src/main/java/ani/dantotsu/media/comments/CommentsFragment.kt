@@ -66,6 +66,7 @@ class CommentsFragment : Fragment() {
     private var isAnime: Boolean = true
     private var commentsLoaded = false
     private var isAutoFilterOn = false
+    private var isSpoilerMode = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -397,10 +398,11 @@ class CommentsFragment : Fragment() {
                 anim.doOnEnd {
                     activity.binding.commentLabel.visibility = View.VISIBLE
                     activity.binding.commentSend.visibility = View.VISIBLE
+                    activity.binding.commentSpoiler.visibility = View.VISIBLE
+                    activity.binding.commentGif.visibility = View.VISIBLE
                     activity.binding.commentLabel.animate().translationX(0f).setDuration(300)
                         .start()
                     activity.binding.commentSend.animate().translationX(0f).setDuration(300).start()
-
                 }
             }
 
@@ -446,6 +448,29 @@ class CommentsFragment : Fragment() {
                     show()
                 }
             }
+        }
+
+        // Spoiler toggle button
+        activity.binding.commentSpoiler.setOnClickListener {
+            isSpoilerMode = !isSpoilerMode
+            activity.binding.commentSpoiler.alpha = if (isSpoilerMode) 1f else 0.5f
+            activity.binding.commentSpoiler.setImageResource(
+                if (isSpoilerMode) R.drawable.ic_round_visibility_off_24
+                else R.drawable.ic_round_visibility_24
+            )
+        }
+
+        // GIF picker button
+        activity.binding.commentGif.setOnClickListener {
+            val gifPicker = GifPickerBottomDialog.newInstance()
+            gifPicker.setOnGifSelectedListener { gifUrl ->
+                val currentText = activity.binding.commentInput.text.toString()
+                val gifMarkdown = "![gif]($gifUrl)"
+                val newText = if (currentText.isEmpty()) gifMarkdown else "$currentText\n$gifMarkdown"
+                activity.binding.commentInput.setText(newText)
+                activity.binding.commentInput.setSelection(newText.length)
+            }
+            gifPicker.show(childFragmentManager, "gifPicker")
         }
 
         activity.binding.commentSend.setOnClickListener {
@@ -822,18 +847,28 @@ class CommentsFragment : Fragment() {
     }
 
     private fun processComment() {
-        val commentText = activity.binding.commentInput.text.toString()
+        var commentText = activity.binding.commentInput.text.toString()
         if (commentText.isEmpty()) {
             snackString("Comment cannot be empty")
             return
         }
 
+        // Wrap in spoiler tags if spoiler mode is active
+        if (isSpoilerMode) {
+            commentText = "||$commentText||"
+            // Reset spoiler mode after sending
+            isSpoilerMode = false
+            activity.binding.commentSpoiler.alpha = 0.5f
+            activity.binding.commentSpoiler.setImageResource(R.drawable.ic_round_visibility_24)
+        }
+
         activity.binding.commentInput.text.clear()
+        val finalText = commentText
         lifecycleScope.launch {
             if (interactionState == InteractionState.EDIT) {
-                handleEditComment(commentText)
+                handleEditComment(finalText)
             } else {
-                handleNewComment(commentText)
+                handleNewComment(finalText)
                 tag = null
                 activity.binding.commentLabel.background = ResourcesCompat.getDrawable(
                     resources,
