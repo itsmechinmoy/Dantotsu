@@ -173,7 +173,7 @@ class AnilistQueries {
                                                     image = it.image?.large,
                                                     role = it.languageV2
                                                 )
-                                            } as ArrayList<Author>
+                                            }?.distinctBy { it.id }?.let { ArrayList(it) }
                                         )
                                     )
                                 }
@@ -1441,7 +1441,7 @@ Page(page:$page,perPage:50) {
                             va.languageV2
                         )
                     } ?: emptyList()
-                } as ArrayList<Author>?
+                }?.distinctBy { it.id }?.let { ArrayList(it) }
             )
         }
         return character
