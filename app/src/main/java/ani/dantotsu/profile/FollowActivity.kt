@@ -62,9 +62,9 @@ class FollowActivity : AppCompatActivity() {
         binding.listTitle.text = title
 
         lifecycleScope.launch(Dispatchers.IO) {
-            val respond = when (title) {
-                "Following" -> Anilist.query.userFollowing(userID)?.data?.page?.following
-                "Followers" -> Anilist.query.userFollowers(userID)?.data?.page?.followers
+            val respond: List<User>? = when (title) {
+                "Following" -> Anilist.query.userFollowing(userID)
+                "Followers" -> Anilist.query.userFollowers(userID)
                 else -> null
             }
             users = respond
