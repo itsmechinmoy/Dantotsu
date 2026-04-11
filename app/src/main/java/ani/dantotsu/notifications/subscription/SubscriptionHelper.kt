@@ -45,6 +45,7 @@ class SubscriptionHelper {
             val selected = loadSelected(id)
             if (selected.sourceIndex >= sources.list.size) {
                 selected.sourceIndex = 0
+                saveSelected(id, selected)
             }
             val parser = sources[selected.sourceIndex]
             parser.selectDub = selected.preferDub
@@ -88,6 +89,7 @@ class SubscriptionHelper {
             val selected = loadSelected(id)
             if (selected.sourceIndex >= sources.list.size) {
                 selected.sourceIndex = 0
+                saveSelected(id, selected)
             }
             return sources[selected.sourceIndex]
         }
@@ -200,6 +202,18 @@ class SubscriptionHelper {
                         media.banner
                     )
                     data[media.id] = new
+                    val current = PrefManager.getNullableCustomVal(
+                        "Selected-${media.id}", null, Selected::class.java
+                    )
+                    if (current == null) {
+                        val selected = Selected().apply {
+                            sourceIndex = media.selected?.sourceIndex ?: 0
+                            preferDub = media.selected?.preferDub
+                                ?: PrefManager.getVal(PrefName.SettingsPreferDub)
+                            latest = media.selected?.latest ?: 0f
+                        }
+                        saveSelected(media.id, selected)
+                    }
                 }
             } else {
                 data.remove(media.id)
