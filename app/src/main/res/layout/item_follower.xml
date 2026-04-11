@@ -82,5 +82,21 @@
                 android:textSize="12sp"
                 android:visibility="gone" />
         </LinearLayout>
+        <com.google.android.material.chip.Chip
+            android:id="@+id/followStatusChip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:layout_marginEnd="12dp"
+            android:textSize="10dp"
+            android:text="@string/mutual"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:textColor="?attr/colorPrimary"
+            app:chipBackgroundColor="?attr/colorOnPrimary"
+            app:chipCornerRadius="16dp"
+            app:chipStrokeWidth="0dp"
+            app:chipStrokeColor="@android:color/transparent"
+            app:chipMinHeight="24dp"
+            app:chipIconVisible="false" />
     </androidx.cardview.widget.CardView>
 </FrameLayout>

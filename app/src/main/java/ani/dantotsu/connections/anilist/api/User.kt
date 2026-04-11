@@ -22,10 +22,10 @@ data class User(
     @SerialName("bannerImage") var bannerImage: String?,
 
     // If the authenticated user if following this user
-    //    @SerialName("isFollowing") var isFollowing: Boolean?,
+    @SerialName("isFollowing") var isFollowing: Boolean?,
 
     // If this user if following the authenticated user
-    //    @SerialName("isFollower") var isFollower: Boolean?,
+    @SerialName("isFollower") var isFollower: Boolean?,
 
     // If the user is blocked by the authenticated user
     //    @SerialName("isBlocked") var isBlocked: Boolean?,

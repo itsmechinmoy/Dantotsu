@@ -49,9 +49,7 @@ class FollowActivity : AppCompatActivity() {
         binding.followerList.alpha = 0.33f
         selected(selected)
         binding.listRecyclerView.layoutManager = LinearLayoutManager(
-            this,
-            LinearLayoutManager.VERTICAL,
-            false
+            this, LinearLayoutManager.VERTICAL, false
         )
         binding.listRecyclerView.adapter = adapter
         binding.listProgressBar.visibility = View.VISIBLE
@@ -94,36 +92,26 @@ class FollowActivity : AppCompatActivity() {
         binding.listRecyclerView.layoutManager = when (getLayoutType(selected)) {
             0 -> LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
             1 -> GridLayoutManager(
-                this,
-                (screenWidth / 120f).toInt(),
-                GridLayoutManager.VERTICAL,
-                false
+                this, (screenWidth / 120f).toInt(), GridLayoutManager.VERTICAL, false
             )
 
             else -> LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
         }
         users?.forEach { user ->
-            val username = SpannableString(user.name ?: "Unknown")
             if (getLayoutType(selected) == 0) {
                 adapter.add(
                     FollowerItem(
                         false,
-                        user.id,
-                        username,
-                        user.avatar?.medium,
-                        user.bannerImage ?: user.avatar?.medium
-                    ) { onUserClick(it) }
-                )
+                        user,
+                        lifecycleScope,
+                    ) { onUserClick(it) })
             } else {
                 adapter.add(
                     FollowerItem(
                         true,
-                        user.id,
-                        username,
-                        user.avatar?.medium,
-                        user.bannerImage ?: user.avatar?.medium
-                    ) { onUserClick(it) }
-                )
+                        user,
+                        lifecycleScope,
+                    ) { onUserClick(it) })
             }
         }
     }
