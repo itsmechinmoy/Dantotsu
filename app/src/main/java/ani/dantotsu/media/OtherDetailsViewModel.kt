@@ -35,6 +35,7 @@ class OtherDetailsViewModel : ViewModel() {
             val curr = System.currentTimeMillis() / 1000
             val res = Anilist.query.recentlyUpdated(curr - 86400, curr + (86400 * 6))
             val df = DateFormat.getDateInstance(DateFormat.FULL)
+            val tf = DateFormat.getTimeInstance(DateFormat.SHORT)
             val allMap = mutableMapOf<String, MutableList<Media>>()
             val libraryMap = mutableMapOf<String, MutableList<Media>>()
             val idMap = mutableMapOf<String, MutableList<Int>>()
@@ -46,6 +47,7 @@ class OtherDetailsViewModel : ViewModel() {
             res.forEach {
                 val v = it.relation?.split(",")?.map { i -> i.toLong() }!!
                 val dateInfo = df.format(Date(v[1] * 1000))
+                val timeInfo = tf.format(Date(v[1] * 1000))
                 val list = allMap.getOrPut(dateInfo) { mutableListOf() }
                 val libraryList = if (libraryMediaIds.contains(it.id)) {
                     libraryMap.getOrPut(dateInfo) { mutableListOf() }
@@ -53,7 +55,7 @@ class OtherDetailsViewModel : ViewModel() {
                     null
                 }
                 val idList = idMap.getOrPut(dateInfo) { mutableListOf() }
-                it.relation = "Episode ${v[0]}"
+                it.relation = "Episode ${v[0]}\n$timeInfo"
                 if (!idList.contains(it.id)) {
                     idList.add(it.id)
                     list.add(it)

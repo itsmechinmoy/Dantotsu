@@ -19,6 +19,23 @@ import ani.dantotsu.R
 import ani.dantotsu.widgets.WidgetSizeProvider
 
 class UpcomingWidget : AppWidgetProvider() {
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_REFRESH) {
+            val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                    .putLong(LAST_UPDATE, 0)
+                    .putString(PREF_SERIALIZED_MEDIA, "")
+                    .apply()
+                
+                val appWidgetManager = AppWidgetManager.getInstance(context)
+                appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widgetListView)
+            }
+        }
+    }
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -77,6 +94,14 @@ class UpcomingWidget : AppWidgetProvider() {
                 putExtra("fromWidget", true)
             }
 
+            val refreshIntent = Intent(context, UpcomingWidget::class.java).apply {
+                action = ACTION_REFRESH
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+            }
+            val refreshPendingIntent = PendingIntent.getBroadcast(
+                context, appWidgetId, refreshIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
             val gradientDrawable = ResourcesCompat.getDrawable(
                 context.resources,
                 R.drawable.linear_gradient_black,
@@ -97,6 +122,8 @@ class UpcomingWidget : AppWidgetProvider() {
                 setTextColor(R.id.text_show_title, titleTextColor)
                 setTextColor(R.id.text_show_countdown, countdownTextColor)
                 setTextColor(R.id.widgetTitle, titleTextColor)
+                setInt(R.id.refreshButton, "setColorFilter", titleTextColor)
+                setOnClickPendingIntent(R.id.refreshButton, refreshPendingIntent)
                 setRemoteAdapter(R.id.widgetListView, intent)
                 setEmptyView(R.id.widgetListView, R.id.empty_view)
                 setPendingIntentTemplate(
@@ -140,6 +167,7 @@ class UpcomingWidget : AppWidgetProvider() {
         const val PREF_COUNTDOWN_TEXT_COLOR = "countdown_text_color"
         const val PREF_SERIALIZED_MEDIA = "serialized_media"
         const val LAST_UPDATE = "last_update"
+        const val ACTION_REFRESH = "ani.dantotsu.widgets.upcoming.ACTION_REFRESH"
     }
 }
 

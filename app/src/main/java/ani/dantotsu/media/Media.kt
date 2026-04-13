@@ -70,6 +70,7 @@ data class Media(
     var popularity: Int? = null,
 
     var timeUntilAiring: Long? = null,
+    var nextEpisode: Int? = null,
 
     var characters: ArrayList<Character>? = null,
     var review: ArrayList<Query.Review>? = null,
@@ -114,6 +115,7 @@ data class Media(
         endDate = apiMedia.endDate,
         favourites = apiMedia.favourites,
         timeUntilAiring = apiMedia.nextAiringEpisode?.timeUntilAiring?.let { it.toLong() * 1000 },
+        nextEpisode = apiMedia.nextAiringEpisode?.episode,
         anime = if (apiMedia.type == MediaType.ANIME) Anime(
             totalEpisodes = apiMedia.episodes,
             nextAiringEpisode = apiMedia.nextAiringEpisode?.episode?.minus(1)
