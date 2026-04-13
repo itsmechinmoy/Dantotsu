@@ -106,9 +106,21 @@ class MediaAdaptor(
                     if (media.relation != null) {
                         b.itemCompactRelation.text = "${media.relation}  "
                         b.itemCompactType.visibility = View.VISIBLE
+                        
+                        if (media.relation!!.contains("\n")) {
+                            b.itemCompactRelation.isSingleLine = false
+                            b.itemCompactRelation.maxLines = 2
+                            b.itemCompactType.layoutParams = b.itemCompactType.layoutParams.apply {
+                                height = ViewGroup.LayoutParams.WRAP_CONTENT
+                            }
+                        } else {
+                            b.itemCompactRelation.isSingleLine = true
+                            b.itemCompactRelation.maxLines = 1
+                        }
                     } else {
                         b.itemCompactType.visibility = View.GONE
                     }
+                    
                     if (media.anime != null) {
                         if (media.relation != null) b.itemCompactTypeImage.setImageDrawable(
                             AppCompatResources.getDrawable(
