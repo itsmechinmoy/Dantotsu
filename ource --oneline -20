@@ -1,0 +1,20 @@
+[33m4820f206[m[33m ([m[1;31mupstream/dev[m[33m, [m[1;32mnew[m[33m)[m Feat: Next Chapter Prediction & Anime Adaption Details For Manga & Novel (#21)
+[33m4a9e72b7[m Change the max buffer size from 10min to 1min. (#24)
+[33me8784fb8[m Remove a cache config option. (#22)
+[33m84ca8438[m Fix: Forgot to import a commit for token expiry (#19)
+[33mf34c5ce5[m[33m ([m[1;32micon[m[33m)[m Feat: Replace Github icon with Forgejo & Kofi icon with Github Sponsor (#17)
+[33m93e44835[m Feat: Improved widgets + Commentfragment error fix (#16)
+[33m2e655558[m Feat: Token expiry badge in settings>accounts (#18)
+[33m82894cd3[m fix: another another proguard issue
+[33m2028bcc8[m Fix: CommentsFragment.kt error (#15)
+[33mee5d9f54[m[33m ([m[1;31mforgejo/cumment2[m[33m, [m[1;32mcumment2[m[33m)[m Feat: Improved comment section (#14)
+[33ma835a23b[m Merge pull request 'Fix: Notifications' (#13) from itsmechinmoy/Dantotsu:notif into dev
+[33m1135ce7a[m Update app/src/main/java/ani/dantotsu/notifications/BootCompletedReceiver.kt
+[33mdb41f0ae[m Update app/src/main/java/ani/dantotsu/notifications/comment/CommentNotificationReceiver.kt
+[33m4cf8709c[m Update app/src/main/java/ani/dantotsu/notifications/AlarmManagerScheduler.kt
+[33m56ea2a75[m fix: another proguard issue
+[33m841d16e4[m fix: image bug
+[33mdcf6e7ed[m ofc a proguard issue
+[33mbc8f471c[m[33m ([m[1;31mforgejo/notif[m[33m, [m[1;32mnotif[m[33m, [m[1;32mlatest-upstream[m[33m)[m here
+[33mc3c69d0f[m crash fix
+[33m30d0839e[m Improve episode metadata and subtitle support (#11)

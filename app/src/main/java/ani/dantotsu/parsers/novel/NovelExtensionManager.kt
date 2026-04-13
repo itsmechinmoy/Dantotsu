@@ -4,52 +4,44 @@ import android.content.Context
 import android.graphics.drawable.Drawable
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.snackString
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
 import eu.kanade.tachiyomi.extension.InstallStep
 import eu.kanade.tachiyomi.extension.api.ExtensionGithubApi
 import eu.kanade.tachiyomi.extension.util.ExtensionInstallReceiver
 import eu.kanade.tachiyomi.extension.util.ExtensionInstaller
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 import rx.Observable
 import tachiyomi.core.util.lang.withUIContext
 
 class NovelExtensionManager(private val context: Context) {
+
     var isInitialized = false
         private set
-
-
-    /**
-     * API where all the available Novel extensions can be found.
-     */
     private val api = ExtensionGithubApi()
-
-    /**
-     * The installer which installs, updates and uninstalls the Novel extensions.
-     */
     private val installer by lazy { ExtensionInstaller(context) }
-
     private val iconMap = mutableMapOf<String, Drawable>()
-
     private val _installedNovelExtensionsFlow =
         MutableStateFlow(emptyList<NovelExtension.Installed>())
     val installedExtensionsFlow = _installedNovelExtensionsFlow.asStateFlow()
-
     private val _availableNovelExtensionsFlow =
         MutableStateFlow(emptyList<NovelExtension.Available>())
     val availableExtensionsFlow = _availableNovelExtensionsFlow.asStateFlow()
-
     private var availableNovelExtensionsSourcesData: Map<Long, NovelSourceData> = emptyMap()
-
-    private fun setupAvailableNovelExtensionsSourcesDataMap(novelExtensions: List<NovelExtension.Available>) {
-        if (novelExtensions.isEmpty()) return
-        availableNovelExtensionsSourcesData = novelExtensions
-            .flatMap { ext -> ext.sources.map { it.toNovelSourceData() } }
-            .associateBy { it.id }
-    }
-
-    fun getSourceData(id: Long) = availableNovelExtensionsSourcesData[id]
+    val lnReaderManager = LnReaderExtensionManager(context)
+    val allInstalledExtensionsFlow: kotlinx.coroutines.flow.Flow<List<NovelExtension>> =
+        _installedNovelExtensionsFlow.combine(lnReaderManager.installedPluginsFlow) { apk, js ->
+            val apkList: List<NovelExtension> = apk
+            val jsList: List<NovelExtension>  = js.map { NovelExtension.JsPlugin(it) }
+            apkList + jsList
+        }
 
     init {
         initNovelExtensions()
@@ -58,17 +50,14 @@ class NovelExtensionManager(private val context: Context) {
 
     private fun initNovelExtensions() {
         val novelExtensions = ExtensionLoader.loadNovelExtensions(context)
-
         _installedNovelExtensionsFlow.value = novelExtensions
             .filterIsInstance<NovelLoadResult.Success>()
             .map { it.extension }
-
         isInitialized = true
     }
 
-    /**
-     * Finds the available manga extensions in the [api] and updates [availableExtensions].
-     */
+    fun getSourceData(id: Long) = availableNovelExtensionsSourcesData[id]
+
     suspend fun findAvailableExtensions() {
         val extensions: List<NovelExtension.Available> = try {
             api.findNovelExtensions()
@@ -77,167 +66,103 @@ class NovelExtensionManager(private val context: Context) {
             withUIContext { snackString("Failed to get Novel extensions list") }
             emptyList()
         }
-
         _availableNovelExtensionsFlow.value = extensions
         updatedInstalledNovelExtensionsStatuses(extensions)
         setupAvailableNovelExtensionsSourcesDataMap(extensions)
+
+        try {
+            val novelRepos = PrefManager.getVal<Set<String>>(PrefName.NovelExtensionRepos).toList()
+            lnReaderManager.findAvailablePlugins(novelRepos)
+        } catch (e: Exception) {
+            Logger.log("Error finding LnReader plugins: ${e.message}")
+        }
     }
 
-    private fun updatedInstalledNovelExtensionsStatuses(availableNovelExtensions: List<NovelExtension.Available>) {
-        if (availableNovelExtensions.isEmpty()) {
-            return
-        }
+    private fun setupAvailableNovelExtensionsSourcesDataMap(novelExtensions: List<NovelExtension.Available>) {
+        if (novelExtensions.isEmpty()) return
+        availableNovelExtensionsSourcesData = novelExtensions
+            .flatMap { ext -> ext.sources.map { it.toNovelSourceData() } }
+            .associateBy { it.id }
+    }
 
-        val mutInstalledNovelExtensions = _installedNovelExtensionsFlow.value.toMutableList()
-        var hasChanges = false
-
-        for ((index, installedExt) in mutInstalledNovelExtensions.withIndex()) {
-            val pkgName = installedExt.pkgName
-            val availableExt = availableNovelExtensions.find { it.pkgName == pkgName }
-
-            if (availableExt == null && !installedExt.isObsolete) {
-                mutInstalledNovelExtensions[index] = installedExt.copy(isObsolete = true)
-                hasChanges = true
-            } else if (availableExt != null) {
-                val hasUpdate = installedExt.updateExists(availableExt)
-
-                if (installedExt.hasUpdate != hasUpdate) {
-                    mutInstalledNovelExtensions[index] = installedExt.copy(hasUpdate = hasUpdate)
-                    hasChanges = true
-                }
+    private fun updatedInstalledNovelExtensionsStatuses(
+        availableNovelExtensions: List<NovelExtension.Available>
+    ) {
+        if (availableNovelExtensions.isEmpty()) return
+        val mut = _installedNovelExtensionsFlow.value.toMutableList()
+        var changed = false
+        for ((i, ext) in mut.withIndex()) {
+            val avail = availableNovelExtensions.find { it.pkgName == ext.pkgName }
+            if (avail == null && !ext.isObsolete) {
+                mut[i] = ext.copy(isObsolete = true); changed = true
+            } else if (avail != null) {
+                val hasUpdate = ext.updateExists(avail)
+                if (ext.hasUpdate != hasUpdate) { mut[i] = ext.copy(hasUpdate = hasUpdate); changed = true }
             }
         }
-        if (hasChanges) {
-            _installedNovelExtensionsFlow.value = mutInstalledNovelExtensions
-        }
+        if (changed) _installedNovelExtensionsFlow.value = mut
     }
 
-    /**
-     * Returns an observable of the installation process for the given novel extension. It will complete
-     * once the novel extension is installed or throws an error. The process will be canceled if
-     * unsubscribed before its completion.
-     *
-     * @param extension The anime extension to be installed.
-     */
-    fun installExtension(extension: NovelExtension.Available): Observable<InstallStep> {
-        return installer.downloadAndInstall(
+    fun installExtension(extension: NovelExtension.Available): Observable<InstallStep> =
+        installer.downloadAndInstall(
             api.getNovelApkUrl(extension), extension.pkgName,
             extension.name, MediaType.NOVEL
         )
-    }
 
-    /**
-     * Returns an observable of the installation process for the given anime extension. It will complete
-     * once the anime extension is updated or throws an error. The process will be canceled if
-     * unsubscribed before its completion.
-     *
-     * @param extension The anime extension to be updated.
-     */
     fun updateExtension(extension: NovelExtension.Installed): Observable<InstallStep> {
-        val availableExt =
-            _availableNovelExtensionsFlow.value.find { it.pkgName == extension.pkgName }
-                ?: return Observable.empty()
-        return installExtension(availableExt)
+        val avail = _availableNovelExtensionsFlow.value.find { it.pkgName == extension.pkgName }
+            ?: return Observable.empty()
+        return installExtension(avail)
     }
 
-    fun cancelInstallUpdateExtension(extension: NovelExtension) {
+    fun cancelInstallUpdateExtension(extension: NovelExtension) =
         installer.cancelInstall(extension.pkgName)
-    }
-
-    /**
-     * Sets to "installing" status of an novel extension installation.
-     *
-     * @param downloadId The id of the download.
-     */
-    fun setInstalling(downloadId: Long) {
+    fun setInstalling(downloadId: Long) =
         installer.updateInstallStep(downloadId, InstallStep.Installing)
-    }
-
-    fun updateInstallStep(downloadId: Long, step: InstallStep) {
+    fun updateInstallStep(downloadId: Long, step: InstallStep) =
         installer.updateInstallStep(downloadId, step)
+    fun uninstallExtension(pkgName: String) = installer.uninstallApk(pkgName)
+    suspend fun findAvailableLnReaderPlugins(extraRepos: List<String> = emptyList()) =
+        lnReaderManager.findAvailablePlugins(extraRepos)
+    suspend fun installLnReaderPlugin(item: LnReaderPluginItem): Boolean =
+        lnReaderManager.installPlugin(item)
+    fun uninstallLnReaderPlugin(pluginId: String) =
+        lnReaderManager.uninstallPlugin(pluginId)
+    suspend fun updateLnReaderPlugin(pluginId: String): Boolean =
+        lnReaderManager.updatePlugin(pluginId)
+    private fun registerNewExtension(ext: NovelExtension.Installed) {
+        _installedNovelExtensionsFlow.value += ext
     }
 
-    /**
-     * Uninstalls the novel extension that matches the given package name.
-     *
-     * @param pkgName The package name of the application to uninstall.
-     */
-    fun uninstallExtension(pkgName: String) {
-        installer.uninstallApk(pkgName)
+    private fun registerUpdatedExtension(ext: NovelExtension.Installed) {
+        val mut = _installedNovelExtensionsFlow.value.toMutableList()
+        val old = mut.find { it.pkgName == ext.pkgName }
+        if (old != null) mut -= old
+        mut += ext
+        _installedNovelExtensionsFlow.value = mut
     }
 
-    /**
-     * Registers the given novel extension in this and the source managers.
-     *
-     * @param extension The anime extension to be registered.
-     */
-    private fun registerNewExtension(extension: NovelExtension.Installed) {
-        _installedNovelExtensionsFlow.value += extension
-    }
-
-    /**
-     * Registers the given updated novel extension in this and the source managers previously removing
-     * the outdated ones.
-     *
-     * @param extension The anime extension to be registered.
-     */
-    private fun registerUpdatedExtension(extension: NovelExtension.Installed) {
-        val mutInstalledNovelExtensions = _installedNovelExtensionsFlow.value.toMutableList()
-        val oldNovelExtension = mutInstalledNovelExtensions.find { it.pkgName == extension.pkgName }
-        if (oldNovelExtension != null) {
-            mutInstalledNovelExtensions -= oldNovelExtension
-        }
-        mutInstalledNovelExtensions += extension
-        _installedNovelExtensionsFlow.value = mutInstalledNovelExtensions
-    }
-
-    /**
-     * Unregisters the novel extension in this and the source managers given its package name. Note this
-     * method is called for every uninstalled application in the system.
-     *
-     * @param pkgName The package name of the uninstalled application.
-     */
     private fun unregisterNovelExtension(pkgName: String) {
-        val installedNovelExtension =
-            _installedNovelExtensionsFlow.value.find { it.pkgName == pkgName }
-        if (installedNovelExtension != null) {
-            _installedNovelExtensionsFlow.value -= installedNovelExtension
-        }
+        val ext = _installedNovelExtensionsFlow.value.find { it.pkgName == pkgName }
+        if (ext != null) _installedNovelExtensionsFlow.value -= ext
     }
 
-    /**
-     * Listener which receives events of the novel extensions being installed, updated or removed.
-     */
     private inner class NovelInstallationListener : ExtensionInstallReceiver.NovelListener {
-        override fun onExtensionInstalled(extension: NovelExtension.Installed) {
+        override fun onExtensionInstalled(extension: NovelExtension.Installed) =
             registerNewExtension(extension.withUpdateCheck())
-        }
-
-        override fun onExtensionUpdated(extension: NovelExtension.Installed) {
+        override fun onExtensionUpdated(extension: NovelExtension.Installed) =
             registerUpdatedExtension(extension.withUpdateCheck())
-        }
-
-        override fun onPackageUninstalled(pkgName: String) {
+        override fun onPackageUninstalled(pkgName: String) =
             unregisterNovelExtension(pkgName)
-        }
     }
 
-    /**
-     * AnimeExtension method to set the update field of an installed anime extension.
-     */
-    private fun NovelExtension.Installed.withUpdateCheck(): NovelExtension.Installed {
-        return if (updateExists()) {
-            copy(hasUpdate = true)
-        } else {
-            this
-        }
-    }
+    private fun NovelExtension.Installed.withUpdateCheck(): NovelExtension.Installed =
+        if (updateExists()) copy(hasUpdate = true) else this
 
-    private fun NovelExtension.Installed.updateExists(availableNovelExtension: NovelExtension.Available? = null): Boolean {
-        val availableExt = availableNovelExtension
-            ?: _availableNovelExtensionsFlow.value.find { it.pkgName == pkgName }
-        if (availableExt == null) return false
-
-        return (availableExt.versionCode > versionCode)
+    private fun NovelExtension.Installed.updateExists(
+        avail: NovelExtension.Available? = null
+    ): Boolean {
+        val a = avail ?: _availableNovelExtensionsFlow.value.find { it.pkgName == pkgName }
+        return a != null && a.versionCode > versionCode
     }
 }
