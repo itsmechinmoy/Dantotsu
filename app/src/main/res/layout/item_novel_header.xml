@@ -10,35 +10,125 @@
     android:orientation="vertical">
 
 
-    <com.google.android.material.textfield.TextInputLayout
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+    <LinearLayout
+        android:id="@+id/novelSourceContainer"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:hint="@string/source"
-        app:boxCornerRadiusBottomEnd="8dp"
-        app:boxCornerRadiusBottomStart="8dp"
-        app:boxCornerRadiusTopEnd="8dp"
-        app:boxCornerRadiusTopStart="8dp"
-        app:boxStrokeColor="@color/text_input_layout_stroke_color"
-        app:hintAnimationEnabled="true"
-        app:startIconDrawable="@drawable/ic_round_source_24">
+        android:layout_height="match_parent"
+        android:layout_marginTop="-16dp"
+        android:layout_marginBottom="-24dp"
+        android:clipToPadding="false"
+        android:orientation="vertical"
+        android:padding="32dp">
 
-        <AutoCompleteTextView
-            android:id="@+id/mediaSource"
+        <TextView
+            android:id="@+id/mediaSourceTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
+            android:layout_gravity="end"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:ellipsize="marquee"
             android:fontFamily="@font/poppins_bold"
-            android:freezesText="false"
-            android:inputType="none"
-            android:padding="8dp"
-            android:text="@string/read"
-            android:textAllCaps="true"
-            android:textColor="?android:attr/textColorSecondary"
-            android:textSize="14sp"
-            tools:ignore="LabelFor,TextContrastCheck,DuplicateSpeakableTextCheck" />
-    </com.google.android.material.textfield.TextInputLayout>
+            android:marqueeRepeatLimit="marquee_forever"
+            android:singleLine="true"
+            android:visibility="gone"
+            tools:text="Found: Novel Title" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:hint="@string/source"
+                app:boxCornerRadiusBottomEnd="8dp"
+                app:boxCornerRadiusBottomStart="8dp"
+                app:boxCornerRadiusTopEnd="8dp"
+                app:boxCornerRadiusTopStart="8dp"
+                app:boxStrokeColor="@color/text_input_layout_stroke_color"
+                app:hintAnimationEnabled="true"
+                app:startIconDrawable="@drawable/ic_round_source_24">
+
+                <AutoCompleteTextView
+                    android:id="@+id/mediaSource"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:fontFamily="@font/poppins_bold"
+                    android:freezesText="false"
+                    android:inputType="none"
+                    android:maxLines="1"
+                    android:padding="8dp"
+                    android:text="@string/read"
+                    android:textAllCaps="true"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="14sp"
+                    tools:ignore="LabelFor,TextContrastCheck,DuplicateSpeakableTextCheck" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <ImageView
+                android:id="@+id/mediaSourceSettings"
+                android:layout_width="48dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:padding="8dp"
+                android:visibility="gone"
+                app:srcCompat="@drawable/ic_round_settings_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription,ImageContrastCheck" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/wrongTitleButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/poppins_bold"
+            android:padding="12dp"
+            android:text="@string/wrong"
+            android:textAlignment="textEnd"
+            android:textColor="?attr/colorSecondary"
+            android:visibility="gone"
+            tools:ignore="TextContrastCheck" />
+
+        <LinearLayout
+            android:id="@+id/chaptersHeaderRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/sourceTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/chaps"
+                android:textSize="16sp" />
+
+            <ImageView
+                android:id="@+id/mediaNestedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:alpha="1"
+                android:padding="8dp"
+                app:srcCompat="@drawable/ic_round_filter_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription,ImageContrastCheck" />
+        </LinearLayout>
+
+    </LinearLayout>
 
     <View
         android:id="@+id/divider"
@@ -85,5 +175,127 @@
         layout="@layout/item_progressbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/sourceContinue"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:layout_gravity="center"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:visibility="gone"
+        app:cardCornerRadius="16dp"
+        app:cornerRadius="12dp">
+
+        <ImageView
+            android:id="@+id/itemMediaImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            tools:ignore="ContentDescription,ImageContrastCheck"
+            tools:srcCompat="@tools:sample/backgrounds/scenic" />
+
+        <View
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:alpha="0.6"
+            android:background="@color/bg_black" />
+
+        <View
+            android:id="@+id/itemEpisodeFillerView"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:background="@color/filler"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/mediaSourceContinueText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:ellipsize="end"
+            android:fontFamily="@font/poppins_bold"
+            android:gravity="center"
+            android:maxLines="2"
+            android:text="@string/continue_reading"
+            android:textColor="@color/bg_white"
+            app:drawableEndCompat="@drawable/ic_round_play_arrow_24" />
+
+        <LinearLayout
+            android:id="@+id/itemMediaProgressCont"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/itemMediaProgress"
+                android:layout_width="0dp"
+                android:layout_height="4dp"
+                android:layout_weight="0"
+                android:alpha="0.75"
+                android:background="?attr/colorPrimary" />
+
+            <View
+                android:id="@+id/itemMediaProgressEmpty"
+                android:layout_width="0dp"
+                android:layout_height="4dp"
+                android:layout_weight="1"
+                android:alpha="0.1"
+                android:background="@color/bg_opp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <HorizontalScrollView
+        android:id="@+id/mediaWatchChipScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:clipToPadding="false"
+        android:paddingStart="28dp"
+        android:paddingEnd="28dp"
+        android:scrollbars="none">
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/mediaSourceChipGroup"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:singleLine="true"
+            app:singleSelection="true" />
+    </HorizontalScrollView>
+
+    <LinearLayout
+        android:id="@+id/novelLocalHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="32dp"
+        android:layout_marginTop="-16dp"
+        android:layout_marginBottom="-24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/novelLocalTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="@font/poppins_bold"
+            android:text="Volumes"
+            android:textSize="16sp" />
+
+        <ImageView
+            android:id="@+id/novelLocalFilter"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="end"
+            android:alpha="1"
+            android:padding="12dp"
+            app:srcCompat="@drawable/ic_round_filter_24"
+            app:tint="?attr/colorOnBackground"
+            tools:ignore="ContentDescription,ImageContrastCheck" />
+    </LinearLayout>
 
 </LinearLayout>
