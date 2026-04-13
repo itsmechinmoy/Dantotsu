@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/poppins_bold"
+        android:text="@string/filter_activity"
+        android:textSize="18sp"
+        android:textColor="?android:attr/textColorPrimary" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:fontFamily="@font/poppins"
+        android:text="@string/filter_activity_subtitle"
+        android:textSize="13sp"
+        android:textColor="?android:attr/textColorSecondary" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginVertical="16dp"
+        android:background="?android:attr/listDivider" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:text="@string/filter_by_type"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorPrimary" />
+
+    <com.google.android.flexbox.FlexboxLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:flexWrap="wrap"
+        app:alignItems="flex_start"
+        app:flexDirection="row"
+        app:justifyContent="flex_start">
+
+        <TextView
+            android:id="@+id/filterAll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_filter_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/poppins"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="@string/all"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/filterAnimeProgress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_filter_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/poppins"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="@string/anime_progress"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/filterMangaProgress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_filter_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/poppins"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="@string/manga_progress"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/filterStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_filter_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/poppins"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="@string/status"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/filterMessages"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_filter_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/poppins"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="@string/messages"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/filterText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_filter_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/poppins"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="@string/text"
+            android:textSize="13sp" />
+
+    </com.google.android.flexbox.FlexboxLayout>
+
+    <Button
+        android:id="@+id/applyFiltersButton"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="24dp"
+        android:background="@drawable/bg_button_primary"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:text="@string/apply_filters"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp" />
+  
+</LinearLayout>

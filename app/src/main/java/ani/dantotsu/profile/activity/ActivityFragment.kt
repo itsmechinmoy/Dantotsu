@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.api.Activity
+import ani.dantotsu.connections.anilist.api.MediaType
 import ani.dantotsu.databinding.FragmentFeedBinding
 import ani.dantotsu.media.MediaDetailsActivity
 import ani.dantotsu.navBarHeight
@@ -31,6 +32,8 @@ class ActivityFragment : Fragment() {
     private lateinit var binding: FragmentFeedBinding
     private var adapter: GroupieAdapter = GroupieAdapter()
     private var page: Int = 1
+    private var allActivities: MutableList<Activity> = mutableListOf()
+    private var currentFilter: ActivityFilterType = ActivityFilterType.ALL
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -52,6 +55,13 @@ class ActivityFragment : Fragment() {
             if (type == ActivityType.OTHER_USER) View.VISIBLE else View.GONE
         binding.titleText.text =
             if (userId == Anilist.userid) getString(R.string.create_new_activity) else getString(R.string.write_a_message)
+        
+        // Set up filter icon visibility
+        binding.filterButton.visibility = if (type == ActivityType.OTHER_USER) View.VISIBLE else View.GONE
+        binding.filterButton.setOnClickListener {
+            showFilterBottomSheet()
+        }
+        
         binding.titleImage.setOnClickListener { handleTitleImageClick() }
         binding.listRecyclerView.adapter = adapter
         binding.listRecyclerView.layoutManager = LinearLayoutManager(context)
@@ -71,6 +81,7 @@ class ActivityFragment : Fragment() {
         binding.feedSwipeRefresh.setOnRefreshListener {
             lifecycleScope.launch {
                 adapter.clear()
+                allActivities.clear()
                 page = 1
                 getList()
                 binding.feedSwipeRefresh.isRefreshing = false
@@ -91,6 +102,47 @@ class ActivityFragment : Fragment() {
         })
     }
 
+    private fun showFilterBottomSheet() {
+        ActivityFilterBottomSheet.newInstance(currentFilter) { filterType ->
+            currentFilter = filterType
+            applyFilter()
+        }.show(childFragmentManager, "ActivityFilterBottomSheet")
+    }
+
+    private fun applyFilter() {
+        val filteredActivities = when (currentFilter) {
+            ActivityFilterType.ALL -> allActivities
+            ActivityFilterType.ANIME_PROGRESS -> allActivities.filter { 
+                it.typename == "ListActivity" && it.media?.type == MediaType.ANIME
+            }
+            ActivityFilterType.MANGA_PROGRESS -> allActivities.filter { 
+                it.typename == "ListActivity" && it.media?.type == MediaType.MANGA
+            }
+            ActivityFilterType.STATUS -> allActivities.filter { 
+                it.typename == "ListActivity" && it.status != null 
+            }
+            ActivityFilterType.MESSAGES -> allActivities.filter { 
+                it.typename == "MessageActivity" 
+            }
+            ActivityFilterType.TEXT -> allActivities.filter { 
+                it.typename == "TextActivity" 
+            }
+        }
+        
+        adapter.clear()
+        adapter.addAll(filteredActivities.map { ActivityItem(it, adapter, ::onActivityClick) })
+        
+        binding.emptyTextView.isVisible = filteredActivities.isEmpty()
+        binding.emptyTextView.text = when (currentFilter) {
+            ActivityFilterType.ALL -> getString(R.string.nothing_here)
+            ActivityFilterType.ANIME_PROGRESS -> getString(R.string.no_anime_progress)
+            ActivityFilterType.MANGA_PROGRESS -> getString(R.string.no_manga_progress)
+            ActivityFilterType.STATUS -> getString(R.string.no_status_activities)
+            ActivityFilterType.MESSAGES -> getString(R.string.no_messages)
+            ActivityFilterType.TEXT -> getString(R.string.no_text_activities)
+        }
+    }
+
     private fun handleTitleImageClick() {
         val intent = Intent(context, ActivityMarkdownCreator::class.java).apply {
             putExtra("type", if (userId == Anilist.userid) "activity" else "message")
@@ -106,7 +158,8 @@ class ActivityFragment : Fragment() {
             ActivityType.OTHER_USER -> getActivities(userId = userId)
             ActivityType.ONE -> getActivities(activityId = activityId)
         }
-        adapter.addAll(list.map { ActivityItem(it, adapter, ::onActivityClick) })
+        allActivities.addAll(list)
+        applyFilter()
     }
 
     private suspend fun getActivities(
