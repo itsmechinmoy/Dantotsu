@@ -704,16 +704,44 @@ class MangaReaderActivity : AppCompatActivity() {
 
                 onVolumeUp = {
                     if ((defaultSettings.direction == TOP_TO_BOTTOM || defaultSettings.direction == BOTTOM_TO_TOP))
-                        smoothScrollBy(0, -500)
+                        binding.mangaReaderRecycler.smoothScrollBy(0, -500)
                     else
-                        smoothScrollBy(-500, 0)
+                        binding.mangaReaderRecycler.smoothScrollBy(-500, 0)
+                }
+
+                onVolumeUpLong = {
+                    if (defaultSettings.direction == TOP_TO_BOTTOM || defaultSettings.direction == BOTTOM_TO_TOP) {
+                        if (!binding.mangaReaderRecycler.canScrollVertically(-1)) {
+                            binding.mangaReaderSwipy.onTopSwiped.invoke()
+                            true
+                        } else false
+                    } else {
+                        if (!binding.mangaReaderRecycler.canScrollHorizontally(-1)) {
+                            binding.mangaReaderSwipy.onLeftSwiped.invoke()
+                            true
+                        } else false
+                    }
                 }
 
                 onVolumeDown = {
                     if ((defaultSettings.direction == TOP_TO_BOTTOM || defaultSettings.direction == BOTTOM_TO_TOP))
-                        smoothScrollBy(0, 500)
+                        binding.mangaReaderRecycler.smoothScrollBy(0, 500)
                     else
-                        smoothScrollBy(500, 0)
+                        binding.mangaReaderRecycler.smoothScrollBy(500, 0)
+                }
+
+                onVolumeDownLong = {
+                    if (defaultSettings.direction == TOP_TO_BOTTOM || defaultSettings.direction == BOTTOM_TO_TOP) {
+                        if (!binding.mangaReaderRecycler.canScrollVertically(1)) {
+                            binding.mangaReaderSwipy.onBottomSwiped.invoke()
+                            true
+                        } else false
+                    } else {
+                        if (!binding.mangaReaderRecycler.canScrollHorizontally(1)) {
+                            binding.mangaReaderSwipy.onRightSwiped.invoke()
+                            true
+                        } else false
+                    }
                 }
 
                 scrollToPosition(currentPage / (dualPage { 2 } ?: 1) - 1)
@@ -738,36 +766,92 @@ class MangaReaderActivity : AppCompatActivity() {
             onVolumeUp = {
                 binding.mangaReaderPager.currentItem -= 1
             }
+            onVolumeUpLong = {
+                if (binding.mangaReaderPager.currentItem == 0) {
+                    if (defaultSettings.direction == LEFT_TO_RIGHT || defaultSettings.direction == RIGHT_TO_LEFT) {
+                        if (binding.mangaReaderPager.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
+                            binding.mangaReaderSwipy.onRightSwiped.invoke()
+                        } else {
+                            binding.mangaReaderSwipy.onLeftSwiped.invoke()
+                        }
+                    } else {
+                        binding.mangaReaderSwipy.onTopSwiped.invoke()
+                    }
+                    true
+                } else false
+            }
+            
             onVolumeDown = {
                 binding.mangaReaderPager.currentItem += 1
+            }
+            onVolumeDownLong = {
+                val lastPage = (maxChapterPage / (dualPage { 2 } ?: 1)).toInt() - 1
+                if (binding.mangaReaderPager.currentItem >= lastPage) {
+                    if (defaultSettings.direction == LEFT_TO_RIGHT || defaultSettings.direction == RIGHT_TO_LEFT) {
+                        if (binding.mangaReaderPager.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
+                            binding.mangaReaderSwipy.onLeftSwiped.invoke()
+                        } else {
+                            binding.mangaReaderSwipy.onRightSwiped.invoke()
+                        }
+                    } else {
+                        binding.mangaReaderSwipy.onBottomSwiped.invoke()
+                    }
+                    true
+                } else false
             }
         }
     }
 
     private var onVolumeUp: (() -> Unit)? = null
     private var onVolumeDown: (() -> Unit)? = null
+    private var onVolumeUpLong: (() -> Boolean)? = null
+    private var onVolumeDownLong: (() -> Boolean)? = null
+    private var volumeLongPressHandled = false
+    
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         return when (event.keyCode) {
             KEYCODE_VOLUME_UP, KEYCODE_DPAD_UP, KEYCODE_PAGE_UP -> {
-                if (event.keyCode == KEYCODE_VOLUME_UP)
-                    if (!defaultSettings.volumeButtons)
-                        return false
+                if (event.keyCode == KEYCODE_VOLUME_UP && !defaultSettings.volumeButtons)
+                    return false
                 if (event.action == ACTION_DOWN) {
-                    onVolumeUp?.invoke()
+                    if (event.repeatCount == 0) {
+                        volumeLongPressHandled = false
+                        onVolumeUp?.invoke()
+                    } else if (event.repeatCount >= 8 && !volumeLongPressHandled) {
+                        if (onVolumeUpLong?.invoke() == true) {
+                            volumeLongPressHandled = true
+                        } else {
+                            onVolumeUp?.invoke()
+                        }
+                    } else if (!volumeLongPressHandled) {
+                        onVolumeUp?.invoke()
+                    }
+                    true
+                } else if (event.action == KeyEvent.ACTION_UP) {
                     true
                 } else false
             }
-
             KEYCODE_VOLUME_DOWN, KEYCODE_DPAD_DOWN, KEYCODE_PAGE_DOWN -> {
-                if (event.keyCode == KEYCODE_VOLUME_DOWN)
-                    if (!defaultSettings.volumeButtons)
-                        return false
+                if (event.keyCode == KEYCODE_VOLUME_DOWN && !defaultSettings.volumeButtons)
+                    return false
                 if (event.action == ACTION_DOWN) {
-                    onVolumeDown?.invoke()
+                    if (event.repeatCount == 0) {
+                        volumeLongPressHandled = false
+                        onVolumeDown?.invoke()
+                    } else if (event.repeatCount >= 8 && !volumeLongPressHandled) {
+                        if (onVolumeDownLong?.invoke() == true) {
+                            volumeLongPressHandled = true
+                        } else {
+                            onVolumeDown?.invoke()
+                        }
+                    } else if (!volumeLongPressHandled) {
+                        onVolumeDown?.invoke()
+                    }
+                    true
+                } else if (event.action == KeyEvent.ACTION_UP) {
                     true
                 } else false
             }
-
             else -> {
                 super.dispatchKeyEvent(event)
             }
