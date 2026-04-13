@@ -55,10 +55,10 @@ class CommentNotificationTask : Task {
                     PrefManager.setVal(PrefName.RecentGlobalNotification, newRecentGlobal)
                 }
                 if (notifications.isNullOrEmpty()) return@withContext
-                PrefManager.setVal(
-                    PrefName.UnreadCommentNotifications,
-                    PrefManager.getVal<Int>(PrefName.UnreadCommentNotifications) + (notifications.size)
-                )
+                
+                var commentCount = 0
+                var warningCount = 0
+                var updateCount = 0
 
                 notifications.forEach {
                     val type: CommentNotificationWorker.NotificationType = when (it.type) {
@@ -67,6 +67,12 @@ class CommentNotificationTask : Task {
                         3 -> CommentNotificationWorker.NotificationType.DANTOTSU_UPDATE
                         420 -> CommentNotificationWorker.NotificationType.NO_NOTIFICATION
                         else -> CommentNotificationWorker.NotificationType.UNKNOWN
+                    }
+                    when (type) {
+                        CommentNotificationWorker.NotificationType.COMMENT_REPLY -> commentCount++
+                        CommentNotificationWorker.NotificationType.COMMENT_WARNING -> warningCount++
+                        CommentNotificationWorker.NotificationType.DANTOTSU_UPDATE -> updateCount++
+                        else -> {}
                     }
                     val notification = when (type) {
                         CommentNotificationWorker.NotificationType.COMMENT_WARNING -> {
@@ -172,6 +178,13 @@ class CommentNotificationTask : Task {
                                 )
                         }
                     }
+                }
+                
+                // Update comment notification count (combining replies and warnings as they appear in the Comments section)
+                val totalNewComments = commentCount + warningCount
+                if (totalNewComments > 0) {
+                    val currentCommentCount = PrefManager.getVal<Int>(PrefName.UnreadCommentNotifications)
+                    PrefManager.setVal(PrefName.UnreadCommentNotifications, currentCommentCount + totalNewComments)
                 }
             }
             return true

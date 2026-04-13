@@ -274,6 +274,12 @@ object Anilist {
         episodesWatched = null
         chapterRead = null
         PrefManager.removeVal(PrefName.AnilistToken)
+        // Reset per-section notification counts
+        PrefManager.setVal(PrefName.UnreadUserNotifications, 0)
+        PrefManager.setVal(PrefName.UnreadMediaNotifications, 0)
+        PrefManager.setVal(PrefName.UnreadSubscriptionNotifications, 0)
+        PrefManager.setVal(PrefName.UnreadCommentNotifications, 0)
+        Anilist.unreadNotificationCount = 0
         //logout from comments api
         CommentsAPI.logout()
 
