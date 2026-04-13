@@ -39,6 +39,9 @@ class NotificationFragment : Fragment() {
     private var adapter: GroupieAdapter = GroupieAdapter()
     private var currentPage = 1
     private var hasNextPage = false
+    private var countResetCallback: ((NotificationType, Boolean) -> Unit)? = null
+    private var hasReset = false
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -95,6 +98,31 @@ class NotificationFragment : Fragment() {
             SUBSCRIPTION -> getSubscriptions()
             COMMENT -> getComments()
         }
+        
+        // Reset notification count for this section when first loaded
+        if (!hasReset && type != ONE) {
+            hasReset = true
+            when (type) {
+                USER -> {
+                    PrefManager.setVal(PrefName.UnreadUserNotifications, 0)
+                    countResetCallback?.invoke(type, true)
+                }
+                MEDIA -> {
+                    PrefManager.setVal(PrefName.UnreadMediaNotifications, 0)
+                    countResetCallback?.invoke(type, true)
+                }
+                SUBSCRIPTION -> {
+                    PrefManager.setVal(PrefName.UnreadSubscriptionNotifications, 0)
+                    countResetCallback?.invoke(type, true)
+                }
+                COMMENT -> {
+                    PrefManager.setVal(PrefName.UnreadCommentNotifications, 0)
+                    countResetCallback?.invoke(type, true)
+                }
+                ONE -> {}
+            }
+        }
+        
         adapter.addAll(list.map { NotificationItem(it, type, adapter, ::onClick) })
         if (adapter.itemCount == 0) {
             binding.emptyTextView.isVisible = true
@@ -208,7 +236,6 @@ class NotificationFragment : Fragment() {
         }
     }
 
-
     override fun onResume() {
         super.onResume()
         if (this::binding.isInitialized) {
@@ -220,8 +247,13 @@ class NotificationFragment : Fragment() {
         enum class NotificationClickType { USER, MEDIA, ACTIVITY, COMMENT, UNDEFINED }
         enum class NotificationType { MEDIA, USER, SUBSCRIPTION, COMMENT, ONE }
 
-        fun newInstance(type: NotificationType, id: Int = -1): NotificationFragment {
+        fun newInstance(
+            type: NotificationType, 
+            id: Int = -1,
+            countResetCallback: ((NotificationType, Boolean) -> Unit)? = null
+        ): NotificationFragment {
             return NotificationFragment().apply {
+                this.countResetCallback = countResetCallback
                 arguments = Bundle().apply {
                     putSerializable("type", type)
                     putInt("id", id)

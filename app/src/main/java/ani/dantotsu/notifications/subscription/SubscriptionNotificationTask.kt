@@ -89,6 +89,7 @@ class SubscriptionNotificationTask : Task {
                             )
                     }
 
+                    var newSubscriptionCount = 0
                     subscriptions.toList().map {
                         val media = it.second
                         val text = if (media.isAnime) {
@@ -127,10 +128,7 @@ class SubscriptionNotificationTask : Task {
                                 banner = media.banner
                             )
                         )
-                        PrefManager.setVal(
-                            PrefName.UnreadCommentNotifications,
-                            PrefManager.getVal<Int>(PrefName.UnreadCommentNotifications) + 1
-                        )
+                        newSubscriptionCount++
                         val notification = createNotification(
                             context.applicationContext,
                             media,
@@ -145,6 +143,11 @@ class SubscriptionNotificationTask : Task {
                                     notification
                                 )
                         }
+                    }
+
+                    if (newSubscriptionCount > 0) {
+                        val currentSubsCount = PrefManager.getVal<Int>(PrefName.UnreadSubscriptionNotifications)
+                        PrefManager.setVal(PrefName.UnreadSubscriptionNotifications, currentSubsCount + newSubscriptionCount)
                     }
 
                     if (progressNotification != null) notificationManager.cancel(
