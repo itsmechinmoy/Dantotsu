@@ -12,6 +12,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.NumberPicker
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.getString
 import androidx.core.content.ContextCompat.startActivity
 import androidx.core.view.isGone
@@ -23,6 +24,7 @@ import ani.dantotsu.currActivity
 import ani.dantotsu.currContext
 import ani.dantotsu.databinding.CustomDialogLayoutBinding
 import ani.dantotsu.databinding.DialogLayoutBinding
+import ani.dantotsu.databinding.ItemChipBinding
 import ani.dantotsu.databinding.ItemMediaSourceBinding
 import ani.dantotsu.isOnline
 import ani.dantotsu.loadImage
@@ -45,6 +47,7 @@ import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.toast
 import ani.dantotsu.util.customAlertDialog
+import com.google.android.material.chip.Chip
 import eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_SUBSCRIPTION_CHECK
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.system.WebViewUtil
@@ -409,18 +412,66 @@ class MangaReadAdapter(
     fun updateChips(limit: Int, names: Array<String>, arr: Array<Int>, selected: Int = 0) {
         val binding = _binding
         if (binding != null) {
-            ani.dantotsu.util.PaginationChipHelper.buildChips(
-                context = fragment.requireContext(),
-                chipGroup = binding.mediaSourceChipGroup,
-                scrollView = binding.mediaWatchChipScroll,
-                limit = limit,
-                names = names,
-                arr = arr,
-                selected = selected,
-                onChipClicked = { position, start, end ->
-                    fragment.onChipClicked(position, start, end)
+            val screenWidth = fragment.screenWidth.px
+            var select: Chip? = null
+            for (position in arr.indices) {
+                val last = if (position + 1 == arr.size) names.size else (limit * (position + 1))
+                val chip =
+                    ItemChipBinding.inflate(
+                        LayoutInflater.from(fragment.context),
+                        binding.mediaSourceChipGroup,
+                        false
+                    ).root
+                chip.isCheckable = true
+                fun selected() {
+                    chip.isChecked = true
+                    binding.mediaWatchChipScroll.smoothScrollTo(
+                        (chip.left - screenWidth / 2) + (chip.width / 2),
+                        0
+                    )
                 }
-            )
+
+                val startChapter = MediaNameAdapter.findChapterNumber(names[limit * (position)])
+                val endChapter = MediaNameAdapter.findChapterNumber(names[last - 1])
+                val startChapterString = if (startChapter != null) {
+                    "Ch.%.1f".format(startChapter)
+                } else {
+                    names[limit * (position)]
+                }
+                val endChapterString = if (endChapter != null) {
+                    "Ch.%.1f".format(endChapter)
+                } else {
+                    names[last - 1]
+                }
+                // chip.text = "${names[limit * (position)]} - ${names[last - 1]}"
+                val chipText = "$startChapterString - $endChapterString"
+                chip.text = chipText
+                chip.setTextColor(
+                    ContextCompat.getColorStateList(
+                        fragment.requireContext(),
+                        R.color.chip_text_color
+                    )
+                )
+
+                chip.setOnClickListener {
+                    selected()
+                    fragment.onChipClicked(position, limit * (position), last - 1)
+                }
+                binding.mediaSourceChipGroup.addView(chip)
+                if (selected == position) {
+                    selected()
+                    select = chip
+                }
+            }
+            if (select != null)
+                binding.mediaWatchChipScroll.apply {
+                    post {
+                        scrollTo(
+                            (select.left - screenWidth / 2) + (select.width / 2),
+                            0
+                        )
+                    }
+                }
         }
     }
 

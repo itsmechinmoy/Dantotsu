@@ -130,7 +130,7 @@ class App : Application() {
                 novelExtensionManager.findAvailableExtensions()
             }
             Logger.log("Novel Extensions: ${novelExtensionManager.installedExtensionsFlow.first()}")
-            NovelSources.init(novelExtensionManager.allInstalledExtensionsFlow)
+            NovelSources.init(novelExtensionManager.installedExtensionsFlow)
         }
         GlobalScope.launch {
             torrentAddonManager = Injekt.get()

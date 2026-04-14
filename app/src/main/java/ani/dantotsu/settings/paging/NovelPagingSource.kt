@@ -19,7 +19,6 @@ import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.R
 import ani.dantotsu.databinding.ItemExtensionAllBinding
 import ani.dantotsu.others.LanguageMapper
-import ani.dantotsu.parsers.novel.LnReaderPluginItem
 import ani.dantotsu.parsers.novel.NovelExtension
 import ani.dantotsu.parsers.novel.NovelExtensionManager
 import ani.dantotsu.settings.saving.PrefManager
@@ -67,30 +66,10 @@ class NovelExtensionsViewModel(
     val pagerFlow: Flow<PagingData<NovelExtension.Available>> = combine(
         novelExtensionManager.availableExtensionsFlow,
         novelExtensionManager.installedExtensionsFlow,
-        novelExtensionManager.lnReaderManager.availablePluginsFlow,
-        novelExtensionManager.lnReaderManager.installedPluginsFlow,
         searchQuery
-    ) { available, installed, lnAvailable, lnInstalled, query ->
-        val installedPkgs = installed.map { it.pkgName }.toSet()
-        val installedLnIds = lnInstalled.map { it.id }.toSet()
-
-        val lnAsAvailable = lnAvailable
-            .filter { it.id !in installedLnIds }
-            .map { plugin ->
-                NovelExtension.Available(
-                    name = plugin.name,
-                    pkgName = "lnreader-${plugin.id}",
-                    versionName = plugin.version,
-                    versionCode = 0L,
-                    repository = "lnreader",
-                    sources = emptyList(),
-                    iconUrl = plugin.iconUrl,
-                )
-            }
-
-        val combinedAvailable = available.filterNot { it.pkgName in installedPkgs } + lnAsAvailable
-        Pair(combinedAvailable, query)
-    }.flatMapLatest { (combinedAvailable, query) ->
+    ) { available, installed, query ->
+        Triple(available, installed, query)
+    }.flatMapLatest { (available, installed, query) ->
         Pager(
             PagingConfig(
                 pageSize = 15,
@@ -98,7 +77,7 @@ class NovelExtensionsViewModel(
                 prefetchDistance = 15
             )
         ) {
-            val nEPS = NovelExtensionPagingSource(combinedAvailable, query)
+            val nEPS = NovelExtensionPagingSource(available, installed, query)
             currentPagingSource = nEPS
             nEPS
         }.flow
@@ -107,12 +86,16 @@ class NovelExtensionsViewModel(
 
 
 class NovelExtensionPagingSource(
-    private val availableExtensions: List<NovelExtension.Available>,
+    private val availableExtensionsFlow: List<NovelExtension.Available>,
+    private val installedExtensionsFlow: List<NovelExtension.Installed>,
     private val searchQuery: String
 ) : PagingSource<Int, NovelExtension.Available>() {
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, NovelExtension.Available> {
         val position = params.key ?: 0
+        val installedExtensions = installedExtensionsFlow.map { it.pkgName }.toSet()
+        val availableExtensions =
+            availableExtensionsFlow.filterNot { it.pkgName in installedExtensions }
         val query = searchQuery
         val filteredExtensions = if (query.isEmpty()) {
             availableExtensions

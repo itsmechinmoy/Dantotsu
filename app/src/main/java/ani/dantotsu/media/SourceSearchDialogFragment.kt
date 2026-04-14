@@ -37,8 +37,6 @@ class SourceSearchDialogFragment : BottomSheetDialogFragment() {
     var i: Int? = null
     var id: Int? = null
     var media: Media? = null
-    var isNovel = false
-    var onSourceSelected: ((ani.dantotsu.parsers.ShowResponse) -> Unit)? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -64,18 +62,12 @@ class SourceSearchDialogFragment : BottomSheetDialogFragment() {
                 binding.searchRecyclerView.visibility = View.GONE
                 binding.searchProgress.visibility = View.VISIBLE
 
-                val source = if (isNovel) {
-                    val novelSourceIndex = media!!.selected!!.sourceIndex.let {
-                        if (it >= model.novelSources.names.size) 0 else it
-                    }
-                    i = novelSourceIndex
-                    model.novelSources[novelSourceIndex]
-                } else if (media!!.anime != null) {
-                    if (i == null) i = media!!.selected?.sourceIndex ?: 0
+                i = media!!.selected!!.sourceIndex
+
+                val source = if (media!!.anime != null) {
                     (if (media!!.isAdult) HAnimeSources else AnimeSources)[i!!]
                 } else {
                     anime = false
-                    if (i == null) i = media!!.selected?.sourceIndex ?: 0
                     (if (media!!.isAdult) HMangaSources else MangaSources)[i!!]
                 }
 
@@ -86,13 +78,13 @@ class SourceSearchDialogFragment : BottomSheetDialogFragment() {
                         model.responses.postValue(
                             withContext(Dispatchers.IO) {
                                 tryWithSuspend {
-                                    source?.search(binding.searchBarText.text.toString())
+                                    source.search(binding.searchBarText.text.toString())
                                 }
                             }
                         )
                     }
                 }
-                binding.searchSourceTitle.text = source?.name ?: "Search"
+                binding.searchSourceTitle.text = source.name
                 binding.searchBarText.setText(media!!.mangaName())
                 binding.searchBarText.setOnEditorActionListener { _, actionId, _ ->
                     return@setOnEditorActionListener when (actionId) {
@@ -112,11 +104,7 @@ class SourceSearchDialogFragment : BottomSheetDialogFragment() {
                         binding.searchRecyclerView.visibility = View.VISIBLE
                         binding.searchProgress.visibility = View.GONE
                         binding.searchRecyclerView.adapter =
-                            if (isNovel) ani.dantotsu.media.novel.NovelSearchResultAdapter(j) { selected ->
-                                onSourceSelected?.invoke(selected)
-                                dismiss()
-                            }
-                            else if (anime) AnimeSourceAdapter(j, model, i!!, media!!.id, this, scope)
+                            if (anime) AnimeSourceAdapter(j, model, i!!, media!!.id, this, scope)
                             else MangaSourceAdapter(j, model, i!!, media!!.id, this, scope)
                         binding.searchRecyclerView.layoutManager = GridLayoutManager(
                             requireActivity(),

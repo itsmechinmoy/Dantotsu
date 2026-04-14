@@ -33,7 +33,7 @@ class UrlAdapter(
     override fun onBindViewHolder(holder: UrlViewHolder, position: Int) {
         val binding = holder.binding
         val url = urls[position]
-        binding.urlQuality.text = url.headers?.get("X-Chapter-Name") ?: url.url
+        binding.urlQuality.text = url.url
         binding.urlQuality.maxLines = 4
         binding.urlDownload.visibility = View.VISIBLE
     }
@@ -42,10 +42,17 @@ class UrlAdapter(
 
     inner class UrlViewHolder(val binding: ItemUrlBinding) : RecyclerView.ViewHolder(binding.root) {
         init {
-            binding.urlDownload.setSafeOnClickListener {
+            itemView.setSafeOnClickListener {
                 tryWith(true) {
                     binding.urlDownload.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                     callback?.onDownloadTriggered(book.links[bindingAdapterPosition].url)
+                    /*download(
+                        itemView.context,
+                        book,
+                        bindingAdapterPosition,
+                        novel
+                    )*/
+
                 }
             }
             itemView.setOnLongClickListener {
