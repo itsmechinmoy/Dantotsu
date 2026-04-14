@@ -76,28 +76,12 @@ class NovelExtensionsFragment : Fragment(),
     }
 
     override fun onInstallClick(pkg: NovelExtension.Available) {
-        if (isAdded) {
+        if (isAdded) {  // Check if the fragment is currently added to its activity
             val context = requireContext()
             val notificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            if (pkg.pkgName.startsWith("lnreader-")) {
-                val pluginId = pkg.pkgName.removePrefix("lnreader-")
-                val plugin = novelExtensionManager.lnReaderManager.availablePluginsFlow.value
-                    .find { it.id == pluginId }
-                if (plugin != null) {
-                    lifecycleScope.launch {
-                        val success = novelExtensionManager.installLnReaderPlugin(plugin)
-                        if (success) {
-                            snackString("Extension installed")
-                        } else {
-                            snackString("Installation failed")
-                        }
-                    }
-                }
-                return
-            }
-
+            // Start the installation process
             novelExtensionManager.installExtension(pkg)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(

@@ -97,6 +97,8 @@ class ExtensionTestSettingsBottomDialog : BottomSheetDialogFragment() {
             }
         }
         binding.extensionTypeTextView.setOnLongClickListener {
+            binding.searchTextView.visibility = View.VISIBLE
+            binding.searchView.visibility = View.VISIBLE
             true
         }
         setupAdapter()
@@ -107,23 +109,17 @@ class ExtensionTestSettingsBottomDialog : BottomSheetDialogFragment() {
         super.onDestroyView()
     }
 
-    data class ExtData(val name: String, val icon: Drawable?, val iconUrl: String?)
-
     private fun setupAdapter() {
-        val extDataList: List<ExtData> = when (extensionType) {
-            "anime" -> animeExtension.installedExtensionsFlow.value.map { ExtData(it.name, it.icon, null) }
-            "manga" -> mangaExtensions.installedExtensionsFlow.value.map { ExtData(it.name, it.icon, null) }
-            "novel" -> {
-                val apk = novelExtensions.installedExtensionsFlow.value.map { ExtData(it.name, it.icon, null) }
-                val js = novelExtensions.lnReaderManager.installedPluginsFlow.value.map { ExtData(it.name, null, it.iconUrl) }
-                apk + js
-            }
-            else -> emptyList()
+        val namesAndUrls: Map<String, Drawable?> = when (extensionType) {
+            "anime" -> animeExtension.installedExtensionsFlow.value.associate { it.name to it.icon }
+            "manga" -> mangaExtensions.installedExtensionsFlow.value.associate { it.name to it.icon }
+            "novel" -> novelExtensions.installedExtensionsFlow.value.associate { it.name to it.icon }
+            else -> emptyMap()
         }
         adapter.clear()
-        extDataList.forEach { data ->
-            val isSelected = extensionsToTest.contains(data.name)
-            adapter.add(ExtensionSelectItem(data.name, data.icon, data.iconUrl, isSelected, ::selectedCallback))
+        namesAndUrls.forEach { (name, icon) ->
+            val isSelected = extensionsToTest.contains(name)
+            adapter.add(ExtensionSelectItem(name, icon, isSelected, ::selectedCallback))
         }
     }
 
@@ -142,7 +138,7 @@ class ExtensionTestSettingsBottomDialog : BottomSheetDialogFragment() {
 
         var extensionType = "anime"
         var testType = "basic"
-        var searchQuery = ""
+        var searchQuery = "Chainsaw Man"
         var extensionsToTest: MutableList<String> = mutableListOf()
     }
 }

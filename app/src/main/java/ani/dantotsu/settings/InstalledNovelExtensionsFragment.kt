@@ -24,14 +24,12 @@ import ani.dantotsu.databinding.FragmentNovelExtensionsBinding
 import ani.dantotsu.others.LanguageMapper
 import ani.dantotsu.parsers.NovelSources
 import ani.dantotsu.parsers.novel.NovelExtension
-import com.bumptech.glide.Glide
 import ani.dantotsu.parsers.novel.NovelExtensionManager
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
 import eu.kanade.tachiyomi.data.notification.Notifications
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import rx.android.schedulers.AndroidSchedulers
 import uy.kohesive.injekt.Injekt
@@ -49,75 +47,62 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
             Toast.makeText(requireContext(), "Source is not configurable", Toast.LENGTH_SHORT)
                 .show()
         },
-        { ext ->
+        { pkg ->
             if (isAdded) {
-                when (ext) {
-                    is NovelExtension.Installed -> {
-                        novelExtensionManager.uninstallExtension(ext.pkgName)
-                        snackString("Extension uninstalled")
-                    }
-                    is NovelExtension.JsPlugin -> {
-                        novelExtensionManager.uninstallLnReaderPlugin(ext.pkgName)
-                        snackString("Extension uninstalled")
-                    }
-                    else -> {}
-                }
+                novelExtensionManager.uninstallExtension(pkg.pkgName)
+                snackString("Extension uninstalled")
+
             }
         },
-        { ext ->
+        { pkg ->
             if (isAdded) {
                 val context = requireContext()
                 val notificationManager =
                     context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                when (ext) {
-                    is NovelExtension.Installed -> {
-                        if (ext.hasUpdate) {
-                            novelExtensionManager.updateExtension(ext)
-                                .observeOn(AndroidSchedulers.mainThread())
-                                .subscribe(
-                                    { installStep ->
-                                        val builder = NotificationCompat.Builder(
-                                            context,
-                                            Notifications.CHANNEL_DOWNLOADER_PROGRESS
-                                        )
-                                            .setSmallIcon(R.drawable.ic_round_sync_24)
-                                            .setContentTitle("Updating extension")
-                                            .setContentText("Step: $installStep")
-                                            .setPriority(NotificationCompat.PRIORITY_LOW)
-                                        notificationManager.notify(1, builder.build())
-                                    },
-                                    { error ->
-                                        Injekt.get<CrashlyticsInterface>().logException(error)
-                                        Logger.log(error)
-                                        val builder = NotificationCompat.Builder(
-                                            context,
-                                            Notifications.CHANNEL_DOWNLOADER_ERROR
-                                        )
-                                            .setSmallIcon(R.drawable.ic_round_info_24)
-                                            .setContentTitle("Update failed: ${error.message}")
-                                            .setContentText("Error: ${error.message}")
-                                            .setPriority(NotificationCompat.PRIORITY_HIGH)
-                                        notificationManager.notify(1, builder.build())
-                                        snackString("Update failed: ${error.message}")
-                                    },
-                                    {
-                                        val builder = NotificationCompat.Builder(
-                                            context,
-                                            Notifications.CHANNEL_DOWNLOADER_PROGRESS
-                                        )
-                                            .setSmallIcon(R.drawable.ic_check)
-                                            .setContentTitle("Update complete")
-                                            .setContentText("The extension has been successfully updated.")
-                                            .setPriority(NotificationCompat.PRIORITY_LOW)
-                                        notificationManager.notify(1, builder.build())
-                                        snackString("Extension updated")
-                                    }
+                if (pkg.hasUpdate) {
+                    novelExtensionManager.updateExtension(pkg)
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(
+                            { installStep ->
+                                val builder = NotificationCompat.Builder(
+                                    context,
+                                    Notifications.CHANNEL_DOWNLOADER_PROGRESS
                                 )
-                        } else {
-                            snackString("No update available")
-                        }
-                    }
-                    else -> snackString("No update available")
+                                    .setSmallIcon(R.drawable.ic_round_sync_24)
+                                    .setContentTitle("Updating extension")
+                                    .setContentText("Step: $installStep")
+                                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                                notificationManager.notify(1, builder.build())
+                            },
+                            { error ->
+                                Injekt.get<CrashlyticsInterface>().logException(error)
+                                Logger.log(error)
+                                val builder = NotificationCompat.Builder(
+                                    context,
+                                    Notifications.CHANNEL_DOWNLOADER_ERROR
+                                )
+                                    .setSmallIcon(R.drawable.ic_round_info_24)
+                                    .setContentTitle("Update failed: ${error.message}")
+                                    .setContentText("Error: ${error.message}")
+                                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                                notificationManager.notify(1, builder.build())
+                                snackString("Update failed: ${error.message}")
+                            },
+                            {
+                                val builder = NotificationCompat.Builder(
+                                    context,
+                                    Notifications.CHANNEL_DOWNLOADER_PROGRESS
+                                )
+                                    .setSmallIcon(R.drawable.ic_check)
+                                    .setContentTitle("Update complete")
+                                    .setContentText("The extension has been successfully updated.")
+                                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                                notificationManager.notify(1, builder.build())
+                                snackString("Extension updated")
+                            }
+                        )
+                } else {
+                    snackString("No update available")
                 }
             }
         }, skipIcons
@@ -175,14 +160,14 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
 
 
         lifecycleScope.launch {
-            novelExtensionManager.allInstalledExtensionsFlow.collect { extensions ->
+            novelExtensionManager.installedExtensionsFlow.collect { extensions ->
                 extensionsAdapter.updateData(sortToNovelSourcesList(extensions))
             }
         }
         return binding.root
     }
 
-    private fun sortToNovelSourcesList(inpt: List<NovelExtension>): List<NovelExtension> {
+    private fun sortToNovelSourcesList(inpt: List<NovelExtension.Installed>): List<NovelExtension.Installed> {
         val sourcesMap = inpt.associateBy { it.name }
         val orderedSources = NovelSources.pinnedNovelSources.mapNotNull { name ->
             sourcesMap[name]
@@ -196,28 +181,25 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
     }
 
     override fun updateContentBasedOnQuery(query: String?) {
-        lifecycleScope.launch {
-            val allInstalled = novelExtensionManager.allInstalledExtensionsFlow.first()
-            extensionsAdapter.filter(
-                query ?: "",
-                sortToNovelSourcesList(allInstalled)
-            )
-        }
+        extensionsAdapter.filter(
+            query ?: "",
+            sortToNovelSourcesList(novelExtensionManager.installedExtensionsFlow.value)
+        )
     }
 
     override fun notifyDataChanged() { // do nothing
     }
 
     private class NovelExtensionsAdapter(
-        private val onSettingsClicked: (NovelExtension) -> Unit,
-        private val onUninstallClicked: (NovelExtension) -> Unit,
-        private val onUpdateClicked: (NovelExtension) -> Unit,
+        private val onSettingsClicked: (NovelExtension.Installed) -> Unit,
+        private val onUninstallClicked: (NovelExtension.Installed) -> Unit,
+        private val onUpdateClicked: (NovelExtension.Installed) -> Unit,
         val skipIcons: Boolean
-    ) : ListAdapter<NovelExtension, NovelExtensionsAdapter.ViewHolder>(
+    ) : ListAdapter<NovelExtension.Installed, NovelExtensionsAdapter.ViewHolder>(
         DIFF_CALLBACK_INSTALLED
     ) {
 
-        fun updateData(newExtensions: List<NovelExtension>) {
+        fun updateData(newExtensions: List<NovelExtension.Installed>) {
             submitList(newExtensions)
         }
 
@@ -236,31 +218,20 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val extension = getItem(position)
+            val extension = getItem(position)  // Use getItem() from ListAdapter
+            val nsfw = ""
+            val lang = LanguageMapper.getLanguageName("all")
             holder.extensionNameTextView.text = extension.name
-
-            when (extension) {
-                is NovelExtension.Installed -> {
-                    val lang = LanguageMapper.getLanguageName("all")
-                    holder.extensionVersionTextView.text = "$lang ${extension.versionName}"
-                    if (!skipIcons) {
-                        holder.extensionIconImageView.setImageDrawable(extension.icon)
-                    }
-                    holder.updateView.isVisible = extension.hasUpdate
-                }
-                is NovelExtension.JsPlugin -> {
-                    val lang = extension.plugin.lang
-                    holder.extensionVersionTextView.text = "$lang ${extension.versionName}"
-                    if (!skipIcons) {
-                        Glide.with(holder.itemView.context)
-                            .load(extension.iconUrl)
-                            .into(holder.extensionIconImageView)
-                    }
-                    holder.updateView.isVisible = extension.hasUpdate
-                }
-                else -> {}
+            val versionText = "$lang ${extension.versionName} $nsfw"
+            holder.extensionVersionTextView.text = versionText
+            if (!skipIcons) {
+                holder.extensionIconImageView.setImageDrawable(extension.icon)
             }
-
+            if (extension.hasUpdate) {
+                holder.updateView.isVisible = true
+            } else {
+                holder.updateView.isVisible = false
+            }
             holder.deleteView.setOnClickListener {
                 onUninstallClicked(extension)
             }
@@ -272,8 +243,8 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
             }
         }
 
-        fun filter(query: String, currentList: List<NovelExtension>) {
-            val filteredList = ArrayList<NovelExtension>()
+        fun filter(query: String, currentList: List<NovelExtension.Installed>) {
+            val filteredList = ArrayList<NovelExtension.Installed>()
             for (extension in currentList) {
                 if (extension.name.lowercase(Locale.ROOT).contains(query.lowercase(Locale.ROOT))) {
                     filteredList.add(extension)
@@ -295,21 +266,23 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
 
         companion object {
             val DIFF_CALLBACK_INSTALLED =
-                object : DiffUtil.ItemCallback<NovelExtension>() {
+                object : DiffUtil.ItemCallback<NovelExtension.Installed>() {
                     override fun areItemsTheSame(
-                        oldItem: NovelExtension,
-                        newItem: NovelExtension
+                        oldItem: NovelExtension.Installed,
+                        newItem: NovelExtension.Installed
                     ): Boolean {
                         return oldItem.pkgName == newItem.pkgName
                     }
 
                     override fun areContentsTheSame(
-                        oldItem: NovelExtension,
-                        newItem: NovelExtension
+                        oldItem: NovelExtension.Installed,
+                        newItem: NovelExtension.Installed
                     ): Boolean {
                         return oldItem == newItem
                     }
                 }
         }
     }
+
+
 }

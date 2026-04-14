@@ -7,7 +7,6 @@ import androidx.core.view.isVisible
 import ani.dantotsu.R
 import ani.dantotsu.databinding.ItemExtensionTestBinding
 import ani.dantotsu.getThemeColor
-import com.bumptech.glide.Glide
 import com.xwray.groupie.viewbinding.BindableItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,21 +32,12 @@ class ExtensionTestItem(
     override fun bind(viewBinding: ItemExtensionTestBinding, position: Int) {
         binding = viewBinding
         context = binding.root.context
-        
-        Glide.with(context).clear(binding.extensionIconImageView)
-        binding.extensionIconImageView.setImageDrawable(null)
-        if (extension.icon != null) {
-            binding.extensionIconImageView.setImageDrawable(extension.icon)
-        } else if (extension.iconUrl != null) {
-            Glide.with(context)
-                .load(extension.iconUrl)
-                .into(binding.extensionIconImageView)
-        }
-
+        binding.extensionIconImageView.setImageDrawable(extension.icon)
         binding.extensionNameTextView.text = extension.name
         binding.extensionLoading.isVisible = isRunning
         hideAllResults()
 
+        println(searchString)
         pingResult()
         searchResult()
         episodeResult()
@@ -190,7 +180,6 @@ class ExtensionTestItem(
 
     private suspend fun runNovelTest(extension: NovelParser) {
         if (testType == "ping") {
-            pingResult = extension.ping()
             withContext(Dispatchers.Main) {
                 pingResult()
             }
@@ -230,6 +219,14 @@ class ExtensionTestItem(
 
     private fun pingResult() {
         if (::binding.isInitialized.not()) return
+        if (extensionType == "novel" && testType != "basic") {
+            binding.pingResultText.isVisible = true
+            binding.pingResultText.text = context.getString(R.string.test_not_supported)
+            binding.pingResultText.setCompoundDrawablesWithIntrinsicBounds(
+                R.drawable.ic_round_info_24, 0, 0, 0
+            )
+            return
+        }
         if (pingResult == null) {
             binding.pingResultText.isVisible = false
             return
@@ -355,7 +352,11 @@ class ExtensionTestItem(
     private fun serverResult() {
         if (::binding.isInitialized.not()) return
         if (extensionType == "novel") {
-            binding.serverResultText.isVisible = false
+            binding.pingResultText.isVisible = true
+            binding.pingResultText.text = context.getString(R.string.test_not_supported)
+            binding.pingResultText.setCompoundDrawablesWithIntrinsicBounds(
+                R.drawable.ic_round_info_24, 0, 0, 0
+            )
             return
         }
         if (serverResultData.time == 0) {
