@@ -51,6 +51,11 @@ abstract class BaseParser {
     open val icon: Drawable? = null
 
     /**
+     * Icon URL of the site, used if local icon is null
+     */
+    open val iconUrl: String? = null
+
+    /**
      *  Search for Anime/Manga/Novel, returns a List of Responses
      *
      *  use `encode(query)` to encode the query for making requests
