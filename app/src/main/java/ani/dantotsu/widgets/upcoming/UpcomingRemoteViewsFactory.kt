@@ -80,7 +80,7 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         if (media != null) {
             for (mediaItem in media) {
                 val timeUntilAiring = (mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0)
-                if (timeUntilAiring <= 0 || mediaItem.nextEpisode == null) {
+                if (timeUntilAiring <= 0 || mediaItem.anime?.nextAiringEpisode == null) {
                     forceRefresh = true
                     break
                 }
@@ -96,7 +96,7 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
                     if (seen.add(mediaItem.id)) {
                         val timeUntilAiring = mediaItem.timeUntilAiring ?: 0
                         if (timeUntilAiring > 0) {
-                            val episodeNumber = mediaItem.nextEpisode ?: mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
+                            val episodeNumber =  mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
                             widgetItems.add(
                                 WidgetItem(
                                     title = mediaItem.userPreferredName,
@@ -127,7 +127,7 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
                     if (seen.add(mediaItem.id)) {
                         val timeUntilAiring = (mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0)
                         if (timeUntilAiring > 0) {
-                            val episodeNumber = mediaItem.nextEpisode ?: mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
+                            val episodeNumber = mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
                             widgetItems.add(
                                 WidgetItem(
                                     title = mediaItem.userPreferredName,
