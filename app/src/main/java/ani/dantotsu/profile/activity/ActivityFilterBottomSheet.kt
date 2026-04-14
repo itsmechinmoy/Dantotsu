@@ -10,6 +10,7 @@ import ani.dantotsu.R
 import ani.dantotsu.databinding.BottomSheetActivityFilterBinding
 
 class ActivityFilterBottomSheet : BottomSheetDialogFragment() {
+
     private var _binding: BottomSheetActivityFilterBinding? = null
     private val binding get() = _binding!!
 
@@ -28,37 +29,20 @@ class ActivityFilterBottomSheet : BottomSheetDialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Set the current filter selection
-        setSelectedFilter(currentFilter)
+        binding.filterChipGroup.check(getChipId(currentFilter))
 
-        binding.filterAll.setOnClickListener {
-            currentFilter = ActivityFilterType.ALL
-            setSelectedFilter(ActivityFilterType.ALL)
-        }
+        binding.filterChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+            val id = checkedIds.firstOrNull() ?: return@setOnCheckedStateChangeListener
 
-        binding.filterAnimeProgress.setOnClickListener {
-            currentFilter = ActivityFilterType.ANIME_PROGRESS
-            setSelectedFilter(ActivityFilterType.ANIME_PROGRESS)
-        }
-
-        binding.filterMangaProgress.setOnClickListener {
-            currentFilter = ActivityFilterType.MANGA_PROGRESS
-            setSelectedFilter(ActivityFilterType.MANGA_PROGRESS)
-        }
-
-        binding.filterStatus.setOnClickListener {
-            currentFilter = ActivityFilterType.STATUS
-            setSelectedFilter(ActivityFilterType.STATUS)
-        }
-
-        binding.filterMessages.setOnClickListener {
-            currentFilter = ActivityFilterType.MESSAGES
-            setSelectedFilter(ActivityFilterType.MESSAGES)
-        }
-
-        binding.filterText.setOnClickListener {
-            currentFilter = ActivityFilterType.TEXT
-            setSelectedFilter(ActivityFilterType.TEXT)
+            currentFilter = when (id) {
+                R.id.filterAll -> ActivityFilterType.ALL
+                R.id.filterAnimeProgress -> ActivityFilterType.ANIME_PROGRESS
+                R.id.filterMangaProgress -> ActivityFilterType.MANGA_PROGRESS
+                R.id.filterStatus -> ActivityFilterType.STATUS
+                R.id.filterMessages -> ActivityFilterType.MESSAGES
+                R.id.filterText -> ActivityFilterType.TEXT
+                else -> return@setOnCheckedStateChangeListener
+            }
         }
 
         binding.applyFiltersButton.setOnClickListener {
@@ -67,40 +51,15 @@ class ActivityFilterBottomSheet : BottomSheetDialogFragment() {
         }
     }
 
-    private fun setSelectedFilter(filter: ActivityFilterType) {
-        val context = requireContext()
-        val selectedColor = ContextCompat.getColor(context, R.color.yt_red)
-        val defaultColor = ContextCompat.getColor(context, R.color.bg_opp)
-
-        binding.filterAll.setBackgroundResource(
-            if (filter == ActivityFilterType.ALL) R.drawable.bg_selected_filter else R.drawable.bg_filter_chip
-        )
-        binding.filterAll.setTextColor(if (filter == ActivityFilterType.ALL) selectedColor else defaultColor)
-
-        binding.filterAnimeProgress.setBackgroundResource(
-            if (filter == ActivityFilterType.ANIME_PROGRESS) R.drawable.bg_selected_filter else R.drawable.bg_filter_chip
-        )
-        binding.filterAnimeProgress.setTextColor(if (filter == ActivityFilterType.ANIME_PROGRESS) selectedColor else defaultColor)
-
-        binding.filterMangaProgress.setBackgroundResource(
-            if (filter == ActivityFilterType.MANGA_PROGRESS) R.drawable.bg_selected_filter else R.drawable.bg_filter_chip
-        )
-        binding.filterMangaProgress.setTextColor(if (filter == ActivityFilterType.MANGA_PROGRESS) selectedColor else defaultColor)
-
-        binding.filterStatus.setBackgroundResource(
-            if (filter == ActivityFilterType.STATUS) R.drawable.bg_selected_filter else R.drawable.bg_filter_chip
-        )
-        binding.filterStatus.setTextColor(if (filter == ActivityFilterType.STATUS) selectedColor else defaultColor)
-
-        binding.filterMessages.setBackgroundResource(
-            if (filter == ActivityFilterType.MESSAGES) R.drawable.bg_selected_filter else R.drawable.bg_filter_chip
-        )
-        binding.filterMessages.setTextColor(if (filter == ActivityFilterType.MESSAGES) selectedColor else defaultColor)
-
-        binding.filterText.setBackgroundResource(
-            if (filter == ActivityFilterType.TEXT) R.drawable.bg_selected_filter else R.drawable.bg_filter_chip
-        )
-        binding.filterText.setTextColor(if (filter == ActivityFilterType.TEXT) selectedColor else defaultColor)
+    private fun getChipId(filter: ActivityFilterType): Int {
+        return when (filter) {
+            ActivityFilterType.ALL -> R.id.filterAll
+            ActivityFilterType.ANIME_PROGRESS -> R.id.filterAnimeProgress
+            ActivityFilterType.MANGA_PROGRESS -> R.id.filterMangaProgress
+            ActivityFilterType.STATUS -> R.id.filterStatus
+            ActivityFilterType.MESSAGES -> R.id.filterMessages
+            ActivityFilterType.TEXT -> R.id.filterText
+        }
     }
 
     override fun onDestroyView() {
