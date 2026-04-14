@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
+import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -106,12 +107,15 @@ class MediaAdaptor(
                     if (media.relation != null) {
                         b.itemCompactRelation.text = "${media.relation}  "
                         b.itemCompactType.visibility = View.VISIBLE
-                        
+
                         if (media.relation!!.contains("\n")) {
-                            b.itemCompactRelation.isSingleLine = false
-                            b.itemCompactRelation.maxLines = 2
-                            b.itemCompactType.layoutParams = b.itemCompactType.layoutParams.apply {
-                                height = ViewGroup.LayoutParams.WRAP_CONTENT
+                            b.itemCompactRelation.apply {
+                                isSingleLine = false
+                                maxLines = 2
+                                ellipsize = TextUtils.TruncateAt.START
+
+                                includeFontPadding = false
+                                setLineSpacing(0f, 0.9f)
                             }
                         } else {
                             b.itemCompactRelation.isSingleLine = true
@@ -180,7 +184,7 @@ class MediaAdaptor(
                         b.itemTotal.text = itemTotal
                         b.itemCompactTotal.text = "${media.manga.totalChapters ?: "??"}"
                     }
-                    if (position == mediaList!!.size - 2 && viewPager != null) viewPager.post {
+                    if (position == mediaList.size - 2 && viewPager != null) viewPager.post {
                         val start = mediaList.size
                         mediaList.addAll(mediaList)
                         val end = mediaList.size - start
