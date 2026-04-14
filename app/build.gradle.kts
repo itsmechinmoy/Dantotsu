@@ -47,7 +47,7 @@ android {
 
     buildTypes {
         create("alpha") {
-            applicationIdSuffix = ".beta"
+            applicationIdSuffix = ".beta1"
             versionNameSuffix = "-alpha01-$gitCommitHash"
             manifestPlaceholders["icon_placeholder"] = "@mipmap/ic_launcher_alpha"
             manifestPlaceholders["icon_placeholder_round"] = "@mipmap/ic_launcher_alpha_round"
