@@ -9,6 +9,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Lifecycle
 import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.databinding.ActivityNotificationBinding
@@ -118,6 +119,14 @@ class NotificationActivity : AppCompatActivity() {
                     saveCounts()
                 }
             }
+        binding.notificationViewPager.registerOnPageChangeCallback(
+            object : ViewPager2 .OnPageChangeCallback() {
+                override fun onPageSelected(position: Int) {
+                    super.onPageSelected(position)
+                    fragments[position]?.onVisible()
+                }
+            }
+        )
         binding.notificationViewPager.setCurrentItem(selected, false)
         navBar.selectTabAt(selected)
         navBar.setOnTabSelectListener(object : AnimatedBottomBar.OnTabSelectListener {
@@ -161,8 +170,8 @@ class NotificationActivity : AppCompatActivity() {
             navBar.selectTabAt(selected)
         }
     }
-
-    private class ViewPagerAdapter(
+    val fragments = mutableMapOf<Int, NotificationFragment>()
+    private inner class ViewPagerAdapter(
         fragmentManager: FragmentManager,
         lifecycle: Lifecycle,
         val id: Int = -1,
@@ -171,12 +180,18 @@ class NotificationActivity : AppCompatActivity() {
     ) : FragmentStateAdapter(fragmentManager, lifecycle) {
         override fun getItemCount(): Int = if (id != -1) 1 else if (commentsEnabled) 4 else 3
 
-        override fun createFragment(position: Int): Fragment = when (position) {
-            0 -> newInstance(if (id != -1) ONE else USER, id, countResetCallback)
-            1 -> newInstance(MEDIA, countResetCallback = countResetCallback)
-            2 -> newInstance(SUBSCRIPTION, countResetCallback = countResetCallback)
-            3 -> newInstance(COMMENT, countResetCallback = countResetCallback)
-            else -> newInstance(MEDIA, countResetCallback = countResetCallback)
+        override fun createFragment(position: Int): Fragment {
+
+
+            val fragment = when (position) {
+                0 -> newInstance(if (id != -1) ONE else USER, id, countResetCallback)
+                1 -> newInstance(MEDIA, countResetCallback = countResetCallback)
+                2 -> newInstance(SUBSCRIPTION, countResetCallback = countResetCallback)
+                3 -> newInstance(COMMENT, countResetCallback = countResetCallback)
+                else -> newInstance(MEDIA, countResetCallback = countResetCallback)
+            }
+            fragments[position] = fragment
+            return fragment
         }
     }
 }
