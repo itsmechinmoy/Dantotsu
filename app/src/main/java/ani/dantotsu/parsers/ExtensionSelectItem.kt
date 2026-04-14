@@ -4,11 +4,13 @@ import android.graphics.drawable.Drawable
 import android.view.View
 import ani.dantotsu.R
 import ani.dantotsu.databinding.ItemExtensionSelectBinding
+import com.bumptech.glide.Glide
 import com.xwray.groupie.viewbinding.BindableItem
 
 class ExtensionSelectItem(
     private val name: String,
     private val image: Drawable?,
+    private val iconUrl: String?,
     private var isSelected: Boolean,
     val selectCallback: (String, Boolean) -> Unit
 ) : BindableItem<ItemExtensionSelectBinding>() {
@@ -17,8 +19,16 @@ class ExtensionSelectItem(
     override fun bind(viewBinding: ItemExtensionSelectBinding, position: Int) {
         binding = viewBinding
         binding.extensionNameTextView.text = name
-        image?.let {
-            binding.extensionIconImageView.setImageDrawable(it)
+
+        Glide.with(binding.root.context).clear(binding.extensionIconImageView)
+        binding.extensionIconImageView.setImageDrawable(null)
+
+        if (image != null) {
+            binding.extensionIconImageView.setImageDrawable(image)
+        } else if (iconUrl != null) {
+            Glide.with(binding.root.context)
+                .load(iconUrl)
+                .into(binding.extensionIconImageView)
         }
         binding.extensionCheckBox.setOnCheckedChangeListener(null)
         binding.extensionCheckBox.isChecked = isSelected

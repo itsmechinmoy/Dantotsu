@@ -101,7 +101,6 @@
         android:fontFamily="@font/poppins_bold"
         android:text="@string/test_search"
         android:textAlignment="center"
-        android:visibility="gone"
         android:textSize="16sp" />
 
     <com.google.android.material.textfield.TextInputLayout
@@ -120,7 +119,6 @@
         app:boxCornerRadiusTopEnd="28dp"
         app:boxCornerRadiusTopStart="28dp"
         app:endIconDrawable="@drawable/ic_round_search_24"
-        android:visibility="gone"
         app:hintAnimationEnabled="true">
 
         <AutoCompleteTextView

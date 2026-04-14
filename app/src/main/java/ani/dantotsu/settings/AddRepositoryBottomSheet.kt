@@ -139,8 +139,14 @@ class AddRepositoryBottomSheet : BottomSheetDialogFragment() {
 
     private fun isValidUrl(input: String): String? {
         if (input.startsWith("http://") || input.startsWith("https://")) {
-            if (!input.removeSuffix("/").endsWith("index.min.json")) {
-                return "URL must end with index.min.json"
+            if (mediaType == MediaType.NOVEL) {
+                if (!input.removeSuffix("/").endsWith(".json")) {
+                    return "URL must end with a .json file"
+                }
+            } else {
+                if (!input.removeSuffix("/").endsWith("index.min.json")) {
+                    return "URL must end with index.min.json"
+                }
             }
             return null
         }

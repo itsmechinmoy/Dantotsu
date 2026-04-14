@@ -8,7 +8,6 @@ sealed class NovelExtension {
     abstract val pkgName: String
     abstract val versionName: String
     abstract val versionCode: Long
-
     data class Installed(
         override val name: String,
         override val pkgName: String,
@@ -30,6 +29,17 @@ sealed class NovelExtension {
         val sources: List<AvailableNovelSources>,
         val iconUrl: String,
     ) : NovelExtension()
+
+    data class JsPlugin(
+        val plugin: LnReaderInstalledPlugin,
+    ) : NovelExtension() {
+        override val name: String       get() = plugin.name
+        override val pkgName: String    get() = plugin.id
+        override val versionName: String get() = plugin.version
+        override val versionCode: Long   get() = 0L
+        val hasUpdate: Boolean           get() = plugin.hasUpdate
+        val iconUrl: String              get() = plugin.iconUrl
+    }
 }
 
 data class AvailableNovelSources(
@@ -40,7 +50,7 @@ data class AvailableNovelSources(
 ) {
     fun toNovelSourceData(): NovelSourceData {
         return NovelSourceData(
-            id = this.id,
+            id   = this.id,
             lang = this.lang,
             name = this.name,
         )
@@ -52,6 +62,5 @@ data class NovelSourceData(
     val lang: String,
     val name: String,
 ) {
-
     val isMissingInfo: Boolean = name.isBlank() || lang.isBlank()
 }
