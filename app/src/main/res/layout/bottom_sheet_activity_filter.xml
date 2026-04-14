@@ -40,116 +40,69 @@
         android:textSize="14sp"
         android:textColor="?android:attr/textColorPrimary" />
 
-    <com.google.android.flexbox.FlexboxLayout
+    <com.google.android.material.chip.ChipGroup
+        android:id="@+id/filterChipGroup"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:flexWrap="wrap"
-        app:alignItems="flex_start"
-        app:flexDirection="row"
-        app:justifyContent="flex_start">
+        app:singleSelection="true"
+        app:selectionRequired="true"
+        app:chipSpacingHorizontal="8dp"
+        app:chipSpacingVertical="12dp">
 
-        <TextView
+        <com.google.android.material.chip.Chip
             android:id="@+id/filterAll"
+            style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_filter_chip"
-            android:clickable="true"
-            android:focusable="true"
-            android:fontFamily="@font/poppins"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
-            android:text="@string/all"
-            android:textSize="13sp" />
+            android:text="@string/all" />
 
-        <TextView
+        <com.google.android.material.chip.Chip
             android:id="@+id/filterAnimeProgress"
+            style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_filter_chip"
-            android:clickable="true"
-            android:focusable="true"
-            android:fontFamily="@font/poppins"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
-            android:text="@string/anime_progress"
-            android:textSize="13sp" />
+            android:text="@string/anime_progress" />
 
-        <TextView
+        <com.google.android.material.chip.Chip
             android:id="@+id/filterMangaProgress"
+            style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_filter_chip"
-            android:clickable="true"
-            android:focusable="true"
-            android:fontFamily="@font/poppins"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
-            android:text="@string/manga_progress"
-            android:textSize="13sp" />
+            android:text="@string/manga_progress" />
 
-        <TextView
+        <com.google.android.material.chip.Chip
             android:id="@+id/filterStatus"
+            style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_filter_chip"
-            android:clickable="true"
-            android:focusable="true"
-            android:fontFamily="@font/poppins"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
-            android:text="@string/status"
-            android:textSize="13sp" />
+            android:text="@string/status" />
 
-        <TextView
+        <com.google.android.material.chip.Chip
             android:id="@+id/filterMessages"
+            style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_filter_chip"
-            android:clickable="true"
-            android:focusable="true"
-            android:fontFamily="@font/poppins"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
-            android:text="@string/messages"
-            android:textSize="13sp" />
+            android:text="@string/messages" />
 
-        <TextView
+        <com.google.android.material.chip.Chip
             android:id="@+id/filterText"
+            style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_filter_chip"
-            android:clickable="true"
-            android:focusable="true"
-            android:fontFamily="@font/poppins"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
-            android:text="@string/text"
-            android:textSize="13sp" />
+            android:text="@string/text" />
 
-    </com.google.android.flexbox.FlexboxLayout>
+    </com.google.android.material.chip.ChipGroup>
 
     <Button
         android:id="@+id/applyFiltersButton"
         android:layout_width="match_parent"
         android:layout_height="48dp"
         android:layout_marginTop="24dp"
-        android:background="@drawable/bg_button_primary"
+        android:backgroundTint="?attr/colorPrimary"
         android:fontFamily="@font/poppins_semi_bold"
         android:text="@string/apply_filters"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
         android:textSize="14sp" />
-  
+
 </LinearLayout>
