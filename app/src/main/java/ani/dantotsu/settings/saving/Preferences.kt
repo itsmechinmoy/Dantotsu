@@ -1,6 +1,7 @@
 package ani.dantotsu.settings.saving
 
 import android.graphics.Color
+import ani.dantotsu.connections.PendingProgressUpdate
 import ani.dantotsu.connections.comments.AuthResponse
 import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.media.SearchHistory
@@ -197,6 +198,8 @@ enum class PrefName(val data: Pref) {
 
     //Irrelevant
     Incognito(Pref(Location.Irrelevant, Boolean::class, false)),
+    RescueMode(Pref(Location.Irrelevant, Boolean::class, false)),
+    PendingProgressUpdates(Pref(Location.Irrelevant, List::class, listOf<PendingProgressUpdate>())),
     OfflineMode(Pref(Location.Irrelevant, Boolean::class, false)),
     DiscordStatus(Pref(Location.Irrelevant, String::class, "online")),
     DiscordRPCModeAnime(Pref(Location.Irrelevant, String::class, "dantotsu")),

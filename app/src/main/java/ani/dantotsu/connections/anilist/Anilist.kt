@@ -52,6 +52,9 @@ object Anilist {
     var animeCustomLists: List<String>? = null
     var mangaCustomLists: List<String>? = null
 
+    /** Set to true when the AniList API reports a "disabled" error. Reset on next successful call. */
+    var anilistDisabledSignal: Boolean = false
+
     val sortBy = listOf(
         "SCORE_DESC",
         "POPULARITY_DESC",
@@ -366,7 +369,9 @@ object Anilist {
                             .getString("message") else "Forbidden (error ${json.code})"
                     } ?: "Forbidden (error ${json.code})"
 
-                    if (message.contains("Invalid token")) {
+                    if (message.contains("disabled", ignoreCase = true)) {
+                        anilistDisabledSignal = true
+                    } else if (message.contains("Invalid token")) {
                         if (!show) snackString("Anilist token expired, please login again")
                     } else {
                         if (!show) snackString("Error fetching Anilist data: $message")
@@ -375,9 +380,11 @@ object Anilist {
                     throw Exception(message)
                 }
                 if (!json.text.startsWith("{")) {
+                    anilistDisabledSignal = true
                     throw Exception(currContext()?.getString(R.string.anilist_down) + " (error: ${json.code})")
                 }
 
+                anilistDisabledSignal = false
                 json.parsed()
             } else null
         } catch (e: Exception) {

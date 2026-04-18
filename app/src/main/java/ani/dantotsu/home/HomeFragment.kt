@@ -48,6 +48,7 @@ import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.util.Logger
+import ani.dantotsu.util.customAlertDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -464,6 +465,28 @@ class HomeFragment : Fragment() {
 
         var running = false
         val live = Refresh.activity.getOrPut(1) { MutableLiveData(true) }
+
+        // Observe rescue mode to show/hide AL-exclusive personal sections
+        PrefManager.getLiveVal(PrefName.RescueMode, false).asLiveBool()
+            .observe(viewLifecycleOwner) { inRescueMode ->
+                val alOnlySections = listOf(
+                    binding.homeContinueWatchingContainer,
+                    binding.homeFavAnimeContainer,
+                    binding.homePlannedAnimeContainer,
+                    binding.homeContinueReadingContainer,
+                    binding.homeFavMangaContainer,
+                    binding.homePlannedMangaContainer,
+                    binding.homeUserStatusContainer,
+                    binding.homeUserDataContainer,
+                    binding.homeAnimeList,
+                    binding.homeMangaList,
+                )
+                if (inRescueMode) {
+                    alOnlySections.forEach { it.visibility = View.GONE }
+                }
+                // When rescue mode is disabled, sections will be restored on the next data refresh
+            }
+
         live.observe(viewLifecycleOwner) { shouldRefresh ->
             if (!running && shouldRefresh) {
                 running = true
@@ -486,6 +509,23 @@ class HomeFragment : Fragment() {
                         }
                         model.loaded = true
                         model.setListImages()
+                    }
+
+                    // Show rescue mode dialog if AniList reported a disabled/down error
+                    if (Anilist.anilistDisabledSignal && !PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+                        withContext(Dispatchers.Main) {
+                            if (isAdded && _binding != null) {
+                                requireContext().customAlertDialog().apply {
+                                    setTitle(R.string.rescue_mode_prompt_title)
+                                    setMessage(R.string.rescue_mode_prompt_message)
+                                    setPosButton(R.string.rescue_mode_enable) {
+                                        PrefManager.setVal(PrefName.RescueMode, true)
+                                    }
+                                    setNegButton(R.string.no)
+                                    show()
+                                }
+                            }
+                        }
                     }
 
                     var empty = true
