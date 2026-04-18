@@ -33,8 +33,6 @@ object Anify {
                 }
                 .associate { (key, ep) ->
                     val title = ep.title?.en
-                        ?: ep.title?.xJat
-                        ?: ep.title?.ja
 
                     key to Episode(
                         number = key,
