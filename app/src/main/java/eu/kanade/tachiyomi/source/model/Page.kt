@@ -5,23 +5,27 @@ import eu.kanade.tachiyomi.network.ProgressListener
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
+import kotlinx.serialization.Transient as KotlinxTransient
 
 @Serializable
 open class Page(
     val index: Int,
     val url: String = "",
     var imageUrl: String? = null,
-    @Transient var uri: Uri? = null, // Deprecated but can't be deleted due to extensions
+    @kotlin.jvm.Transient
+    @KotlinxTransient
+    var uri: Uri? = null, // Deprecated but can't be deleted due to extensions
 ) : ProgressListener {
 
     val number: Int
         get() = index + 1
 
-    @Transient
+    @kotlin.jvm.Transient
+    @KotlinxTransient
     private val _statusFlow = MutableStateFlow(State.QUEUE)
 
-    @Transient
+    @kotlin.jvm.Transient
+    @KotlinxTransient
     val statusFlow = _statusFlow.asStateFlow()
     var status: State
         get() = _statusFlow.value
@@ -29,10 +33,12 @@ open class Page(
             _statusFlow.value = value
         }
 
-    @Transient
+    @kotlin.jvm.Transient
+    @KotlinxTransient
     private val _progressFlow = MutableStateFlow(0)
 
-    @Transient
+    @kotlin.jvm.Transient
+    @KotlinxTransient
     val progressFlow = _progressFlow.asStateFlow()
     var progress: Int
         get() = _progressFlow.value
