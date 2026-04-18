@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/poppins_bold"
+        android:text="@string/filter_activity"
+        android:textSize="18sp"
+        android:textColor="?android:attr/textColorPrimary" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:fontFamily="@font/poppins"
+        android:text="@string/filter_activity_subtitle"
+        android:textSize="13sp"
+        android:textColor="?android:attr/textColorSecondary" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginVertical="16dp"
+        android:background="?android:attr/listDivider" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:text="@string/filter_by_type"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorPrimary" />
+
+    <com.google.android.material.chip.ChipGroup
+        android:id="@+id/filterChipGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:singleSelection="true"
+        app:selectionRequired="true"
+        app:chipSpacingHorizontal="8dp"
+        app:chipSpacingVertical="12dp">
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/filterAll"
+            style="@style/Widget.Material3.Chip.Filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/all" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/filterAnimeProgress"
+            style="@style/Widget.Material3.Chip.Filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/anime_progress" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/filterMangaProgress"
+            style="@style/Widget.Material3.Chip.Filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/manga_progress" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/filterStatus"
+            style="@style/Widget.Material3.Chip.Filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/status" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/filterMessages"
+            style="@style/Widget.Material3.Chip.Filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/messages" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/filterText"
+            style="@style/Widget.Material3.Chip.Filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/text" />
+
+    </com.google.android.material.chip.ChipGroup>
+
+    <Button
+        android:id="@+id/applyFiltersButton"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="24dp"
+        android:backgroundTint="?attr/colorPrimary"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:text="@string/apply_filters"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp" />
+
+</LinearLayout>

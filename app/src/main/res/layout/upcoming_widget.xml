@@ -3,6 +3,8 @@
     android:id="@+id/widgetRootContainer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@drawable/round_corner"
+    android:clipToOutline="true"
     android:theme="@style/Theme.Dantotsu.AppWidgetContainer">
 
     <ImageView
@@ -34,7 +36,7 @@
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:layout_alignParentTop="true"
-            android:layout_alignParentEnd="true"
+            android:layout_toStartOf="@+id/refreshButton"
             android:layout_marginStart="0dp"
             android:layout_toEndOf="@+id/logoView"
             android:ellipsize="none"
@@ -44,6 +46,16 @@
             android:textAlignment="viewStart"
             android:textSize="20sp"
             android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/refreshButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentEnd="true"
+            android:padding="8dp"
+            android:src="@drawable/ic_round_refresh_24"
+            tools:ignore="ContentDescription" />
 
         <ListView
             android:id="@+id/widgetListView"

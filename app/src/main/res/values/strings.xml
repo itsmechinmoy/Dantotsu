@@ -1122,4 +1122,19 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="next_chapter_prediction">Next Chapter Prediction</string>
     <string name="anime_adaptation">Anime Adaptation</string>
 
+    <string name="filter_activity">Filter Activity</string>
+    <string name="filter_activity_subtitle">Choose what type of activities to show</string>
+    <string name="filter_by_type">Filter by type</string>
+    <string name="all">All</string>
+    <string name="anime_progress">Anime Progress</string>
+    <string name="manga_progress">Manga Progress</string>
+    <string name="messages">Messages</string>
+    <string name="text">Text</string>
+    <string name="apply_filters">Apply Filters</string>
+    <string name="no_anime_progress">No anime progress activities</string>
+    <string name="no_manga_progress">No manga progress activities</string>
+    <string name="no_status_activities">No status activities</string>
+    <string name="no_messages">No messages</string>
+    <string name="no_text_activities">No text activities</string>
+
 </resources>

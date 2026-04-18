@@ -58,9 +58,12 @@ class AnilistQueries {
         Anilist.episodesWatched = user.statistics?.anime?.episodesWatched
         Anilist.chapterRead = user.statistics?.manga?.chaptersRead
         Anilist.adult = user.options?.displayAdultContent ?: false
-        Anilist.unreadNotificationCount = user.unreadNotificationCount ?: 0
-        val unread = PrefManager.getVal<Int>(PrefName.UnreadCommentNotifications)
-        Anilist.unreadNotificationCount += unread
+        val anilistCount = user.unreadNotificationCount ?: 0
+        val userCount = PrefManager.getVal<Int>(PrefName.UnreadUserNotifications)
+        val mediaCount = PrefManager.getVal<Int>(PrefName.UnreadMediaNotifications)
+        val subsCount = PrefManager.getVal<Int>(PrefName.UnreadSubscriptionNotifications)
+        val commentCount = PrefManager.getVal<Int>(PrefName.UnreadCommentNotifications)
+        Anilist.unreadNotificationCount = anilistCount + subsCount + commentCount
         Anilist.initialized = true
 
         user.options?.let {
@@ -1715,7 +1718,7 @@ Page(page:$page,perPage:50) {
 
     suspend fun getUpcomingAnime(id: String): List<Media> {
         val res = executeQuery<Query.MediaListCollection>(
-            """{MediaListCollection(userId:$id,type:ANIME){lists{name entries{media{id,isFavourite,title{userPreferred,romaji}coverImage{medium}nextAiringEpisode{timeUntilAiring}}}}}}""",
+            """{MediaListCollection(userId:$id,type:ANIME){lists{name entries{media{id,isFavourite,title{userPreferred,romaji}coverImage{medium}nextAiringEpisode{episode,timeUntilAiring}}}}}}""",
             force = true
         )
         val list = mutableListOf<Media>()

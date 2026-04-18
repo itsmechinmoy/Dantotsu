@@ -3,6 +3,7 @@ package ani.dantotsu.widgets.upcoming
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import ani.dantotsu.R
@@ -79,7 +80,7 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         if (media != null) {
             for (mediaItem in media) {
                 val timeUntilAiring = (mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0)
-                if (timeUntilAiring <= 0) {
+                if (timeUntilAiring <= 0 || mediaItem.anime?.nextAiringEpisode == null) {
                     forceRefresh = true
                     break
                 }
@@ -95,7 +96,7 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
                     if (seen.add(mediaItem.id)) {
                         val timeUntilAiring = mediaItem.timeUntilAiring ?: 0
                         if (timeUntilAiring > 0) {
-                            val episodeNumber = mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
+                            val episodeNumber =  mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
                             widgetItems.add(
                                 WidgetItem(
                                     title = mediaItem.userPreferredName,
@@ -207,6 +208,7 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
             
             val episodeText = item.episode?.let { "Episode $it" } ?: ""
             setTextViewText(R.id.text_show_episode, episodeText)
+            setViewVisibility(R.id.text_show_episode, if (episodeText.isEmpty()) View.GONE else View.VISIBLE)
             
             setTextColor(R.id.text_show_title, titleTextColor)
             setTextColor(R.id.text_show_countdown, countdownTextColor)

@@ -41,6 +41,10 @@ class AnilistNotificationTask : Task {
                         val newNotifications = unreadNotifications?.filter { it.id > lastId }
                         val filteredTypes =
                             PrefManager.getVal<Set<String>>(PrefName.AnilistFilteredTypes)
+                        
+                        var userCount = 0
+                        var mediaCount = 0
+                        
                         newNotifications?.forEach {
                             if (!filteredTypes.contains(it.notificationType)) {
                                 val content = ActivityItemBuilder.getContent(it)
@@ -57,8 +61,25 @@ class AnilistNotificationTask : Task {
                                             notification
                                         )
                                 }
+                                // Track counts per section
+                                if (it.media != null) {
+                                    mediaCount++
+                                } else if (it.user != null || it.userId != null) {
+                                    userCount++
+                                }
                             }
                         }
+                        
+                        // Update per-section counts
+                        if (userCount > 0) {
+                            val currentUserCount = PrefManager.getVal<Int>(PrefName.UnreadUserNotifications)
+                            PrefManager.setVal(PrefName.UnreadUserNotifications, currentUserCount + userCount)
+                        }
+                        if (mediaCount > 0) {
+                            val currentMediaCount = PrefManager.getVal<Int>(PrefName.UnreadMediaNotifications)
+                            PrefManager.setVal(PrefName.UnreadMediaNotifications, currentMediaCount + mediaCount)
+                        }
+                        
                         if (newNotifications?.isNotEmpty() == true) {
                             PrefManager.setVal(
                                 PrefName.LastAnilistNotificationId,
