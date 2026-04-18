@@ -113,6 +113,7 @@ import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.load.model.GlideUrl
+import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade
 import com.bumptech.glide.load.resource.gif.GifDrawable
 import com.bumptech.glide.request.RequestListener
@@ -164,6 +165,7 @@ import androidx.core.view.isVisible
 
 var statusBarHeight = 0
 var navBarHeight = 0
+private const val MARKDOWN_IMAGE_MAX_SCREEN_SCALE_FACTOR = 2L
 val Int.dp: Float get() = (this / getSystem().displayMetrics.density)
 val Float.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
 
@@ -1486,6 +1488,17 @@ fun buildMarkwon(
     anilist: Boolean = false
 ): Markwon {
     val glideContext = fragment?.let { Glide.with(it) } ?: Glide.with(activity)
+    val metrics = activity.resources.displayMetrics
+    // Allow modestly larger-than-screen markdown images while preventing oversized bitmap draw crashes.
+    val maxImageWidth = (metrics.widthPixels.toLong() * MARKDOWN_IMAGE_MAX_SCREEN_SCALE_FACTOR)
+        .coerceAtMost(Int.MAX_VALUE.toLong())
+        .toInt()
+    val maxImageHeight = (metrics.heightPixels.toLong() * MARKDOWN_IMAGE_MAX_SCREEN_SCALE_FACTOR)
+        .coerceAtMost(Int.MAX_VALUE.toLong())
+        .toInt()
+    val markdownImageRequestOptions = RequestOptions()
+        .downsample(DownsampleStrategy.AT_MOST)
+        .override(maxImageWidth, maxImageHeight)
     val markwon = Markwon.builder(activity)
         .usePlugin(object : AbstractMarkwonPlugin() {
             override fun configureConfiguration(builder: MarkwonConfiguration.Builder) {
@@ -1540,7 +1553,9 @@ fun buildMarkwon(
 
             override fun load(drawable: AsyncDrawable): RequestBuilder<Drawable> {
                 Logger.log("Loading image: ${drawable.destination}")
-                return requestManager.load(drawable.destination)
+                return requestManager
+                    .load(drawable.destination)
+                    .apply(markdownImageRequestOptions)
             }
 
             override fun cancel(target: Target<*>) {
