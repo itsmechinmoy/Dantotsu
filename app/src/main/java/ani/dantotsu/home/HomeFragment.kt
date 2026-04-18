@@ -45,6 +45,7 @@ import ani.dantotsu.settings.SettingsDialogFragment
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefManager.asLiveBool
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.settings.saving.HOME_LAYOUT_FIXED_INDEX
 import ani.dantotsu.snackString
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.util.Logger
@@ -306,6 +307,17 @@ class HomeFragment : Fragment() {
         }
 
         initRecyclerView(
+            model.getMissingSequels(),
+            binding.homeMissingSequelsContainer,
+            binding.homeMissingSequelsRecyclerView,
+            binding.homeMissingSequelsProgressBar,
+            binding.homeMissingSequelsEmpty,
+            binding.homeMissingSequels,
+            binding.homeMissingSequelsMore,
+            getString(R.string.missing_sequels)
+        )
+
+        initRecyclerView(
             model.getMangaContinue(),
             binding.homeContinueReadingContainer,
             binding.homeReadingRecyclerView,
@@ -449,6 +461,7 @@ class HomeFragment : Fragment() {
             "MangaPlanned",
             "Recommendation",
             "UserStatus",
+            "MissingSequels",
         )
 
         val containers = arrayOf(
@@ -460,6 +473,7 @@ class HomeFragment : Fragment() {
             binding.homePlannedMangaContainer,
             binding.homeRecommendedContainer,
             binding.homeUserStatusContainer,
+            binding.homeMissingSequelsContainer,
         )
 
         var running = false
@@ -491,14 +505,29 @@ class HomeFragment : Fragment() {
                     var empty = true
                     val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
                     var homeLayoutOrder: List<Int> = PrefManager.getVal(PrefName.HomeLayoutOrder)
+                    val fixedIndex = HOME_LAYOUT_FIXED_INDEX
 
-                    if (homeLayoutOrder.isEmpty()) {
-                        homeLayoutOrder = (0..6).toList()
+                    val normalizedHomeLayoutShow = homeLayoutShow.toMutableList().apply {
+                        if (size < containers.size) {
+                            repeat(containers.size - size) { add(true) }
+                        } else if (size > containers.size) {
+                            subList(containers.size, size).clear()
+                        }
+                    }
+
+                    val reorderable = containers.indices.filter { it != fixedIndex }
+                    homeLayoutOrder = if (homeLayoutOrder.isEmpty()) {
+                        reorderable
+                    } else {
+                        val sanitizedOrder = homeLayoutOrder.filter { it in reorderable }.distinct().toMutableList()
+                        val missing = reorderable.filterNot { it in sanitizedOrder }
+                        sanitizedOrder.addAll(missing)
+                        sanitizedOrder
                     }
 
                     withContext(Dispatchers.Main) {
-                        homeLayoutShow.indices.forEach { i ->
-                            if (homeLayoutShow.elementAt(i)) {
+                        containers.indices.forEach { i ->
+                            if (normalizedHomeLayoutShow.elementAt(i)) {
                                 empty = false
                             } else {
                                 containers[i].visibility = View.GONE

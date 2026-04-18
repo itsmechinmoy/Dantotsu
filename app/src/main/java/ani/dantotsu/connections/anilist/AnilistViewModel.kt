@@ -77,6 +77,11 @@ class AnilistHomeViewModel : ViewModel() {
 
     fun getRecommendation(): LiveData<ArrayList<Media>> = recommendation
 
+    private val missingSequels: MutableLiveData<ArrayList<Media>> =
+        MutableLiveData<ArrayList<Media>>(null)
+
+    fun getMissingSequels(): LiveData<ArrayList<Media>> = missingSequels
+
     private val userStatus: MutableLiveData<ArrayList<User>> =
         MutableLiveData<ArrayList<User>>(null)
 
@@ -100,6 +105,7 @@ class AnilistHomeViewModel : ViewModel() {
         res["favoriteManga"]?.let { mangaFav.postValue(it) }
         res["currentMangaPlanned"]?.let { mangaPlanned.postValue(it) }
         res["recommendations"]?.let { recommendation.postValue(it) }
+        res["missingSequels"]?.let { missingSequels.postValue(it) }
         res["hidden"]?.let { hidden.postValue(it) }
     }
 

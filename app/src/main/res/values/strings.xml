@@ -60,6 +60,8 @@
     <string name="episodes_watched_n">Episodes\nWatched</string>
     <string name="continue_reading">Continue Reading</string>
     <string name="continue_watching">Continue Watching</string>
+    <string name="missing_sequels">Missed Sequels</string>
+    <string name="no_missing_sequels">No missed sequels found.</string>
     <string name="recommended">Recommended</string>
 
     <string name="get_recommendations">Watch/Read some Anime or Manga to get Recommendations</string>
@@ -312,6 +314,7 @@
         <item>Planned Manga</item>
         <item>Recommended</item>
         <item>Social Feeds</item>
+        <item>Missed Sequels</item>
     </string-array>
 
     <string name="startUpTab">Default Start Up Tab</string>
