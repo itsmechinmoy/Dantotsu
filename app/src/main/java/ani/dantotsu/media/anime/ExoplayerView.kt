@@ -2116,7 +2116,7 @@ class ExoplayerView :
         playbackPosition = exoPlayer.currentPosition
         disappeared = false
         functionstarted = false
-        exoSubtitleView.removeAllViews()
+        exoSubtitleView.setCues(emptyList())
         exoPlayer.release()
         VideoCache.release()
         mediaSession?.release()
