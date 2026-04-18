@@ -538,6 +538,11 @@
     <string name="loading_image_failed">Loading Image Failed</string>
     <string name="copied_device_info">Copied device info</string>
     <string name="anilist_down">Seems like Anilist is down, maybe try using a VPN or you can wait for it to come back.</string>
+    <string name="rescue_mode">Rescue Mode (MAL)</string>
+    <string name="rescue_mode_prompt_title">AniList Unavailable</string>
+    <string name="rescue_mode_prompt_message">AniList seems to be disabled or unavailable. Would you like to enable Rescue Mode and use MAL/Jikan as a fallback? Your progress will be cached and synced back to AniList when it comes back online.</string>
+    <string name="rescue_mode_enable">Enable Rescue Mode</string>
+    <string name="rescue_mode_active">Rescue Mode Active (MAL)</string>
     <string name="failed_to_load_data">Failed to load saved data of %1$d</string>
     <string name="access_not_available">Wasn\'t able to get access</string>
     <string name="mal_login_uri_not_found">Mal Login : Uri not Found</string>

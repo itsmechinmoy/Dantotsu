@@ -12,6 +12,7 @@ import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.MainActivity
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.syncPendingProgressUpdates
 import ani.dantotsu.databinding.BottomSheetSettingsBinding
 import ani.dantotsu.download.anime.OfflineAnimeFragment
 import ani.dantotsu.download.manga.OfflineMangaFragment
@@ -105,6 +106,14 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
         binding.settingsIncognito.setOnCheckedChangeListener { _, isChecked ->
             PrefManager.setVal(PrefName.Incognito, isChecked)
             incognitoNotification(requireContext())
+        }
+
+        binding.settingsRescueMode.isChecked = PrefManager.getVal(PrefName.RescueMode)
+        binding.settingsRescueMode.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setVal(PrefName.RescueMode, isChecked)
+            if (!isChecked) {
+                syncPendingProgressUpdates()
+            }
         }
 
         binding.settingsExtensionSettings.setSafeOnClickListener {
