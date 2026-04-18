@@ -11,7 +11,6 @@ import ani.dantotsu.navBarHeight
 import ani.dantotsu.restartApp
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
-import ani.dantotsu.settings.saving.HOME_LAYOUT_FIXED_INDEX
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.util.customAlertDialog
@@ -48,7 +47,7 @@ class UserInterfaceSettingsActivity : AppCompatActivity() {
             val currentVisibility = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout).toMutableList()
             var currentOrder = PrefManager.getVal<List<Int>>(PrefName.HomeLayoutOrder).toMutableList()
             val views = resources.getStringArray(R.array.home_layouts)
-            val fixedIndex = HOME_LAYOUT_FIXED_INDEX
+            val fixedIndex = 7
 
             if (currentVisibility.size < views.size) {
                 repeat(views.size - currentVisibility.size) { currentVisibility.add(true) }
