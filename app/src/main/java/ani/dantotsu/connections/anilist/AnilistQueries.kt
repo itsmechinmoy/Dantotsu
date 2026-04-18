@@ -25,6 +25,7 @@ import ani.dantotsu.others.MalScraper
 import ani.dantotsu.profile.User
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.settings.saving.HOME_LAYOUT_SECTION_COUNT
 import ani.dantotsu.snackString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -539,6 +540,10 @@ class AnilistQueries {
         return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: PLANNING${if (type == "ANIME") ", sort: MEDIA_POPULARITY_DESC" else ""} ) { lists { entries { media { id mediaListEntry { progress private score(format:POINT_100) status } idMal type isAdult popularity status(version: 2) chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } }"""
     }
 
+    private fun missingSequelsQuery(): String {
+        return """ MediaListCollection(userId: ${Anilist.userid}, type: ANIME, status: COMPLETED, sort: UPDATED_TIME) { lists { entries { media { relations { edges { relationType(version: 2) node { id idMal type isAdult popularity status(version: 2) chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } mediaListEntry { status private } } } } } } } }"""
+    }
+
     private fun continueMediaQuery(type: String, status: String): String {
         return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status , sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status updatedAt media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
     }
@@ -547,8 +552,13 @@ class AnilistQueries {
         val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
         val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
         val removedMedia = ArrayList<Media>()
-        val toShow: List<Boolean> =
-            PrefManager.getVal(PrefName.HomeLayout) // list of booleans for what to show
+        val toShow = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout).toMutableList().apply {
+            if (size < HOME_LAYOUT_SECTION_COUNT) {
+                repeat(HOME_LAYOUT_SECTION_COUNT - size) { add(true) }
+            } else if (size > HOME_LAYOUT_SECTION_COUNT) {
+                subList(HOME_LAYOUT_SECTION_COUNT, size).clear()
+            }
+        } // list of booleans for what to show
 
         val queries = mutableListOf<String>()
         if (toShow.getOrNull(0) == true) {
@@ -589,6 +599,7 @@ class AnilistQueries {
             queries.add("""recommendationPlannedQueryAnime: ${recommendationPlannedQuery("ANIME")}""")
             queries.add("""recommendationPlannedQueryManga: ${recommendationPlannedQuery("MANGA")}""")
         }
+        if (toShow.getOrNull(8) == true) queries.add("""missingSequelsQuery: ${missingSequelsQuery()}""")
 
         if (queries.isEmpty()) {
             return mutableMapOf("hidden" to arrayListOf())
@@ -723,6 +734,31 @@ class AnilistQueries {
             }
             val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
             returnMap["recommendations"] = list
+        }
+
+        if (toShow.getOrNull(8) == true) {
+            val subMap = linkedMapOf<Int, Media>()
+            val excludedStatuses = setOf("CURRENT", "REPEATING", "COMPLETED")
+            response?.data?.missingSequelsQuery?.lists?.flatMap { it.entries ?: emptyList() }
+                ?.forEach { entry ->
+                    entry.media?.relations?.edges?.forEach { edge ->
+                        if (edge.relationType?.name == "SEQUEL") {
+                            val sequelNode = edge.node ?: return@forEach
+                            val sequelStatus = sequelNode.mediaListEntry?.status?.name
+                            val releaseStatus = sequelNode.status?.name
+                            val isReleased = releaseStatus in setOf("RELEASING", "FINISHED")
+                            if (sequelStatus !in excludedStatuses && isReleased) {
+                                val sequel = Media(sequelNode)
+                                if (sequel.id !in removeList && (!hidePrivate || !sequel.isListPrivate)) {
+                                    subMap.putIfAbsent(sequel.id, sequel)
+                                } else {
+                                    removedMedia.add(sequel)
+                                }
+                            }
+                        }
+                    }
+                }
+            returnMap["missingSequels"] = ArrayList(subMap.values)
         }
 
         val allOrders = listOf(

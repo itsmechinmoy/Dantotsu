@@ -11,6 +11,7 @@ import ani.dantotsu.navBarHeight
 import ani.dantotsu.restartApp
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.settings.saving.HOME_LAYOUT_FIXED_INDEX
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.util.customAlertDialog
@@ -47,13 +48,26 @@ class UserInterfaceSettingsActivity : AppCompatActivity() {
             val currentVisibility = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout).toMutableList()
             var currentOrder = PrefManager.getVal<List<Int>>(PrefName.HomeLayoutOrder).toMutableList()
             val views = resources.getStringArray(R.array.home_layouts)
+            val fixedIndex = HOME_LAYOUT_FIXED_INDEX
 
-            if (currentOrder.isEmpty()) {
-                currentOrder = (0..6).toMutableList()
+            if (currentVisibility.size < views.size) {
+                repeat(views.size - currentVisibility.size) { currentVisibility.add(true) }
+            } else if (currentVisibility.size > views.size) {
+                currentVisibility.subList(views.size, currentVisibility.size).clear()
             }
 
-            val displayList = mutableListOf(7)
-            displayList.addAll(currentOrder.filter { it != 7 })
+            val reorderable = views.indices.filter { it != fixedIndex }
+            if (currentOrder.isEmpty()) {
+                currentOrder = reorderable.toMutableList()
+            } else {
+                val sanitizedOrder = currentOrder.filter { it in reorderable }.distinct().toMutableList()
+                val missing = reorderable.filterNot { it in sanitizedOrder }
+                sanitizedOrder.addAll(missing)
+                currentOrder = sanitizedOrder
+            }
+
+            val displayList = mutableListOf(fixedIndex)
+            displayList.addAll(currentOrder.filter { it != fixedIndex })
 
             val recyclerView = RecyclerView(this).apply {
                 layoutManager = LinearLayoutManager(this@UserInterfaceSettingsActivity)

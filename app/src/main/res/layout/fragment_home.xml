@@ -988,6 +988,96 @@
             </LinearLayout>
 
             <LinearLayout
+                android:id="@+id/homeMissingSequelsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    tools:ignore="UseCompoundDrawables">
+
+                    <TextView
+                        android:id="@+id/homeMissingSequels"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="24dp"
+                        android:layout_weight="1"
+                        android:fontFamily="@font/poppins_bold"
+                        android:padding="8dp"
+                        android:text="@string/missing_sequels"
+                        android:textSize="16sp" />
+
+                    <ImageView
+                        android:id="@+id/homeMissingSequelsMore"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:layout_marginEnd="16dp"
+                        android:fontFamily="@font/poppins_bold"
+                        android:padding="8dp"
+                        android:src="@drawable/arrow_mark"
+                        android:textSize="16sp"
+                        tools:ignore="ContentDescription" />
+                </LinearLayout>
+
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="250dp">
+
+                    <LinearLayout
+                        android:id="@+id/homeMissingSequelsEmpty"
+                        android:layout_width="match_parent"
+                        android:layout_height="250dp"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:visibility="gone"
+                        tools:ignore="UseCompoundDrawables">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="32dp"
+                            android:alpha="0.58"
+                            android:src="@drawable/ic_round_movie_filter_24"
+                            tools:ignore="ContentDescription" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_margin="16dp"
+                            android:alpha="0.58"
+                            android:text="@string/no_missing_sequels"
+                            android:textAlignment="center" />
+                    </LinearLayout>
+
+                    <ProgressBar
+                        android:id="@+id/homeMissingSequelsProgressBar"
+                        style="?android:attr/progressBarStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_margin="90dp" />
+
+                    <ani.dantotsu.FadingEdgeRecyclerView
+                        android:id="@+id/homeMissingSequelsRecyclerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clipToPadding="false"
+                        android:paddingStart="20dp"
+                        android:paddingEnd="20dp"
+                        android:requiresFadingEdge="horizontal"
+                        tools:itemCount="4"
+                        tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                        tools:listitem="@layout/item_media_compact"
+                        tools:orientation="horizontal" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <LinearLayout
                 android:id="@+id/homeRecommendedContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
