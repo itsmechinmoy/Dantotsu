@@ -45,7 +45,6 @@ import ani.dantotsu.settings.SettingsDialogFragment
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefManager.asLiveBool
 import ani.dantotsu.settings.saving.PrefName
-import ani.dantotsu.settings.saving.HOME_LAYOUT_FIXED_INDEX
 import ani.dantotsu.snackString
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.util.Logger
@@ -505,29 +504,13 @@ class HomeFragment : Fragment() {
                     var empty = true
                     val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
                     var homeLayoutOrder: List<Int> = PrefManager.getVal(PrefName.HomeLayoutOrder)
-                    val fixedIndex = HOME_LAYOUT_FIXED_INDEX
-
-                    val normalizedHomeLayoutShow = homeLayoutShow.toMutableList().apply {
-                        if (size < containers.size) {
-                            repeat(containers.size - size) { add(true) }
-                        } else if (size > containers.size) {
-                            subList(containers.size, size).clear()
-                        }
-                    }
-
-                    val reorderable = containers.indices.filter { it != fixedIndex }
-                    homeLayoutOrder = if (homeLayoutOrder.isEmpty()) {
-                        reorderable
-                    } else {
-                        val sanitizedOrder = homeLayoutOrder.filter { it in reorderable }.distinct().toMutableList()
-                        val missing = reorderable.filterNot { it in sanitizedOrder }
-                        sanitizedOrder.addAll(missing)
-                        sanitizedOrder
+                    if (homeLayoutOrder.isEmpty()) {
+                        homeLayoutOrder = (0..7).toList()
                     }
 
                     withContext(Dispatchers.Main) {
-                        containers.indices.forEach { i ->
-                            if (normalizedHomeLayoutShow.elementAt(i)) {
+                        homeLayoutShow.indices.forEach { i ->
+                            if (homeLayoutShow.elementAt(i)) {
                                 empty = false
                             } else {
                                 containers[i].visibility = View.GONE

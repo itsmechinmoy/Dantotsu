@@ -25,7 +25,6 @@ import ani.dantotsu.others.MalScraper
 import ani.dantotsu.profile.User
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
-import ani.dantotsu.settings.saving.HOME_LAYOUT_SECTION_COUNT
 import ani.dantotsu.snackString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -541,7 +540,7 @@ class AnilistQueries {
     }
 
     private fun missingSequelsQuery(): String {
-        return """ MediaListCollection(userId: ${Anilist.userid}, type: ANIME, status: COMPLETED, sort: UPDATED_TIME) { lists { entries { media { relations { edges { relationType(version: 2) node { id idMal type isAdult popularity status(version: 2) chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } mediaListEntry { status private } } } } } } } }"""
+        return """ MediaListCollection(userId: ${Anilist.userid}, type: ANIME, status: COMPLETED, sort: UPDATED_TIME) { lists { entries { media {  id relations { edges { relationType(version: 2) node { id idMal type isAdult popularity status(version: 2) chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } mediaListEntry { status private } } } } } } } }"""
     }
 
     private fun continueMediaQuery(type: String, status: String): String {
@@ -552,13 +551,7 @@ class AnilistQueries {
         val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
         val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
         val removedMedia = ArrayList<Media>()
-        val toShow = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout).toMutableList().apply {
-            if (size < HOME_LAYOUT_SECTION_COUNT) {
-                repeat(HOME_LAYOUT_SECTION_COUNT - size) { add(true) }
-            } else if (size > HOME_LAYOUT_SECTION_COUNT) {
-                subList(HOME_LAYOUT_SECTION_COUNT, size).clear()
-            }
-        } // list of booleans for what to show
+        val toShow = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout).toMutableList()
 
         val queries = mutableListOf<String>()
         if (toShow.getOrNull(0) == true) {
@@ -738,19 +731,29 @@ class AnilistQueries {
 
         if (toShow.getOrNull(8) == true) {
             val subMap = linkedMapOf<Int, Media>()
-            val excludedStatuses = setOf("CURRENT", "REPEATING", "COMPLETED")
-            response?.data?.missingSequelsQuery?.lists?.flatMap { it.entries ?: emptyList() }
+
+            response?.data?.missingSequelsQuery?.lists
+                ?.flatMap { it.entries ?: emptyList() }
                 ?.forEach { entry ->
+
                     entry.media?.relations?.edges?.forEach { edge ->
+
                         if (edge.relationType?.name == "SEQUEL") {
+
                             val sequelNode = edge.node ?: return@forEach
-                            val sequelStatus = sequelNode.mediaListEntry?.status?.name
+                            if (sequelNode.mediaListEntry != null) return@forEach
+                            val id = sequelNode.id
+
                             val releaseStatus = sequelNode.status?.name
                             val isReleased = releaseStatus in setOf("RELEASING", "FINISHED")
-                            if (sequelStatus !in excludedStatuses && isReleased) {
+
+                            if (isReleased) {
                                 val sequel = Media(sequelNode)
-                                if (sequel.id !in removeList && (!hidePrivate || !sequel.isListPrivate)) {
-                                    subMap.putIfAbsent(sequel.id, sequel)
+
+                                if (id !in removeList && (!hidePrivate || !sequel.isListPrivate)) {
+                                    if (!subMap.containsKey(id)) {
+                                        subMap[id] = sequel
+                                    }
                                 } else {
                                     removedMedia.add(sequel)
                                 }
@@ -758,6 +761,7 @@ class AnilistQueries {
                         }
                     }
                 }
+
             returnMap["missingSequels"] = ArrayList(subMap.values)
         }
 
