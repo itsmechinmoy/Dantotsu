@@ -78,14 +78,23 @@ fun syncPendingProgressUpdates() {
         PrefManager.getVal(PrefName.PendingProgressUpdates, listOf())
     if (pending.isEmpty()) return
     CoroutineScope(Dispatchers.IO).launch {
+        val remaining = pending.toMutableList()
         for (update in pending) {
+            // executeQuery returns null on failure; editList doesn't surface this,
+            // so we rely on the disabled signal to detect AniList being down
             Anilist.mutation.editList(
                 update.mediaId,
                 update.progress,
                 status = update.status
             )
+            if (!Anilist.anilistDisabledSignal) {
+                remaining.remove(update)
+            } else {
+                // AniList appears to be down again; stop and keep remaining
+                break
+            }
         }
-        PrefManager.setVal(PrefName.PendingProgressUpdates, listOf<PendingProgressUpdate>())
+        PrefManager.setVal(PrefName.PendingProgressUpdates, remaining)
         Refresh.all()
     }
 }

@@ -53,6 +53,7 @@ object Anilist {
     var mangaCustomLists: List<String>? = null
 
     /** Set to true when the AniList API reports a "disabled" error. Reset on next successful call. */
+    @Volatile
     var anilistDisabledSignal: Boolean = false
 
     val sortBy = listOf(
