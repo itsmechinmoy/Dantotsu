@@ -350,11 +350,7 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
-        var hasRunInitialSearchActions = false
         fun runInitialSearchActions() {
-            if (hasRunInitialSearchActions) return
-            hasRunInitialSearchActions = true
-
             if (!notSet) {
                 if (!model.searched) {
                     model.searched = true
@@ -367,12 +363,6 @@ class SearchActivity : AppCompatActivity() {
             if (intent.getBooleanExtra("search", false)) {
                 window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED)
                 search()
-            }
-        }
-
-        progressAdapter.ready.observe(this) {
-            if (it == true) {
-                runInitialSearchActions()
             }
         }
         binding.searchRecyclerView.post { runInitialSearchActions() }
