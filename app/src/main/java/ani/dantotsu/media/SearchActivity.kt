@@ -350,10 +350,10 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
-        var didRunInitialActions = false
+        var hasRunInitialActions = false
         fun runInitialActions() {
-            if (didRunInitialActions) return
-            didRunInitialActions = true
+            if (hasRunInitialActions) return
+            hasRunInitialActions = true
 
             if (!notSet) {
                 if (!model.searched) {
