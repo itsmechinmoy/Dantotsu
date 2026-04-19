@@ -1758,7 +1758,7 @@ Page(page:$page,perPage:50) {
 
     suspend fun getUpcomingAnime(id: String): List<Media> {
         val res = executeQuery<Query.MediaListCollection>(
-            """{MediaListCollection(userId:$id,type:ANIME){lists{name entries{media{id,isFavourite,title{userPreferred,romaji}coverImage{medium}nextAiringEpisode{episode,timeUntilAiring}}}}}}""",
+            """{MediaListCollection(userId:$id,type:ANIME){lists{name entries{media{id,type,isFavourite,title{userPreferred,romaji}coverImage{medium}nextAiringEpisode{episode,timeUntilAiring}}}}}}""",
             force = true
         )
         val list = mutableListOf<Media>()
