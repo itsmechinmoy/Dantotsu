@@ -350,20 +350,30 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
+        var didRunInitialActions = false
+        fun runInitialActions() {
+            if (didRunInitialActions) return
+            didRunInitialActions = true
+
+            if (!notSet) {
+                if (!model.searched) {
+                    model.searched = true
+                    headerAdaptor.search?.run()
+                }
+            } else {
+                headerAdaptor.requestFocus?.run()
+            }
+
+            if (intent.getBooleanExtra("search", false)) {
+                window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED)
+                search()
+            }
+        }
+
+        binding.searchRecyclerView.post { runInitialActions() }
         progressAdapter.ready.observe(this) {
             if (it == true) {
-                if (!notSet) {
-                    if (!model.searched) {
-                        model.searched = true
-                        headerAdaptor.search?.run()
-                    }
-                } else
-                    headerAdaptor.requestFocus?.run()
-
-                if (intent.getBooleanExtra("search", false)) {
-                    window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED)
-                    search()
-                }
+                runInitialActions()
             }
         }
     }
