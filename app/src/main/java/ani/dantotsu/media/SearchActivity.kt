@@ -350,10 +350,10 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
-        var hasRunInitialActions = false
-        fun runInitialActions() {
-            if (hasRunInitialActions) return
-            hasRunInitialActions = true
+        var hasRunInitialSearchActions = false
+        fun runInitialSearchActions() {
+            if (hasRunInitialSearchActions) return
+            hasRunInitialSearchActions = true
 
             if (!notSet) {
                 if (!model.searched) {
@@ -370,12 +370,12 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
-        binding.searchRecyclerView.post { runInitialActions() }
         progressAdapter.ready.observe(this) {
             if (it == true) {
-                runInitialActions()
+                runInitialSearchActions()
             }
         }
+        binding.searchRecyclerView.post { runInitialSearchActions() }
     }
 
     fun emptyMediaAdapter() {
