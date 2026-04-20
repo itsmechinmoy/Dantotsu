@@ -12,7 +12,7 @@ class SubscriptionNotificationWorker(appContext: Context, workerParams: WorkerPa
     override suspend fun doWork(): Result {
         Logger.log("SubscriptionNotificationWorker: doWork")
         PrefManager.init(applicationContext)
-        if (SubscriptionAppLockState.isAppLocked()) {
+        if (SubscriptionAppLockHelper.isAppLocked()) {
             Logger.log("SubscriptionNotificationWorker: doWork skipped (calculator lock enabled)")
             return Result.success()
         }

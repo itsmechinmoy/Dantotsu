@@ -38,7 +38,7 @@ class SubscriptionNotificationTask : Task {
     @SuppressLint("MissingPermission")
     override suspend fun execute(context: Context): Boolean {
         PrefManager.init(context)
-        if (SubscriptionAppLockState.isAppLocked()) {
+        if (SubscriptionAppLockHelper.isAppLocked()) {
             Logger.log("SubscriptionNotificationTask: skipped (calculator lock enabled)")
             return true
         }
