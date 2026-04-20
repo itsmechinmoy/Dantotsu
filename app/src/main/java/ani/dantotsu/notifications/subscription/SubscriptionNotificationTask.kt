@@ -40,12 +40,11 @@ class SubscriptionNotificationTask : Task {
         if (!currentlyPerforming) {
             try {
                 withContext(Dispatchers.IO) {
-                    currentlyPerforming = true
                     if (SubscriptionAppLockState.isAppLocked(context)) {
                         Logger.log("SubscriptionNotificationTask: skipped (calculator lock enabled)")
-                        currentlyPerforming = false
                         return@withContext
                     }
+                    currentlyPerforming = true
                     App.context = context
                     Logger.log("SubscriptionNotificationTask: execute")
                     var timeout = 15_000L
