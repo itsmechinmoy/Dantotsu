@@ -101,7 +101,6 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        TaskScheduler.scheduleSingleWork(this)
         if (!CalcActivity.hasPermission) {
             val pin: String = PrefManager.getVal(PrefName.AppPassword)
             if (pin.isNotEmpty()) {
@@ -116,6 +115,7 @@ class MainActivity : AppCompatActivity() {
                 return
             }
         }
+        TaskScheduler.scheduleSingleWork(this)
 
         if (Intent.ACTION_VIEW == intent.action) {
             handleViewIntent(intent)

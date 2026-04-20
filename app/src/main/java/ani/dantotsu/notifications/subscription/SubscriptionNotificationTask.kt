@@ -15,6 +15,7 @@ import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.UrlMedia
 import ani.dantotsu.hasNotificationPermission
 import ani.dantotsu.notifications.Task
+import ani.dantotsu.others.calc.CalcActivity
 import ani.dantotsu.parsers.AnimeSources
 import ani.dantotsu.parsers.Episode
 import ani.dantotsu.parsers.MangaChapter
@@ -42,6 +43,13 @@ class SubscriptionNotificationTask : Task {
                 withContext(Dispatchers.IO) {
                     PrefManager.init(context)
                     currentlyPerforming = true
+                    val isCalculatorLocked =
+                        PrefManager.getVal<String>(PrefName.AppPassword).isNotEmpty() && !CalcActivity.hasPermission
+                    if (isCalculatorLocked) {
+                        Logger.log("SubscriptionNotificationTask: skipped (calculator lock enabled)")
+                        currentlyPerforming = false
+                        return@withContext
+                    }
                     App.context = context
                     Logger.log("SubscriptionNotificationTask: execute")
                     var timeout = 15_000L
