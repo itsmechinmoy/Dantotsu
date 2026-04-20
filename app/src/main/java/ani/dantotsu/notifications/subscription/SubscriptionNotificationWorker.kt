@@ -3,9 +3,6 @@ package ani.dantotsu.notifications.subscription
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import ani.dantotsu.others.calc.CalcActivity
-import ani.dantotsu.settings.saving.PrefManager
-import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
 
 class SubscriptionNotificationWorker(appContext: Context, workerParams: WorkerParameters) :
@@ -13,10 +10,7 @@ class SubscriptionNotificationWorker(appContext: Context, workerParams: WorkerPa
 
     override suspend fun doWork(): Result {
         Logger.log("SubscriptionNotificationWorker: doWork")
-        PrefManager.init(applicationContext)
-        val isCalculatorLocked =
-            PrefManager.getVal<String>(PrefName.AppPassword).isNotEmpty() && !CalcActivity.hasPermission
-        if (isCalculatorLocked) {
+        if (SubscriptionAppLockState.isAppLocked(applicationContext)) {
             Logger.log("SubscriptionNotificationWorker: doWork skipped (calculator lock enabled)")
             return Result.success()
         }
