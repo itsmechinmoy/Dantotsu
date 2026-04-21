@@ -1036,19 +1036,45 @@ class ExoplayerView :
                 volumeHide()
             }
             val fastForward = playerView.findViewById<TextView>(R.id.exo_fast_forward_text)
+            val minLongPressSpeed = 0.25f
+            val maxLongPressSpeed = 4f
+            var fastForwardStartX = 0f
+            var fastForwardInitialSpeed = 1f
+            var fastForwardOriginalSpeed = 1f
 
-            fun fastForward() {
+            fun updateFastForwardText(speed: Float) {
+                val displaySpeed = ((speed * 100).roundToInt() / 100f).toString()
+                fastForward.text = "${displaySpeed}x"
+            }
+
+            fun fastForward(event: MotionEvent) {
                 isFastForwarding = true
-                exoPlayer.setPlaybackSpeed(exoPlayer.playbackParameters.speed * 2)
+                fastForwardStartX = event.rawX
+                fastForwardOriginalSpeed = exoPlayer.playbackParameters.speed
+                fastForwardInitialSpeed = clamp(fastForwardOriginalSpeed * 2f, minLongPressSpeed, maxLongPressSpeed)
+                exoPlayer.setPlaybackSpeed(fastForwardInitialSpeed)
                 fastForward.visibility = View.VISIBLE
-                val speedText = "${exoPlayer.playbackParameters.speed}x"
-                fastForward.text = speedText
+                updateFastForwardText(exoPlayer.playbackParameters.speed)
+            }
+
+            fun updateFastForwardSpeed(event: MotionEvent) {
+                if (!isFastForwarding) return
+                val width = playerView.width.takeIf { it > 0 } ?: return
+                val deltaRatio = (event.rawX - fastForwardStartX) / width.toFloat()
+                val targetSpeed =
+                    clamp(
+                        fastForwardInitialSpeed + (deltaRatio * 4f),
+                        minLongPressSpeed,
+                        maxLongPressSpeed,
+                    )
+                exoPlayer.setPlaybackSpeed(targetSpeed)
+                updateFastForwardText(exoPlayer.playbackParameters.speed)
             }
 
             fun stopFastForward() {
                 if (isFastForwarding) {
                     isFastForwarding = false
-                    exoPlayer.setPlaybackSpeed(exoPlayer.playbackParameters.speed / 2)
+                    exoPlayer.setPlaybackSpeed(fastForwardOriginalSpeed)
                     fastForward.visibility = View.GONE
                 }
             }
@@ -1059,7 +1085,7 @@ class ExoplayerView :
                     this,
                     object : GesturesListener() {
                         override fun onLongClick(event: MotionEvent) {
-                            if (PrefManager.getVal(PrefName.FastForward)) fastForward()
+                            if (PrefManager.getVal(PrefName.FastForward)) fastForward(event)
                         }
 
                         override fun onDoubleClick(event: MotionEvent) {
@@ -1084,7 +1110,10 @@ class ExoplayerView :
             rewindArea.isClickable = true
             rewindArea.setOnTouchListener { v, event ->
                 fastRewindDetector.onTouchEvent(event)
-                if (event.action == MotionEvent.ACTION_UP) stopFastForward()
+                when (event.action) {
+                    MotionEvent.ACTION_MOVE -> updateFastForwardSpeed(event)
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stopFastForward()
+                }
                 v.performClick()
                 true
             }
@@ -1095,7 +1124,7 @@ class ExoplayerView :
                     this,
                     object : GesturesListener() {
                         override fun onLongClick(event: MotionEvent) {
-                            if (PrefManager.getVal(PrefName.FastForward)) fastForward()
+                            if (PrefManager.getVal(PrefName.FastForward)) fastForward(event)
                         }
 
                         override fun onDoubleClick(event: MotionEvent) {
@@ -1120,7 +1149,10 @@ class ExoplayerView :
             forwardArea.isClickable = true
             forwardArea.setOnTouchListener { v, event ->
                 fastForwardDetector.onTouchEvent(event)
-                if (event.action == MotionEvent.ACTION_UP) stopFastForward()
+                when (event.action) {
+                    MotionEvent.ACTION_MOVE -> updateFastForwardSpeed(event)
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stopFastForward()
+                }
                 v.performClick()
                 true
             }
