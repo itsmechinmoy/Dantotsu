@@ -1038,13 +1038,15 @@ class ExoplayerView :
             val fastForward = playerView.findViewById<TextView>(R.id.exo_fast_forward_text)
             val minLongPressSpeed = 0.25f
             val maxLongPressSpeed = 4f
+            val dragSpeedSensitivity = 4f
+            val minSpeedUpdateDelta = 0.01f
             var fastForwardStartX = 0f
             var fastForwardInitialSpeed = 1f
             var fastForwardOriginalSpeed = 1f
+            var lastFastForwardSpeed = 1f
 
             fun updateFastForwardText(speed: Float) {
-                val displaySpeed = ((speed * 100).roundToInt() / 100f).toString()
-                fastForward.text = "${displaySpeed}x"
+                fastForward.text = String.format(Locale.US, "%.2fx", speed)
             }
 
             fun fastForward(event: MotionEvent) {
@@ -1053,6 +1055,7 @@ class ExoplayerView :
                 fastForwardOriginalSpeed = exoPlayer.playbackParameters.speed
                 fastForwardInitialSpeed = clamp(fastForwardOriginalSpeed * 2f, minLongPressSpeed, maxLongPressSpeed)
                 exoPlayer.setPlaybackSpeed(fastForwardInitialSpeed)
+                lastFastForwardSpeed = fastForwardInitialSpeed
                 fastForward.visibility = View.VISIBLE
                 updateFastForwardText(exoPlayer.playbackParameters.speed)
             }
@@ -1063,11 +1066,13 @@ class ExoplayerView :
                 val deltaRatio = (event.rawX - fastForwardStartX) / width.toFloat()
                 val targetSpeed =
                     clamp(
-                        fastForwardInitialSpeed + (deltaRatio * 4f),
+                        fastForwardInitialSpeed + (deltaRatio * dragSpeedSensitivity),
                         minLongPressSpeed,
                         maxLongPressSpeed,
                     )
+                if (kotlin.math.abs(targetSpeed - lastFastForwardSpeed) < minSpeedUpdateDelta) return
                 exoPlayer.setPlaybackSpeed(targetSpeed)
+                lastFastForwardSpeed = targetSpeed
                 updateFastForwardText(exoPlayer.playbackParameters.speed)
             }
 
