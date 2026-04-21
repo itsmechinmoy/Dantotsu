@@ -71,6 +71,7 @@ class AnilistNotificationTask : Task {
                                 if (it.notificationType in mediaSectionTypes) {
                                     mediaCount++
                                 } else {
+                                    // User section displays all notifications that are not in the media section.
                                     userCount++
                                 }
                             }

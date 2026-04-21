@@ -62,30 +62,23 @@ class NotificationItem(
             setMessage(ActivityItemBuilder.getContent(notification))
             if (canDeleteLocal) {
                 setPosButton(R.string.yes) {
-                    when (type) {
-                        COMMENT -> {
-                            val list = PrefManager.getNullableVal<List<CommentStore>>(
-                                PrefName.CommentNotificationStore,
-                                null
-                            ) ?: listOf()
-                            val newList = list.filter { it.commentId != notification.commentId }
-                            PrefManager.setVal(PrefName.CommentNotificationStore, newList)
-                            parentAdapter.remove(this@NotificationItem)
-
-                        }
-
-                        SUBSCRIPTION -> {
-                            val list = PrefManager.getNullableVal<List<SubscriptionStore>>(
-                                PrefName.SubscriptionNotificationStore,
-                                null
-                            ) ?: listOf()
-                            val newList =
-                                list.filter { (it.time / 1000L).toInt() != notification.createdAt }
-                            PrefManager.setVal(PrefName.SubscriptionNotificationStore, newList)
-                            parentAdapter.remove(this@NotificationItem)
-                        }
-
-                        else -> {}
+                    if (type == COMMENT) {
+                        val list = PrefManager.getNullableVal<List<CommentStore>>(
+                            PrefName.CommentNotificationStore,
+                            null
+                        ) ?: listOf()
+                        val newList = list.filter { it.commentId != notification.commentId }
+                        PrefManager.setVal(PrefName.CommentNotificationStore, newList)
+                        parentAdapter.remove(this@NotificationItem)
+                    } else if (type == SUBSCRIPTION) {
+                        val list = PrefManager.getNullableVal<List<SubscriptionStore>>(
+                            PrefName.SubscriptionNotificationStore,
+                            null
+                        ) ?: listOf()
+                        val newList =
+                            list.filter { (it.time / 1000L).toInt() != notification.createdAt }
+                        PrefManager.setVal(PrefName.SubscriptionNotificationStore, newList)
+                        parentAdapter.remove(this@NotificationItem)
                     }
                 }
             }
@@ -96,10 +89,12 @@ class NotificationItem(
                         snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
                     } else {
                         lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                            val success = Anilist.mutation.toggleActivitySubscription(
-                                notification.activityId!!,
-                                false
-                            )
+                            val success = runCatching {
+                                Anilist.mutation.toggleActivitySubscription(
+                                    notification.activityId!!,
+                                    false
+                                )
+                            }.getOrDefault(false)
                             withContext(Dispatchers.Main) {
                                 if (success) {
                                     snackString(binding.root.context.getString(R.string.activity_unsubscribed))
