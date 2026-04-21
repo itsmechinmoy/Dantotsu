@@ -47,7 +47,7 @@ class NotificationItem(
     }
 
     fun dialog() {
-        val notificationType = NotificationType.valueOf(notification.notificationType)
+        val notificationType = NotificationType.entries.find { it.value == notification.notificationType } ?: return
         val canDeleteLocal = type == COMMENT || type == SUBSCRIPTION
         val canUnsubscribeActivity =
             notificationType == NotificationType.ACTIVITY_REPLY_SUBSCRIBED && notification.activityId != null
