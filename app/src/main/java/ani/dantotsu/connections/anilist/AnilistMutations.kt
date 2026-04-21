@@ -6,7 +6,7 @@ import ani.dantotsu.connections.anilist.api.Query
 import ani.dantotsu.connections.anilist.api.ToggleLike
 import ani.dantotsu.currContext
 import com.google.gson.Gson
-import kotlinx.serialization.json.JsonObject
+import com.google.gson.JsonObject
 
 class AnilistMutations {
 
@@ -308,6 +308,20 @@ class AnilistMutations {
             }
         """.trimIndent()
         )
+    }
+
+    suspend fun toggleActivitySubscription(activityId: Int, subscribe: Boolean): Boolean {
+        val result = executeQuery<JsonObject>(
+            """
+            mutation {
+                ToggleActivitySubscription(activityId: $activityId, subscribe: $subscribe) {
+                    __typename
+                }
+            }
+        """.trimIndent()
+        )
+        val errors = result?.get("errors")
+        return result != null && (errors == null || (errors.isJsonArray && errors.asJsonArray.isEmpty))
     }
 
     suspend fun postActivity(text: String, edit: Int? = null): String {

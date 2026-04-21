@@ -62,6 +62,7 @@ class NotificationFragment : Fragment() {
         binding.emptyTextView.text = getString(R.string.nothing_here)
         lifecycleScope.launch {
             getList()
+            resetCountIfNeeded()
 
             binding.notificationProgressBar.isVisible = false
         }
