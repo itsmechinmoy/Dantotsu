@@ -24,6 +24,7 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.toPx
+import ani.dantotsu.util.Logger
 import ani.dantotsu.util.customAlertDialog
 import com.xwray.groupie.GroupieAdapter
 import com.xwray.groupie.viewbinding.BindableItem
@@ -83,7 +84,11 @@ class NotificationItem(
                 }
             }
             if (canUnsubscribeActivity) {
-                val unsubscribeAction = {
+                val unsubscribeAction = unsubscribe@{
+                    val activityId = notification.activityId ?: run {
+                        snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
+                        return@unsubscribe
+                    }
                     val lifecycleOwner = binding.root.findViewTreeLifecycleOwner()
                     if (lifecycleOwner == null) {
                         snackString(binding.root.context.getString(R.string.activity_unsubscribe_unavailable))
@@ -91,9 +96,11 @@ class NotificationItem(
                         lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                             val success = runCatching {
                                 Anilist.mutation.toggleActivitySubscription(
-                                    notification.activityId!!,
+                                    activityId,
                                     false
                                 )
+                            }.onFailure {
+                                Logger.log("Failed to unsubscribe from activity: ${it.message}")
                             }.getOrDefault(false)
                             withContext(Dispatchers.Main) {
                                 if (success) {
