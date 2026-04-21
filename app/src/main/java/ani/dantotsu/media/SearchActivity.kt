@@ -350,22 +350,7 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
-        progressAdapter.ready.observe(this) {
-            if (it == true) {
-                if (!notSet) {
-                    if (!model.searched) {
-                        model.searched = true
-                        headerAdaptor.search?.run()
-                    }
-                } else
-                    headerAdaptor.requestFocus?.run()
-
-                if (intent.getBooleanExtra("search", false)) {
-                    window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED)
-                    search()
-                }
-            }
-        }
+        binding.searchRecyclerView.post { runInitialSearchActions(notSet) }
     }
 
     fun emptyMediaAdapter() {
@@ -455,6 +440,24 @@ class SearchActivity : AppCompatActivity() {
         if (searchType == SearchType.ANIME || searchType == SearchType.MANGA) {
             mediaAdaptor.type = style
             mediaAdaptor.notifyDataSetChanged()
+        }
+    }
+
+    private fun runInitialSearchActions(notSet: Boolean) {
+        if (isFinishing || isDestroyed) return
+
+        if (!notSet) {
+            if (!model.searched) {
+                model.searched = true
+                headerAdaptor.search?.run()
+            }
+        } else {
+            headerAdaptor.requestFocus?.run()
+        }
+
+        if (intent.getBooleanExtra("search", false)) {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED)
+            search()
         }
     }
 
