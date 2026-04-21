@@ -23,8 +23,7 @@ class SubscriptionsBottomDialog : BottomSheetDialogFragment() {
     private val binding get() = _binding!!
     private val adapter: GroupieAdapter = GroupieAdapter()
     private var subscriptions: Map<Int, SubscriptionHelper.Companion.SubscribeMedia> = mapOf()
-    private var groupedSubscriptions:
-        MutableMap<String, MutableList<SubscriptionHelper.Companion.SubscribeMedia>> = mutableMapOf()
+    private var groupedSubscriptions: MutableMap<String, MutableList<SubscriptionHelper.Companion.SubscribeMedia>> = mutableMapOf()
     private var currentFilter: String? = null
     private val animeExtension: AnimeExtensionManager = Injekt.get()
     private val mangaExtensions: MangaExtensionManager = Injekt.get()

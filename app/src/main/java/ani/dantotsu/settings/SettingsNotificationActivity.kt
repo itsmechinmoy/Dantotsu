@@ -34,7 +34,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
-import kotlin.math.minOf
 
 class SettingsNotificationActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsNotificationsBinding
@@ -165,8 +164,8 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                                             if (!existingIds.contains(media.id)) {
                                                                 existingIds.add(media.id)
                                                                 importedCount++
+                                                                SubscriptionHelper.saveSubscription(media, true)
                                                             }
-                                                            SubscriptionHelper.saveSubscription(media, true)
                                                         }
                                                     }
                                                 }
@@ -257,8 +256,8 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                                             if (!existingIds.contains(media.id)) {
                                                                 existingIds.add(media.id)
                                                                 importedCount++
+                                                                SubscriptionHelper.saveSubscription(media, true)
                                                             }
-                                                            SubscriptionHelper.saveSubscription(media, true)
                                                         }
                                                     }
                                                 }
