@@ -124,7 +124,7 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             lifecycleScope.launch(Dispatchers.IO) {
                                 val userId = (Anilist.userid
                                     ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull())
-                                if (userId == null || userId <= 0) {
+                                if (userId == null) {
                                     withContext(Dispatchers.Main) { toast(getString(R.string.login_to_anilist_first)) }
                                     return@launch
                                 }
@@ -154,22 +154,26 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                     context.customAlertDialog().apply {
                                         setTitle(R.string.select_lists_to_import)
                                         multiChoiceItems(titles, selected) {}
-                                        setPosButton(R.string.import_) {
+                                        setPosButton(R.string.import_action) {
                                             lifecycleScope.launch(Dispatchers.IO) {
-                                                val beforeCount = SubscriptionHelper.getSubscriptions().size
+                                                val existingIds = SubscriptionHelper.getSubscriptions().keys.toMutableSet()
+                                                var importedCount = 0
                                                 titles.forEachIndexed { index, title ->
                                                     if (selected[index]) {
                                                         selectableLists[title]?.forEach { media ->
+                                                            if (!existingIds.contains(media.id)) {
+                                                                existingIds.add(media.id)
+                                                                importedCount++
+                                                            }
                                                             SubscriptionHelper.saveSubscription(media, true)
                                                         }
                                                     }
                                                 }
-                                                val afterCount = SubscriptionHelper.getSubscriptions().size
                                                 withContext(Dispatchers.Main) {
                                                     toast(
                                                         getString(
                                                             R.string.imported_subscriptions_count,
-                                                            (afterCount - beforeCount).coerceAtLeast(0)
+                                                            importedCount
                                                         )
                                                     )
                                                 }

@@ -717,7 +717,7 @@
     <string name="import_anilist_lists_to_subscriptions">Import AniList lists to subscriptions</string>
     <string name="import_anilist_lists_to_subscriptions_desc">Add media from selected AniList anime/manga list sections to subscriptions</string>
     <string name="select_lists_to_import">Select lists to import</string>
-    <string name="import_">Import</string>
+    <string name="import_action">Import</string>
     <string name="imported_subscriptions_count">Imported %1$d subscriptions</string>
     <string name="no_lists_available_to_import">No AniList lists available to import</string>
     <string name="login_to_anilist_first">Please login to AniList first</string>
