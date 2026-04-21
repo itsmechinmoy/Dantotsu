@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import ani.dantotsu.MainActivity
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.anilist.api.NotificationType
 import ani.dantotsu.notifications.Task
 import ani.dantotsu.profile.activity.ActivityItemBuilder
 import ani.dantotsu.settings.saving.PrefManager
@@ -42,10 +43,10 @@ class AnilistNotificationTask : Task {
                         val filteredTypes =
                             PrefManager.getVal<Set<String>>(PrefName.AnilistFilteredTypes)
                         val mediaSectionTypes = setOf(
-                            "AIRING",
-                            "MEDIA_MERGE",
-                            "MEDIA_DELETION",
-                            "MEDIA_DATA_CHANGE"
+                            NotificationType.AIRING.value,
+                            NotificationType.MEDIA_MERGE.value,
+                            NotificationType.MEDIA_DELETION.value,
+                            NotificationType.MEDIA_DATA_CHANGE.value
                         )
                         
                         var userCount = 0
