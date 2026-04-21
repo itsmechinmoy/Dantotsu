@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import ani.dantotsu.MainActivity
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.anilist.api.NotificationType
 import ani.dantotsu.notifications.Task
 import ani.dantotsu.profile.activity.ActivityItemBuilder
 import ani.dantotsu.settings.saving.PrefManager
@@ -41,6 +42,12 @@ class AnilistNotificationTask : Task {
                         val newNotifications = unreadNotifications?.filter { it.id > lastId }
                         val filteredTypes =
                             PrefManager.getVal<Set<String>>(PrefName.AnilistFilteredTypes)
+                        val mediaSectionTypes = setOf(
+                            NotificationType.AIRING.value,
+                            NotificationType.MEDIA_MERGE.value,
+                            NotificationType.MEDIA_DELETION.value,
+                            NotificationType.MEDIA_DATA_CHANGE.value
+                        )
                         
                         var userCount = 0
                         var mediaCount = 0
@@ -62,9 +69,10 @@ class AnilistNotificationTask : Task {
                                         )
                                 }
                                 // Track counts per section
-                                if (it.media != null) {
+                                if (it.notificationType in mediaSectionTypes) {
                                     mediaCount++
-                                } else if (it.user != null || it.userId != null) {
+                                } else {
+                                    // User section displays all notifications that are not in the media section.
                                     userCount++
                                 }
                             }
