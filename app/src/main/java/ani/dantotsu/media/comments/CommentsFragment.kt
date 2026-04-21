@@ -27,6 +27,7 @@ import ani.dantotsu.connections.comments.CommentsAPI
 import ani.dantotsu.databinding.DialogEdittextBinding
 import ani.dantotsu.databinding.FragmentCommentsBinding
 import ani.dantotsu.loadImage
+import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.media.MediaDetailsActivity
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.setBaseline
@@ -501,6 +502,90 @@ class CommentsFragment : Fragment() {
     enum class InteractionState {
         NONE, EDIT, REPLY
     }
+
+    fun onTagClicked(tag: String) {
+        val model: MediaDetailsViewModel by activityViewModels()
+        val currentMedia = model.getMedia().value ?: return
+
+        if (isAnime) {
+            val ep = currentMedia.anime?.episodes?.get(tag)
+            if (ep != null) {
+                model.onEpisodeClick(currentMedia, tag, childFragmentManager, true)
+            } else {
+                snackString("Episode $tag not found for this provider")
+            }
+        } else {
+            val selected = currentMedia.selected
+            if (selected?.sourceIndex == null) {
+                snackString("Please select an extension first")
+                return
+            }
+            val sourceIndex = selected.sourceIndex
+
+            val isNovel = currentMedia.format == "NOVEL"
+            if (isNovel) {
+                val chapters = model.getNovelChapters().value?.get(sourceIndex)
+                val chpResponse = chapters?.find { it.extra?.get("chapterNumber") == tag }
+                if (chpResponse != null) {
+                    lifecycleScope.launch {
+                        model.loadBook(chpResponse, sourceIndex)
+                        val intent = android.content.Intent(activity, ani.dantotsu.media.novel.novelreader.NovelReaderActivity::class.java)
+                        startActivity(intent)
+                    }
+                } else {
+                    snackString("Novel chapter $tag not found")
+                }
+            } else {
+                val manga = currentMedia.manga ?: run {
+                    snackString("Manga not available")
+                    return
+                }
+                val cachedChapters = model.getMangaChapters().value?.get(sourceIndex)
+                if (manga.chapters.isNullOrEmpty() && cachedChapters != null) {
+                    manga.chapters = cachedChapters
+                }
+
+                val chp = manga.chapters?.values?.find { chapterMatchesTag(it.number, tag) }
+                if (chp != null) {
+                    model.continueMedia = false
+                    manga.selectedChapter = chp
+                    model.saveSelected(currentMedia.id, selected)
+                    
+                    ani.dantotsu.media.manga.mangareader.ChapterLoaderDialog.newInstance(chp, true)
+                        .show(childFragmentManager, "dialog")
+                } else {
+                    lifecycleScope.launch {
+                        snackString("Loading chapter for tag...")
+                        model.loadMangaChapters(currentMedia, sourceIndex)
+                        val refreshedChapters = model.getMangaChapters().value?.get(sourceIndex)
+                        if (refreshedChapters != null) {
+                            manga.chapters = refreshedChapters
+                        }
+                        val foundChp =
+                            manga.chapters?.values?.find { chapterMatchesTag(it.number, tag) }
+                        if (foundChp != null) {
+                            model.continueMedia = false
+                            manga.selectedChapter = foundChp
+                            model.saveSelected(currentMedia.id, selected)
+                            ani.dantotsu.media.manga.mangareader.ChapterLoaderDialog.newInstance(foundChp, true)
+                                .show(childFragmentManager, "dialog")
+                        } else {
+                            snackString("Chapter $tag not found for this provider")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun chapterMatchesTag(chapterNumber: String, tag: String): Boolean {
+        if (chapterNumber == tag) return true
+
+        val chapterValue = MediaNameAdapter.findChapterNumber(chapterNumber)
+        val tagValue = MediaNameAdapter.findChapterNumber(tag)
+        return chapterValue != null && tagValue != null && chapterValue == tagValue
+    }
+
     /**
      * Loads and displays the comments
      * Called when the activity is created
