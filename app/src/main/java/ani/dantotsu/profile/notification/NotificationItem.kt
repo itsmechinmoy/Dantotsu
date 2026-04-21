@@ -84,29 +84,30 @@ class NotificationItem(
                 }
             }
             if (canUnsubscribeActivity) {
-                val unsubscribeAction = unsubscribe@{
-                    val activityId = notification.activityId ?: run {
+                val unsubscribeAction = {
+                    val activityId = notification.activityId
+                    if (activityId == null) {
                         snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
-                        return@unsubscribe
-                    }
-                    val lifecycleOwner = binding.root.findViewTreeLifecycleOwner()
-                    if (lifecycleOwner == null) {
-                        snackString(binding.root.context.getString(R.string.activity_unsubscribe_unavailable))
                     } else {
-                        lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                            val success = runCatching {
-                                Anilist.mutation.toggleActivitySubscription(
-                                    activityId,
-                                    false
-                                )
-                            }.onFailure {
-                                Logger.log("Failed to unsubscribe from activity: ${it.message}")
-                            }.getOrDefault(false)
-                            withContext(Dispatchers.Main) {
-                                if (success) {
-                                    snackString(binding.root.context.getString(R.string.activity_unsubscribed))
-                                } else {
-                                    snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
+                        val lifecycleOwner = binding.root.findViewTreeLifecycleOwner()
+                        if (lifecycleOwner == null) {
+                            snackString(binding.root.context.getString(R.string.activity_unsubscribe_unavailable))
+                        } else {
+                            lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                                val success = runCatching {
+                                    Anilist.mutation.toggleActivitySubscription(
+                                        activityId,
+                                        false
+                                    )
+                                }.onFailure {
+                                    Logger.log("Failed to unsubscribe from activity: ${it.message}")
+                                }.getOrDefault(false)
+                                withContext(Dispatchers.Main) {
+                                    if (success) {
+                                        snackString(binding.root.context.getString(R.string.activity_unsubscribed))
+                                    } else {
+                                        snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
+                                    }
                                 }
                             }
                         }
