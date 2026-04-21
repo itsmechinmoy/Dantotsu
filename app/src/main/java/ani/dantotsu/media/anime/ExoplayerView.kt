@@ -183,6 +183,7 @@ import java.util.Timer
 import java.util.TimerTask
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -1062,15 +1063,15 @@ class ExoplayerView :
 
             fun updateFastForwardSpeed(event: MotionEvent) {
                 if (!isFastForwarding) return
-                val width = playerView.width.takeIf { it > 0 } ?: return
-                val deltaRatio = (event.rawX - fastForwardStartX) / width.toFloat()
+                val width = playerView.width.toFloat().takeIf { it > 0f } ?: return
+                val deltaRatio = (event.rawX - fastForwardStartX) / width
                 val targetSpeed =
                     clamp(
                         fastForwardInitialSpeed + (deltaRatio * dragSpeedSensitivity),
                         minLongPressSpeed,
                         maxLongPressSpeed,
                     )
-                if (kotlin.math.abs(targetSpeed - lastFastForwardSpeed) < minSpeedUpdateDelta) return
+                if (abs(targetSpeed - lastFastForwardSpeed) < minSpeedUpdateDelta) return
                 exoPlayer.setPlaybackSpeed(targetSpeed)
                 lastFastForwardSpeed = targetSpeed
                 updateFastForwardText(exoPlayer.playbackParameters.speed)
