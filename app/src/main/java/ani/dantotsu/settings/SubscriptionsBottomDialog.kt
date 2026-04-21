@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.appcompat.widget.PopupMenu
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.R
@@ -22,6 +23,9 @@ class SubscriptionsBottomDialog : BottomSheetDialogFragment() {
     private val binding get() = _binding!!
     private val adapter: GroupieAdapter = GroupieAdapter()
     private var subscriptions: Map<Int, SubscriptionHelper.Companion.SubscribeMedia> = mapOf()
+    private var groupedSubscriptions:
+        MutableMap<String, MutableList<SubscriptionHelper.Companion.SubscribeMedia>> = mutableMapOf()
+    private var currentFilter: String? = null
     private val animeExtension: AnimeExtensionManager = Injekt.get()
     private val mangaExtensions: MangaExtensionManager = Injekt.get()
     private val novelExtensions: NovelExtensionManager = Injekt.get()
@@ -44,23 +48,59 @@ class SubscriptionsBottomDialog : BottomSheetDialogFragment() {
         )
         val context = requireContext()
         binding.title.text = context.getString(R.string.subscriptions)
-        binding.replyButton.visibility = View.GONE
-
-        val groupedSubscriptions = subscriptions.values.groupBy {
-            if (it.isAnime) SubscriptionHelper.getAnimeParser(it.id).name
-            else SubscriptionHelper.getMangaParser(it.id).name
+        binding.replyButton.apply {
+            visibility = View.VISIBLE
+            setImageResource(R.drawable.ic_round_filter_list_24)
+            contentDescription = context.getString(R.string.filter)
+            setOnClickListener { showFilterMenu() }
         }
 
-        groupedSubscriptions.forEach { (parserName, mediaList) ->
+        groupedSubscriptions = subscriptions.values.groupBy {
+            if (it.isAnime) SubscriptionHelper.getAnimeParser(it.id).name
+            else SubscriptionHelper.getMangaParser(it.id).name
+        }.mapValues { it.value.toMutableList() }.toMutableMap()
+
+        updateAdapter()
+    }
+
+    private fun updateAdapter() {
+        adapter.clear()
+        val visibleSubscriptions = if (currentFilter == null) {
+            groupedSubscriptions
+        } else {
+            groupedSubscriptions.filterKeys { it == currentFilter }
+        }
+
+        visibleSubscriptions.forEach { (parserName, mediaList) ->
             adapter.add(SubscriptionSource(
                 parserName,
-                mediaList.toMutableList(),
+                mediaList,
                 adapter,
                 getParserIcon(parserName)
             ) { group ->
                 adapter.remove(group)
+                groupedSubscriptions.remove(parserName)
             })
         }
+    }
+
+    private fun showFilterMenu() {
+        val context = requireContext()
+        val popup = PopupMenu(context, binding.replyButton)
+        popup.menu.add(context.getString(R.string.all))
+        groupedSubscriptions.keys.sorted().forEach { parserName ->
+            popup.menu.add(parserName)
+        }
+        popup.setOnMenuItemClickListener { item ->
+            currentFilter = if (item.title == context.getString(R.string.all)) {
+                null
+            } else {
+                item.title.toString()
+            }
+            updateAdapter()
+            true
+        }
+        popup.show()
     }
 
     private fun getParserIcon(parserName: String): Drawable? {

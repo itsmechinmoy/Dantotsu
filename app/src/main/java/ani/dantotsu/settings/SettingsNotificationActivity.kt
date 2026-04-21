@@ -34,6 +34,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import kotlin.math.minOf
 
 class SettingsNotificationActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsNotificationsBinding
@@ -169,6 +170,100 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                                         }
                                                     }
                                                 }
+                                                withContext(Dispatchers.Main) {
+                                                    toast(
+                                                        getString(
+                                                            R.string.imported_subscriptions_count,
+                                                            importedCount
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        setNegButton(R.string.cancel)
+                                        show()
+                                    }
+                                }
+                            }
+                        }
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.import_anilist_statuses_to_subscriptions),
+                        desc = getString(R.string.import_anilist_statuses_to_subscriptions_desc),
+                        icon = R.drawable.ic_round_playlist_add_24,
+                        onClick = {
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val userId = (Anilist.userid
+                                    ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull())
+                                if (userId == null) {
+                                    withContext(Dispatchers.Main) { toast(getString(R.string.login_to_anilist_first)) }
+                                    return@launch
+                                }
+
+                                val animeLists = Anilist.query.getMediaLists(true, userId)
+                                val mangaLists = Anilist.query.getMediaLists(false, userId)
+                                val animeAll = animeLists["All"] ?: arrayListOf()
+                                val mangaAll = mangaLists["All"] ?: arrayListOf()
+
+                                if (animeAll.isEmpty() && mangaAll.isEmpty()) {
+                                    withContext(Dispatchers.Main) { toast(getString(R.string.no_lists_available_to_import)) }
+                                    return@launch
+                                }
+
+                                val statusKeys = resources.getStringArray(R.array.status)
+                                val animeStatuses = resources.getStringArray(R.array.status_anime)
+                                val mangaStatuses = resources.getStringArray(R.array.status_manga)
+                                val count = minOf(
+                                    statusKeys.size,
+                                    animeStatuses.size,
+                                    mangaStatuses.size
+                                )
+                                val titles = ArrayList<String>(count * 2)
+                                val statusMeta = ArrayList<Pair<Boolean, String>>(count * 2)
+                                repeat(count) { index ->
+                                    titles.add("${getString(R.string.anime)} • ${animeStatuses[index]}")
+                                    statusMeta.add(true to statusKeys[index])
+                                    titles.add("${getString(R.string.manga)} • ${mangaStatuses[index]}")
+                                    statusMeta.add(false to statusKeys[index])
+                                }
+                                val selected = BooleanArray(titles.size) { false }
+
+                                withContext(Dispatchers.Main) {
+                                    context.customAlertDialog().apply {
+                                        setTitle(R.string.select_statuses_to_import)
+                                        multiChoiceItems(titles.toTypedArray(), selected) {}
+                                        setPosButton(R.string.import_action) {
+                                            lifecycleScope.launch(Dispatchers.IO) {
+                                                val animeSelected = mutableSetOf<String>()
+                                                val mangaSelected = mutableSetOf<String>()
+                                                statusMeta.forEachIndexed { index, (isAnime, status) ->
+                                                    if (selected[index]) {
+                                                        if (isAnime) animeSelected.add(status)
+                                                        else mangaSelected.add(status)
+                                                    }
+                                                }
+                                                val existingIds =
+                                                    SubscriptionHelper.getSubscriptions().keys.toMutableSet()
+                                                var importedCount = 0
+                                                fun importMedia(
+                                                    list: List<Media>,
+                                                    statuses: Set<String>
+                                                ) {
+                                                    list.forEach { media ->
+                                                        if (media.userStatus != null &&
+                                                            statuses.contains(media.userStatus)
+                                                        ) {
+                                                            if (!existingIds.contains(media.id)) {
+                                                                existingIds.add(media.id)
+                                                                importedCount++
+                                                            }
+                                                            SubscriptionHelper.saveSubscription(media, true)
+                                                        }
+                                                    }
+                                                }
+                                                importMedia(animeAll, animeSelected)
+                                                importMedia(mangaAll, mangaSelected)
                                                 withContext(Dispatchers.Main) {
                                                     toast(
                                                         getString(
