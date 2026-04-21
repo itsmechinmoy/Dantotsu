@@ -41,10 +41,7 @@ import kotlin.system.measureTimeMillis
 
 class AnilistQueries {
     companion object {
-        private const val MISSING_SEQUELS_LOOKUP_BATCH_SIZE = 50
-        private const val MISSING_SEQUELS_CACHE_KEY = "missing_sequels_cache"
-        private const val MISSING_SEQUELS_CACHE_TTL_MS = 6 * 60 * 60 * 1000L
-        private val PLANNING_LIST_STATUS_NAME = MediaListStatus.PLANNING.name
+
         const val ITEMS_PER_PAGE = 25
     }
 
@@ -561,10 +558,10 @@ class AnilistQueries {
         return """
             MediaListCollection( userId: ${Anilist.userid}, type: ANIME ) { lists { entries { media { id } } } } """.trimIndent()
     }
-
+    private val batchSize = 50
     private fun missingSequelsLookupQuery(ids: List<Int>): String {
         val idsString = ids.joinToString(",")
-        return """ { Page(page: 1, perPage: $MISSING_SEQUELS_LOOKUP_BATCH_SIZE) { media( id_in: [$idsString], type: ANIME, status_in: [RELEASING, FINISHED], onList: false ) { id mediaListEntry { progress private score(format: POINT_100) status } idMal type isAdult popularity status(version: 2) chapters episodes nextAiringEpisode { episode } meanScore isFavourite format bannerImage coverImage { large } title { english romaji userPreferred } startDate { year } } } } """.trimIndent()
+        return """ { Page(page: 1, perPage: $batchSize) { media( id_in: [$idsString], type: ANIME, status_in: [RELEASING, FINISHED], onList: false ) { id mediaListEntry { progress private score(format: POINT_100) status } idMal type isAdult popularity status(version: 2) chapters episodes nextAiringEpisode { episode } meanScore isFavourite format bannerImage coverImage { large } title { english romaji userPreferred } startDate { year } } } } """.trimIndent()
     }
 
     private fun extractMissingSequelIds(completedEntries: List<MediaList>?): Set<Int> {
@@ -591,7 +588,7 @@ class AnilistQueries {
     private suspend fun fetchMissingSequelMedia(ids: Set<Int>): ArrayList<Media> {
         if (ids.isEmpty()) return arrayListOf()
 
-        val batches = ids.toList().chunked(MISSING_SEQUELS_LOOKUP_BATCH_SIZE)
+        val batches = ids.toList().chunked(batchSize)
         val batchResults: List<List<Media>> = coroutineScope {
             batches.map { batch ->
                 async {
@@ -612,19 +609,19 @@ class AnilistQueries {
 
     private fun loadMissingSequelCache(ids: Set<Int>): ArrayList<Media>? {
         val cached = PrefManager.getNullableCustomVal(
-            MISSING_SEQUELS_CACHE_KEY,
+            "missing_sequels_cache",
             null,
             MissingSequelsCache::class.java
         ) ?: return null
 
-        val cacheExpired = System.currentTimeMillis() - cached.cachedAt > MISSING_SEQUELS_CACHE_TTL_MS
+        val cacheExpired = System.currentTimeMillis() - cached.cachedAt > 6 * 60 * 60 * 1000L
         if (cacheExpired || cached.sourceIds != ids) return null
         return ArrayList(cached.media)
     }
 
     private fun saveMissingSequelCache(ids: Set<Int>, media: ArrayList<Media>) {
         PrefManager.setCustomVal(
-            MISSING_SEQUELS_CACHE_KEY,
+            "missing_sequels_cache",
             MissingSequelsCache(ids, media, System.currentTimeMillis())
         )
     }
@@ -1841,7 +1838,7 @@ Page(page:$page,perPage:50) {
 
     suspend fun getUpcomingAnime(id: String): List<Media> {
         val res = executeQuery<Query.MediaListCollection>(
-            """{MediaListCollection(userId:$id,type:ANIME){lists{name entries{media{id,isFavourite,title{userPreferred,romaji}coverImage{medium}nextAiringEpisode{episode,timeUntilAiring}}}}}}""",
+            """{MediaListCollection(userId:$id,type:ANIME){lists{name entries{media{id,type, isFavourite,title{userPreferred,romaji}coverImage{medium}nextAiringEpisode{episode,timeUntilAiring}}}}}}""",
             force = true
         )
         val list = mutableListOf<Media>()
