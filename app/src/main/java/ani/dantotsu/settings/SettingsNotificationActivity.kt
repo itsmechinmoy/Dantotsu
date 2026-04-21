@@ -9,11 +9,14 @@ import android.os.Bundle
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.updateLayoutParams
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.R
+import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.api.NotificationType
 import ani.dantotsu.databinding.ActivitySettingsNotificationsBinding
 import ani.dantotsu.initActivity
+import ani.dantotsu.media.Media
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.notifications.TaskScheduler
 import ani.dantotsu.notifications.anilist.AnilistNotificationWorker
@@ -25,7 +28,11 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.themes.ThemeManager
+import ani.dantotsu.toast
 import ani.dantotsu.util.customAlertDialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 class SettingsNotificationActivity : AppCompatActivity() {
@@ -106,6 +113,73 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                 supportFragmentManager,
                                 "subscriptions"
                             )
+                        }
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.import_anilist_lists_to_subscriptions),
+                        desc = getString(R.string.import_anilist_lists_to_subscriptions_desc),
+                        icon = R.drawable.ic_round_playlist_add_24,
+                        onClick = {
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val userId = (Anilist.userid
+                                    ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull())
+                                if (userId == null || userId <= 0) {
+                                    withContext(Dispatchers.Main) { toast(getString(R.string.login_to_anilist_first)) }
+                                    return@launch
+                                }
+
+                                val animeLists = Anilist.query.getMediaLists(true, userId)
+                                val mangaLists = Anilist.query.getMediaLists(false, userId)
+
+                                val selectableLists = linkedMapOf<String, ArrayList<Media>>()
+                                fun addSelectableLists(prefix: String, lists: MutableMap<String, ArrayList<Media>>) {
+                                    lists.forEach { (name, media) ->
+                                        if (name != "All" && name != "Favourites" && media.isNotEmpty()) {
+                                            selectableLists["$prefix • $name"] = media
+                                        }
+                                    }
+                                }
+                                addSelectableLists(getString(R.string.anime), animeLists)
+                                addSelectableLists(getString(R.string.manga), mangaLists)
+
+                                if (selectableLists.isEmpty()) {
+                                    withContext(Dispatchers.Main) { toast(getString(R.string.no_lists_available_to_import)) }
+                                    return@launch
+                                }
+
+                                val titles = selectableLists.keys.toTypedArray()
+                                val selected = BooleanArray(titles.size) { false }
+                                withContext(Dispatchers.Main) {
+                                    context.customAlertDialog().apply {
+                                        setTitle(R.string.select_lists_to_import)
+                                        multiChoiceItems(titles, selected) {}
+                                        setPosButton(R.string.import_) {
+                                            lifecycleScope.launch(Dispatchers.IO) {
+                                                val beforeCount = SubscriptionHelper.getSubscriptions().size
+                                                titles.forEachIndexed { index, title ->
+                                                    if (selected[index]) {
+                                                        selectableLists[title]?.forEach { media ->
+                                                            SubscriptionHelper.saveSubscription(media, true)
+                                                        }
+                                                    }
+                                                }
+                                                val afterCount = SubscriptionHelper.getSubscriptions().size
+                                                withContext(Dispatchers.Main) {
+                                                    toast(
+                                                        getString(
+                                                            R.string.imported_subscriptions_count,
+                                                            (afterCount - beforeCount).coerceAtLeast(0)
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        setNegButton(R.string.cancel)
+                                        show()
+                                    }
+                                }
+                            }
                         }
                     ),
                     Settings(
