@@ -179,6 +179,7 @@ class MediaDetailsViewModel : ViewModel() {
     suspend fun loadEpisodeVideos(ep: Episode, i: Int, post: Boolean = true) {
         val link = ep.link ?: return
         if (!ep.allStreams || ep.extractors.isNullOrEmpty()) {
+            val existingExtractors = ep.extractors?.toMutableList() ?: mutableListOf()
             val list = mutableListOf<VideoExtractor>()
             ep.extractors = list
             watchSources?.get(i)?.apply {
@@ -194,6 +195,8 @@ class MediaDetailsViewModel : ViewModel() {
                 ep.extractorCallback = null
                 if (list.isNotEmpty())
                     ep.allStreams = true
+                else if (existingExtractors.isNotEmpty())
+                    ep.extractors = existingExtractors
             }
         }
 

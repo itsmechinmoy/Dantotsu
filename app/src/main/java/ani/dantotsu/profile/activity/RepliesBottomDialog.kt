@@ -1,5 +1,6 @@
 package ani.dantotsu.profile.activity
 
+import android.content.DialogInterface
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -27,6 +28,8 @@ class RepliesBottomDialog : BottomSheetDialogFragment() {
     private val adapter: GroupieAdapter = GroupieAdapter()
     private val replies: MutableList<ActivityReply> = mutableListOf()
     private var activityId: Int = -1
+    private var didNotifyClose = false
+    var onDialogClosed: (() -> Unit)? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -99,6 +102,20 @@ class RepliesBottomDialog : BottomSheetDialogFragment() {
     override fun onDestroyView() {
         _binding = null
         super.onDestroyView()
+    }
+
+    override fun onDismiss(dialog: DialogInterface) {
+        super.onDismiss(dialog)
+        notifyDialogClosed()
+    }
+
+    private fun notifyDialogClosed() {
+        if (didNotifyClose) {
+            return
+        }
+        didNotifyClose = true
+        onDialogClosed?.invoke()
+        onDialogClosed = null
     }
 
     override fun onResume() {

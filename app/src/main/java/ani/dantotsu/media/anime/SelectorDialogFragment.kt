@@ -377,6 +377,15 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 }
                             }
 
+                            fun failToList() {
+                                snackString(getString(R.string.auto_select_server_error))
+                                media!!.selected!!.server = null
+                                model.saveSelected(media!!.id, media!!.selected!!)
+                                binding.selectorAutoListContainer.visibility = View.GONE
+                                binding.selectorListContainer.visibility = View.VISIBLE
+                                initializeVideoServerSelector(ep)
+                            }
+
                             fun load() {
                                 val size =
                                     if (model.watchSources!!.isDownloadedSource(media!!.selected!!.sourceIndex)) {
@@ -391,7 +400,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     media!!.anime!!.episodes?.get(media!!.anime!!.selectedEpisode!!)?.selectedVideo =
                                         media!!.selected!!.video
                                     startExoplayer(media!!)
-                                } else fail(R.string.auto_select_server_error)
+                                } else failToList()
                             }
 
                             if (ep.extractors?.filter { it.server.name == selected } == null) {
@@ -399,9 +408,9 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     if(!withContext(Dispatchers.IO){
                                         loadEpisodeSingleServer(ep.number, selected!!)
                                     }){
-                                        media!!.selected!!.server = null
-                                        model.saveSelected(media!!.id, media!!.selected!!)
-                                        fail(R.string.auto_select_server_error)
+                                        withContext(Dispatchers.Main) {
+                                            failToList()
+                                        }
                                     }
                                     else load()
                                 }
