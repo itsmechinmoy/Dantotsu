@@ -4,6 +4,8 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import ani.dantotsu.R
 import ani.dantotsu.blurImage
 import ani.dantotsu.connections.anilist.Anilist
@@ -25,9 +27,7 @@ import ani.dantotsu.toPx
 import ani.dantotsu.util.customAlertDialog
 import com.xwray.groupie.GroupieAdapter
 import com.xwray.groupie.viewbinding.BindableItem
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -53,7 +53,6 @@ class NotificationItem(
 
         if (!canDeleteLocal && !canUnsubscribeActivity) return
 
-        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         binding.root.context.customAlertDialog().apply {
             if (canDeleteLocal) {
                 setTitle(R.string.delete)
@@ -92,16 +91,21 @@ class NotificationItem(
             }
             if (canUnsubscribeActivity) {
                 val unsubscribeAction = {
-                    scope.launch {
-                        val success = Anilist.mutation.toggleActivitySubscription(
-                            notification.activityId!!,
-                            false
-                        )
-                        withContext(Dispatchers.Main) {
-                            if (success) {
-                                snackString(binding.root.context.getString(R.string.activity_unsubscribed))
-                            } else {
-                                snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
+                    val lifecycleOwner = binding.root.findViewTreeLifecycleOwner()
+                    if (lifecycleOwner == null) {
+                        snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
+                    } else {
+                        lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                            val success = Anilist.mutation.toggleActivitySubscription(
+                                notification.activityId!!,
+                                false
+                            )
+                            withContext(Dispatchers.Main) {
+                                if (success) {
+                                    snackString(binding.root.context.getString(R.string.activity_unsubscribed))
+                                } else {
+                                    snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
+                                }
                             }
                         }
                     }

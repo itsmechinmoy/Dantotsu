@@ -41,6 +41,12 @@ class AnilistNotificationTask : Task {
                         val newNotifications = unreadNotifications?.filter { it.id > lastId }
                         val filteredTypes =
                             PrefManager.getVal<Set<String>>(PrefName.AnilistFilteredTypes)
+                        val mediaSectionTypes = setOf(
+                            "AIRING",
+                            "MEDIA_MERGE",
+                            "MEDIA_DELETION",
+                            "MEDIA_DATA_CHANGE"
+                        )
                         
                         var userCount = 0
                         var mediaCount = 0
@@ -62,7 +68,7 @@ class AnilistNotificationTask : Task {
                                         )
                                 }
                                 // Track counts per section
-                                if (it.media != null) {
+                                if (it.notificationType in mediaSectionTypes) {
                                     mediaCount++
                                 } else {
                                     userCount++
