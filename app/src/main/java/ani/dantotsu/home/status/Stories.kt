@@ -435,8 +435,20 @@ class Stories @JvmOverloads constructor(
         binding.replyCount.text = story.replyCount.toString()
         binding.activityReplies.setColorFilter(ContextCompat.getColor(context, R.color.bg_opp))
         binding.activityRepliesContainer.setOnClickListener {
-            RepliesBottomDialog.newInstance(story.id)
-                .show((it.context as FragmentActivity).supportFragmentManager, "replies")
+            val hostActivity = it.context as? FragmentActivity ?: return@setOnClickListener
+            pause()
+            RepliesBottomDialog.newInstance(story.id).apply {
+                onDialogClosed = {
+                    hostActivity.window?.decorView?.post {
+                        if (!hostActivity.isFinishing &&
+                            !hostActivity.isDestroyed &&
+                            hostActivity.hasWindowFocus()
+                        ) {
+                            resume()
+                        }
+                    }
+                }
+            }.show(hostActivity.supportFragmentManager, "replies")
         }
         binding.activityLike.setColorFilter(if (story.isLiked == true) likeColor else notLikeColor)
         binding.activityLikeCount.text = story.likeCount.toString()

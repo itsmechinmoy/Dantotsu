@@ -523,6 +523,7 @@ class ExoplayerView :
         audioManager.requestAudioFocus({ focus ->
             when (focus) {
                 AUDIOFOCUS_LOSS_TRANSIENT, AUDIOFOCUS_LOSS -> if (isInitialized) exoPlayer.pause()
+                AUDIOFOCUS_GAIN -> if (isInitialized && isPlayerPlaying) exoPlayer.play()
             }
         }, AUDIO_CONTENT_TYPE_MOVIE, AUDIOFOCUS_GAIN)
 
@@ -1744,7 +1745,10 @@ class ExoplayerView :
             CacheDataSource.Factory().apply {
                 setCache(VideoCache.getInstance(this@ExoplayerView))
                 setUpstreamDataSourceFactory(defaultDataSourceFactory)
-                // Enable disk cache writes so segments are reused across seeks and sessions
+                // Fall back to network when a cached segment cannot be read (e.g. stale/incomplete
+                // data left from a previous session), so seeks past already-cached positions don't
+                // hang indefinitely.
+                setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
             }
 
         // Set up libass for ASS/SSA subtitle rendering.
@@ -2718,7 +2722,7 @@ class ExoplayerView :
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         if (PrefManager.getVal(PrefName.FocusPause) && !epChanging) {
-            if (isInitialized && !hasFocus) wasPlaying = exoPlayer.isPlaying
+            if (isInitialized && !hasFocus) wasPlaying = exoPlayer.playWhenReady
             if (hasFocus) {
                 if (isInitialized && wasPlaying) exoPlayer.play()
             } else {
@@ -2751,6 +2755,14 @@ class ExoplayerView :
         super.onPositionDiscontinuity(oldPosition, newPosition, reason)
         if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) {
             discordRPC()
+            // Proactively ensure playback resumes after seek when the player was playing.
+            // Seeking to an unbuffered position transitions to STATE_BUFFERING; setting
+            // playWhenReady = true here (before buffering begins) ensures ExoPlayer will
+            // auto-play as soon as STATE_READY is reached, preventing the player from
+            // silently staying paused after the buffer fills.
+            if (isPlayerPlaying) {
+                exoPlayer.play()
+            }
         }
     }
 

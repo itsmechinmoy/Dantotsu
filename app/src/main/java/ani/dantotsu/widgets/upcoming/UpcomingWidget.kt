@@ -16,7 +16,6 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
 import ani.dantotsu.MainActivity
 import ani.dantotsu.R
-import ani.dantotsu.widgets.WidgetSizeProvider
 
 class UpcomingWidget : AppWidgetProvider() {
 
@@ -108,17 +107,11 @@ class UpcomingWidget : AppWidgetProvider() {
                 null
             ) as GradientDrawable
             gradientDrawable.colors = intArrayOf(backgroundColor, backgroundFade)
-            val widgetSizeProvider = WidgetSizeProvider(context)
-            var (width, height) = widgetSizeProvider.getWidgetsSize(appWidgetId)
-            if (width > 0 && height > 0) {
-                gradientDrawable.cornerRadius = 64f
-            } else {
-                width = 300
-                height = 300
-            }
+            gradientDrawable.cornerRadius = 0f
+            val backgroundBitmap = gradientDrawable.toBitmap(720, 360)
 
             fun buildViews(): RemoteViews = RemoteViews(context.packageName, R.layout.upcoming_widget).apply {
-                setImageViewBitmap(R.id.backgroundView, gradientDrawable.toBitmap(width, height))
+                setImageViewBitmap(R.id.backgroundView, backgroundBitmap)
                 setTextColor(R.id.text_show_title, titleTextColor)
                 setTextColor(R.id.text_show_countdown, countdownTextColor)
                 setTextColor(R.id.widgetTitle, titleTextColor)
