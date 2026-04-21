@@ -27,7 +27,18 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal">
-
+        
+            <com.google.android.material.chip.Chip
+                android:id="@+id/animePreviousSeason"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="@string/previous_season"
+                android:textAppearance="@style/Suffix"
+                app:chipStrokeColor="?attr/colorPrimaryContainer"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+        
             <com.google.android.material.chip.Chip
                 android:id="@+id/animeThisSeason"
                 android:layout_width="wrap_content"
@@ -39,7 +50,7 @@
                 app:layout_constraintBaseline_toBaselineOf="@+id/animeNextSeason"
                 app:layout_constraintEnd_toStartOf="@+id/animeNextSeason"
                 app:layout_constraintStart_toStartOf="parent" />
-
+        
             <com.google.android.material.chip.Chip
                 android:id="@+id/animeNextSeason"
                 android:layout_width="wrap_content"
@@ -48,17 +59,6 @@
                 android:text="@string/next_season"
                 android:textAppearance="@style/Suffix"
                 app:chipStrokeColor="?attr/colorPrimaryContainer" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/animePreviousSeason"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:text="@string/previous_season"
-                android:textAppearance="@style/Suffix"
-                app:chipStrokeColor="?attr/colorPrimaryContainer"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent" />
         </LinearLayout>
 
     </HorizontalScrollView>
