@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import ani.dantotsu.R
 import ani.dantotsu.blurImage
+import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.api.Notification
 import ani.dantotsu.connections.anilist.api.NotificationType
 import ani.dantotsu.databinding.ItemNotificationBinding
@@ -19,10 +20,16 @@ import ani.dantotsu.profile.notification.NotificationFragment.Companion.Notifica
 import ani.dantotsu.setAnimation
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.snackString
 import ani.dantotsu.toPx
 import ani.dantotsu.util.customAlertDialog
 import com.xwray.groupie.GroupieAdapter
 import com.xwray.groupie.viewbinding.BindableItem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class NotificationItem(
     private val notification: Notification,
@@ -39,44 +46,74 @@ class NotificationItem(
     }
 
     fun dialog() {
-        when (type) {
-            COMMENT, SUBSCRIPTION -> {
-                binding.root.context.customAlertDialog().apply {
-                    setTitle(R.string.delete)
-                    setMessage(ActivityItemBuilder.getContent(notification))
-                    setPosButton(R.string.yes) {
-                        when (type) {
-                            COMMENT -> {
-                                val list = PrefManager.getNullableVal<List<CommentStore>>(
-                                    PrefName.CommentNotificationStore,
-                                    null
-                                ) ?: listOf()
-                                val newList = list.filter { it.commentId != notification.commentId }
-                                PrefManager.setVal(PrefName.CommentNotificationStore, newList)
-                                parentAdapter.remove(this@NotificationItem)
+        val notificationType = NotificationType.valueOf(notification.notificationType)
+        val canDeleteLocal = type == COMMENT || type == SUBSCRIPTION
+        val canUnsubscribeActivity =
+            notificationType == NotificationType.ACTIVITY_REPLY_SUBSCRIBED && notification.activityId != null
 
-                            }
+        if (!canDeleteLocal && !canUnsubscribeActivity) return
 
-                            SUBSCRIPTION -> {
-                                val list = PrefManager.getNullableVal<List<SubscriptionStore>>(
-                                    PrefName.SubscriptionNotificationStore,
-                                    null
-                                ) ?: listOf()
-                                val newList =
-                                    list.filter { (it.time / 1000L).toInt() != notification.createdAt }
-                                PrefManager.setVal(PrefName.SubscriptionNotificationStore, newList)
-                                parentAdapter.remove(this@NotificationItem)
-                            }
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        binding.root.context.customAlertDialog().apply {
+            if (canDeleteLocal) {
+                setTitle(R.string.delete)
+            } else {
+                setTitle(R.string.activity_subscription)
+            }
+            setMessage(ActivityItemBuilder.getContent(notification))
+            if (canDeleteLocal) {
+                setPosButton(R.string.yes) {
+                    when (type) {
+                        COMMENT -> {
+                            val list = PrefManager.getNullableVal<List<CommentStore>>(
+                                PrefName.CommentNotificationStore,
+                                null
+                            ) ?: listOf()
+                            val newList = list.filter { it.commentId != notification.commentId }
+                            PrefManager.setVal(PrefName.CommentNotificationStore, newList)
+                            parentAdapter.remove(this@NotificationItem)
 
-                            else -> {}
                         }
+
+                        SUBSCRIPTION -> {
+                            val list = PrefManager.getNullableVal<List<SubscriptionStore>>(
+                                PrefName.SubscriptionNotificationStore,
+                                null
+                            ) ?: listOf()
+                            val newList =
+                                list.filter { (it.time / 1000L).toInt() != notification.createdAt }
+                            PrefManager.setVal(PrefName.SubscriptionNotificationStore, newList)
+                            parentAdapter.remove(this@NotificationItem)
+                        }
+
+                        else -> {}
                     }
-                    setNegButton(R.string.no)
-                    show()
                 }
             }
-
-            else -> {}
+            if (canUnsubscribeActivity) {
+                val unsubscribeAction = {
+                    scope.launch {
+                        val success = Anilist.mutation.toggleActivitySubscription(
+                            notification.activityId!!,
+                            false
+                        )
+                        withContext(Dispatchers.Main) {
+                            if (success) {
+                                snackString(binding.root.context.getString(R.string.activity_unsubscribed))
+                            } else {
+                                snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
+                            }
+                        }
+                    }
+                }
+                if (canDeleteLocal) {
+                    setNeutralButton(R.string.unsubscribe) { unsubscribeAction() }
+                } else {
+                    setPosButton(R.string.unsubscribe) { unsubscribeAction() }
+                }
+            }
+            setNegButton(R.string.no)
+            show()
         }
 
     }

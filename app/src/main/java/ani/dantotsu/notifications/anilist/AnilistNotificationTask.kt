@@ -64,7 +64,7 @@ class AnilistNotificationTask : Task {
                                 // Track counts per section
                                 if (it.media != null) {
                                     mediaCount++
-                                } else if (it.user != null || it.userId != null) {
+                                } else {
                                     userCount++
                                 }
                             }

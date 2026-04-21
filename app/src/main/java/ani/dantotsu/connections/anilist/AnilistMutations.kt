@@ -310,6 +310,19 @@ class AnilistMutations {
         )
     }
 
+    suspend fun toggleActivitySubscription(activityId: Int, subscribe: Boolean): Boolean {
+        val result = executeQuery<JsonObject>(
+            """
+            mutation {
+                ToggleActivitySubscription(activityId: $activityId, subscribe: $subscribe) {
+                    __typename
+                }
+            }
+        """.trimIndent()
+        )
+        return result?.get("errors") == null
+    }
+
     suspend fun postActivity(text: String, edit: Int? = null): String {
         val encodedText = text.stringSanitizer()
         val query = """

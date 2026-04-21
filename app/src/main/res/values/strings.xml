@@ -709,6 +709,10 @@
     <string name="subscribed_notification">Subscribed! Receiving notifications, when new episodes are released on %1$s.</string>
 
     <string name="unsubscribed_notification">Unsubscribed, you will not receive any notifications.</string>
+    <string name="activity_subscription">Activity Subscription</string>
+    <string name="unsubscribe">Unsubscribe</string>
+    <string name="activity_unsubscribed">Unsubscribed from activity</string>
+    <string name="activity_unsubscribe_failed">Failed to unsubscribe from activity</string>
     <string name="episode_plural">Episodes</string>
     <string name="episode_singular">Episode</string>
     <string name="chapter_singular">Chapter</string>
