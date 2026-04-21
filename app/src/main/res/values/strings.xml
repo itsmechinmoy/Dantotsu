@@ -713,6 +713,7 @@
     <string name="unsubscribe">Unsubscribe</string>
     <string name="activity_unsubscribed">Unsubscribed from activity</string>
     <string name="activity_unsubscribe_failed">Failed to unsubscribe from activity</string>
+    <string name="activity_unsubscribe_unavailable">Cannot unsubscribe right now</string>
     <string name="episode_plural">Episodes</string>
     <string name="episode_singular">Episode</string>
     <string name="chapter_singular">Chapter</string>

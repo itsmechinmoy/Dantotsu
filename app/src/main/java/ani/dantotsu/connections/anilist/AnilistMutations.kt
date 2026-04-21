@@ -320,7 +320,7 @@ class AnilistMutations {
             }
         """.trimIndent()
         )
-        return result?.get("errors") == null
+        return result != null && result["errors"] == null
     }
 
     suspend fun postActivity(text: String, edit: Int? = null): String {

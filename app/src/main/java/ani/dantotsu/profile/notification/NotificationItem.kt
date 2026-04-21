@@ -86,7 +86,7 @@ class NotificationItem(
                 val unsubscribeAction = {
                     val lifecycleOwner = binding.root.findViewTreeLifecycleOwner()
                     if (lifecycleOwner == null) {
-                        snackString(binding.root.context.getString(R.string.activity_unsubscribe_failed))
+                        snackString(binding.root.context.getString(R.string.activity_unsubscribe_unavailable))
                     } else {
                         lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                             val success = runCatching {
