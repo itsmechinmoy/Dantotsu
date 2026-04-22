@@ -136,7 +136,7 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
                     LengthFilter(volumeTotal.toString().length)
                 )
             }
-            binding.mediaListVolumeProgressLayout.suffixText = " / ${volumeTotal ?: '?'}"
+            binding.mediaListVolumeProgressLayout.suffixText = " / ${volumeTotal ?: "?"}"
             binding.mediaListVolumeProgressLayout.suffixTextView.updateLayoutParams {
                 height = ViewGroup.LayoutParams.MATCH_PARENT
             }
