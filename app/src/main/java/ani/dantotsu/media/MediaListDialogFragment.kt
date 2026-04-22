@@ -96,6 +96,27 @@ class MediaListDialogFragment : BottomSheetDialogFragment() {
                 }
                 binding.mediaListProgressLayout.suffixTextView.gravity = Gravity.CENTER
 
+                val volumeTotal = media?.manga?.totalVolumes
+                if (media?.manga != null) {
+                    binding.mediaListVolumeProgressLayout.visibility = View.VISIBLE
+                    binding.mediaListVolumeProgress.setText(
+                        media?.userProgressVolumes?.toString() ?: ""
+                    )
+                    if (volumeTotal != null) {
+                        binding.mediaListVolumeProgress.filters = arrayOf(
+                            InputFilterMinMax(0.0, volumeTotal.toDouble()),
+                            LengthFilter(volumeTotal.toString().length)
+                        )
+                    }
+                    binding.mediaListVolumeProgressLayout.suffixText = " / ${volumeTotal ?: '?'}"
+                    binding.mediaListVolumeProgressLayout.suffixTextView.updateLayoutParams {
+                        height = ViewGroup.LayoutParams.MATCH_PARENT
+                    }
+                    binding.mediaListVolumeProgressLayout.suffixTextView.gravity = Gravity.CENTER
+                } else {
+                    binding.mediaListVolumeProgressLayout.visibility = View.GONE
+                }
+
                 binding.mediaListScore.setText(
                     if (media!!.userScore != 0) media!!.userScore.div(
                         10.0
@@ -138,6 +159,9 @@ class MediaListDialogFragment : BottomSheetDialogFragment() {
 
                 fun onComplete() {
                     binding.mediaListProgress.setText(total.toString())
+                    if (volumeTotal != null) {
+                        binding.mediaListVolumeProgress.setText(volumeTotal.toString())
+                    }
                     if (start.date.year == null) {
                         start.date = FuzzyDate().getToday()
                         binding.mediaListStart.setText(start.date.toString())
@@ -230,6 +254,8 @@ class MediaListDialogFragment : BottomSheetDialogFragment() {
                                 val score =
                                     (_binding?.mediaListScore?.text.toString().toDoubleOrNull()
                                         ?.times(10))?.toInt()
+                                val progressVolumes =
+                                    _binding?.mediaListVolumeProgress?.text.toString().toIntOrNull()
                                 val status =
                                     statuses[statusStrings.indexOf(_binding?.mediaListStatus?.text.toString())]
                                 val rewatch =
@@ -238,16 +264,17 @@ class MediaListDialogFragment : BottomSheetDialogFragment() {
                                 val startD = start.date
                                 val endD = end.date
                                 Anilist.mutation.editList(
-                                    media!!.id,
-                                    progress,
-                                    score,
-                                    rewatch,
-                                    notes,
-                                    status,
-                                    media?.isListPrivate ?: false,
-                                    startD,
-                                    endD,
-                                    media?.inCustomListsOf?.mapNotNull { if (it.value) it.key else null }
+                                    mediaID = media!!.id,
+                                    progress = progress,
+                                    progressVolumes = progressVolumes,
+                                    score = score,
+                                    repeat = rewatch,
+                                    notes = notes,
+                                    status = status,
+                                    private = media?.isListPrivate ?: false,
+                                    startedAt = startD,
+                                    completedAt = endD,
+                                    customList = media?.inCustomListsOf?.mapNotNull { if (it.value) it.key else null }
                                 )
                                 MAL.query.editList(
                                     media!!.idMAL,

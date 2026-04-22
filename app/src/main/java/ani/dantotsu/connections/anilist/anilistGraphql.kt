@@ -74,6 +74,7 @@ fun characterInformation(includeMediaInfo: Boolean) = """
           }
           mediaListEntry {
               progress
+              progressVolumes
               private
               score(format: POINT_100)
               status
@@ -116,6 +117,7 @@ fun studioInformation(page: Int, perPage: Int) = """
           }
           mediaListEntry {
               progress
+              progressVolumes
               private
               score(format: POINT_100)
               status
@@ -180,6 +182,7 @@ fun staffInformation(page: Int, perPage: Int) = """
           }
           mediaListEntry {
               progress
+              progressVolumes
               private
               score(format: POINT_100)
               status
@@ -247,6 +250,7 @@ title {
 }
 mediaListEntry {
   progress
+  progressVolumes
   private
   score(format: POINT_100)
   status
@@ -267,6 +271,7 @@ fun fullMediaInformation(id: Int) = """
       status
       score(format: POINT_100)
       progress
+      progressVolumes
       private
       notes
       repeat

@@ -126,6 +126,25 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
         }
         binding.mediaListProgressLayout.suffixTextView.gravity = Gravity.CENTER
 
+        val volumeTotal = media.manga?.totalVolumes
+        if (media.manga != null) {
+            binding.mediaListVolumeProgressLayout.visibility = View.VISIBLE
+            binding.mediaListVolumeProgress.setText(media.userProgressVolumes?.toString() ?: "")
+            if (volumeTotal != null) {
+                binding.mediaListVolumeProgress.filters = arrayOf(
+                    InputFilterMinMax(0.0, volumeTotal.toDouble()),
+                    LengthFilter(volumeTotal.toString().length)
+                )
+            }
+            binding.mediaListVolumeProgressLayout.suffixText = " / ${volumeTotal ?: '?'}"
+            binding.mediaListVolumeProgressLayout.suffixTextView.updateLayoutParams {
+                height = ViewGroup.LayoutParams.MATCH_PARENT
+            }
+            binding.mediaListVolumeProgressLayout.suffixTextView.gravity = Gravity.CENTER
+        } else {
+            binding.mediaListVolumeProgressLayout.visibility = View.GONE
+        }
+
         binding.mediaListScore.setText(
             if (media.userScore != 0) media.userScore.div(
                 10.0
@@ -170,18 +189,19 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
                 withContext(Dispatchers.IO) {
                     withContext(Dispatchers.IO) {
                         val progress = _binding?.mediaListProgress?.text.toString().toIntOrNull()
+                        val progressVolumes =
+                            _binding?.mediaListVolumeProgress?.text.toString().toIntOrNull()
                         val score = (_binding?.mediaListScore?.text.toString().toDoubleOrNull()
                             ?.times(10))?.toInt()
                         val status =
                             statuses[statusStrings.indexOf(_binding?.mediaListStatus?.text.toString())]
                         Anilist.mutation.editList(
-                            media.id,
-                            progress,
-                            score,
-                            null,
-                            null,
-                            status,
-                            media.isListPrivate
+                            mediaID = media.id,
+                            progress = progress,
+                            progressVolumes = progressVolumes,
+                            score = score,
+                            status = status,
+                            private = media.isListPrivate
                         )
                         MAL.query.editList(
                             media.idMAL,

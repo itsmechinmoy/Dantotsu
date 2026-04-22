@@ -114,6 +114,7 @@
         <item>DROPPED</item>
     </string-array>
     <string name="progress">PROGRESS</string>
+    <string name="volume_progress">VOLUME PROGRESS</string>
     <string name="score">SCORE</string>
     <string name="score_suffix">" / 10"</string>
     <string name="started_at">STARTED AT</string>

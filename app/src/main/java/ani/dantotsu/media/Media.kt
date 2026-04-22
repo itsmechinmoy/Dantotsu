@@ -46,6 +46,7 @@ data class Media(
     var isListPrivate: Boolean = false,
     var notes: String? = null,
     var userProgress: Int? = null,
+    var userProgressVolumes: Int? = null,
     var userStatus: String? = null,
     var userScore: Int = 0,
     var userRepeat: Int = 0,
@@ -107,6 +108,7 @@ data class Media(
         isAdult = apiMedia.isAdult ?: false,
         isListPrivate = apiMedia.mediaListEntry?.private ?: false,
         userProgress = apiMedia.mediaListEntry?.progress,
+        userProgressVolumes = apiMedia.mediaListEntry?.progressVolumes,
         userScore = apiMedia.mediaListEntry?.score?.toInt() ?: 0,
         userStatus = apiMedia.mediaListEntry?.status?.toString(),
         meanScore = apiMedia.meanScore,
@@ -118,12 +120,16 @@ data class Media(
             totalEpisodes = apiMedia.episodes,
             nextAiringEpisode = apiMedia.nextAiringEpisode?.episode?.minus(1)
         ) else null,
-        manga = if (apiMedia.type == MediaType.MANGA) Manga(totalChapters = apiMedia.chapters) else null,
+        manga = if (apiMedia.type == MediaType.MANGA) Manga(
+            totalChapters = apiMedia.chapters,
+            totalVolumes = apiMedia.volumes
+        ) else null,
         format = apiMedia.format?.toString(),
     )
 
     constructor(mediaList: MediaList) : this(mediaList.media!!) {
         this.userProgress = mediaList.progress
+        this.userProgressVolumes = mediaList.progressVolumes
         this.isListPrivate = mediaList.private ?: false
         this.userScore = mediaList.score?.toInt() ?: 0
         this.userStatus = mediaList.status?.toString()

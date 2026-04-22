@@ -179,6 +179,7 @@ class AnilistMutations {
     suspend fun editList(
         mediaID: Int,
         progress: Int? = null,
+        progressVolumes: Int? = null,
         score: Int? = null,
         repeat: Int? = null,
         notes: String? = null,
@@ -192,6 +193,7 @@ class AnilistMutations {
             mutation (
                 ${"$"}mediaID: Int,
                 ${"$"}progress: Int,
+                ${"$"}progressVolumes: Int,
                 ${"$"}private: Boolean,
                 ${"$"}repeat: Int,
                 ${"$"}notes: String,
@@ -204,6 +206,7 @@ class AnilistMutations {
                 SaveMediaListEntry(
                     mediaId: ${"$"}mediaID,
                     progress: ${"$"}progress,
+                    progressVolumes: ${"$"}progressVolumes,
                     repeat: ${"$"}repeat,
                     notes: ${"$"}notes,
                     private: ${"$"}private,
@@ -231,6 +234,7 @@ class AnilistMutations {
         val variables = """{"mediaID":$mediaID
             ${if (private != null) ""","private":$private""" else ""}
             ${if (progress != null) ""","progress":$progress""" else ""}
+            ${if (progressVolumes != null) ""","progressVolumes":$progressVolumes""" else ""}
             ${if (score != null) ""","scoreRaw":$score""" else ""}
             ${if (repeat != null) ""","repeat":$repeat""" else ""}
             ${if (notes != null) ""","notes":"${notes.replace("\n", "\\n")}"""" else ""}
