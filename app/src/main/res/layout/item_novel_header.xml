@@ -298,4 +298,38 @@
             tools:ignore="ContentDescription,ImageContrastCheck" />
     </LinearLayout>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/sourceNotFound"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_bold"
+            android:padding="32dp"
+            android:text="@string/source_not_found"
+            android:textAlignment="center"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/faqbutton"
+            android:layout_width="120dp"
+            android:layout_height="50dp"
+            android:layout_marginTop="-16dp"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="?attr/colorPrimaryContainer"
+            android:fontFamily="@font/poppins_bold"
+            android:text="@string/faq"
+            android:textColor="?attr/colorOnPrimaryContainer"
+            android:visibility="gone"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_round_help_outline"
+            app:iconTint="?attr/colorOnPrimaryContainer" />
+
+    </LinearLayout>
+
 </LinearLayout>
