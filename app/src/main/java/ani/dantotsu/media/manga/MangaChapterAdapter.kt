@@ -15,6 +15,7 @@ import ani.dantotsu.databinding.ItemEpisodeCompactBinding
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.setAnimation
+import ani.dantotsu.util.SizeFormatter
 import ani.dantotsu.util.customAlertDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -142,23 +143,11 @@ class MangaChapterAdapter(
         val hasDownloaded = downloadedBytes > 0L
         val hasEstimatedTotal = estimatedTotalBytes > 0L
         return if (hasDownloaded && hasEstimatedTotal) {
-            "Downloading: $progress% (${formatBytes(downloadedBytes)} / ${formatBytes(estimatedTotalBytes)} est.)"
+            "Downloading: $progress% (${SizeFormatter.formatBytes(downloadedBytes)} / ${SizeFormatter.formatBytes(estimatedTotalBytes)} est.)"
         } else if (hasEstimatedTotal) {
-            "Downloading: $progress% (~${formatBytes(estimatedTotalBytes)} est.)"
+            "Downloading: $progress% (~${SizeFormatter.formatBytes(estimatedTotalBytes)} est.)"
         } else {
             "Downloading: $progress%"
-        }
-    }
-
-    private fun formatBytes(bytes: Long): String {
-        val kb = 1024.0
-        val mb = kb * 1024
-        val gb = mb * 1024
-        return when {
-            bytes >= gb -> "%.1f GB".format(bytes / gb)
-            bytes >= mb -> "%.1f MB".format(bytes / mb)
-            bytes >= kb -> "%.1f KB".format(bytes / kb)
-            else -> "$bytes B"
         }
     }
 
