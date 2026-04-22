@@ -151,7 +151,6 @@ class MangaChapterAdapter(
     }
 
     private fun formatBytes(bytes: Long): String {
-        if (bytes <= 0L) return "0 B"
         val kb = 1024.0
         val mb = kb * 1024
         val gb = mb * 1024
