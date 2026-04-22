@@ -12,4 +12,14 @@ object SizeFormatter {
             else -> "$bytes B"
         }
     }
+
+    fun estimateTotalBytesByPercent(downloadedBytes: Long, percent: Int): Long {
+        if (downloadedBytes <= 0L || percent <= 0) return -1L
+        return downloadedBytes * 100L / percent
+    }
+
+    fun estimateTotalBytesByFraction(downloadedBytes: Long, completedParts: Int, totalParts: Int): Long {
+        if (downloadedBytes <= 0L || completedParts <= 0 || totalParts <= 0) return -1L
+        return downloadedBytes * totalParts.toLong() / completedParts.toLong()
+    }
 }

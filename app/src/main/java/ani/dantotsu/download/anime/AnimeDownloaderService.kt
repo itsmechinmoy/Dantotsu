@@ -35,6 +35,7 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.snackString
 import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
+import ani.dantotsu.util.SizeFormatter
 import com.anggrayudi.storage.file.forceDelete
 import com.anggrayudi.storage.file.openOutputStream
 import com.google.gson.GsonBuilder
@@ -331,11 +332,8 @@ class AnimeDownloaderService : Service() {
                         false
                     )
                     val downloadedBytes = outputFile.length()
-                    val estimatedTotalBytes = if (percent > 0 && downloadedBytes > 0L) {
-                        downloadedBytes * 100L / percent.coerceAtLeast(1)
-                    } else {
-                        -1L
-                    }
+                    val estimatedTotalBytes =
+                        SizeFormatter.estimateTotalBytesByPercent(downloadedBytes, percent)
                     broadcastDownloadProgress(
                         task.episode,
                         percent.coerceAtMost(99),

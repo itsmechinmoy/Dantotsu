@@ -33,6 +33,7 @@ import ani.dantotsu.media.manga.MangaReadFragment.Companion.EXTRA_CHAPTER_NUMBER
 import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
 import ani.dantotsu.util.NumberConverter.Companion.ofLength
+import ani.dantotsu.util.SizeFormatter
 import com.anggrayudi.storage.file.deleteRecursively
 import com.anggrayudi.storage.file.forceDelete
 import com.anggrayudi.storage.file.openOutputStream
@@ -250,11 +251,11 @@ class MangaDownloaderService : Service() {
 
                         builder.setProgress(task.imageData.size, farthest, false)
 
-                        val estimatedTotalBytes = if (farthest > 0 && downloadedBytes > 0L) {
-                            downloadedBytes * task.imageData.size.toLong() / farthest.toLong()
-                        } else {
-                            -1L
-                        }
+                        val estimatedTotalBytes = SizeFormatter.estimateTotalBytesByFraction(
+                            downloadedBytes,
+                            farthest,
+                            task.imageData.size
+                        )
                         broadcastDownloadProgress(
                             task.uniqueName,
                             farthest * 100 / task.imageData.size,
