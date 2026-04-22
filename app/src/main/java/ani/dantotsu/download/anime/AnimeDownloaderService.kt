@@ -330,10 +330,18 @@ class AnimeDownloaderService : Service() {
                         100, percent.coerceAtMost(99),
                         false
                     )
+                    val downloadedBytes = outputFile.length()
+                    val estimatedTotalBytes = if (percent > 0 && downloadedBytes > 0L) {
+                        downloadedBytes * 100L / percent.coerceAtLeast(1)
+                    } else {
+                        -1L
+                    }
                     broadcastDownloadProgress(
                         task.episode,
                         percent.coerceAtMost(99),
-                        task.sourceMedia?.id
+                        task.sourceMedia?.id,
+                        downloadedBytes,
+                        estimatedTotalBytes
                     )
                     if (notifi) {
                         withContext(Dispatchers.Main) {
@@ -549,10 +557,22 @@ class AnimeDownloaderService : Service() {
     }
 
     private fun broadcastDownloadProgress(episodeNumber: String, progress: Int, mediaId: Int?) {
+        broadcastDownloadProgress(episodeNumber, progress, mediaId, -1L, -1L)
+    }
+
+    private fun broadcastDownloadProgress(
+        episodeNumber: String,
+        progress: Int,
+        mediaId: Int?,
+        downloadedBytes: Long,
+        estimatedTotalBytes: Long
+    ) {
         val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_PROGRESS).apply {
             putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, episodeNumber)
             putExtra("progress", progress)
             putExtra("mediaId", mediaId)
+            putExtra(AnimeWatchFragment.EXTRA_DOWNLOADED_BYTES, downloadedBytes)
+            putExtra(AnimeWatchFragment.EXTRA_ESTIMATED_TOTAL_BYTES, estimatedTotalBytes)
         }
         sendBroadcast(intent)
     }

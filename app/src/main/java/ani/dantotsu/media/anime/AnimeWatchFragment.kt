@@ -709,9 +709,16 @@ class AnimeWatchFragment : Fragment() {
                     val chapterNumber = intent.getStringExtra(EXTRA_EPISODE_NUMBER)
                     val progress = intent.getIntExtra("progress", 0)
                     val mediaId = intent.getIntExtra("mediaId", -1)
+                    val downloadedBytes = intent.getLongExtra(EXTRA_DOWNLOADED_BYTES, -1L)
+                    val estimatedTotalBytes = intent.getLongExtra(EXTRA_ESTIMATED_TOTAL_BYTES, -1L)
                     if (mediaId != media.id) return
                     chapterNumber?.let {
-                        episodeAdapter.updateDownloadProgress(it, progress)
+                        episodeAdapter.updateDownloadProgress(
+                            it,
+                            progress,
+                            downloadedBytes,
+                            estimatedTotalBytes
+                        )
                     }
                 }
             }
@@ -782,6 +789,8 @@ class AnimeWatchFragment : Fragment() {
         const val ACTION_DOWNLOAD_FAILED = "ani.dantotsu.ACTION_DOWNLOAD_FAILED"
         const val ACTION_DOWNLOAD_PROGRESS = "ani.dantotsu.ACTION_DOWNLOAD_PROGRESS"
         const val EXTRA_EPISODE_NUMBER = "extra_episode_number"
+        const val EXTRA_DOWNLOADED_BYTES = "extra_downloaded_bytes"
+        const val EXTRA_ESTIMATED_TOTAL_BYTES = "extra_estimated_total_bytes"
     }
 
 }

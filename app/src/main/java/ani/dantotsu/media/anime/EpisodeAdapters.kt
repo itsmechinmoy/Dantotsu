@@ -296,12 +296,54 @@ class EpisodeAdapter(
     }
 
     fun updateDownloadProgress(episodeNumber: String, progress: Int) {
+        updateDownloadProgress(episodeNumber, progress, -1L, -1L)
+    }
+
+    fun updateDownloadProgress(
+        episodeNumber: String,
+        progress: Int,
+        downloadedBytes: Long,
+        estimatedTotalBytes: Long
+    ) {
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
-            arr[position].downloadProgress = "Downloading: $progress%"
+            arr[position].downloadProgress = buildDownloadProgressText(
+                progress,
+                downloadedBytes,
+                estimatedTotalBytes
+            )
 
             notifyItemChanged(position)
+        }
+    }
+
+    private fun buildDownloadProgressText(
+        progress: Int,
+        downloadedBytes: Long,
+        estimatedTotalBytes: Long
+    ): String {
+        val hasDownloaded = downloadedBytes > 0L
+        val hasEstimatedTotal = estimatedTotalBytes > 0L
+        return if (hasDownloaded && hasEstimatedTotal) {
+            "Downloading: $progress% (${formatBytes(downloadedBytes)} / ${formatBytes(estimatedTotalBytes)} est.)"
+        } else if (hasEstimatedTotal) {
+            "Downloading: $progress% (~${formatBytes(estimatedTotalBytes)} est.)"
+        } else {
+            "Downloading: $progress%"
+        }
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes <= 0L) return "0 B"
+        val kb = 1024.0
+        val mb = kb * 1024
+        val gb = mb * 1024
+        return when {
+            bytes >= gb -> "%.1f GB".format(bytes / gb)
+            bytes >= mb -> "%.1f MB".format(bytes / mb)
+            bytes >= kb -> "%.1f KB".format(bytes / kb)
+            else -> "$bytes B"
         }
     }
 
@@ -479,4 +521,3 @@ class EpisodeAdapter(
         type = t
     }
 }
-

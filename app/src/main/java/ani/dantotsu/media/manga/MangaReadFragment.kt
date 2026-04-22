@@ -595,8 +595,15 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                 ACTION_DOWNLOAD_PROGRESS -> {
                     val chapterNumber = intent.getStringExtra(EXTRA_CHAPTER_NUMBER)
                     val progress = intent.getIntExtra("progress", 0)
+                    val downloadedBytes = intent.getLongExtra(EXTRA_DOWNLOADED_BYTES, -1L)
+                    val estimatedTotalBytes = intent.getLongExtra(EXTRA_ESTIMATED_TOTAL_BYTES, -1L)
                     chapterNumber?.let {
-                        chapterAdapter.updateDownloadProgress(it, progress)
+                        chapterAdapter.updateDownloadProgress(
+                            it,
+                            progress,
+                            downloadedBytes,
+                            estimatedTotalBytes
+                        )
                     }
                 }
             }
@@ -660,5 +667,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         const val ACTION_DOWNLOAD_FAILED = "ani.dantotsu.ACTION_DOWNLOAD_FAILED"
         const val ACTION_DOWNLOAD_PROGRESS = "ani.dantotsu.ACTION_DOWNLOAD_PROGRESS"
         const val EXTRA_CHAPTER_NUMBER = "extra_chapter_number"
+        const val EXTRA_DOWNLOADED_BYTES = "extra_downloaded_bytes"
+        const val EXTRA_ESTIMATED_TOTAL_BYTES = "extra_estimated_total_bytes"
     }
 }

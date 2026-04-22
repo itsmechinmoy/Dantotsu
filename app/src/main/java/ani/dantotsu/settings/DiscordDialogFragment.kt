@@ -57,6 +57,11 @@ class DiscordDialogFragment : BottomSheetDialogFragment() {
             updatePreview()
         }
 
+        binding.switchDisableAdultMediaRpc.setOnCheckedChangeListener { _, isChecked ->
+            if (isLoadingSettings) return@setOnCheckedChangeListener
+            PrefManager.setVal(PrefName.DiscordRPCDisableAdultMedia, isChecked)
+        }
+
         binding.radioGroupMode.setOnCheckedChangeListener { _, checkedId ->
             if (isLoadingSettings) return@setOnCheckedChangeListener
             val mode = when (checkedId) {
@@ -154,6 +159,8 @@ class DiscordDialogFragment : BottomSheetDialogFragment() {
             PrefManager.getVal(PrefName.DiscordRPCShowIconAnime, true)
         }
         binding.switchShowIcon.isChecked = showIcon
+        binding.switchDisableAdultMediaRpc.isChecked =
+            PrefManager.getVal(PrefName.DiscordRPCDisableAdultMedia, false)
 
         isLoadingSettings = false
     }

@@ -58,6 +58,7 @@ import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.media.MediaSingleton
 import ani.dantotsu.media.manga.MangaCache
 import ani.dantotsu.media.manga.MangaChapter
+import ani.dantotsu.notifications.subscription.SubscriptionHelper
 import ani.dantotsu.others.ImageViewDialog
 import ani.dantotsu.parsers.HMangaSources
 import ani.dantotsu.parsers.MangaImage
@@ -408,7 +409,9 @@ class MangaReaderActivity : AppCompatActivity() {
                 val offline: Boolean = PrefManager.getVal(PrefName.OfflineMode)
                 val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
                 val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled)
-                if ((isOnline(context) && !offline) && Discord.token != null && !incognito && rpcenabled) {
+                if (RPCManager.shouldSuppressForAdultMedia(media.isAdult)) {
+                    RPCManager.clearPresence(context)
+                } else if ((isOnline(context) && !offline) && Discord.token != null && !incognito && rpcenabled) {
                     lifecycleScope.launch {
                         val buttons = mutableListOf<RPC.Link>()
                         buttons.add(RPC.Link("View Manga", "https://anilist.co/manga/${media.id}/"))
@@ -1065,7 +1068,11 @@ class MangaReaderActivity : AppCompatActivity() {
     }
 
     private fun progress(runnable: Runnable) {
-        if (maxChapterPage - currentChapterPage <= 1 && Anilist.userid != null) {
+        val chapterCompleted = maxChapterPage - currentChapterPage <= 1
+        if (chapterCompleted) {
+            maybeHandleSubscriptionAfterChapterCompletion()
+        }
+        if (chapterCompleted && Anilist.userid != null) {
             showProgressDialog =
                 if (PrefManager.getVal(PrefName.AskIndividualReader)) PrefManager.getCustomVal(
                     "${media.id}_progressDialog",
@@ -1119,6 +1126,45 @@ class MangaReaderActivity : AppCompatActivity() {
         } else {
             runnable.run()
         }
+    }
+
+    private var lastSubscriptionPromptChapter: String? = null
+
+    private fun maybeHandleSubscriptionAfterChapterCompletion() {
+        val chapterKey = chapter.uniqueNumber()
+        if (lastSubscriptionPromptChapter == chapterKey) return
+        lastSubscriptionPromptChapter = chapterKey
+
+        if (!PrefManager.getVal(PrefName.SubscriptionCheckingNotifications)) return
+
+        val isCompleted = isMangaCompleted()
+        val alreadySubscribed = SubscriptionHelper.getSubscriptions().containsKey(media.id)
+        if (isCompleted) {
+            if (alreadySubscribed) {
+                SubscriptionHelper.saveSubscription(media, false)
+                snackString(getString(R.string.unsubscribed_notification))
+            }
+            return
+        }
+        if (alreadySubscribed) return
+
+        customAlertDialog().apply {
+            setTitle(getString(R.string.subscribe_prompt_title))
+            setMessage(getString(R.string.subscribe_prompt_manga_message, media.userPreferredName))
+            setPosButton(R.string.yes) {
+                SubscriptionHelper.saveSubscription(media, true)
+                snackString(getString(R.string.subscribed_notification, getString(R.string.manga)))
+            }
+            setNegButton(R.string.no)
+            show()
+        }
+    }
+
+    private fun isMangaCompleted(): Boolean {
+        if (media.userStatus == "COMPLETED") return true
+        val totalChapters = media.manga?.totalChapters ?: return false
+        val chapterNumber = MediaNameAdapter.findChapterNumber(chapter.number) ?: return false
+        return chapterNumber >= totalChapters
     }
 
 

@@ -127,6 +127,7 @@ import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.media.SubtitleDownloader
+import ani.dantotsu.notifications.subscription.SubscriptionHelper
 import ani.dantotsu.okHttpClient
 import ani.dantotsu.others.AniSkip
 import ani.dantotsu.others.AniSkip.getType
@@ -1498,6 +1499,10 @@ class ExoplayerView :
         val offline: Boolean = PrefManager.getVal(PrefName.OfflineMode)
         val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
         val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled)
+        if (RPCManager.shouldSuppressForAdultMedia(media.isAdult)) {
+            RPCManager.clearPresence(context)
+            return
+        }
         if ((isOnline(context) && !offline) && Discord.token != null && !incognito && rpcenabled) {
             lifecycleScope.launch {
                 val buttons = mutableListOf<RPC.Link>()
@@ -3124,6 +3129,48 @@ class ExoplayerView :
                 }
             }
         }
+        maybeHandleSubscriptionAfterEpisodeCompletion(episodeEnd, incognito)
+    }
+
+    private var lastSubscriptionPromptEpisode: String? = null
+
+    private fun maybeHandleSubscriptionAfterEpisodeCompletion(episodeEnd: Boolean, incognito: Boolean) {
+        if (!episodeEnd || incognito) return
+        val currentEpisode = media.anime?.selectedEpisode ?: return
+        if (lastSubscriptionPromptEpisode == currentEpisode) return
+        lastSubscriptionPromptEpisode = currentEpisode
+
+        val subscriptionsEnabled = PrefManager.getVal(PrefName.SubscriptionCheckingNotifications)
+        if (!subscriptionsEnabled) return
+
+        val isCompleted = isAnimeCompleted()
+        val alreadySubscribed = SubscriptionHelper.getSubscriptions().containsKey(media.id)
+        if (isCompleted) {
+            if (alreadySubscribed) {
+                SubscriptionHelper.saveSubscription(media, false)
+                toast(getString(R.string.unsubscribed_notification))
+            }
+            return
+        }
+        if (alreadySubscribed) return
+
+        customAlertDialog().apply {
+            setTitle(getString(R.string.subscribe_prompt_title))
+            setMessage(getString(R.string.subscribe_prompt_anime_message, media.userPreferredName))
+            setPosButton(R.string.yes) {
+                SubscriptionHelper.saveSubscription(media, true)
+                toast(getString(R.string.subscribed_notification, getString(R.string.anime)))
+            }
+            setNegButton(R.string.no)
+            show()
+        }
+    }
+
+    private fun isAnimeCompleted(): Boolean {
+        if (media.userStatus == "COMPLETED") return true
+        val totalEpisodes = media.anime?.totalEpisodes ?: return false
+        val currentEpisodeNumber = media.anime?.selectedEpisode?.toFloatOrNull() ?: return false
+        return currentEpisodeNumber >= totalEpisodes
     }
 
     private fun nextEpisode(

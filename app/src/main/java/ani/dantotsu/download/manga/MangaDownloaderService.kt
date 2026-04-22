@@ -217,6 +217,7 @@ class MangaDownloaderService : Service() {
                 outputDir.deleteRecursively(this@MangaDownloaderService, true)
 
                 var farthest = 0
+                var downloadedBytes = 0L
                 for ((index, image) in task.imageData.withIndex()) {
                     if (deferredMap.size >= task.simultaneousDownloads) {
                         deferredMap.values.awaitAll()
@@ -243,14 +244,22 @@ class MangaDownloaderService : Service() {
                             throw Exception("${task.chapter} - Unable to download all pages after $retryCount attempts. Try again.")
                         }
 
-                        saveToDisk("${index.ofLength(3)}.jpg", outputDir, bitmap)
+                        val writtenBytes = saveToDisk("${index.ofLength(3)}.jpg", outputDir, bitmap)
+                        downloadedBytes += writtenBytes
                         farthest++
 
                         builder.setProgress(task.imageData.size, farthest, false)
 
+                        val estimatedTotalBytes = if (farthest > 0 && downloadedBytes > 0L) {
+                            downloadedBytes * task.imageData.size.toLong() / farthest.toLong()
+                        } else {
+                            -1L
+                        }
                         broadcastDownloadProgress(
                             task.uniqueName,
-                            farthest * 100 / task.imageData.size
+                            farthest * 100 / task.imageData.size,
+                            downloadedBytes,
+                            estimatedTotalBytes
                         )
                         if (notifi) {
                             withContext(Dispatchers.Main) {
@@ -296,7 +305,7 @@ class MangaDownloaderService : Service() {
         fileName: String,
         directory: DocumentFile,
         bitmap: Bitmap
-    ) {
+    ): Long {
         try {
             directory.findFile(fileName)?.forceDelete(this)
             val file =
@@ -306,10 +315,12 @@ class MangaDownloaderService : Service() {
                 if (outputStream == null) throw Exception("Output stream is null")
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
             }
+            return file.length()
         } catch (e: Exception) {
             println("Exception while saving image: ${e.message}")
             snackString("Exception while saving image: ${e.message}")
             Injekt.get<CrashlyticsInterface>().logException(e)
+            return 0L
         }
     }
 
@@ -407,10 +418,17 @@ class MangaDownloaderService : Service() {
         sendBroadcast(intent)
     }
 
-    private fun broadcastDownloadProgress(chapterNumber: String, progress: Int) {
+    private fun broadcastDownloadProgress(
+        chapterNumber: String,
+        progress: Int,
+        downloadedBytes: Long,
+        estimatedTotalBytes: Long
+    ) {
         val intent = Intent(ACTION_DOWNLOAD_PROGRESS).apply {
             putExtra(EXTRA_CHAPTER_NUMBER, chapterNumber)
             putExtra("progress", progress)
+            putExtra(MangaReadFragment.EXTRA_DOWNLOADED_BYTES, downloadedBytes)
+            putExtra(MangaReadFragment.EXTRA_ESTIMATED_TOTAL_BYTES, estimatedTotalBytes)
         }
         sendBroadcast(intent)
     }

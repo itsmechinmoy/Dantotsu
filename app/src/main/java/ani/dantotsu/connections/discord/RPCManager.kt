@@ -233,6 +233,10 @@ object RPCManager {
         return headlessRpc?.tokenManager?.getTokenExpiresAt() ?: 0L
     }
 
+    fun shouldSuppressForAdultMedia(isAdultMedia: Boolean): Boolean {
+        return isAdultMedia && PrefManager.getVal(PrefName.DiscordRPCDisableAdultMedia, false)
+    }
+
     // ΓöÇΓöÇΓöÇ Private helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     private fun ensureHeadlessRpc(context: Context): HeadlessRPC? {
