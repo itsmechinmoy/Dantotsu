@@ -72,6 +72,7 @@ class NovelReadFragment : Fragment(),
 
     private var continueEp: Boolean = false
     var loaded = false
+    private var sourceRequested = false
 
     private var isShowingChapters = false
     private var currentChapterLinks: List<ani.dantotsu.FileUrl> = emptyList()
@@ -466,7 +467,8 @@ class NovelReadFragment : Fragment(),
                     val isLnReader = source in 0 until model.novelSources.names.size
                             && model.novelSources[source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
                     if (isLnReader) {
-                        headerAdapter.progress?.visibility = View.VISIBLE
+                        sourceRequested = true
+                        binding.mediaSourceRecycler.post { headerAdapter.startLoading() }
                         lifecycleScope.launch(Dispatchers.IO) {
                             model.loadNovelChapters(media, source)
                         }
@@ -479,20 +481,22 @@ class NovelReadFragment : Fragment(),
             }
         }
         model.novelResponses.observe(viewLifecycleOwner) {
-            if (it != null) {
+            if (it != null && sourceRequested) {
                 response = it
                 searching = false
                 val sortedList = if (reverse) it.reversed() else it
                 novelResponseAdapter.submitList(sortedList)
                 headerAdapter.updateContinue(it)
                 headerAdapter.progress?.visibility = View.GONE
+                headerAdapter.handleSourceNotFound(it.isEmpty())
             }
         }
 
         model.getNovelChapters().observe(viewLifecycleOwner) { loadedChapters ->
-            if (loadedChapters != null) {
+            if (loadedChapters != null && loadedChapters.containsKey(source)) {
+                searching = false
                 val chapters = loadedChapters[source]
-                if (chapters != null) {
+                if (!chapters.isNullOrEmpty()) {
                     isShowingChapters = true
                     currentChapterResponses = chapters
                     currentChapterLinks = chapters.map { ch ->
@@ -509,8 +513,10 @@ class NovelReadFragment : Fragment(),
                     novelResponseAdapter.updateType(style) 
                     headerAdapter.updateContinue(chapters)
                     headerAdapter.progress?.visibility = View.GONE
+                    headerAdapter.handleSourceNotFound(false)
                 } else {
                     headerAdapter.progress?.visibility = View.GONE
+                    headerAdapter.handleSourceNotFound(true)
                 }
             }
         }
@@ -525,7 +531,8 @@ class NovelReadFragment : Fragment(),
             headerAdapter.clearChips()
             novelResponseAdapter.clear()
             searchQuery = query
-            headerAdapter.progress?.visibility = View.VISIBLE
+            sourceRequested = true
+            headerAdapter.startLoading()
             
             val isLnReader = source in 0 until model.novelSources.names.size
                     && model.novelSources[source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
@@ -556,6 +563,10 @@ class NovelReadFragment : Fragment(),
         selected.server = null
         model.saveSelected(media.id, selected)
         media.selected = selected
+        searching = false
+        resetChapterState()
+        novelResponseAdapter.clear()
+        headerAdapter.startLoading()
     }
 
     fun onLayoutChanged(newStyle: Int, newReverse: Boolean) {

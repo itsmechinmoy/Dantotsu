@@ -1,6 +1,7 @@
 package ani.dantotsu.media.novel
 
 import android.content.Context
+import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -8,6 +9,8 @@ import android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
 import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.ImageButton
+import androidx.core.content.ContextCompat.startActivity
+import androidx.core.view.isGone
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.R
 import ani.dantotsu.databinding.DialogLayoutBinding
@@ -16,6 +19,7 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.parsers.ShowResponse
 import ani.dantotsu.loadImage
 import ani.dantotsu.parsers.NovelReadSources
+import ani.dantotsu.settings.FAQActivity
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.util.customAlertDialog
 
@@ -42,6 +46,14 @@ class NovelReadAdapter(
         val binding = holder.binding
         _binding = binding
         progress = binding.progress.root
+
+        binding.faqbutton.setOnClickListener {
+            startActivity(
+                fragment.requireContext(),
+                Intent(fragment.requireContext(), FAQActivity::class.java),
+                null
+            )
+        }
 
         val isLocal = media.format == "LOCAL" || media.format == "LOCAL_NOVEL"
 
@@ -312,6 +324,19 @@ class NovelReadAdapter(
 
     fun clearChips() {
         _binding?.mediaSourceChipGroup?.removeAllViews()
+    }
+
+    fun startLoading() {
+        _binding?.sourceContinue?.visibility = View.GONE
+        _binding?.sourceNotFound?.visibility = View.GONE
+        _binding?.faqbutton?.visibility = View.GONE
+        clearChips()
+        progress?.visibility = View.VISIBLE
+    }
+
+    fun handleSourceNotFound(isEmpty: Boolean) {
+        _binding?.sourceNotFound?.isGone = !isEmpty
+        _binding?.faqbutton?.isGone = !isEmpty
     }
 
     override fun getItemCount(): Int = 1
