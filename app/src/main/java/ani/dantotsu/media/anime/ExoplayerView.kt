@@ -1695,6 +1695,9 @@ class ExoplayerView :
                     .setLabel(subtitle.language)
                     .build()
         }
+        if (subtitle != null && hasExtSubtitles) {
+            pendingSubtitleLabel = subtitle?.language
+        }
 
         // 2. Online Subtitles (Stremio/Wyzie)
         // Auto-fetch removed for Lazy Loading.
@@ -2037,7 +2040,7 @@ class ExoplayerView :
                 var lastPosition: Long = 0
 
                 override fun onCues(cueGroup: CueGroup) {
-                    val libassActive = assHandler?.hasTracks() == true || subtitle?.type == SubtitleType.ASS
+                    val libassActive = assHandler?.hasTracks() == true
                     if (libassActive) {
                         exoSubtitleView.visibility = View.GONE
                         customSubtitleView.visibility = View.GONE
