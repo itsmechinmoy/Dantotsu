@@ -1666,9 +1666,10 @@ class ExoplayerView :
         val sub: MutableList<MediaItem.SubtitleConfiguration> =
             emptyList<MediaItem.SubtitleConfiguration>().toMutableList()
         val currentVideoUrl = video!!.file.url
+        val embedUrl = ext.server.embed.url
         ext.subtitles.forEachIndexed { index, subtitle ->
             val subtitleUrl = if (!hasExtSubtitles) currentVideoUrl else subtitle.file.url
-            val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, currentVideoUrl)
+            val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, embedUrl, currentVideoUrl)
             val subtitleId = buildSubtitleId(index, subtitle.language, resolvedSubtitleUrl)
             val subtitleLangCodeRaw = LanguageMapper.getLanguageCode(subtitle.language)
             val subtitleLanguageCode =
@@ -2601,18 +2602,23 @@ class ExoplayerView :
         else -> isoCode
     }
 
-    private fun resolveSubtitleUrl(subtitleUrl: String, fallbackMediaUrl: String): String {
-        return runCatching {
-            val subtitleUri = URI(subtitleUrl)
-            if (subtitleUri.isAbsolute) {
-                subtitleUri.toString()
-            } else {
-                URI(fallbackMediaUrl).resolve(subtitleUri).toString()
-            }
-        }.getOrElse {
-            Logger.log("Failed to resolve subtitle URL '$subtitleUrl' against '$fallbackMediaUrl': ${it.message}")
-            subtitleUrl
+    private fun resolveSubtitleUrl(subtitleUrl: String, vararg baseUrls: String): String {
+        val subtitleUri = runCatching { URI(subtitleUrl) }.getOrElse {
+            Logger.log("Failed to parse subtitle URL '$subtitleUrl': ${it.message}")
+            return subtitleUrl
         }
+        if (subtitleUri.isAbsolute) return subtitleUri.toString()
+
+        baseUrls.forEach { baseUrl ->
+            val resolved =
+                runCatching {
+                    if (baseUrl.isBlank()) null else URI(baseUrl).resolve(subtitleUri).takeIf { it.isAbsolute }?.toString()
+                }.getOrNull()
+            if (!resolved.isNullOrBlank()) return resolved
+        }
+
+        Logger.log("Failed to resolve relative subtitle URL '$subtitleUrl' with bases: ${baseUrls.joinToString()}")
+        return subtitleUrl
     }
 
     private fun buildSubtitleId(index: Int, language: String, url: String): String {
