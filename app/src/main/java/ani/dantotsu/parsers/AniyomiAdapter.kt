@@ -761,6 +761,9 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
 
     private fun trackToSubtitle(track: Track): Subtitle {
         val type = runBlocking { findSubtitleType(track.url) }
+        if (type == SubtitleType.UNKNOWN) {
+            Logger.log("Warning: subtitle type unresolved for '${track.url}', defaulting to SRT")
+        }
         return Subtitle(track.lang, track.url, type.takeUnless { it == SubtitleType.UNKNOWN } ?: SubtitleType.SRT)
     }
 
