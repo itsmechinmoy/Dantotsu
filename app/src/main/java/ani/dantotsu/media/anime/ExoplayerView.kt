@@ -1672,6 +1672,8 @@ class ExoplayerView :
             val subtitleId = buildSubtitleId(index, subtitle.language, resolvedSubtitleUrl)
             val subtitleLangCodeRaw = LanguageMapper.getLanguageCode(subtitle.language)
             val subtitleLanguageCode =
+                // Some extension labels map to "all" (not a valid BCP-47/ISO track language),
+                // so normalize that sentinel to "und" for Media3 track metadata.
                 subtitleLangCodeRaw.takeUnless { it.equals("all", ignoreCase = true) || it.isBlank() } ?: "und"
             val subtitleMime =
                 when (subtitle.type) {
@@ -1971,6 +1973,8 @@ class ExoplayerView :
         val loadControl =
             DefaultLoadControl
                 .Builder()
+                // Keep full back-buffer samples (not keyframes-only) to reduce refetch churn
+                // after seeks on problematic encrypted HLS streams.
                 .setBackBuffer(BACK_BUFFER_DURATION_MS, false)
                 .setBufferDurationsMs(
                     DEFAULT_MIN_BUFFER_MS,
