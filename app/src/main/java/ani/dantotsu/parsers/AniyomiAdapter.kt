@@ -4,6 +4,7 @@ import android.content.Context
 import ani.dantotsu.FileUrl
 import ani.dantotsu.currContext
 import ani.dantotsu.media.MediaNameAdapter
+import ani.dantotsu.media.SubtitleDownloader
 import ani.dantotsu.media.manga.ImageData
 import ani.dantotsu.media.manga.MangaCache
 import ani.dantotsu.snackString
@@ -45,6 +46,7 @@ import java.io.UnsupportedEncodingException
 import java.net.MalformedURLException
 import java.net.URL
 import java.net.URLDecoder
+import java.util.Locale
 
 class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     val extension: AnimeExtension.Installed
@@ -758,22 +760,57 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
     }
 
     private fun trackToSubtitle(track: Track): Subtitle {
-        var type: SubtitleType?
-        runBlocking {
-            type = findSubtitleType(track.url)
+        val type = runBlocking { findSubtitleType(track.url) }
+        if (type == SubtitleType.UNKNOWN) {
+            Logger.log("Warning: subtitle type unresolved for '${track.url}', defaulting to SRT")
         }
-        return Subtitle(track.lang, track.url, type ?: SubtitleType.SRT)
+        return Subtitle(track.lang, track.url, type.takeUnless { it == SubtitleType.UNKNOWN } ?: SubtitleType.SRT)
     }
 
-    private fun findSubtitleType(url: String): SubtitleType {
-        // First, try to determine the type based on the URL file extension
-        val type: SubtitleType = when {
-            url.endsWith(".vtt", true) -> SubtitleType.VTT
-            url.endsWith(".ass", true) -> SubtitleType.ASS
-            url.endsWith(".srt", true) -> SubtitleType.SRT
+    private suspend fun findSubtitleType(url: String): SubtitleType {
+        val typeFromUrl = findSubtitleTypeFromUrl(url)
+        if (typeFromUrl != SubtitleType.UNKNOWN) return typeFromUrl
+        return SubtitleDownloader.loadSubtitleType(url)
+    }
+
+    private fun findSubtitleTypeFromUrl(url: String): SubtitleType {
+        val normalizedUrl = url.substringBefore('#').substringBefore('?')
+        val fromPath = extensionToSubtitleType(normalizedUrl)
+        if (fromPath != SubtitleType.UNKNOWN) return fromPath
+
+        val encodedCandidate =
+            try {
+                val query = URL(url).query ?: return SubtitleType.UNKNOWN
+                query
+                    .split('&')
+                    .asSequence()
+                    .mapNotNull { part ->
+                        val idx = part.indexOf('=')
+                        if (idx == -1) null else URLDecoder.decode(part.substring(idx + 1), "UTF-8")
+                    }.firstOrNull { value ->
+                        extensionToSubtitleType(value) != SubtitleType.UNKNOWN
+                    }
+            } catch (_: Exception) {
+                null
+            }
+
+        return extensionToSubtitleType(encodedCandidate ?: "")
+    }
+
+    private fun extensionToSubtitleType(value: String): SubtitleType {
+        val lower = value.lowercase(Locale.ROOT)
+        return when {
+            hasExtensionMarker(lower, ".vtt") -> SubtitleType.VTT
+            hasExtensionMarker(lower, ".ass", ".ssa") -> SubtitleType.ASS
+            hasExtensionMarker(lower, ".srt") -> SubtitleType.SRT
             else -> SubtitleType.UNKNOWN
         }
+    }
 
-        return type
+    private fun hasExtensionMarker(value: String, vararg extensions: String): Boolean {
+        val base = value.substringBefore('#').substringBefore('?').substringBefore('&')
+        return extensions.any { ext ->
+            base.endsWith(ext)
+        }
     }
 }
