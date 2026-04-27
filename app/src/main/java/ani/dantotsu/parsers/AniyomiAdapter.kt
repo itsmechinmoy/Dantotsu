@@ -805,8 +805,9 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
     }
 
     private fun hasExtensionMarker(value: String, vararg extensions: String): Boolean {
+        val base = value.substringBefore('#').substringBefore('?').substringBefore('&')
         return extensions.any { ext ->
-            value.endsWith(ext) || value.contains("$ext?") || value.contains("$ext&")
+            base.endsWith(ext)
         }
     }
 }
