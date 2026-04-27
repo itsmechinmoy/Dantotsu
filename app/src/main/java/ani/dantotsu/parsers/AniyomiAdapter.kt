@@ -798,10 +798,16 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
     private fun extensionToSubtitleType(value: String): SubtitleType {
         val lower = value.lowercase(Locale.ROOT)
         return when {
-            lower.endsWith(".vtt") || lower.contains(".vtt?") || lower.contains(".vtt&") -> SubtitleType.VTT
-            lower.endsWith(".ass") || lower.endsWith(".ssa") || lower.contains(".ass?") || lower.contains(".ass&") || lower.contains(".ssa?") || lower.contains(".ssa&") -> SubtitleType.ASS
-            lower.endsWith(".srt") || lower.contains(".srt?") || lower.contains(".srt&") -> SubtitleType.SRT
+            hasExtensionMarker(lower, ".vtt") -> SubtitleType.VTT
+            hasExtensionMarker(lower, ".ass", ".ssa") -> SubtitleType.ASS
+            hasExtensionMarker(lower, ".srt") -> SubtitleType.SRT
             else -> SubtitleType.UNKNOWN
+        }
+    }
+
+    private fun hasExtensionMarker(value: String, vararg extensions: String): Boolean {
+        return extensions.any { ext ->
+            value.endsWith(ext) || value.contains("$ext?") || value.contains("$ext&")
         }
     }
 }
