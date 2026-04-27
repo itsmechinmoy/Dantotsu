@@ -2623,7 +2623,12 @@ class ExoplayerView :
 
     private fun buildSubtitleId(index: Int, language: String, url: String): String {
         val normalizedLanguage = language.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "_")
-        return "ext_sub_${index}_${normalizedLanguage}_${url.hashCode()}"
+        val normalizedUrlTail =
+            runCatching { URI(url).path.substringAfterLast('/').ifBlank { "track" } }
+                .getOrDefault("track")
+                .lowercase(Locale.ROOT)
+                .replace(Regex("[^a-z0-9]+"), "_")
+        return "ext_sub_${index}_${normalizedLanguage}_${normalizedUrlTail}"
     }
 
     private fun selectSubtitleTrack(langCode: String, targetLabel: String? = null) {
