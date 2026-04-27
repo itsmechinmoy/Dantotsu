@@ -165,8 +165,8 @@ import com.google.android.material.slider.Slider
 import com.lagradost.nicehttp.ignoreAllSSLErrors
 import io.github.peerless2012.ass.media.AssHandler
 import io.github.peerless2012.ass.media.AssHandlerConfig
+import io.github.peerless2012.ass.media.AssRenderersFactory
 import io.github.peerless2012.ass.media.kt.withAssMkvSupport
-import io.github.peerless2012.ass.media.kt.withAssSupport
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
 import io.github.peerless2012.ass.media.type.AssRenderType
@@ -190,9 +190,7 @@ import kotlin.math.roundToInt
 import androidx.core.net.toUri
 import ani.dantotsu.connections.subtitles.StremioSubtitles
 import ani.dantotsu.connections.subtitles.StremioSub
-import androidx.media3.exoplayer.Renderer
-import androidx.media3.exoplayer.text.TextOutput
-import androidx.media3.exoplayer.text.TextRenderer
+import java.net.URI
 
 @UnstableApi
 @SuppressLint("ClickableViewAccessibility")
@@ -1666,34 +1664,34 @@ class ExoplayerView :
         }
         val sub: MutableList<MediaItem.SubtitleConfiguration> =
             emptyList<MediaItem.SubtitleConfiguration>().toMutableList()
-        ext.subtitles.forEach { subtitle ->
+        ext.subtitles.forEachIndexed { index, subtitle ->
             val subtitleUrl = if (!hasExtSubtitles) video!!.file.url else subtitle.file.url
+            val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, video!!.file.url)
+            val subtitleId = "ext_sub_${index}_${subtitle.language.lowercase(Locale.ROOT)}"
             if (subtitle.type == SubtitleType.UNKNOWN) {
                 runBlocking {
-                    val type = SubtitleDownloader.loadSubtitleType(subtitleUrl)
-                    val fileUri = (subtitleUrl).toUri()
+                    val type = SubtitleDownloader.loadSubtitleType(resolvedSubtitleUrl)
+                    val fileUri = resolvedSubtitleUrl.toUri()
                     sub +=
                         MediaItem.SubtitleConfiguration
                             .Builder(fileUri)
-                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                             .setMimeType(
                                 when (type) {
                                     SubtitleType.VTT -> MimeTypes.TEXT_VTT
                                     SubtitleType.ASS -> MimeTypes.TEXT_SSA
                                     SubtitleType.SRT -> MimeTypes.APPLICATION_SUBRIP
-                                    else -> MimeTypes.TEXT_UNKNOWN
+                                    else -> MimeTypes.TEXT_VTT
                                 },
-                            ).setId("69")
-                            .setLanguage(subtitle.language)
+                            ).setId(subtitleId)
+                            .setLanguage("und")
                             .setLabel(subtitle.language)
                             .build()
                 }
             } else {
-                val subUri = subtitleUrl.toUri()
+                val subUri = resolvedSubtitleUrl.toUri()
                 sub +=
                     MediaItem.SubtitleConfiguration
                         .Builder(subUri)
-                        .setSelectionFlags(C.SELECTION_FLAG_FORCED)
                         .setMimeType(
                             when (subtitle.type) {
                                 SubtitleType.VTT -> MimeTypes.TEXT_VTT
@@ -1701,8 +1699,8 @@ class ExoplayerView :
                                 SubtitleType.SRT -> MimeTypes.APPLICATION_SUBRIP
                                 else -> MimeTypes.TEXT_UNKNOWN
                             },
-                        ).setId("69")
-                        .setLanguage(subtitle.language)
+                        ).setId(subtitleId)
+                        .setLanguage("und")
                         .setLabel(subtitle.language)
                         .build()
             }
@@ -1986,7 +1984,7 @@ class ExoplayerView :
         val loadControl =
             DefaultLoadControl
                 .Builder()
-                .setBackBuffer(1000 * 60 * 2, true)
+                .setBackBuffer(1000 * 60 * 2, false)
                 .setBufferDurationsMs(
                     DEFAULT_MIN_BUFFER_MS,
                     DEFAULT_MAX_BUFFER_MS,
@@ -2006,42 +2004,18 @@ class ExoplayerView :
             } else {
                 DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
             }
-        val activityContext: android.content.Context = this
-        // We use NextRenderersFactory to provide FFmpeg video/audio rendering when
-        // Additional Codec Support is enabled. Since we now use OVERLAY_OPEN_GL,
-        // it doesn't matter that FfmpegVideoRenderer bypasses the video effects pipeline.
-        val baseRenderersFactory =
-            object : NextRenderersFactory(activityContext) {
-                override fun buildTextRenderers(
-                    context: Context,
-                    output: TextOutput,
-                    outputLooper: Looper,
-                    extensionRendererMode: Int,
-                    out: ArrayList<Renderer>
-                ) {
-                    out.add(TextRenderer(output, outputLooper))
-                    try {
-                        val clazz = Class.forName("io.github.anilbeesetti.nextlib.media3ext.renderer.NextTextRenderer")
-                        val ctor = clazz.getConstructor(
-                            TextOutput::class.java,
-                            Looper::class.java
-                        )
-                        out.add(ctor.newInstance(output, outputLooper) as Renderer)
-                    } catch (e: Exception) {
-                    }
-                }
-            }.apply {
-                setEnableDecoderFallback(true)
-                setExtensionRendererMode(decoder)
-            }
-
-        val handler = assHandler!!
-        Logger.log("Libass: Calling baseRenderersFactory.withAssSupport()")
-        val renderersFactory = baseRenderersFactory.withAssSupport(handler)
+        val nextRenderersFactory = NextRenderersFactory(this)
+            .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(decoder)
+        val assFactory = AssRenderersFactory(
+            assHandler = assHandler!!,
+            renderersFactory = nextRenderersFactory,
+        )
 
         exoPlayer =
             ExoPlayer
-                .Builder(this, renderersFactory)
+                .Builder(this)
+                .setRenderersFactory(assFactory)
                 .setMediaSourceFactory(assMediaSourceFactory)
                 .setTrackSelector(trackSelector)
                 .setLoadControl(loadControl)
@@ -2636,6 +2610,17 @@ class ExoplayerView :
         "slk" -> "slovak"
         "slv" -> "slovenian"
         else -> isoCode
+    }
+
+    private fun resolveSubtitleUrl(subtitleUrl: String, fallbackMediaUrl: String): String {
+        return runCatching {
+            val subtitleUri = URI(subtitleUrl)
+            if (subtitleUri.isAbsolute) {
+                subtitleUri.toString()
+            } else {
+                URI(fallbackMediaUrl).resolve(subtitleUri).toString()
+            }
+        }.getOrDefault(subtitleUrl)
     }
 
     private fun selectSubtitleTrack(langCode: String, targetLabel: String? = null) {
