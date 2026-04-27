@@ -1664,10 +1664,13 @@ class ExoplayerView :
         }
         val sub: MutableList<MediaItem.SubtitleConfiguration> =
             emptyList<MediaItem.SubtitleConfiguration>().toMutableList()
+        val currentVideoUrl = video!!.file.url
         ext.subtitles.forEachIndexed { index, subtitle ->
-            val subtitleUrl = if (!hasExtSubtitles) video!!.file.url else subtitle.file.url
-            val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, video!!.file.url)
+            val subtitleUrl = if (!hasExtSubtitles) currentVideoUrl else subtitle.file.url
+            val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, currentVideoUrl)
             val subtitleId = "ext_sub_${index}_${subtitle.language.lowercase(Locale.ROOT)}"
+            val subtitleLanguageCode = getLanguageCode(subtitle.language)
+                .takeUnless { it.equals("all", true) || it.isBlank() } ?: "und"
             if (subtitle.type == SubtitleType.UNKNOWN) {
                 runBlocking {
                     val type = SubtitleDownloader.loadSubtitleType(resolvedSubtitleUrl)
@@ -1680,10 +1683,13 @@ class ExoplayerView :
                                     SubtitleType.VTT -> MimeTypes.TEXT_VTT
                                     SubtitleType.ASS -> MimeTypes.TEXT_SSA
                                     SubtitleType.SRT -> MimeTypes.APPLICATION_SUBRIP
-                                    else -> MimeTypes.TEXT_VTT
+                                    else -> {
+                                        Logger.log("Subtitle type unknown for '$resolvedSubtitleUrl', defaulting to VTT")
+                                        MimeTypes.TEXT_VTT
+                                    }
                                 },
                             ).setId(subtitleId)
-                            .setLanguage("und")
+                            .setLanguage(subtitleLanguageCode)
                             .setLabel(subtitle.language)
                             .build()
                 }
@@ -1700,7 +1706,7 @@ class ExoplayerView :
                                 else -> MimeTypes.TEXT_UNKNOWN
                             },
                         ).setId(subtitleId)
-                        .setLanguage("und")
+                        .setLanguage(subtitleLanguageCode)
                         .setLabel(subtitle.language)
                         .build()
             }
@@ -2620,7 +2626,10 @@ class ExoplayerView :
             } else {
                 URI(fallbackMediaUrl).resolve(subtitleUri).toString()
             }
-        }.getOrDefault(subtitleUrl)
+        }.getOrElse {
+            Logger.log("Failed to resolve subtitle URL '$subtitleUrl' against '$fallbackMediaUrl': ${it.message}")
+            subtitleUrl
+        }
     }
 
     private fun selectSubtitleTrack(langCode: String, targetLabel: String? = null) {
