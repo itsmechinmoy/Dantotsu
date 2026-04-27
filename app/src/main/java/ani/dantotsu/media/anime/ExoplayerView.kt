@@ -1669,47 +1669,27 @@ class ExoplayerView :
             val subtitleUrl = if (!hasExtSubtitles) currentVideoUrl else subtitle.file.url
             val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, currentVideoUrl)
             val subtitleId = "ext_sub_${index}_${subtitle.language.lowercase(Locale.ROOT)}"
-            val subtitleLanguageCode = getLanguageCode(subtitle.language)
-                .takeUnless { it.equals("all", true) || it.isBlank() } ?: "und"
-            if (subtitle.type == SubtitleType.UNKNOWN) {
-                runBlocking {
-                    val type = SubtitleDownloader.loadSubtitleType(resolvedSubtitleUrl)
-                    val fileUri = resolvedSubtitleUrl.toUri()
-                    sub +=
-                        MediaItem.SubtitleConfiguration
-                            .Builder(fileUri)
-                            .setMimeType(
-                                when (type) {
-                                    SubtitleType.VTT -> MimeTypes.TEXT_VTT
-                                    SubtitleType.ASS -> MimeTypes.TEXT_SSA
-                                    SubtitleType.SRT -> MimeTypes.APPLICATION_SUBRIP
-                                    else -> {
-                                        Logger.log("Subtitle type unknown for '$resolvedSubtitleUrl', defaulting to VTT")
-                                        MimeTypes.TEXT_VTT
-                                    }
-                                },
-                            ).setId(subtitleId)
-                            .setLanguage(subtitleLanguageCode)
-                            .setLabel(subtitle.language)
-                            .build()
+            val subtitleLangCodeRaw = getLanguageCode(subtitle.language)
+            val subtitleLanguageCode =
+                subtitleLangCodeRaw.takeUnless { it.equals("all", true) || it.isBlank() } ?: "und"
+            val subtitleMime =
+                when (subtitle.type) {
+                    SubtitleType.VTT -> MimeTypes.TEXT_VTT
+                    SubtitleType.ASS -> MimeTypes.TEXT_SSA
+                    SubtitleType.SRT -> MimeTypes.APPLICATION_SUBRIP
+                    SubtitleType.UNKNOWN -> {
+                        Logger.log("Subtitle type unknown for '$resolvedSubtitleUrl', defaulting to VTT")
+                        MimeTypes.TEXT_VTT
+                    }
                 }
-            } else {
-                val subUri = resolvedSubtitleUrl.toUri()
-                sub +=
-                    MediaItem.SubtitleConfiguration
-                        .Builder(subUri)
-                        .setMimeType(
-                            when (subtitle.type) {
-                                SubtitleType.VTT -> MimeTypes.TEXT_VTT
-                                SubtitleType.ASS -> MimeTypes.TEXT_SSA
-                                SubtitleType.SRT -> MimeTypes.APPLICATION_SUBRIP
-                                else -> MimeTypes.TEXT_UNKNOWN
-                            },
-                        ).setId(subtitleId)
-                        .setLanguage(subtitleLanguageCode)
-                        .setLabel(subtitle.language)
-                        .build()
-            }
+            sub +=
+                MediaItem.SubtitleConfiguration
+                    .Builder(resolvedSubtitleUrl.toUri())
+                    .setMimeType(subtitleMime)
+                    .setId(subtitleId)
+                    .setLanguage(subtitleLanguageCode)
+                    .setLabel(subtitle.language)
+                    .build()
         }
 
         // 2. Online Subtitles (Stremio/Wyzie)
