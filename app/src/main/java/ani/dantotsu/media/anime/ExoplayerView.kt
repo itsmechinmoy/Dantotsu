@@ -165,8 +165,8 @@ import com.google.android.material.slider.Slider
 import com.lagradost.nicehttp.ignoreAllSSLErrors
 import io.github.peerless2012.ass.media.AssHandler
 import io.github.peerless2012.ass.media.AssHandlerConfig
-import io.github.peerless2012.ass.media.AssRenderersFactory
 import io.github.peerless2012.ass.media.kt.withAssMkvSupport
+import io.github.peerless2012.ass.media.kt.withAssSupport
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
 import io.github.peerless2012.ass.media.type.AssRenderType
@@ -1669,9 +1669,9 @@ class ExoplayerView :
             val subtitleUrl = if (!hasExtSubtitles) currentVideoUrl else subtitle.file.url
             val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, currentVideoUrl)
             val subtitleId = "ext_sub_${index}_${subtitle.language.lowercase(Locale.ROOT)}"
-            val subtitleLangCodeRaw = getLanguageCode(subtitle.language)
+            val subtitleLangCodeRaw = LanguageMapper.getLanguageCode(subtitle.language)
             val subtitleLanguageCode =
-                subtitleLangCodeRaw.takeUnless { it.equals("all", true) || it.isBlank() } ?: "und"
+                subtitleLangCodeRaw.takeUnless { it.equals("all", ignoreCase = true) || it.isBlank() } ?: "und"
             val subtitleMime =
                 when (subtitle.type) {
                     SubtitleType.VTT -> MimeTypes.TEXT_VTT
@@ -1993,15 +1993,13 @@ class ExoplayerView :
         val nextRenderersFactory = NextRenderersFactory(this)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(decoder)
-        val assFactory = AssRenderersFactory(
-            assHandler = assHandler!!,
-            renderersFactory = nextRenderersFactory,
-        )
+        val handler = assHandler!!
+        Logger.log("Libass: Calling nextRenderersFactory.withAssSupport()")
+        val renderersFactory = nextRenderersFactory.withAssSupport(handler)
 
         exoPlayer =
             ExoPlayer
-                .Builder(this)
-                .setRenderersFactory(assFactory)
+                .Builder(this, renderersFactory)
                 .setMediaSourceFactory(assMediaSourceFactory)
                 .setTrackSelector(trackSelector)
                 .setLoadControl(loadControl)
