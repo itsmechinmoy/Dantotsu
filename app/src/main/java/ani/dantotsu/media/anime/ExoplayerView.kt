@@ -261,6 +261,7 @@ class ExoplayerView :
         private const val DEFAULT_MAX_BUFFER_MS = 60000
         private const val BUFFER_FOR_PLAYBACK_MS = 2000   // 2s: faster start, still safe on 4G
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5000
+        private const val BACK_BUFFER_DURATION_MS = 1000 * 60 * 2
     }
 
     private lateinit var episode: Episode
@@ -1668,7 +1669,7 @@ class ExoplayerView :
         ext.subtitles.forEachIndexed { index, subtitle ->
             val subtitleUrl = if (!hasExtSubtitles) currentVideoUrl else subtitle.file.url
             val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, currentVideoUrl)
-            val subtitleId = "ext_sub_${index}_${subtitle.language.lowercase(Locale.ROOT)}"
+            val subtitleId = buildSubtitleId(index, subtitle.language, resolvedSubtitleUrl)
             val subtitleLangCodeRaw = LanguageMapper.getLanguageCode(subtitle.language)
             val subtitleLanguageCode =
                 subtitleLangCodeRaw.takeUnless { it.equals("all", ignoreCase = true) || it.isBlank() } ?: "und"
@@ -1678,7 +1679,7 @@ class ExoplayerView :
                     SubtitleType.ASS -> MimeTypes.TEXT_SSA
                     SubtitleType.SRT -> MimeTypes.APPLICATION_SUBRIP
                     SubtitleType.UNKNOWN -> {
-                        Logger.log("Subtitle type unknown for '$resolvedSubtitleUrl', defaulting to VTT")
+                        Logger.log("Warning: subtitle type unknown for '$resolvedSubtitleUrl', defaulting to VTT")
                         MimeTypes.TEXT_VTT
                     }
                 }
@@ -1970,7 +1971,7 @@ class ExoplayerView :
         val loadControl =
             DefaultLoadControl
                 .Builder()
-                .setBackBuffer(1000 * 60 * 2, false)
+                .setBackBuffer(BACK_BUFFER_DURATION_MS, false)
                 .setBufferDurationsMs(
                     DEFAULT_MIN_BUFFER_MS,
                     DEFAULT_MAX_BUFFER_MS,
@@ -2608,6 +2609,11 @@ class ExoplayerView :
             Logger.log("Failed to resolve subtitle URL '$subtitleUrl' against '$fallbackMediaUrl': ${it.message}")
             subtitleUrl
         }
+    }
+
+    private fun buildSubtitleId(index: Int, language: String, url: String): String {
+        val normalizedLanguage = language.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "_")
+        return "ext_sub_${index}_${normalizedLanguage}_${url.hashCode()}"
     }
 
     private fun selectSubtitleTrack(langCode: String, targetLabel: String? = null) {
