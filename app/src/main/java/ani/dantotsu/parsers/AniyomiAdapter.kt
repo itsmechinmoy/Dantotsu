@@ -785,8 +785,7 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
                         val idx = part.indexOf('=')
                         if (idx == -1) null else URLDecoder.decode(part.substring(idx + 1), "UTF-8")
                     }.firstOrNull { value ->
-                        val lower = value.lowercase(Locale.ROOT)
-                        lower.contains(".vtt") || lower.contains(".ass") || lower.contains(".ssa") || lower.contains(".srt")
+                        extensionToSubtitleType(value) != SubtitleType.UNKNOWN
                     }
             } catch (_: Exception) {
                 null
