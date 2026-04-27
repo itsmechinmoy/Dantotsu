@@ -1682,8 +1682,8 @@ class ExoplayerView :
                     SubtitleType.ASS -> MimeTypes.TEXT_SSA
                     SubtitleType.SRT -> MimeTypes.APPLICATION_SUBRIP
                     SubtitleType.UNKNOWN -> {
-                        Logger.log("Warning: subtitle type unknown for '$resolvedSubtitleUrl', defaulting to VTT")
-                        MimeTypes.TEXT_VTT
+                        Logger.log("Warning: subtitle type unknown for '$resolvedSubtitleUrl', defaulting to SRT")
+                        MimeTypes.APPLICATION_SUBRIP
                     }
                 }
             sub +=
