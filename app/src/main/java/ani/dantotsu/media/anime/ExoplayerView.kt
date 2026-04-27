@@ -1674,7 +1674,7 @@ class ExoplayerView :
             val subtitleLangCodeRaw = LanguageMapper.getLanguageCode(subtitle.language)
             val subtitleLanguageCode =
                 // Some extension labels map to "all" (not a valid BCP-47/ISO track language),
-                // so normalize that sentinel to "und" for Media3 track metadata.
+                // and some may be blank, so normalize both cases to "und" for Media3 track metadata.
                 subtitleLangCodeRaw.takeUnless { it.equals("all", ignoreCase = true) || it.isBlank() } ?: "und"
             val subtitleMime =
                 when (subtitle.type) {
