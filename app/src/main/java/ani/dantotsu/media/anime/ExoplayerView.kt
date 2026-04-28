@@ -262,6 +262,8 @@ class ExoplayerView :
         private const val BUFFER_FOR_PLAYBACK_MS = 2000   // 2s: faster start, still safe on 4G
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5000
         private const val BACK_BUFFER_DURATION_MS = 1000 * 60 * 2
+        // Maximum number of automatic retries for recoverable player errors (3001, 4003).
+        private const val MAX_PLAYER_ERROR_RETRIES = 1
     }
 
     private lateinit var episode: Episode
@@ -3083,8 +3085,10 @@ class ExoplayerView :
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
             PlaybackException.ERROR_CODE_DECODING_FAILED,
                 -> {
-                if (playerErrorRetryCount < 1) {
+                if (playerErrorRetryCount < MAX_PLAYER_ERROR_RETRIES) {
                     playerErrorRetryCount++
+                    // Use currentPosition when available; fall back to playbackPosition
+                    // (last manually saved position) or 0 for streams that errored immediately.
                     val savedPosition = exoPlayer.currentPosition.takeIf { it > 0 }
                         ?: playbackPosition
                     exoPlayer.setMediaSource(mediaSource, savedPosition)
