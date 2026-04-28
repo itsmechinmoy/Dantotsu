@@ -30,8 +30,6 @@ class UpcomingWidget : AppWidgetProvider() {
                     .apply()
 
                 val appWidgetManager = AppWidgetManager.getInstance(context)
-                // Rebuild the entire RemoteViews (re-establishes the remote adapter) then
-                // notify the list adapter so onDataSetChanged fires and re-fetches data.
                 val views = updateAppWidget(context, appWidgetId)
                 appWidgetManager.updateAppWidget(appWidgetId, views)
                 appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widgetListView)
