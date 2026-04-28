@@ -259,10 +259,9 @@ class ExoplayerView :
 
         private const val DEFAULT_MIN_BUFFER_MS = 30000
         private const val DEFAULT_MAX_BUFFER_MS = 60000
-        private const val BUFFER_FOR_PLAYBACK_MS = 2000   // 2s: faster start, still safe on 4G
+        private const val BUFFER_FOR_PLAYBACK_MS = 2000
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5000
         private const val BACK_BUFFER_DURATION_MS = 1000 * 60 * 2
-        // Maximum number of automatic retries for recoverable player errors (3001, 4003).
         private const val MAX_PLAYER_ERROR_RETRIES = 1
     }
 
@@ -299,12 +298,8 @@ class ExoplayerView :
     private var isTimeStampsLoaded = false
     private var isSeeking = false
     private var isFastForwarding = false
-    // Counts automatic retries for recoverable player errors (3001, 4003).
-    // Reset to 0 whenever a new media source is loaded.
     private var playerErrorRetryCount = 0
 
-    // Subtitle label to select the next time onTracksChanged fires (after setMediaItem+prepare).
-    // Volatile so it is safely read from the Player.Listener callback thread.
     @Volatile private var pendingSubtitleLabel: String? = null
 
     var rotation = 0
@@ -1046,8 +1041,6 @@ class ExoplayerView :
             val maxLongPressSpeed = 4f
             val dragSpeedSensitivity = 4f
             val minSpeedUpdateDelta = 0.01f
-            // Fraction of the player width the finger must travel before speed adjustment begins.
-            // This prevents accidental speed changes when the finger barely moves after a long-press.
             val horizontalDeadZoneRatio = 0.03f
             var fastForwardStartX = 0f
             var fastForwardInitialSpeed = 1f
@@ -1073,7 +1066,6 @@ class ExoplayerView :
                 if (!isFastForwarding) return
                 val width = playerView.width.toFloat().takeIf { it > 0f } ?: return
                 val deltaX = event.rawX - fastForwardStartX
-                // Ignore movement within the dead zone to avoid accidental speed changes
                 if (abs(deltaX) < width * horizontalDeadZoneRatio) return
                 val deltaRatio = deltaX / width
                 val targetSpeed =
