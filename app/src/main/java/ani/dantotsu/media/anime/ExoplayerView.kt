@@ -297,6 +297,9 @@ class ExoplayerView :
     private var isTimeStampsLoaded = false
     private var isSeeking = false
     private var isFastForwarding = false
+    // Counts automatic retries for recoverable player errors (3001, 4003).
+    // Reset to 0 whenever a new media source is loaded.
+    private var playerErrorRetryCount = 0
 
     // Subtitle label to select the next time onTracksChanged fires (after setMediaItem+prepare).
     // Volatile so it is safely read from the Player.Listener callback thread.
@@ -1041,6 +1044,9 @@ class ExoplayerView :
             val maxLongPressSpeed = 4f
             val dragSpeedSensitivity = 4f
             val minSpeedUpdateDelta = 0.01f
+            // Fraction of the player width the finger must travel before speed adjustment begins.
+            // This prevents accidental speed changes when the finger barely moves after a long-press.
+            val horizontalDeadZoneRatio = 0.03f
             var fastForwardStartX = 0f
             var fastForwardInitialSpeed = 1f
             var fastForwardOriginalSpeed = 1f
@@ -1064,7 +1070,10 @@ class ExoplayerView :
             fun updateFastForwardSpeed(event: MotionEvent) {
                 if (!isFastForwarding) return
                 val width = playerView.width.toFloat().takeIf { it > 0f } ?: return
-                val deltaRatio = (event.rawX - fastForwardStartX) / width
+                val deltaX = event.rawX - fastForwardStartX
+                // Ignore movement within the dead zone to avoid accidental speed changes
+                if (abs(deltaX) < width * horizontalDeadZoneRatio) return
+                val deltaRatio = deltaX / width
                 val targetSpeed =
                     clamp(
                         fastForwardInitialSpeed + (deltaRatio * dragSpeedSensitivity),
@@ -1969,6 +1978,9 @@ class ExoplayerView :
         customSubtitleView.text = ""
         customSubtitleView.visibility = View.GONE
         exoSubtitleView.visibility = View.GONE
+
+        // Reset the error retry counter so fresh sources get the full retry budget.
+        playerErrorRetryCount = 0
 
         // Player
         val loadControl =
@@ -3062,6 +3074,27 @@ class ExoplayerView :
                 toast("Source Exception : ${error.message}")
                 isPlayerPlaying = true
                 sourceClick()
+            }
+
+            // Error 3001: HLS/container parsing failed (common with encrypted HLS like AnimePahe).
+            // Error 4003: Decoder failed (codec mismatch or hardware decoder issue).
+            // Auto-retry once by re-preparing the player at the last known position before
+            // falling back to a generic error message.
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+                -> {
+                if (playerErrorRetryCount < 1) {
+                    playerErrorRetryCount++
+                    val savedPosition = exoPlayer.currentPosition.takeIf { it > 0 }
+                        ?: playbackPosition
+                    exoPlayer.setMediaSource(mediaSource, savedPosition)
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+                } else {
+                    playerErrorRetryCount = 0
+                    toast("Player Error ${error.errorCode} (${error.errorCodeName}) : ${error.message}")
+                    Injekt.get<CrashlyticsInterface>().logException(error)
+                }
             }
 
             else -> {
