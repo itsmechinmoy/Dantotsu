@@ -140,4 +140,9 @@ dependencies {
     implementation(libs.bundles.rx)
     implementation(libs.bundles.okhttp)
     implementation(libs.okio)
+
+    // Archive support (local source)
+    implementation(libs.libarchive)
+    implementation(libs.xmlutil.core)
+    implementation(libs.xmlutil.serialization)
 }

@@ -153,11 +153,11 @@ class LocalMangaSource(
     }
 
     // Suspend wrappers
-    suspend fun getPopularManga(page: Int): MangasPage = withIOContext {
+    override suspend fun getPopularManga(page: Int): MangasPage = withIOContext {
         getSearchMangaSync(page, "", POPULAR_FILTERS)
     }
 
-    suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage = withIOContext {
+    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage = withIOContext {
         getSearchMangaSync(page, query, filters)
     }
 

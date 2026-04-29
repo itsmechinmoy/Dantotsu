@@ -377,24 +377,6 @@ class NovelReadFragment : Fragment(),
                 position
             )
         }
-=======
-        val bookDialog = BookDialog.newInstance(novelName, novel, source)
-
-        bookDialog.setCallback(object : BookDialog.Callback {
-            override fun onDownloadTriggered(link: String) {
-                downloadTrigger(
-                    NovelDownloadPackage(
-                        link,
-                        media.cover ?: novel.coverUrl.url,
-                        novel.name,
-                        novel.link
-                    )
-                )
-                bookDialog.dismiss()
-            }
-        })
-        bookDialog.show(parentFragmentManager, "dialog")
->>>>>>> 2a7b544f (feat: implement local media reader ui and offline mapping logic)
     }
 
     var response: List<ShowResponse>? = null
@@ -601,21 +583,6 @@ class NovelReadFragment : Fragment(),
         }
     }
 
-    fun onLayoutChanged(newStyle: Int, newReverse: Boolean) {
-        val styleChanged = style != newStyle
-        val reverseChanged = reverse != newReverse
-        style = newStyle
-        reverse = newReverse
-
-        if (styleChanged) {
-            novelResponseAdapter.updateType(newStyle)
-        }
-        if (reverseChanged && response != null) {
-            novelResponseAdapter.clear()
-            val sortedList = if (reverse) response!!.reversed() else response!!
-            novelResponseAdapter.submitList(sortedList)
-        }
-    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
