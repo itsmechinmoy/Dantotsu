@@ -10,6 +10,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.cardview.widget.CardView
 import ani.dantotsu.R
+import ani.dantotsu.loadImage
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 
@@ -59,7 +60,7 @@ class OfflineMangaAdapter(
             val chapters = view.findViewById<TextView>(R.id.itemTotal)
             val text = " ${context.getString(R.string.chapters)}"
             chapters.text = text
-            bannerView.setImageURI(item.banner ?: item.image)
+            bannerView.loadImage(item.banner?.toString() ?: item.image?.toString())
             totalChapter.text = item.totalChapter
         } else if (style == 1) {
             val readChapter =
@@ -72,7 +73,7 @@ class OfflineMangaAdapter(
         typeImage.setImageResource(if (item.type == "Novel") R.drawable.ic_round_book_24 else R.drawable.ic_round_import_contacts_24)
         type.text = item.type
         typeView.visibility = View.VISIBLE
-        imageView.setImageURI(item.image)
+        imageView.loadImage(item.image?.toString())
         titleTextView.text = item.title
         itemScore.text = item.score
 

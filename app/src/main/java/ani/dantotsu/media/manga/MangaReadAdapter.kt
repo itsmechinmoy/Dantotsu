@@ -132,25 +132,27 @@ class MangaReadAdapter(
         media.selected?.scanlators?.let {
             hiddenScanlators.addAll(it)
         }
+        val displayNames = mangaReadSources.names.filter { it != "Local" }
         binding.mediaSource.setAdapter(
             ArrayAdapter(
                 fragment.requireContext(),
                 R.layout.item_dropdown,
-                mangaReadSources.names
+                displayNames
             )
         )
         binding.mediaSourceTitle.isSelected = true
         binding.mediaSource.setOnItemClickListener { _, _, i, _ ->
-            fragment.onSourceChange(i).apply {
+            val actualIndex = mangaReadSources.names.indexOf(displayNames[i])
+            fragment.onSourceChange(actualIndex).apply {
                 binding.mediaSourceTitle.text = showUserText
                 showUserTextListener = { MainScope().launch { binding.mediaSourceTitle.text = it } }
-                source = i
-                setLanguageList(0, i)
+                source = actualIndex
+                setLanguageList(0, actualIndex)
             }
             subscribeButton(false)
             // Invalidate if it's the last source
-            val invalidate = i == mangaReadSources.names.size - 1
-            fragment.loadChapters(i, invalidate)
+            val invalidate = actualIndex == mangaReadSources.names.size - 1
+            fragment.loadChapters(actualIndex, invalidate)
         }
 
         binding.mediaSourceLanguage.setOnItemClickListener { _, _, i, _ ->
@@ -265,9 +267,14 @@ class MangaReadAdapter(
 
                 // Multi download
                 //downloadNo.text = "0"
-                mediaDownloadTop.setOnClickListener {
-                    fragment.requireContext().customAlertDialog().apply {
-                        setTitle("Multi Chapter Downloader")
+                if (media.format == "LOCAL") {
+                    animeDownloadContainer.visibility = View.GONE
+                    mediaWebviewContainer.visibility = View.GONE
+                } else {
+                    mediaDownloadTop.visibility = View.VISIBLE
+                    mediaDownloadTop.setOnClickListener {
+                        fragment.requireContext().customAlertDialog().apply {
+                            setTitle("Multi Chapter Downloader")
                         setMessage("Enter the number of chapters to download")
                         val input = View.inflate(currContext(), R.layout.dialog_layout, null)
                         val editText = input.findViewById<EditText>(R.id.downloadNo)
@@ -284,6 +291,7 @@ class MangaReadAdapter(
                         setNegButton(R.string.cancel)
                         show()
                     }
+                }
                 }
                 resetProgress.setOnClickListener {
                     fragment.requireContext().customAlertDialog().apply {

@@ -14,4 +14,9 @@ data class OfflineAnimeModel(
     val isUserScored: Boolean,
     val image: Uri?,
     val banner: Uri?,
+    val folderName: String = "",
+    val description: String? = null,
+    val genres: String? = null,
+    val status: String? = null,
+    val author: String? = null,
 )

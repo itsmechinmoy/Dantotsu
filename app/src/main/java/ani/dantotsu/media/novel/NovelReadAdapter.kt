@@ -21,6 +21,7 @@ import ani.dantotsu.loadImage
 import ani.dantotsu.parsers.NovelReadSources
 import ani.dantotsu.settings.FAQActivity
 import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.customAlertDialog
 
 class NovelReadAdapter(
