@@ -48,7 +48,10 @@ class SubscriptionSource(
 
         binding.extensionPinImageView.visibility = View.GONE
         binding.extensionVersionTextView.visibility = View.GONE
-        binding.deleteTextView.visibility = View.GONE
+        binding.deleteTextView.visibility = View.VISIBLE
+        binding.deleteTextView.setOnClickListener {
+            showRemoveAllSubscriptionsDialog(it.context)
+        }
         binding.updateTextView.visibility = View.GONE
         binding.settingsImageView.visibility = View.GONE
     }

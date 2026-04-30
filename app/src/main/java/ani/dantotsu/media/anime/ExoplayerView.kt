@@ -262,6 +262,7 @@ class ExoplayerView :
         private const val BUFFER_FOR_PLAYBACK_MS = 2000   // 2s: faster start, still safe on 4G
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5000
         private const val BACK_BUFFER_DURATION_MS = 1000 * 60 * 2
+        private const val MAX_PLAYER_ERROR_RETRIES = 1
     }
 
     private lateinit var episode: Episode
@@ -297,7 +298,8 @@ class ExoplayerView :
     private var isTimeStampsLoaded = false
     private var isSeeking = false
     private var isFastForwarding = false
-
+    private var playerErrorRetryCount = 0
+        
     // Subtitle label to select the next time onTracksChanged fires (after setMediaItem+prepare).
     // Volatile so it is safely read from the Player.Listener callback thread.
     @Volatile private var pendingSubtitleLabel: String? = null
@@ -1041,6 +1043,7 @@ class ExoplayerView :
             val maxLongPressSpeed = 4f
             val dragSpeedSensitivity = 4f
             val minSpeedUpdateDelta = 0.01f
+            val horizontalDeadZoneRatio = 0.03f
             var fastForwardStartX = 0f
             var fastForwardInitialSpeed = 1f
             var fastForwardOriginalSpeed = 1f
@@ -1064,7 +1067,9 @@ class ExoplayerView :
             fun updateFastForwardSpeed(event: MotionEvent) {
                 if (!isFastForwarding) return
                 val width = playerView.width.toFloat().takeIf { it > 0f } ?: return
-                val deltaRatio = (event.rawX - fastForwardStartX) / width
+                val deltaX = event.rawX - fastForwardStartX
+                if (abs(deltaX) < width * horizontalDeadZoneRatio) return
+                val deltaRatio = deltaX / width
                 val targetSpeed =
                     clamp(
                         fastForwardInitialSpeed + (deltaRatio * dragSpeedSensitivity),
@@ -1992,6 +1997,8 @@ class ExoplayerView :
         customSubtitleView.text = ""
         customSubtitleView.visibility = View.GONE
         exoSubtitleView.visibility = View.GONE
+        // Reset the error retry counter so fresh sources get the full retry budget.
+        playerErrorRetryCount = 0
 
         // Player
         val loadControl =
@@ -3085,6 +3092,23 @@ class ExoplayerView :
                 toast("Source Exception : ${error.message}")
                 isPlayerPlaying = true
                 sourceClick()
+            }
+
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+                -> {
+                if (playerErrorRetryCount < MAX_PLAYER_ERROR_RETRIES) {
+                    playerErrorRetryCount++
+                    val savedPosition = exoPlayer.currentPosition.takeIf { it > 0 }
+                        ?: playbackPosition
+                    exoPlayer.setMediaSource(mediaSource, savedPosition)
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+                } else {
+                    playerErrorRetryCount = 0
+                    toast("Player Error ${error.errorCode} (${error.errorCodeName}) : ${error.message}")
+                    Injekt.get<CrashlyticsInterface>().logException(error)
+                }
             }
 
             else -> {

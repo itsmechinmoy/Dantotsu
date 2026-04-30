@@ -28,8 +28,10 @@ class UpcomingWidget : AppWidgetProvider() {
                     .putLong(LAST_UPDATE, 0)
                     .putString(PREF_SERIALIZED_MEDIA, "")
                     .apply()
-                
+
                 val appWidgetManager = AppWidgetManager.getInstance(context)
+                val views = updateAppWidget(context, appWidgetId)
+                appWidgetManager.updateAppWidget(appWidgetId, views)
                 appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widgetListView)
             }
         }
