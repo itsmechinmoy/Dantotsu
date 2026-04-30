@@ -48,6 +48,9 @@ class MediaDetailsViewModel : ViewModel() {
 
 
     fun loadSelected(media: Media, isDownload: Boolean = false): Selected {
+        if ((media.format == "LOCAL" || media.format == "LOCAL_NOVEL") && media.selected != null) {
+            return media.selected!!
+        }
         val data =
             PrefManager.getNullableCustomVal("Selected-${media.id}", null, Selected::class.java)
                 ?: Selected().let {
@@ -75,16 +78,61 @@ class MediaDetailsViewModel : ViewModel() {
     }
 
     var continueMedia: Boolean? = null
-    private var loading = false
+    var loading = false
 
     private val media: MutableLiveData<Media> = MutableLiveData<Media>(null)
     fun getMedia(): LiveData<Media> = media
     fun loadMedia(m: Media) {
         if (!loading) {
             loading = true
-            media.postValue(Anilist.query.mediaDetails(m))
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                if (m.id == 0 && m.format?.startsWith("LOCAL") == true) {
+                    m.folderName = m.folderName ?: m.name
+                    media.postValue(m)
+
+                    val mapKeyStr = m.folderName ?: m.name
+                    var mappedId = PrefManager.getCustomVal<Int>("local_mapping_$mapKeyStr", 0)
+                    if (mappedId == 0) {
+                        try {
+                            val searchType = if (m.manga != null) "MANGA" else "ANIME"
+                            val searchFormat = if (m.format == "LOCAL_NOVEL") "NOVEL" else null
+                            var results = Anilist.query.searchAniManga(searchType, search = m.name, format = searchFormat)
+                            if (results == null || results.results.isEmpty()) {
+                                if (m.folderName != null && m.folderName != m.name) {
+                                    results = Anilist.query.searchAniManga(searchType, search = m.folderName!!, format = searchFormat)
+                                }
+                            }
+                            if (results != null && results.results.isNotEmpty()) {
+                                mappedId = results.results[0].id
+                                PrefManager.setCustomVal("local_mapping_$mapKeyStr", mappedId)
+                            }
+                        } catch (e: Exception) {
+                            ani.dantotsu.util.Logger.log(e)
+                        }
+                    }
+
+                    if (mappedId != 0) {
+                        val newMedia = m.copy(id = mappedId)
+                        val fetchedMedia = Anilist.query.mediaDetails(newMedia)
+                        fetchedMedia?.format = m.format 
+                        
+                        // Cache
+                        fetchedMedia?.cover?.let { ani.dantotsu.settings.saving.PrefManager.setCustomVal("local_cover_$mapKeyStr", it) }
+                        fetchedMedia?.banner?.let { ani.dantotsu.settings.saving.PrefManager.setCustomVal("local_banner_$mapKeyStr", it) }
+
+                        fetchedMedia?.folderName = m.folderName ?: m.name
+                        fetchedMedia?.selected = m.selected
+                        media.postValue(fetchedMedia)
+                    }
+                } else if (m.id == 0) {
+                    m.folderName = m.folderName ?: m.name
+                    media.postValue(m)
+                } else {
+                    media.postValue(Anilist.query.mediaDetails(m))
+                }
+                loading = false
+            }
         }
-        loading = false
         // Prefetch IMDB ID asynchronously to cache it before the player opens
         viewModelScope.launch(Dispatchers.IO) {
             try {

@@ -19,22 +19,37 @@ object NovelSources : NovelReadSources() {
                 ?: emptyList()
 
         val initialExtensions = fromExtensions.first()
-        list = createParsersFromExtensions(initialExtensions) + Lazier(
-            { OfflineNovelParser() }, "Downloaded"
+        list = createParsersFromExtensions(initialExtensions) + Lazier<BaseParser>(
+            { LocalNovelParser() },
+            "Local"
+        ) + Lazier<BaseParser>(
+            { OfflineNovelParser() },
+            "Downloaded"
         )
 
         fromExtensions.collect { extensions ->
             list = sortPinnedNovelSources(
                 createParsersFromExtensions(extensions),
                 pinnedNovelSources
-            ) + Lazier({ OfflineNovelParser() }, "Downloaded")
+            ) + Lazier<BaseParser>(
+                { LocalNovelParser() },
+                "Local"
+            ) + Lazier<BaseParser>(
+                { OfflineNovelParser() },
+                "Downloaded"
+            )
         }
     }
 
     fun performReorderNovelSources() {
-        list = list.filter { it.name != "Downloaded" }
-        list = sortPinnedNovelSources(list, pinnedNovelSources) + Lazier(
-            { OfflineNovelParser() }, "Downloaded"
+        //remove the downloaded source from the list to avoid duplicates
+        list = list.filter { it.name != "Downloaded" && it.name != "Local" }
+        list = sortPinnedNovelSources(list, pinnedNovelSources) + Lazier<BaseParser>(
+            { LocalNovelParser() },
+            "Local"
+        ) + Lazier<BaseParser>(
+            { OfflineNovelParser() },
+            "Downloaded"
         )
     }
 

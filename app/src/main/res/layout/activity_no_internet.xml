@@ -16,7 +16,7 @@
 
     <include
         android:id="@+id/included_navbar"
-        layout="@layout/item_navbar" />
+        layout="@layout/item_navbar_offline" />
 
     <FrameLayout
         android:id="@+id/fragmentContainer"

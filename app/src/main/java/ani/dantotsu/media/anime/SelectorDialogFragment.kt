@@ -365,7 +365,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     val ep = media?.anime?.episodes?.get(media?.anime?.selectedEpisode)
                     episode = ep
                     if (ep != null) {
-                        if (selected != null) {
+                        if (selected != null && media?.format != "LOCAL") {
                             binding.selectorListContainer.visibility = View.GONE
                             binding.selectorAutoListContainer.visibility = View.VISIBLE
                             binding.selectorAutoText.text = selected

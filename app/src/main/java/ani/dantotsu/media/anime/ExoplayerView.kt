@@ -1769,6 +1769,20 @@ class ExoplayerView :
             when (video?.format) {
                 VideoType.M3U8 -> MimeTypes.APPLICATION_M3U8
                 VideoType.DASH -> MimeTypes.APPLICATION_MPD
+                VideoType.CONTAINER -> {
+                    // For (local SAF files)
+                    val url = video?.file?.url ?: ""
+                    if (url.startsWith("content://")) {
+                        val decoded = java.net.URLDecoder.decode(url, "UTF-8").lowercase()
+                        when {
+                            decoded.endsWith(".mkv") -> MimeTypes.APPLICATION_MATROSKA
+                            decoded.endsWith(".webm") -> MimeTypes.APPLICATION_WEBM
+                            else -> MimeTypes.APPLICATION_MP4
+                        }
+                    } else {
+                        null // ExoPlayer auto-detect for non-local containers
+                    }
+                }
                 else -> MimeTypes.APPLICATION_MP4
             }
 
@@ -1897,9 +1911,18 @@ class ExoplayerView :
                         DefaultMediaSourceFactory(cacheFactory).createMediaSource(mediaItem)
                     }
                 }.toTypedArray()
-        val videoMediaSource =
+
+        val isContentUri = video?.file?.url?.startsWith("content://") == true
+        val videoMediaSource = if (isContentUri) {
+            val localDataSourceFactory = DefaultDataSource.Factory(this)
+            val localExtractorsFactory = DefaultExtractorsFactory()
+                .withAssMkvSupport(AssSubtitleParserFactory(assHandler!!), assHandler!!)
+            DefaultMediaSourceFactory(localDataSourceFactory, localExtractorsFactory)
+                .createMediaSource(mediaItem)
+        } else {
             assMediaSourceFactory
                 .createMediaSource(mediaItem)
+        }
         mediaSource = MergingMediaSource(videoMediaSource, *audioSources)
 
         // Source

@@ -183,8 +183,11 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                 progress = View.GONE
                 binding.mediaInfoProgressBar.visibility = progress
 
-                if (media.format == "MANGA" || media.format == "ONE SHOT") {
-                    media.selected = model.loadSelected(media)
+                if (media.format == "MANGA" || media.format == "ONE SHOT" || (media.format == "LOCAL" && media.manga != null)) {
+                    // For LOCAL
+                    if (media.format != "LOCAL" || media.selected == null) {
+                        media.selected = model.loadSelected(media)
+                    }
 
                     subscribed =
                         SubscriptionHelper.getSubscriptions().containsKey(media.id)
@@ -214,7 +217,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                         lifecycleScope.launch(Dispatchers.IO) {
                             val offline =
                                 !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
-                            if (offline) media.selected!!.sourceIndex =
+                            if (offline && media.format != "LOCAL") media.selected!!.sourceIndex =
                                 model.mangaReadSources!!.list.lastIndex
                             model.loadMangaChapters(media, media.selected!!.sourceIndex)
                         }

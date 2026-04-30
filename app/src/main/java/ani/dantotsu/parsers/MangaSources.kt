@@ -20,9 +20,9 @@ object MangaSources : MangaReadSources() {
 
         // Initialize with the first value from StateFlow
         val initialExtensions = fromExtensions.first()
-        list = createParsersFromExtensions(initialExtensions) + Lazier(
-            { OfflineMangaParser() },
-            "Downloaded"
+        list = createParsersFromExtensions(initialExtensions) + listOf(
+            Lazier({ LocalMangaParser() }, "Local"),
+            Lazier({ OfflineMangaParser() }, "Downloaded")
         )
         isInitialized = true
 
@@ -31,19 +31,19 @@ object MangaSources : MangaReadSources() {
             list = sortPinnedMangaSources(
                 createParsersFromExtensions(extensions),
                 pinnedMangaSources
-            ) + Lazier(
-                { OfflineMangaParser() },
-                "Downloaded"
+            ) + listOf(
+                Lazier({ LocalMangaParser() }, "Local"),
+                Lazier({ OfflineMangaParser() }, "Downloaded")
             )
         }
     }
 
     fun performReorderMangaSources() {
         //remove the downloaded source from the list to avoid duplicates
-        list = list.filter { it.name != "Downloaded" }
-        list = sortPinnedMangaSources(list, pinnedMangaSources) + Lazier(
-            { OfflineMangaParser() },
-            "Downloaded"
+        list = list.filter { it.name != "Downloaded" && it.name != "Local" }
+        list = sortPinnedMangaSources(list, pinnedMangaSources) + listOf(
+            Lazier({ LocalMangaParser() }, "Local"),
+            Lazier({ OfflineMangaParser() }, "Downloaded")
         )
     }
 

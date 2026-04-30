@@ -171,7 +171,7 @@ class MediaInfoFragment : Fragment() {
         }
 
         model.getMedia().observe(viewLifecycleOwner) { media ->
-            if (media != null && !loaded) {
+            if (media != null) {
                 loaded = true
 
                 binding.mediaInfoProgressBar.visibility = View.GONE
@@ -234,17 +234,15 @@ class MediaInfoFragment : Fragment() {
                     if (media.anime.mainStudio != null) {
                         binding.mediaInfoStudioContainer.visibility = View.VISIBLE
                         binding.mediaInfoStudio.text = media.anime.mainStudio!!.name
-                        if (!offline) {
-                            binding.mediaInfoStudioContainer.setOnClickListener {
-                                ContextCompat.startActivity(
-                                    requireActivity(),
-                                    Intent(activity, StudioActivity::class.java).putExtra(
-                                        "studio",
-                                        media.anime.mainStudio!! as Serializable
-                                    ),
-                                    null
-                                )
-                            }
+                        binding.mediaInfoStudioContainer.setOnClickListener {
+                            ContextCompat.startActivity(
+                                requireActivity(),
+                                Intent(requireContext(), StudioActivity::class.java).putExtra(
+                                    "studio",
+                                    media.anime.mainStudio!! as Serializable
+                                ),
+                                null
+                            )
                         }
                     }
                     // Show producers as a chip group (same style as External Links)
@@ -283,17 +281,15 @@ class MediaInfoFragment : Fragment() {
                     if (media.anime.author != null) {
                         binding.mediaInfoAuthorContainer.visibility = View.VISIBLE
                         binding.mediaInfoAuthor.text = media.anime.author!!.name
-                        if (!offline) {
-                            binding.mediaInfoAuthorContainer.setOnClickListener {
-                                ContextCompat.startActivity(
-                                    requireActivity(),
-                                    Intent(activity, AuthorActivity::class.java).putExtra(
-                                        "author",
-                                        media.anime.author!! as Serializable
-                                    ),
-                                    null
-                                )
-                            }
+                        binding.mediaInfoAuthorContainer.setOnClickListener {
+                            ContextCompat.startActivity(
+                                requireActivity(),
+                                Intent(requireContext(), AuthorActivity::class.java).putExtra(
+                                    "author",
+                                    media.anime.author!! as Serializable
+                                ),
+                                null
+                            )
                         }
                     }
                     binding.mediaInfoTotalTitle.setText(R.string.total_eps)
@@ -344,6 +340,13 @@ class MediaInfoFragment : Fragment() {
                 }
                 displayTimer(media, binding.mediaInfoContainer)
                 val parent = _binding?.mediaInfoContainer!!
+                for (i in parent.childCount - 1 downTo 0) {
+                    val child = parent.getChildAt(i)
+                    if (child.tag == "dynamic_view") {
+                        parent.removeViewAt(i)
+                    }
+                }
+
                 val screenWidth = resources.displayMetrics.run { widthPixels / density }
 
                 if (media.manga != null && !offline) {
@@ -363,6 +366,7 @@ class MediaInfoFragment : Fragment() {
                         parent,
                         false
                     )
+                    bind.root.tag = "dynamic_view"
                     for (position in media.synonyms.indices) {
                         val chip = ItemChipBinding.inflate(
                             LayoutInflater.from(context),
@@ -407,6 +411,7 @@ class MediaInfoFragment : Fragment() {
                             LinearLayoutManager.HORIZONTAL,
                             false
                         )
+                        root.tag = "dynamic_view"
                         parent.addView(root)
                     }
                 }
@@ -653,32 +658,41 @@ class MediaInfoFragment : Fragment() {
                     }
                 }
 
-                if (media.genres.isNotEmpty() && !offline) {
+                if (media.genres.isNotEmpty()) {
                     val bind = ActivityGenreBinding.inflate(
                         LayoutInflater.from(context),
                         parent,
                         false
                     )
+                    bind.root.tag = "dynamic_view"
                     val adapter = GenreAdapter(type)
-                    genreModel.doneListener = {
-                        MainScope().launch {
-                            bind.mediaInfoGenresProgressBar.visibility = View.GONE
-                        }
-                    }
-                    if (genreModel.genres != null) {
-                        adapter.genres = genreModel.genres!!
-                        adapter.pos = ArrayList(genreModel.genres!!.keys)
-                        if (genreModel.done) genreModel.doneListener?.invoke()
-                    }
+                    
                     bind.mediaInfoGenresRecyclerView.adapter = adapter
                     bind.mediaInfoGenresRecyclerView.layoutManager =
                         GridLayoutManager(requireActivity(), (screenWidth / 156f).toInt())
 
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        genreModel.loadGenres(media.genres) {
+                    if (!offline) {
+                        genreModel.doneListener = {
                             MainScope().launch {
-                                adapter.addGenre(it)
+                                bind.mediaInfoGenresProgressBar.visibility = View.GONE
                             }
+                        }
+                        if (genreModel.genres != null) {
+                            adapter.genres = genreModel.genres!!
+                            adapter.pos = ArrayList(genreModel.genres!!.keys)
+                            if (genreModel.done) genreModel.doneListener?.invoke()
+                        }
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            genreModel.loadGenres(media.genres) {
+                                MainScope().launch {
+                                    adapter.addGenre(it)
+                                }
+                            }
+                        }
+                    } else {
+                        bind.mediaInfoGenresProgressBar.visibility = View.GONE
+                        media.genres.forEach { genre ->
+                             adapter.addGenre(Pair(genre, ""))
                         }
                     }
                     parent.addView(bind.root)
@@ -690,6 +704,7 @@ class MediaInfoFragment : Fragment() {
                         parent,
                         false
                     )
+                    bind.root.tag = "dynamic_view"
                     bind.itemTitle.setText(R.string.tags)
                     for (position in media.tags.indices) {
                         val chip = ItemChipBinding.inflate(

@@ -102,8 +102,15 @@ class EpisodeAdapter(
                 val binding = holder.binding
                 setAnimation(fragment.requireContext(), holder.binding.root)
 
-                val thumb =
-                    ep.thumb?.let { if (it.url.isNotEmpty()) GlideUrl(it.url) { it.headers } else null }
+                val thumb = ep.thumb?.let {
+                    if (it.url.isNotEmpty()) {
+                        if (it.url.startsWith("content://") || it.url.startsWith("file://")) {
+                            it.url
+                        } else {
+                            GlideUrl(it.url) { it.headers }
+                        }
+                    } else null
+                }
                 Glide.with(binding.itemMediaImage).load(thumb ?: media.cover).override(400, 0)
                     .into(binding.itemMediaImage)
                 binding.itemEpisodeNumber.text = ep.number
@@ -165,8 +172,15 @@ class EpisodeAdapter(
                 val binding = holder.binding
                 setAnimation(fragment.requireContext(), holder.binding.root)
 
-                val thumb =
-                    ep.thumb?.let { if (it.url.isNotEmpty()) GlideUrl(it.url) { it.headers } else null }
+                val thumb = ep.thumb?.let {
+                    if (it.url.isNotEmpty()) {
+                        if (it.url.startsWith("content://") || it.url.startsWith("file://")) {
+                            it.url
+                        } else {
+                            GlideUrl(it.url) { it.headers }
+                        }
+                    } else null
+                }
                 Glide.with(binding.itemMediaImage).load(thumb ?: media.cover).override(400, 0)
                     .into(binding.itemMediaImage)
 
@@ -423,29 +437,33 @@ class EpisodeAdapter(
                 binding.itemDownloadStatus.visibility = View.GONE
                 binding.itemDownloadStatus.text = ""
             }
-            if(AnimeDownloader.isDownloading(media.id, episodeNumber)){
-                // Show spinner
-                binding.itemDownload.setImageResource(R.drawable.ic_sync)
-                startOrContinueRotation(episodeNumber) {
+            if (media.format == "LOCAL") {
+                binding.itemDownload.visibility = View.GONE
+            } else {
+                binding.itemDownload.visibility = View.VISIBLE
+                if(AnimeDownloader.isDownloading(media.id, episodeNumber)){                
+                    binding.itemDownload.setImageResource(R.drawable.ic_sync)
+                    startOrContinueRotation(episodeNumber) {
+                        binding.itemDownload.rotation = 0f
+                    }
+                    binding.itemEpisodeDesc.visibility = View.GONE
+                } else if (downloadedEpisodes.contains(episodeNumber)) {
+                    binding.itemEpisodeDesc.visibility = View.GONE
+                    binding.itemDownloadStatus.visibility = View.VISIBLE
+                   
+                    binding.itemDownload.setImageResource(R.drawable.ic_circle_check)
+                    binding.itemDownload.postDelayed({
+                        binding.itemDownload.setImageResource(R.drawable.ic_round_delete_24)
+                        binding.itemDownload.rotation = 0f
+                    }, 1000)
+                } else {
+                    binding.itemDownloadStatus.visibility = View.GONE
+                    binding.itemEpisodeDesc.visibility =
+                        if (desc != null && desc.trim(' ') != "") View.VISIBLE else View.GONE
+                  
+                    binding.itemDownload.setImageResource(R.drawable.ic_download_24)
                     binding.itemDownload.rotation = 0f
                 }
-                binding.itemEpisodeDesc.visibility = View.GONE
-            } else if (downloadedEpisodes.contains(episodeNumber)) {
-                binding.itemEpisodeDesc.visibility = View.GONE
-                binding.itemDownloadStatus.visibility = View.VISIBLE
-                // Show checkmark
-                binding.itemDownload.setImageResource(R.drawable.ic_circle_check)
-                binding.itemDownload.postDelayed({
-                    binding.itemDownload.setImageResource(R.drawable.ic_round_delete_24)
-                    binding.itemDownload.rotation = 0f
-                }, 1000)
-            } else {
-                binding.itemDownloadStatus.visibility = View.GONE
-                binding.itemEpisodeDesc.visibility =
-                    if (desc != null && desc.trim(' ') != "") View.VISIBLE else View.GONE
-                // Show download icon
-                binding.itemDownload.setImageResource(R.drawable.ic_download_24)
-                binding.itemDownload.rotation = 0f
             }
 
         }

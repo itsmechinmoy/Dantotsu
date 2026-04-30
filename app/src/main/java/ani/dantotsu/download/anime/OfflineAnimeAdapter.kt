@@ -11,6 +11,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.cardview.widget.CardView
 import ani.dantotsu.R
+import ani.dantotsu.loadImage
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 
@@ -58,9 +59,8 @@ class OfflineAnimeAdapter(
         if (style == 0) {
             val bannerView = view.findViewById<ImageView>(R.id.itemCompactBanner) // for large view
             val episodes = view.findViewById<TextView>(R.id.itemTotal)
-            val text = " ${context.getString(R.string.episodes)}"
-            episodes.text = text
-            bannerView.setImageURI(item.banner ?: item.image)
+            episodes.text = item.episodes
+            bannerView.loadImage(item.banner?.toString() ?: item.image?.toString())
             totalEpisodes.text = item.totalEpisodeList
         } else if (style == 1) {
             val watchedEpisodes =
@@ -69,11 +69,16 @@ class OfflineAnimeAdapter(
             totalEpisodes.text = context.getString(R.string.total_divider, item.totalEpisode)
         }
 
-        // Bind item data to the views
-        typeImage.setImageResource(R.drawable.ic_round_movie_filter_24)
+       
+        val iconRes = if (item.episodes.contains("Episode", ignoreCase = true)) {
+            R.drawable.ic_round_movie_filter_24
+        } else {
+            R.drawable.ic_round_import_contacts_24
+        }
+        typeImage.setImageResource(iconRes)
         type.text = item.type
         typeView.visibility = View.VISIBLE
-        imageView.setImageURI(item.image)
+        imageView.loadImage(item.image?.toString())
         titleTextView.text = item.title
         itemScore.text = item.score
 
@@ -86,15 +91,15 @@ class OfflineAnimeAdapter(
     }
 
     fun onSearchQuery(query: String) {
-        // Implement the filtering logic here, for example:
+       
         items = if (query.isEmpty()) {
-            // Return the original list if the query is empty
+            
             originalItems
         } else {
-            // Filter the list based on the query
+           
             originalItems.filter { it.title.contains(query, ignoreCase = true) }
         }
-        notifyDataSetChanged() // Notify the adapter that the data set has changed
+        notifyDataSetChanged() 
     }
 
     fun setItems(items: List<OfflineAnimeModel>) {

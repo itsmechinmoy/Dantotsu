@@ -148,6 +148,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         val banner =
             if (bannerAnimations) binding.mediaBanner else binding.mediaBannerNoKen
         val viewPager = binding.mediaViewPager
+        viewPager.offscreenPageLimit = 2
         viewPager.isUserInputEnabled = false
         viewPager.setPageTransformer(ZoomOutPageTransformer())
 
@@ -302,7 +303,30 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
 
         model.getMedia().observe(this) {
             if (it != null) {
+                val oldId = media.id
                 media = it
+
+                // mapping button for LOCAL media
+                if (media.format?.startsWith("LOCAL") == true) {
+                    binding.mediaMapping?.visibility = View.VISIBLE
+                    binding.mediaMapping?.setOnClickListener {
+                        val isAnime = media.anime != null
+                        val isNovel = media.format == "LOCAL_NOVEL"
+                        val folderName = media.folderName ?: media.name ?: media.nameRomaji
+                        val dialog = LocalMappingSearchDialog.newInstance(
+                            folderName = folderName,
+                            isAnime = isAnime,
+                            isNovel = isNovel
+                        ) { newId ->
+                            // Re-trigger it
+                            val updatedMedia = media.copy(id = 0)
+                            model.loading = false
+                            model.loadMedia(updatedMedia)
+                        }
+                        dialog.show(supportFragmentManager, "localMapping")
+                    }
+                }
+
                 scope.launch {
                     if (media.isFav != favButton?.clicked) favButton?.clicked()
                 }
@@ -319,6 +343,13 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                 }
                 binding.mediaCover.setOnClickListener {
                     openLinkInBrowser(media.shareLink)
+                }
+
+                if (oldId == 0 && media.id != 0) {
+                    if (media.format?.startsWith("LOCAL") == true) {
+                        binding.mediaCoverImage.loadImage(media.cover)
+                        blurImage(if (bannerAnimations) binding.mediaBanner else binding.mediaBannerNoKen, media.banner ?: media.cover)
+                    }
                 }
                 progress()
             }
@@ -337,7 +368,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             viewPager.adapter = ViewPagerAdapter(
                 supportFragmentManager,
                 lifecycle,
-                if (media.format == "NOVEL") SupportedMedia.NOVEL else SupportedMedia.MANGA,
+                if (media.format == "NOVEL" || media.format == "LOCAL_NOVEL") SupportedMedia.NOVEL else SupportedMedia.MANGA,
                 media,
                 intent.getIntExtra("commentId", -1)
             )
@@ -349,7 +380,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         val infoTab = navBar.createTab(R.drawable.ic_round_info_24, R.string.info, R.id.info)
         val watchTab = if (anime) {
             navBar.createTab(R.drawable.ic_round_movie_filter_24, R.string.watch, R.id.watch)
-        } else if (media.format == "NOVEL") {
+        } else if (media.format == "NOVEL" || media.format == "LOCAL_NOVEL") {
             navBar.createTab(R.drawable.ic_round_book_24, R.string.read, R.id.read)
         } else {
             navBar.createTab(R.drawable.ic_round_import_contacts_24, R.string.read, R.id.read)
@@ -459,6 +490,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                     val bundle = Bundle()
                     bundle.putInt("mediaId", media.id)
                     bundle.putString("mediaName", media.mainName())
+                    bundle.putString("mediaFormat", media.format)
                     if (commentId != -1) bundle.putInt("commentId", commentId)
                     fragment.arguments = bundle
                     fragment

@@ -137,6 +137,8 @@ class AnilistQueries {
                         media.source = fetchedMedia.source?.toString()
                         media.countryOfOrigin = fetchedMedia.countryOfOrigin
                         media.format = fetchedMedia.format?.toString()
+                        media.cover = fetchedMedia.coverImage?.large ?: media.cover
+                        media.banner = fetchedMedia.bannerImage ?: media.banner
                         media.favourites = fetchedMedia.favourites
                         media.popularity = fetchedMedia.popularity
                         media.startDate = fetchedMedia.startDate
