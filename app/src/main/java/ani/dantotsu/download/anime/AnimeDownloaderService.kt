@@ -35,6 +35,7 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.snackString
 import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
+import ani.dantotsu.util.SizeFormatter
 import com.anggrayudi.storage.file.forceDelete
 import com.anggrayudi.storage.file.openOutputStream
 import com.google.gson.GsonBuilder
@@ -330,10 +331,15 @@ class AnimeDownloaderService : Service() {
                         100, percent.coerceAtMost(99),
                         false
                     )
+                    val downloadedBytes = outputFile.length()
+                    val estimatedTotalBytes =
+                        SizeFormatter.estimateTotalBytesByPercent(downloadedBytes, percent)
                     broadcastDownloadProgress(
                         task.episode,
                         percent.coerceAtMost(99),
-                        task.sourceMedia?.id
+                        task.sourceMedia?.id,
+                        downloadedBytes,
+                        estimatedTotalBytes
                     )
                     if (notifi) {
                         withContext(Dispatchers.Main) {
@@ -549,10 +555,22 @@ class AnimeDownloaderService : Service() {
     }
 
     private fun broadcastDownloadProgress(episodeNumber: String, progress: Int, mediaId: Int?) {
+        broadcastDownloadProgress(episodeNumber, progress, mediaId, -1L, -1L)
+    }
+
+    private fun broadcastDownloadProgress(
+        episodeNumber: String,
+        progress: Int,
+        mediaId: Int?,
+        downloadedBytes: Long,
+        estimatedTotalBytes: Long
+    ) {
         val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_PROGRESS).apply {
             putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, episodeNumber)
             putExtra("progress", progress)
             putExtra("mediaId", mediaId)
+            putExtra(AnimeWatchFragment.EXTRA_DOWNLOADED_BYTES, downloadedBytes)
+            putExtra(AnimeWatchFragment.EXTRA_ESTIMATED_TOTAL_BYTES, estimatedTotalBytes)
         }
         sendBroadcast(intent)
     }

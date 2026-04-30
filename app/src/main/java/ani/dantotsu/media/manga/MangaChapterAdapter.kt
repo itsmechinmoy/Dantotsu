@@ -15,6 +15,7 @@ import ani.dantotsu.databinding.ItemEpisodeCompactBinding
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.setAnimation
+import ani.dantotsu.util.SizeFormatter
 import ani.dantotsu.util.customAlertDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -112,12 +113,41 @@ class MangaChapterAdapter(
     }
 
     fun updateDownloadProgress(chapterNumber: String, progress: Int) {
+        updateDownloadProgress(chapterNumber, progress, -1L, -1L)
+    }
+
+    fun updateDownloadProgress(
+        chapterNumber: String,
+        progress: Int,
+        downloadedBytes: Long,
+        estimatedTotalBytes: Long
+    ) {
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber }
         if (position != -1) {
-            arr[position].progress = "Downloading: ${progress}%"
+            arr[position].progress = buildDownloadProgressText(
+                progress,
+                downloadedBytes,
+                estimatedTotalBytes
+            )
 
             notifyItemChanged(position)
+        }
+    }
+
+    private fun buildDownloadProgressText(
+        progress: Int,
+        downloadedBytes: Long,
+        estimatedTotalBytes: Long
+    ): String {
+        val hasDownloaded = downloadedBytes > 0L
+        val hasEstimatedTotal = estimatedTotalBytes > 0L
+        return if (hasDownloaded && hasEstimatedTotal) {
+            "Downloading: $progress% (${SizeFormatter.formatBytes(downloadedBytes)} / ${SizeFormatter.formatBytes(estimatedTotalBytes)} est.)"
+        } else if (hasEstimatedTotal) {
+            "Downloading: $progress% (~${SizeFormatter.formatBytes(estimatedTotalBytes)} est.)"
+        } else {
+            "Downloading: $progress%"
         }
     }
 

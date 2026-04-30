@@ -288,6 +288,7 @@ class AnilistQueries {
                         if (fetchedMedia.mediaListEntry != null) {
                             fetchedMedia.mediaListEntry?.apply {
                                 media.userProgress = progress
+                                media.userProgressVolumes = progressVolumes
                                 media.isListPrivate = private ?: false
                                 media.notes = notes
                                 media.userListId = id
@@ -304,6 +305,7 @@ class AnilistQueries {
                             media.userStatus = null
                             media.userListId = null
                             media.userProgress = null
+                            media.userProgressVolumes = null
                             media.userScore = 0
                             media.userRepeat = 0
                             media.userUpdatedAt = null
@@ -414,7 +416,7 @@ class AnilistQueries {
 
     fun userMediaDetails(media: Media): Media {
         val query =
-            """{Media(id:${media.id}){id mediaListEntry{id status progress private repeat customLists updatedAt startedAt{year month day}completedAt{year month day}}isFavourite idMal}}"""
+            """{Media(id:${media.id}){id mediaListEntry{id status progress progressVolumes private repeat customLists updatedAt startedAt{year month day}completedAt{year month day}}isFavourite idMal}}"""
         runBlocking {
             val anilist = async {
                 var response = executeQuery<Query.Media>(query, force = true, show = true)
@@ -425,6 +427,7 @@ class AnilistQueries {
                         if (fetchedMedia.mediaListEntry != null) {
                             fetchedMedia.mediaListEntry?.apply {
                                 media.userProgress = progress
+                                media.userProgressVolumes = progressVolumes
                                 media.isListPrivate = private ?: false
                                 media.userListId = id
                                 media.userStatus = status?.toString()
@@ -439,6 +442,7 @@ class AnilistQueries {
                             media.userStatus = null
                             media.userListId = null
                             media.userProgress = null
+                            media.userProgressVolumes = null
                             media.userRepeat = 0
                             media.userUpdatedAt = null
                             media.userCompletedAt = FuzzyDate()
@@ -545,11 +549,11 @@ class AnilistQueries {
     }
 
     private fun recommendationQuery(): String {
-        return """ Page(page: 1, perPage:30) { $standardPageInformation recommendations(sort: RATING_DESC, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress private score(format:POINT_100) status } chapters isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
+        return """ Page(page: 1, perPage:30) { $standardPageInformation recommendations(sort: RATING_DESC, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress progressVolumes private score(format:POINT_100) status } chapters volumes isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
     }
 
     private fun recommendationPlannedQuery(type: String): String {
-        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: PLANNING${if (type == "ANIME") ", sort: MEDIA_POPULARITY_DESC" else ""} ) { lists { entries { media { id mediaListEntry { progress private score(format:POINT_100) status } idMal type isAdult popularity status(version: 2) chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } }"""
+        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: PLANNING${if (type == "ANIME") ", sort: MEDIA_POPULARITY_DESC" else ""} ) { lists { entries { media { id mediaListEntry { progress progressVolumes private score(format:POINT_100) status } idMal type isAdult popularity status(version: 2) chapters volumes episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } }"""
     }
 
     private fun missingSequelsCompletedSourceQuery(): String {
@@ -563,7 +567,7 @@ class AnilistQueries {
     private val batchSize = 50
     private fun missingSequelsLookupQuery(ids: List<Int>): String {
         val idsString = ids.joinToString(",")
-        return """ { Page(page: 1, perPage: $batchSize) { media( id_in: [$idsString], type: ANIME, status_in: [RELEASING, FINISHED], onList: false ) { id mediaListEntry { progress private score(format: POINT_100) status } idMal type isAdult popularity status(version: 2) chapters episodes nextAiringEpisode { episode } meanScore isFavourite format bannerImage coverImage { large } title { english romaji userPreferred } startDate { year } } } } """.trimIndent()
+        return """ { Page(page: 1, perPage: $batchSize) { media( id_in: [$idsString], type: ANIME, status_in: [RELEASING, FINISHED], onList: false ) { id mediaListEntry { progress progressVolumes private score(format: POINT_100) status } idMal type isAdult popularity status(version: 2) chapters volumes episodes nextAiringEpisode { episode } meanScore isFavourite format bannerImage coverImage { large } title { english romaji userPreferred } startDate { year } } } } """.trimIndent()
     }
 
     private fun extractMissingSequelIds(completedEntries: List<MediaList>?): Set<Int> {
@@ -910,7 +914,7 @@ class AnilistQueries {
         sortOrder: String? = null
     ): MutableMap<String, ArrayList<Media>> {
         val response =
-            executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: $userId, type: ${if (anime) "ANIME" else "MANGA"}) { lists { name isCustomList entries { status progress private score(format:POINT_100) updatedAt media { id idMal isAdult type status chapters episodes nextAiringEpisode {episode} bannerImage genres meanScore isFavourite format coverImage{large} startDate{year month day} title {english romaji userPreferred } } } } user { id mediaListOptions { rowOrder animeList { sectionOrder } mangaList { sectionOrder } } } } }""")
+            executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: $userId, type: ${if (anime) "ANIME" else "MANGA"}) { lists { name isCustomList entries { status progress progressVolumes private score(format:POINT_100) updatedAt startedAt{year month day} completedAt{year month day} media { id idMal isAdult type status chapters volumes episodes nextAiringEpisode {episode} bannerImage genres meanScore isFavourite format coverImage{large} startDate{year month day} title {english romaji userPreferred } } } } user { id mediaListOptions { rowOrder animeList { sectionOrder } mangaList { sectionOrder } } } } }""")
         val sorted = mutableMapOf<String, ArrayList<Media>>()
         val unsorted = mutableMapOf<String, ArrayList<Media>>()
         val all = arrayListOf<Media>()
@@ -944,6 +948,7 @@ class AnilistQueries {
         sorted["Favourites"]?.forEach { fav ->
             all.find { it.id == fav.id }?.let {
                 fav.userProgress = it.userProgress
+                fav.userProgressVolumes = it.userProgressVolumes
             }
         }
 
