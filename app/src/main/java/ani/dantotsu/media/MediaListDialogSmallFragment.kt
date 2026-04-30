@@ -10,16 +10,19 @@ import android.widget.ArrayAdapter
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import ani.dantotsu.BottomSheetDialogFragment
+import ani.dantotsu.DatePickerFragment
 import ani.dantotsu.InputFilterMinMax
 import ani.dantotsu.R
 import ani.dantotsu.Refresh
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.anilist.api.FuzzyDate
 import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.databinding.BottomSheetMediaListSmallBinding
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.others.getSerialized
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.snackString
+import ani.dantotsu.tryWith
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -126,6 +129,25 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
         }
         binding.mediaListProgressLayout.suffixTextView.gravity = Gravity.CENTER
 
+        val volumeTotal = media.manga?.totalVolumes
+        if (media.manga != null) {
+            binding.mediaListVolumeProgressLayout.visibility = View.VISIBLE
+            binding.mediaListVolumeProgress.setText(media.userProgressVolumes?.toString() ?: "")
+            if (volumeTotal != null) {
+                binding.mediaListVolumeProgress.filters = arrayOf(
+                    InputFilterMinMax(0.0, volumeTotal.toDouble()),
+                    LengthFilter(volumeTotal.toString().length)
+                )
+            }
+            binding.mediaListVolumeProgressLayout.suffixText = " / ${volumeTotal ?: "?"}"
+            binding.mediaListVolumeProgressLayout.suffixTextView.updateLayoutParams {
+                height = ViewGroup.LayoutParams.MATCH_PARENT
+            }
+            binding.mediaListVolumeProgressLayout.suffixTextView.gravity = Gravity.CENTER
+        } else {
+            binding.mediaListVolumeProgressLayout.visibility = View.GONE
+        }
+
         binding.mediaListScore.setText(
             if (media.userScore != 0) media.userScore.div(
                 10.0
@@ -137,6 +159,33 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
             height = ViewGroup.LayoutParams.MATCH_PARENT
         }
         binding.mediaListScoreLayout.suffixTextView.gravity = Gravity.CENTER
+
+        val start = DatePickerFragment(requireActivity(), media.userStartedAt)
+        val end = DatePickerFragment(requireActivity(), media.userCompletedAt)
+        binding.mediaListStart.setText(media.userStartedAt.toStringOrEmpty())
+        binding.mediaListStart.setOnClickListener {
+            tryWith(false) {
+                if (!start.dialog.isShowing) start.dialog.show()
+            }
+        }
+        binding.mediaListStart.setOnFocusChangeListener { _, b ->
+            tryWith(false) {
+                if (b && !start.dialog.isShowing) start.dialog.show()
+            }
+        }
+        binding.mediaListEnd.setText(media.userCompletedAt.toStringOrEmpty())
+        binding.mediaListEnd.setOnClickListener {
+            tryWith(false) {
+                if (!end.dialog.isShowing) end.dialog.show()
+            }
+        }
+        binding.mediaListEnd.setOnFocusChangeListener { _, b ->
+            tryWith(false) {
+                if (b && !end.dialog.isShowing) end.dialog.show()
+            }
+        }
+        start.dialog.setOnDismissListener { _binding?.mediaListStart?.setText(start.date.toStringOrEmpty()) }
+        end.dialog.setOnDismissListener { _binding?.mediaListEnd?.setText(end.date.toStringOrEmpty()) }
 
         binding.mediaListIncrement.setOnClickListener {
             if (binding.mediaListStatus.text.toString() == statusStrings[0]) binding.mediaListStatus.setText(
@@ -170,25 +219,32 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
                 withContext(Dispatchers.IO) {
                     withContext(Dispatchers.IO) {
                         val progress = _binding?.mediaListProgress?.text.toString().toIntOrNull()
+                        val progressVolumes =
+                            _binding?.mediaListVolumeProgress?.text.toString().toIntOrNull()
                         val score = (_binding?.mediaListScore?.text.toString().toDoubleOrNull()
                             ?.times(10))?.toInt()
                         val status =
                             statuses[statusStrings.indexOf(_binding?.mediaListStatus?.text.toString())]
+                        val startD = start.date
+                        val endD = end.date
                         Anilist.mutation.editList(
-                            media.id,
-                            progress,
-                            score,
-                            null,
-                            null,
-                            status,
-                            media.isListPrivate
+                            mediaID = media.id,
+                            progress = progress,
+                            progressVolumes = progressVolumes,
+                            score = score,
+                            status = status,
+                            private = media.isListPrivate,
+                            startedAt = startD,
+                            completedAt = endD
                         )
                         MAL.query.editList(
                             media.idMAL,
                             media.anime != null,
                             progress,
                             score,
-                            status
+                            status,
+                            start = startD,
+                            end = endD
                         )
                     }
                 }

@@ -203,6 +203,7 @@ enum class PrefName(val data: Pref) {
     DiscordRPCModeManga(Pref(Location.Irrelevant, String::class, "dantotsu")),
     DiscordRPCShowIconAnime(Pref(Location.Irrelevant, Boolean::class, true)),
     DiscordRPCShowIconManga(Pref(Location.Irrelevant, Boolean::class, true)),
+    DiscordRPCDisableAdultMedia(Pref(Location.Irrelevant, Boolean::class, false)),
     DiscordShowButtons(Pref(Location.Irrelevant, Boolean::class, true)),
     DownloadsKeys(Pref(Location.Irrelevant, String::class, "")),
     NovelLastExtCheck(Pref(Location.Irrelevant, Long::class, 0L)),

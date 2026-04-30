@@ -145,6 +145,39 @@
             </LinearLayout>
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/mediaListVolumeProgressLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="16dp"
+                android:hint="@string/volume_progress"
+                android:visibility="gone"
+                app:boxCornerRadiusBottomEnd="16dp"
+                app:boxCornerRadiusBottomStart="16dp"
+                app:boxCornerRadiusTopEnd="16dp"
+                app:boxCornerRadiusTopStart="16dp"
+                app:boxStrokeColor="@color/text_input_layout_stroke_color"
+                app:endIconMode="none"
+                app:hintAnimationEnabled="true"
+                app:startIconDrawable="@drawable/ic_round_add_circle_outline_24"
+                app:suffixTextAppearance="@style/Suffix">
+
+                <AutoCompleteTextView
+                    android:id="@+id/mediaListVolumeProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/poppins_bold"
+                    android:inputType="number"
+                    android:maxLength="4"
+                    android:padding="8dp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="14sp"
+                    tools:ignore="LabelFor,TextContrastCheck" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/mediaListScoreLayout"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
