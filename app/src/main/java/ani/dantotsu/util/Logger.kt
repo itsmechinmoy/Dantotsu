@@ -15,7 +15,9 @@ import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger.getDeviceAndAppInfo
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.BufferedReader
 import java.io.File
+import java.io.InputStreamReader
 import java.util.Date
 import java.util.concurrent.Executors
 import kotlin.system.exitProcess
@@ -170,6 +172,29 @@ object Logger {
             append("--------------------------------\n")
         }
     }
+
+    /**
+     * Reads recent logcat output for the current process.
+     * Capped at [maxLines] to avoid blowing past the Intent size limit.
+     */
+    fun readLogcat(maxLines: Int = 500): String {
+        return try {
+            val pid = android.os.Process.myPid()
+            // -d  → dump and exit (non-blocking)
+            // --pid → only lines from our process (API 24+, falls back gracefully on older)
+            val process = Runtime.getRuntime().exec(
+                arrayOf("logcat", "-d", "--pid=$pid", "-v", "time")
+            )
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val lines = reader.readLines()
+            reader.close()
+            process.destroy()
+            // Keep the tail so we get the lines closest to the crash
+            lines.takeLast(maxLines).joinToString("\n")
+        } catch (e: Exception) {
+            "Failed to read logcat: ${e.message}"
+        }
+    }
 }
 
 class FinalExceptionHandler : Thread.UncaughtExceptionHandler {
@@ -181,10 +206,12 @@ class FinalExceptionHandler : Thread.UncaughtExceptionHandler {
         Injekt.get<CrashlyticsInterface>().logException(e)
 
         if (App.instance?.applicationContext != null) {
-            App.instance?.applicationContext?.let {
+            App.instance?.applicationContext?.let { ctx ->
                 val lastLoadedActivity = App.instance?.mFTActivityLifecycleCallbacks?.lastActivity
+
+                // --- crash report (same as before) ---
                 val report = StringBuilder()
-                report.append(getDeviceAndAppInfo(it))
+                report.append(getDeviceAndAppInfo(ctx))
                 report.append("Thread: ${t.name}\n")
                 report.append("Activity: ${lastLoadedActivity}\n")
                 report.append("Exception: ${e.message}\n")
@@ -192,13 +219,25 @@ class FinalExceptionHandler : Thread.UncaughtExceptionHandler {
                 report.append(stackTraceString)
                 val reportString = report.toString()
                 Logger.uncaughtException(t, Error(reportString))
-                val intent = Intent(it, CrashActivity::class.java)
-                if (reportString.length > MAX_STACK_TRACE_SIZE) {
-                    val subStr = reportString.substring(0, MAX_STACK_TRACE_SIZE)
-                    intent.putExtra("stackTrace", subStr)
-                } else intent.putExtra("stackTrace", reportString)
+
+                // --- logcat snapshot taken at crash time ---
+                val logcatString = Logger.readLogcat()
+
+                val intent = Intent(ctx, CrashActivity::class.java)
+
+                val trimmedReport = if (reportString.length > MAX_STACK_TRACE_SIZE)
+                    reportString.substring(0, MAX_STACK_TRACE_SIZE)
+                else reportString
+
+                // Logcat gets its own size budget so it never crowds out the stack trace
+                val trimmedLogcat = if (logcatString.length > MAX_STACK_TRACE_SIZE)
+                    logcatString.substring(logcatString.length - MAX_STACK_TRACE_SIZE)
+                else logcatString
+
+                intent.putExtra("stackTrace", trimmedReport)
+                intent.putExtra("logcat", trimmedLogcat)
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                it.startActivity(intent)
+                ctx.startActivity(intent)
             }
         } else {
             Logger.log("App context is null")
