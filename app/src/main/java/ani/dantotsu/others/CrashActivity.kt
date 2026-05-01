@@ -17,9 +17,15 @@ import ani.dantotsu.themes.ThemeManager
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import java.io.File
 
-
 class CrashActivity : AppCompatActivity() {
     private lateinit var binding: ActivityCrashBinding
+
+    private lateinit var stackTrace: String
+    private lateinit var logcat: String
+
+    /** Which content is currently shown — false = stack trace, true = logcat */
+    private var showingLogcat = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ThemeManager(this).applyTheme()
@@ -34,29 +40,60 @@ class CrashActivity : AppCompatActivity() {
             topMargin = statusBarHeight
             bottomMargin = navBarHeight
         }
-        val stackTrace = intent.getStringExtra("stackTrace") ?: "No stack trace available"
 
-        binding.crashReportView.setText(stackTrace)
+        stackTrace = intent.getStringExtra("stackTrace") ?: "No stack trace available"
+        logcat = intent.getStringExtra("logcat") ?: "No logcat available"
+
+        // Show stack trace by default
+        showReport(stackTrace)
+
         binding.crashReportView.setOnKeyListener(View.OnKeyListener { _, _, _ ->
             true // Blocks input from hardware keyboards.
         })
 
         binding.copyButton.setOnClickListener {
-            copyToClipboard("Crash log", stackTrace)
+            val label = if (showingLogcat) "Logcat" else "Crash log"
+            copyToClipboard(label, currentContent())
         }
 
         binding.shareAsTextFileButton.setOnClickListener {
-            shareAsTextFile(stackTrace)
+            shareAsTextFile(currentContent(), if (showingLogcat) "logcat.txt" else "crash_log.txt")
+        }
+
+        binding.toggleLogcatButton.setOnClickListener {
+            showingLogcat = !showingLogcat
+            if (showingLogcat) {
+                showReport(logcat)
+                binding.toggleLogcatButton.text = getString(R.string.show_crash_report)
+            } else {
+                showReport(stackTrace)
+                binding.toggleLogcatButton.text = getString(R.string.show_logcat)
+            }
         }
     }
 
-    private fun shareAsTextFile(stackTrace: String) {
-        val file = File(cacheDir, "crash_log.txt")
-        file.writeText(stackTrace)
+    private fun currentContent() = if (showingLogcat) logcat else stackTrace
+
+    private fun showReport(content: String) {
+        binding.crashReportView.setText(content)
+        // Scroll to bottom for logcat (most recent lines last), top for stack trace
+        if (showingLogcat) {
+            binding.crashReportScrollView.post {
+                binding.crashReportScrollView.fullScroll(View.FOCUS_DOWN)
+            }
+        } else {
+            binding.crashReportScrollView.scrollTo(0, 0)
+        }
+    }
+
+    private fun shareAsTextFile(content: String, fileName: String) {
+        val file = File(cacheDir, fileName)
+        file.writeText(content)
         val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivity(Intent.createChooser(intent, getString(R.string.share)))
     }

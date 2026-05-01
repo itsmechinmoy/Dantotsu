@@ -1160,4 +1160,7 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="no_messages">No messages</string>
     <string name="no_text_activities">No text activities</string>
 
+    <string name="show_logcat">Show Logcat</string>
+    <string name="show_crash_report">Show Crash Report</string>
+
 </resources>

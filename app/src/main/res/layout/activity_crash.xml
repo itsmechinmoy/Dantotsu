@@ -44,20 +44,29 @@
             android:textAlignment="center"
             android:textColor="?attr/colorOnBackground" />
 
-        <EditText
-            android:id="@+id/crashReportView"
+        <ScrollView
+            android:id="@+id/crashReportScrollView"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:layout_margin="16dp"
-            android:focusable="false"
-            android:focusableInTouchMode="false"
-            android:fontFamily="@font/poppins"
-            android:inputType="textMultiLine|none"
-            android:padding="16dp"
-            android:textColor="?attr/colorOnBackground"
-            android:textIsSelectable="true"
-            android:textSize="12sp"
-            tools:ignore="LabelFor" />
+            android:scrollbars="vertical">
+
+            <EditText
+                android:id="@+id/crashReportView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:fontFamily="@font/poppins"
+                android:inputType="textMultiLine|none"
+                android:padding="16dp"
+                android:textColor="?attr/colorOnBackground"
+                android:textIsSelectable="true"
+                android:textSize="12sp"
+                tools:ignore="LabelFor" />
+
+        </ScrollView>
 
     </LinearLayout>
 
@@ -65,35 +74,56 @@
         android:id="@+id/buttonContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_gravity="bottom|center_horizontal"
+        android:orientation="vertical"
         android:gravity="center_horizontal"
         android:layout_marginBottom="24dp"
+        android:layout_marginHorizontal="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
+        <!-- Toggle between stack trace and logcat -->
         <Button
-            android:id="@+id/copyButton"
+            android:id="@+id/toggleLogcatButton"
             android:layout_width="wrap_content"
-            android:layout_height="64dp"
-            android:layout_marginEnd="8dp"
+            android:layout_height="56dp"
+            android:layout_marginBottom="8dp"
             android:fontFamily="@font/poppins_bold"
             android:maxLines="1"
-            android:text="@string/copy_report"
+            android:text="@string/show_logcat"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             app:cornerRadius="16dp"
             tools:ignore="ButtonStyle" />
 
-        <Button
-            android:id="@+id/shareAsTextFileButton"
-            android:layout_width="wrap_content"
-            android:layout_height="64dp"
-            android:layout_marginStart="8dp"
-            android:fontFamily="@font/poppins_bold"
-            android:maxLines="1"
-            android:text="@string/share_as_file"
-            app:cornerRadius="16dp"
-            tools:ignore="ButtonStyle"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_horizontal">
+
+            <Button
+                android:id="@+id/copyButton"
+                android:layout_width="wrap_content"
+                android:layout_height="64dp"
+                android:layout_marginEnd="8dp"
+                android:fontFamily="@font/poppins_bold"
+                android:maxLines="1"
+                android:text="@string/copy_report"
+                app:cornerRadius="16dp"
+                tools:ignore="ButtonStyle" />
+
+            <Button
+                android:id="@+id/shareAsTextFileButton"
+                android:layout_width="wrap_content"
+                android:layout_height="64dp"
+                android:layout_marginStart="8dp"
+                android:fontFamily="@font/poppins_bold"
+                android:maxLines="1"
+                android:text="@string/share_as_file"
+                app:cornerRadius="16dp"
+                tools:ignore="ButtonStyle" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
