@@ -1147,6 +1147,13 @@ class MangaReaderActivity : AppCompatActivity() {
             return
         }
         if (alreadySubscribed) return
+        if (PrefManager.getCustomVal("${media.id}_subscription_declined", false)) return
+        val caughtUp = if (directionRLBT) {
+            chaptersArr.getOrNull(currentChapterIndex - 1) == null
+        } else {
+            chaptersArr.getOrNull(currentChapterIndex + 1) == null
+        }
+        if (!caughtUp) return
 
         customAlertDialog().apply {
             setTitle(getString(R.string.subscribe_prompt_title))
@@ -1155,7 +1162,9 @@ class MangaReaderActivity : AppCompatActivity() {
                 SubscriptionHelper.saveSubscription(media, true)
                 snackString(getString(R.string.subscribed_notification, getString(R.string.manga)))
             }
-            setNegButton(R.string.no)
+            setNegButton(R.string.no) {
+                PrefManager.setCustomVal("${media.id}_subscription_declined", true)
+            }
             show()
         }
     }
