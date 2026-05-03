@@ -23,10 +23,12 @@ import ani.dantotsu.media.Character
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.Studio
 import ani.dantotsu.others.MalScraper
+import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.profile.User
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
+import ani.dantotsu.tryWithSuspend
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -881,20 +883,35 @@ class AnilistQueries {
 
 
     private suspend fun bannerImage(type: String): String? {
+        if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+            if (MAL.token != null) {
+                val isAnime = type == "ANIME"
+                val status = if (isAnime) "watching" else "reading"
+                val listRes = tryWithSuspend {
+                    if (isAnime) MAL.query.getUserAnimeList(status = status, limit = 25)
+                    else MAL.query.getUserMangaList(status = status, limit = 25)
+                }
+                val randomCover = listRes?.data?.mapNotNull {
+                    it.node.mainPicture?.large ?: it.node.mainPicture?.medium
+                }?.randomOrNull()
+                if (randomCover != null) return randomCover
+            }
+            return MAL.avatar
+        }
         val image = BannerImage(
             PrefManager.getCustomVal("banner_${type}_url", ""),
             PrefManager.getCustomVal("banner_${type}_time", 0L)
         )
         if (image.url.isNullOrEmpty() || image.checkTime()) {
             val response =
-                executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1,perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries{ media { id bannerImage isAdult } } } } } """)
-            val random = response?.data?.mediaListCollection?.lists?.mapNotNull {
-                it.entries?.filter {i -> i.media?.isAdult != true  }?.mapNotNull { entry ->
-                    val imageUrl = entry.media?.bannerImage
-                    if (imageUrl != null && imageUrl != "null") imageUrl
-                    else null
-                }
-            }?.flatten()?.randomOrNull() ?: return null
+                    executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1,perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries{ media { id bannerImage isAdult } } } } } """)
+            val random: String? = response?.data?.mediaListCollection?.lists?.mapNotNull {
+                    it.entries?.filter { i -> i.media?.isAdult != true }?.mapNotNull { entry ->
+                        val imageUrl = entry.media?.bannerImage
+                        if (imageUrl != null && imageUrl != "null") imageUrl else null
+                    }
+                }?.flatten()?.randomOrNull()
+            if (random == null) return null
             PrefManager.setCustomVal("banner_${type}_url", random)
             PrefManager.setCustomVal("banner_${type}_time", System.currentTimeMillis())
             return random
@@ -1029,10 +1046,11 @@ class AnilistQueries {
 
     suspend fun getGenres(genres: ArrayList<String>, listener: ((Pair<String, String>) -> Unit)) {
         genres.forEach {
-            getGenreThumbnail(it).apply {
-                if (this != null) {
-                    listener.invoke(it to this.thumbnail)
-                }
+            val thumbnail = getGenreThumbnail(it)
+            if (thumbnail != null) {
+                listener.invoke(it to thumbnail.thumbnail)
+            } else {
+                listener.invoke(it to "")
             }
         }
     }

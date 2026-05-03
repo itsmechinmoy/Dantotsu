@@ -136,8 +136,8 @@ class MangaFragment : Fragment() {
             override fun onScrolled(v: RecyclerView, dx: Int, dy: Int) {
                 if (!v.canScrollVertically(1)) {
                     if (model.aniMangaSearchResults.hasNextPage && model.aniMangaSearchResults.results.isNotEmpty() && !loading) {
+                        loading = true
                         scope.launch(Dispatchers.IO) {
-                            loading = true
                             model.loadNextPage(model.aniMangaSearchResults)
                         }
                     }
@@ -247,7 +247,9 @@ class MangaFragment : Fragment() {
                 if (it.hasNextPage)
                     progressAdaptor.bar?.visibility = View.VISIBLE
                 else {
-                    snackString(getString(R.string.jobless_message))
+                    if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+                        snackString(getString(R.string.jobless_message))
+                    }
                     progressAdaptor.bar?.visibility = View.GONE
                 }
                 loading = false
@@ -265,17 +267,22 @@ class MangaFragment : Fragment() {
                 running = true
                 scope.launch {
                     withContext(Dispatchers.IO) {
-                        Anilist.userid =
-                            PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
-                                ?.toIntOrNull()
-                        if (Anilist.userid == null) {
-                            getUserId(requireContext()) {
-                                load()
-                            }
+                        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+                        if (rescueMode) {
+                            withContext(Dispatchers.Main) { load() }
                         } else {
-                            CoroutineScope(Dispatchers.IO).launch {
+                            Anilist.userid =
+                                PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
+                                    ?.toIntOrNull()
+                            if (Anilist.userid == null) {
                                 getUserId(requireContext()) {
                                     load()
+                                }
+                            } else {
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    getUserId(requireContext()) {
+                                        load()
+                                    }
                                 }
                             }
                         }
@@ -287,7 +294,7 @@ class MangaFragment : Fragment() {
                         model.loadPopular(
                             "MANGA",
                             sort = Anilist.sortBy[1],
-                            onList = PrefManager.getVal(PrefName.PopularAnimeList)
+                            onList = PrefManager.getVal(PrefName.PopularMangaList)
                         )
                     }
 

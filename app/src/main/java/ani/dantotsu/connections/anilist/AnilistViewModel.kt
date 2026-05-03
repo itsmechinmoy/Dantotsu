@@ -16,6 +16,8 @@ import ani.dantotsu.profile.User
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
+import ani.dantotsu.connections.syncPendingProgressUpdates
+import ani.dantotsu.connections.syncPendingDeletions
 import ani.dantotsu.tryWithSuspend
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -97,6 +99,11 @@ class AnilistHomeViewModel : ViewModel() {
     fun getHidden(): LiveData<ArrayList<Media>> = hidden
 
     suspend fun initHomePage() {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            initHomePageFromMAL()
+            return
+        }
         val res = Anilist.query.initHomePage()
         res["currentAnime"]?.let { animeContinue.postValue(it) }
         res["favoriteAnime"]?.let { animeFav.postValue(it) }
@@ -109,6 +116,41 @@ class AnilistHomeViewModel : ViewModel() {
         res["hidden"]?.let { hidden.postValue(it) }
     }
 
+    private suspend fun initHomePageFromMAL() {
+        animeFav.postValue(arrayListOf())
+        mangaFav.postValue(arrayListOf())
+        missingSequels.postValue(arrayListOf())
+        hidden.postValue(arrayListOf())
+
+        tryWithSuspend {
+            val res = MAL.jikan.getSeasonUpcoming(limit = 15)
+            recommendation.postValue(ArrayList(res?.data?.map { Media(it, true) } ?: emptyList()))
+        }
+
+        if (MAL.token == null) return
+
+        tryWithSuspend {
+            MAL.query.getUserAnimeList(status = "watching", limit = 20)?.data?.let { entries ->
+                animeContinue.postValue(ArrayList(entries.map { Media(it, true) }))
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getUserAnimeList(status = "plan_to_watch", limit = 20)?.data?.let { entries ->
+                animePlanned.postValue(ArrayList(entries.map { Media(it, true) }))
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getUserMangaList(status = "reading", limit = 20)?.data?.let { entries ->
+                mangaContinue.postValue(ArrayList(entries.map { Media(it, false) }))
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getUserMangaList(status = "plan_to_read", limit = 20)?.data?.let { entries ->
+                mangaPlanned.postValue(ArrayList(entries.map { Media(it, false) }))
+            }
+        }
+    }
+
     suspend fun loadMain(context: FragmentActivity) {
         Anilist.getSavedToken()
         MAL.getSavedToken()
@@ -119,9 +161,15 @@ class AnilistHomeViewModel : ViewModel() {
                     AppUpdater.check(context, false)
                 }
         }
-        val ret = Anilist.query.getGenresAndTags()
-        withContext(Dispatchers.Main) {
-            genres.value = ret
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            if (MAL.token != null) tryWithSuspend { MAL.query.getUserData() }
+            withContext(Dispatchers.Main) { genres.value = true }
+        } else {
+            syncPendingProgressUpdates()
+            syncPendingDeletions()
+            val ret = Anilist.query.getGenresAndTags()
+            withContext(Dispatchers.Main) { genres.value = ret }
         }
     }
 
@@ -141,6 +189,19 @@ class AnilistAnimeViewModel : ViewModel() {
 
     fun getTrending(): LiveData<MutableList<Media>> = trending
     suspend fun loadTrending(i: Int) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            val res = when (i) {
+                0 -> {
+                    val (season, year) = Anilist.currentSeasons[0]
+                    MAL.jikan.getSeason(year, season.lowercase(), limit = 12)
+                }
+                2 -> MAL.jikan.getSeasonUpcoming(limit = 12)
+                else -> MAL.jikan.getSeasonNow(limit = 12)
+            }
+            trending.postValue(res?.data?.map { Media(it, true) }?.toMutableList())
+            return
+        }
         val (season, year) = Anilist.currentSeasons[i]
         trending.postValue(
             Anilist.query.searchAniManga(
@@ -166,6 +227,31 @@ class AnilistAnimeViewModel : ViewModel() {
         sort: String = Anilist.sortBy[1],
         onList: Boolean = true,
     ) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            if (searchVal.isNullOrBlank()) {
+                val limit = 50
+                val malRes = MAL.query.getAnimeRanking("bypopularity", limit = limit)
+                val mapped = malRes?.data?.map { Media(it.node, true) } ?: emptyList()
+                val filtered = if (!onList) mapped.filter { it.userStatus == null } else mapped
+                animePopular.postValue(AniMangaSearchResults(
+                    type = "ANIME", isAdult = false, search = null, onList = onList,
+                    results = filtered.toMutableList(),
+                    hasNextPage = malRes?.paging?.next != null,
+                ))
+            } else {
+                val limit = if (onList) 25 else 50
+                val malRes = MAL.query.searchAnime(searchVal, limit = limit)
+                val mapped = malRes?.data?.map { Media(it.node, true) } ?: emptyList()
+                val filtered = if (!onList) mapped.filter { it.userStatus == null } else mapped
+                animePopular.postValue(AniMangaSearchResults(
+                    type = "ANIME", isAdult = false, search = searchVal, onList = if (onList) null else false,
+                    results = filtered.toMutableList(),
+                    hasNextPage = malRes?.paging?.next != null,
+                ))
+            }
+            return
+        }
         animePopular.postValue(
             Anilist.query.searchAniManga(
                 type,
@@ -179,24 +265,57 @@ class AnilistAnimeViewModel : ViewModel() {
     }
 
 
-    suspend fun loadNextPage(r: AniMangaSearchResults) = animePopular.postValue(
-        Anilist.query.searchAniManga(
-            r.type,
-            r.page + 1,
-            r.perPage,
-            r.search,
-            r.sort,
-            r.genres,
-            r.tags,
-            r.status,
-            r.source,
-            r.format,
-            r.countryOfOrigin,
-            r.isAdult,
-            r.onList,
-            adultOnly = PrefManager.getVal(PrefName.AdultOnly),
+    suspend fun loadNextPage(r: AniMangaSearchResults) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            val searchTerm = r.search
+            if (searchTerm.isNullOrBlank()) {
+                val limit = 50
+                val malRes = MAL.query.getAnimeRanking("bypopularity", limit = limit, offset = r.page * limit)
+                val mapped = malRes?.data?.map { Media(it.node, true) } ?: emptyList()
+                val filtered = if (r.onList == false) mapped.filter { it.userStatus == null } else mapped
+                animePopular.postValue(AniMangaSearchResults(
+                    type = "ANIME", isAdult = false, search = null, page = r.page + 1, onList = r.onList,
+                    results = filtered.toMutableList(),
+                    hasNextPage = malRes?.paging?.next != null,
+                ))
+            } else {
+                val limit = if (r.onList == false) 50 else 25
+                val malRes = MAL.query.searchAnime(searchTerm, limit = limit, offset = r.page * limit)
+                val mapped = malRes?.data?.map { Media(it.node, true) } ?: emptyList()
+                val filtered = if (r.onList == false) mapped.filter { it.userStatus == null } else mapped
+                animePopular.postValue(AniMangaSearchResults(
+                    type = "ANIME", isAdult = false, search = searchTerm, page = r.page + 1, onList = r.onList,
+                    results = filtered.toMutableList(),
+                    hasNextPage = malRes?.paging?.next != null,
+                ))
+            }
+            return
+        }
+        animePopular.postValue(
+            Anilist.query.searchAniManga(
+                r.type,
+                r.page + 1,
+                r.perPage,
+                r.search,
+                r.sort,
+                r.genres,
+                r.tags,
+                r.status,
+                r.source,
+                r.format,
+                r.countryOfOrigin,
+                r.isAdult,
+                r.onList,
+                r.excludedGenres,
+                r.excludedTags,
+                r.startYear,
+                r.seasonYear,
+                r.season,
+                adultOnly = PrefManager.getVal(PrefName.AdultOnly),
+            )
         )
-    )
+    }
 
     var loaded: Boolean = false
     private val updated: MutableLiveData<MutableList<Media>> =
@@ -219,11 +338,39 @@ class AnilistAnimeViewModel : ViewModel() {
 
     fun getMostFav(): LiveData<MutableList<Media>> = mostFavAnime
     suspend fun loadAll() {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            loadAllFromMAL()
+            return
+        }
         val list = Anilist.query.loadAnimeList()
         updated.postValue(list["recentUpdates"])
         popularMovies.postValue(list["trendingMovies"])
         topRatedAnime.postValue(list["topRated"])
         mostFavAnime.postValue(list["mostFav"])
+    }
+
+    private suspend fun loadAllFromMAL() {
+        tryWithSuspend {
+            MAL.query.getAnimeRanking("airing", 15)?.data?.let { entries ->
+                updated.postValue(entries.map { Media(it.node, true) }.toMutableList())
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getAnimeRanking("bypopularity", 15)?.data?.let { entries ->
+                popularMovies.postValue(entries.map { Media(it.node, true) }.toMutableList())
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getAnimeRanking("all", 15)?.data?.let { entries ->
+                topRatedAnime.postValue(entries.map { Media(it.node, true) }.toMutableList())
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getAnimeRanking("favorite", 15)?.data?.let { entries ->
+                mostFavAnime.postValue(entries.map { Media(it.node, true) }.toMutableList())
+            }
+        }
     }
 }
 
@@ -236,7 +383,13 @@ class AnilistMangaViewModel : ViewModel() {
         MutableLiveData<MutableList<Media>>(null)
 
     fun getTrending(): LiveData<MutableList<Media>> = trending
-    suspend fun loadTrending() =
+    suspend fun loadTrending() {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            val res = MAL.jikan.getTopManga(filter = "publishing", limit = 10)
+            trending.postValue(res?.data?.map { Media(it, false) }?.toMutableList())
+            return
+        }
         trending.postValue(
             Anilist.query.searchAniManga(
                 type,
@@ -246,6 +399,7 @@ class AnilistMangaViewModel : ViewModel() {
                 adultOnly = PrefManager.getVal(PrefName.AdultOnly)
             )?.results
         )
+    }
 
 
     private val mangaPopular = MutableLiveData<AniMangaSearchResults?>(null)
@@ -257,6 +411,31 @@ class AnilistMangaViewModel : ViewModel() {
         sort: String = Anilist.sortBy[1],
         onList: Boolean = true,
     ) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            if (searchVal.isNullOrBlank()) {
+                val limit = 50
+                val malRes = MAL.query.getMangaRanking("bypopularity", limit = limit)
+                val mapped = malRes?.data?.map { Media(it.node, false) } ?: emptyList()
+                val filtered = if (!onList) mapped.filter { it.userStatus == null } else mapped
+                mangaPopular.postValue(AniMangaSearchResults(
+                    type = "MANGA", isAdult = false, search = null, onList = onList,
+                    results = filtered.toMutableList(),
+                    hasNextPage = malRes?.paging?.next != null,
+                ))
+            } else {
+                val limit = if (onList) 25 else 50
+                val malRes = MAL.query.searchManga(searchVal, limit = limit)
+                val mapped = malRes?.data?.map { Media(it.node, false) } ?: emptyList()
+                val filtered = if (!onList) mapped.filter { it.userStatus == null } else mapped
+                mangaPopular.postValue(AniMangaSearchResults(
+                    type = "MANGA", isAdult = false, search = searchVal, onList = if (onList) null else false,
+                    results = filtered.toMutableList(),
+                    hasNextPage = malRes?.paging?.next != null,
+                ))
+            }
+            return
+        }
         mangaPopular.postValue(
             Anilist.query.searchAniManga(
                 type,
@@ -270,29 +449,57 @@ class AnilistMangaViewModel : ViewModel() {
     }
 
 
-    suspend fun loadNextPage(r: AniMangaSearchResults) = mangaPopular.postValue(
-        Anilist.query.searchAniManga(
-            r.type,
-            r.page + 1,
-            r.perPage,
-            r.search,
-            r.sort,
-            r.genres,
-            r.tags,
-            r.status,
-            r.source,
-            r.format,
-            r.countryOfOrigin,
-            r.isAdult,
-            r.onList,
-            r.excludedGenres,
-            r.excludedTags,
-            r.startYear,
-            r.seasonYear,
-            r.season,
-            adultOnly = PrefManager.getVal(PrefName.AdultOnly)
+    suspend fun loadNextPage(r: AniMangaSearchResults) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            val searchTerm = r.search
+            if (searchTerm.isNullOrBlank()) {
+                val limit = 50
+                val malRes = MAL.query.getMangaRanking("bypopularity", limit = limit, offset = r.page * limit)
+                val mapped = malRes?.data?.map { Media(it.node, false) } ?: emptyList()
+                val filtered = if (r.onList == false) mapped.filter { it.userStatus == null } else mapped
+                mangaPopular.postValue(AniMangaSearchResults(
+                    type = "MANGA", isAdult = false, search = null, page = r.page + 1, onList = r.onList,
+                    results = filtered.toMutableList(),
+                    hasNextPage = malRes?.paging?.next != null,
+                ))
+            } else {
+                val limit = if (r.onList == false) 50 else 25
+                val malRes = MAL.query.searchManga(searchTerm, limit = limit, offset = r.page * limit)
+                val mapped = malRes?.data?.map { Media(it.node, false) } ?: emptyList()
+                val filtered = if (r.onList == false) mapped.filter { it.userStatus == null } else mapped
+                mangaPopular.postValue(AniMangaSearchResults(
+                    type = "MANGA", isAdult = false, search = searchTerm, page = r.page + 1, onList = r.onList,
+                    results = filtered.toMutableList(),
+                    hasNextPage = malRes?.paging?.next != null,
+                ))
+            }
+            return
+        }
+        mangaPopular.postValue(
+            Anilist.query.searchAniManga(
+                r.type,
+                r.page + 1,
+                r.perPage,
+                r.search,
+                r.sort,
+                r.genres,
+                r.tags,
+                r.status,
+                r.source,
+                r.format,
+                r.countryOfOrigin,
+                r.isAdult,
+                r.onList,
+                r.excludedGenres,
+                r.excludedTags,
+                r.startYear,
+                r.seasonYear,
+                r.season,
+                adultOnly = PrefManager.getVal(PrefName.AdultOnly)
+            )
         )
-    )
+    }
 
     var loaded: Boolean = false
 
@@ -321,12 +528,45 @@ class AnilistMangaViewModel : ViewModel() {
 
     fun getMostFav(): LiveData<MutableList<Media>> = mostFavManga
     suspend fun loadAll() {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            loadAllFromMAL()
+            return
+        }
         val list = Anilist.query.loadMangaList()
         popularManga.postValue(list["trendingManga"])
         popularManhwa.postValue(list["trendingManhwa"])
         popularNovel.postValue(list["trendingNovel"])
         topRatedManga.postValue(list["topRated"])
         mostFavManga.postValue(list["mostFav"])
+    }
+
+    private suspend fun loadAllFromMAL() {
+        tryWithSuspend {
+            MAL.query.getMangaRanking("manga", 15)?.data?.let { entries ->
+                popularManga.postValue(entries.map { Media(it.node, false) }.toMutableList())
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getMangaRanking("manhwa", 15)?.data?.let { entries ->
+                popularManhwa.postValue(entries.map { Media(it.node, false) }.toMutableList())
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getMangaRanking("novels", 15)?.data?.let { entries ->
+                popularNovel.postValue(entries.map { Media(it.node, false) }.toMutableList())
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getMangaRanking("all", 15)?.data?.let { entries ->
+                topRatedManga.postValue(entries.map { Media(it.node, false) }.toMutableList())
+            }
+        }
+        tryWithSuspend {
+            MAL.query.getMangaRanking("favorite", 15)?.data?.let { entries ->
+                mostFavManga.postValue(entries.map { Media(it.node, false) }.toMutableList())
+            }
+        }
     }
 }
 
@@ -395,22 +635,38 @@ class AnilistSearch : ViewModel() {
     }
 
     suspend fun loadSearch(type: SearchType) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         when (type) {
             SearchType.ANIME, SearchType.MANGA -> loadAniMangaSearch(aniMangaSearchResults)
-            SearchType.CHARACTER -> loadCharacterSearch(characterSearchResults)
-            SearchType.STUDIO -> loadStudiosSearch(studioSearchResults)
-            SearchType.STAFF -> loadStaffSearch(staffSearchResults)
-            SearchType.USER -> loadUserSearch(userSearchResults)
+            SearchType.CHARACTER, SearchType.STUDIO, SearchType.STAFF, SearchType.USER -> {
+                if (!rescueMode) {
+                    when (type) {
+                        SearchType.CHARACTER -> loadCharacterSearch(characterSearchResults)
+                        SearchType.STUDIO -> loadStudiosSearch(studioSearchResults)
+                        SearchType.STAFF -> loadStaffSearch(staffSearchResults)
+                        SearchType.USER -> loadUserSearch(userSearchResults)
+                        else -> {}
+                    }
+                }
+            }
         }
     }
 
     suspend fun loadNextPage(type: SearchType) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         when (type) {
             SearchType.ANIME, SearchType.MANGA -> loadNextAniMangaPage(aniMangaSearchResults)
-            SearchType.CHARACTER -> loadNextCharacterPage(characterSearchResults)
-            SearchType.STUDIO -> loadNextStudiosPage(studioSearchResults)
-            SearchType.STAFF -> loadNextStaffPage(staffSearchResults)
-            SearchType.USER -> loadNextUserPage(userSearchResults)
+            SearchType.CHARACTER, SearchType.STUDIO, SearchType.STAFF, SearchType.USER -> {
+                if (!rescueMode) {
+                    when (type) {
+                        SearchType.CHARACTER -> loadNextCharacterPage(characterSearchResults)
+                        SearchType.STUDIO -> loadNextStudiosPage(studioSearchResults)
+                        SearchType.STAFF -> loadNextStaffPage(staffSearchResults)
+                        SearchType.USER -> loadNextUserPage(userSearchResults)
+                        else -> {}
+                    }
+                }
+            }
         }
     }
 
@@ -454,28 +710,127 @@ class AnilistSearch : ViewModel() {
         }
     }
 
-    private suspend fun loadAniMangaSearch(r: AniMangaSearchResults) = aniMangaResult.postValue(
-        Anilist.query.searchAniManga(
-            r.type,
-            r.page,
-            r.perPage,
-            r.search,
-            r.sort,
-            r.genres,
-            r.tags,
-            r.status,
-            r.source,
-            r.format,
-            r.countryOfOrigin,
-            r.isAdult,
-            r.onList,
-            r.excludedGenres,
-            r.excludedTags,
-            r.startYear,
-            r.seasonYear,
-            r.season,
+    private suspend fun loadAniMangaSearch(r: AniMangaSearchResults) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            val isAnime = r.type == "ANIME"
+
+            if (!r.search.isNullOrBlank() && MAL.token != null) {
+                val malRes = tryWithSuspend {
+                    if (isAnime) MAL.query.searchAnime(r.search!!, limit = 25)
+                    else MAL.query.searchManga(r.search!!, limit = 25)
+                }
+                aniMangaResult.postValue(AniMangaSearchResults(
+                    type = r.type,
+                    isAdult = r.isAdult,
+                    search = r.search,
+                    sort = r.sort,
+                    genres = r.genres,
+                    status = r.status,
+                    format = r.format,
+                    seasonYear = r.seasonYear,
+                    startYear = r.startYear,
+                    page = r.page,
+                    results = (malRes?.data?.map { Media(it.node, isAnime) } ?: emptyList()).toMutableList(),
+                    hasNextPage = malRes?.paging?.next != null,
+                ))
+                return
+            }
+
+            val jikanType = if (isAnime) "anime" else "manga"
+            val jikanStatus = when (r.status?.uppercase()) {
+                "RELEASING", "AIRING" -> "airing"
+                "FINISHED", "COMPLETE" -> "complete"
+                "NOT_YET_RELEASED", "UPCOMING" -> "upcoming"
+                else -> null
+            }
+            val (orderBy, sortDir) = when (r.sort) {
+                Anilist.sortBy[0] -> "score" to "desc"
+                Anilist.sortBy[1] -> "members" to "desc"
+                Anilist.sortBy[2] -> "members" to "desc"
+                Anilist.sortBy[3] -> "start_date" to "desc"
+                Anilist.sortBy[4] -> "title" to "asc"
+                Anilist.sortBy[5] -> "title" to "desc"
+                else -> "members" to "desc"
+            }
+            val jikanGenreMap = mapOf(
+                "Action" to 1, "Adventure" to 2, "Cars" to 3, "Comedy" to 4,
+                "Mystery" to 7, "Drama" to 8, "Ecchi" to 9, "Fantasy" to 10,
+                "Game" to 11, "Historical" to 13, "Horror" to 14, "Kids" to 15,
+                "Magic" to 16, "Martial Arts" to 17, "Mecha" to 18, "Music" to 19,
+                "Parody" to 20, "Samurai" to 21, "Romance" to 22, "School" to 23,
+                "Sci-Fi" to 24, "Shoujo" to 25, "Girls Love" to 26, "Shounen" to 27,
+                "Boys Love" to 28, "Space" to 29, "Sports" to 30, "Super Power" to 31,
+                "Vampire" to 32, "Harem" to 35, "Slice of Life" to 36, "Supernatural" to 37,
+                "Military" to 38, "Police" to 39, "Psychological" to 40, "Thriller" to 41,
+                "Seinen" to 42, "Josei" to 43, "Gourmet" to 47, "Work" to 48,
+                "Erotica" to 49, "Isekai" to 62
+            )
+            val genresParam = r.genres?.mapNotNull { jikanGenreMap[it] }?.joinToString(",")
+
+            val jikanFormat = r.format?.lowercase()?.let {
+                when (it) {
+                    "tv", "movie", "ova", "special", "ona", "music" -> it
+                    "tv_short" -> "tv"
+                    "manga", "novel", "light_novel", "oneshot", "doujin", "manhwa", "manhua" -> it.replace("_", "")
+                    else -> null
+                }
+            }
+
+            val year = if (isAnime) r.seasonYear else r.startYear
+            val (startDate, endDate) = if (year != null) "$year-01-01" to "$year-12-31" else null to null
+            val res = MAL.jikan.search(
+                query = r.search ?: "",
+                endpoint = jikanType,
+                type = jikanFormat,
+                page = r.page,
+                status = jikanStatus,
+                orderBy = orderBy,
+                sort = sortDir,
+                genres = genresParam,
+                startDate = startDate,
+                endDate = endDate,
+                sfw = !r.isAdult,
+            )
+            aniMangaResult.postValue(AniMangaSearchResults(
+                type = r.type,
+                isAdult = r.isAdult,
+                search = r.search,
+                sort = r.sort,
+                genres = r.genres,
+                status = r.status,
+                format = r.format,
+                seasonYear = r.seasonYear,
+                startYear = r.startYear,
+                page = r.page,
+                results = (res?.data?.map { Media(it, isAnime) } ?: emptyList()).toMutableList(),
+                hasNextPage = res?.pagination?.hasNextPage ?: false,
+            ))
+            return
+        }
+        aniMangaResult.postValue(
+            Anilist.query.searchAniManga(
+                r.type,
+                r.page,
+                r.perPage,
+                r.search,
+                r.sort,
+                r.genres,
+                r.tags,
+                r.status,
+                r.source,
+                r.format,
+                r.countryOfOrigin,
+                r.isAdult,
+                r.onList,
+                r.excludedGenres,
+                r.excludedTags,
+                r.startYear,
+                r.seasonYear,
+                r.season,
+            )
         )
-    )
+    }
 
     private suspend fun loadCharacterSearch(r: CharacterSearchResults) = characterResult.postValue(
         Anilist.query.searchCharacters(
@@ -505,28 +860,102 @@ class AnilistSearch : ViewModel() {
         )
     )
 
-    private suspend fun loadNextAniMangaPage(r: AniMangaSearchResults) = aniMangaResult.postValue(
-        Anilist.query.searchAniManga(
-            r.type,
-            r.page + 1,
-            r.perPage,
-            r.search,
-            r.sort,
-            r.genres,
-            r.tags,
-            r.status,
-            r.source,
-            r.format,
-            r.countryOfOrigin,
-            r.isAdult,
-            r.onList,
-            r.excludedGenres,
-            r.excludedTags,
-            r.startYear,
-            r.seasonYear,
-            r.season
+    private suspend fun loadNextAniMangaPage(r: AniMangaSearchResults) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            val isAnime = r.type == "ANIME"
+            val jikanEndpoint = if (isAnime) "anime" else "manga"
+            val jikanStatus = when (r.status?.uppercase()) {
+                "RELEASING", "AIRING" -> "airing"
+                "FINISHED", "COMPLETE" -> "complete"
+                "NOT_YET_RELEASED", "UPCOMING" -> "upcoming"
+                else -> null
+            }
+            val (orderBy, sortDir) = when (r.sort) {
+                Anilist.sortBy[0] -> "score" to "desc"
+                Anilist.sortBy[1] -> "members" to "desc"
+                Anilist.sortBy[2] -> "members" to "desc"
+                Anilist.sortBy[3] -> "start_date" to "desc"
+                Anilist.sortBy[4] -> "title" to "asc"
+                Anilist.sortBy[5] -> "title" to "desc"
+                else -> "members" to "desc"
+            }
+            val jikanGenreMap = mapOf(
+                "Action" to 1, "Adventure" to 2, "Cars" to 3, "Comedy" to 4,
+                "Mystery" to 7, "Drama" to 8, "Ecchi" to 9, "Fantasy" to 10,
+                "Game" to 11, "Historical" to 13, "Horror" to 14, "Kids" to 15,
+                "Magic" to 16, "Martial Arts" to 17, "Mecha" to 18, "Music" to 19,
+                "Parody" to 20, "Samurai" to 21, "Romance" to 22, "School" to 23,
+                "Sci-Fi" to 24, "Shoujo" to 25, "Girls Love" to 26, "Shounen" to 27,
+                "Boys Love" to 28, "Space" to 29, "Sports" to 30, "Super Power" to 31,
+                "Vampire" to 32, "Harem" to 35, "Slice of Life" to 36, "Supernatural" to 37,
+                "Military" to 38, "Police" to 39, "Psychological" to 40, "Thriller" to 41,
+                "Seinen" to 42, "Josei" to 43, "Gourmet" to 47, "Work" to 48,
+                "Erotica" to 49, "Isekai" to 62
+            )
+            val genresParam = r.genres?.mapNotNull { jikanGenreMap[it] }?.joinToString(",")
+            val jikanFormat = r.format?.lowercase()?.let {
+                when (it) {
+                    "tv", "movie", "ova", "special", "ona", "music" -> it
+                    "tv_short" -> "tv"
+                    "manga", "novel", "light_novel", "oneshot", "doujin", "manhwa", "manhua" -> it.replace("_", "")
+                    else -> null
+                }
+            }
+            val year = if (isAnime) r.seasonYear else r.startYear
+            val (startDate, endDate) = if (year != null) "$year-01-01" to "$year-12-31" else null to null
+            val res = MAL.jikan.search(
+                query = r.search ?: "",
+                endpoint = jikanEndpoint,
+                type = jikanFormat,
+                page = r.page + 1,
+                status = jikanStatus,
+                orderBy = orderBy,
+                sort = sortDir,
+                genres = genresParam,
+                startDate = startDate,
+                endDate = endDate,
+                sfw = !r.isAdult,
+            )
+            aniMangaResult.postValue(AniMangaSearchResults(
+                type = r.type,
+                isAdult = r.isAdult,
+                search = r.search,
+                sort = r.sort,
+                genres = r.genres,
+                status = r.status,
+                format = r.format,
+                seasonYear = r.seasonYear,
+                startYear = r.startYear,
+                page = r.page + 1,
+                results = (res?.data?.map { Media(it, isAnime) } ?: emptyList()).toMutableList(),
+                hasNextPage = res?.pagination?.hasNextPage ?: false,
+            ))
+            return
+        }
+        aniMangaResult.postValue(
+            Anilist.query.searchAniManga(
+                r.type,
+                r.page + 1,
+                r.perPage,
+                r.search,
+                r.sort,
+                r.genres,
+                r.tags,
+                r.status,
+                r.source,
+                r.format,
+                r.countryOfOrigin,
+                r.isAdult,
+                r.onList,
+                r.excludedGenres,
+                r.excludedTags,
+                r.startYear,
+                r.seasonYear,
+                r.season
+            )
         )
-    )
+    }
 
     private suspend fun loadNextCharacterPage(r: CharacterSearchResults) =
         characterResult.postValue(

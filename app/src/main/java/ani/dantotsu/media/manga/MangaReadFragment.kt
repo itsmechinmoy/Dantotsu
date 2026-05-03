@@ -183,7 +183,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                 progress = View.GONE
                 binding.mediaInfoProgressBar.visibility = progress
 
-                if (media.format == "MANGA" || media.format == "ONE SHOT" || (media.format == "LOCAL" && media.manga != null)) {
+                if (media.format in setOf("MANGA", "ONE SHOT", "MANHWA", "MANHUA", "ONE_SHOT", "DOUJINSHI") || (media.format == "LOCAL" && media.manga != null)) {
                     // For LOCAL
                     if (media.format != "LOCAL" || media.selected == null) {
                         media.selected = model.loadSelected(media)
