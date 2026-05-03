@@ -199,7 +199,10 @@ class OtherDetailsViewModel : ViewModel() {
                                         
                                         tf.timeZone = TimeZone.getDefault()
                                         timeStr = tf.format(targetCal.time)
-                                        sortTime = (targetCal.timeInMillis / 1000).toInt()
+                                        
+                                        val localCal = Calendar.getInstance()
+                                        localCal.time = targetCal.time
+                                        sortTime = localCal.get(Calendar.HOUR_OF_DAY) * 60 + localCal.get(Calendar.MINUTE)
                                     }
                                 } catch (_: Exception) {
                                     timeStr = "$bTime $bTz"
@@ -223,7 +226,7 @@ class OtherDetailsViewModel : ViewModel() {
                     page++
                 }
 
-                allMedia.sortByDescending { it.userUpdatedAt ?: Long.MIN_VALUE }
+                allMedia.sortBy { it.userUpdatedAt ?: Long.MAX_VALUE }
 
                 allMap[dateStr] = allMedia
                 val libList = allMedia.filter { watchingMalIds.contains(it.id) }.toMutableList()
