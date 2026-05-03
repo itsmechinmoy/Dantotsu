@@ -20,6 +20,7 @@ import androidx.viewpager2.widget.ViewPager2
 import ani.dantotsu.MediaPageTransformer
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.databinding.ItemMangaPageBinding
 import ani.dantotsu.databinding.LayoutTrendingBinding
 import ani.dantotsu.getAppString
@@ -79,7 +80,8 @@ class MangaPageAdapter : RecyclerView.Adapter<MangaPageAdapter.MangaPageViewHold
         }
 
         updateAvatar()
-        trendingBinding.notificationCount.isVisible = Anilist.unreadNotificationCount > 0
+        val isRescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        trendingBinding.notificationCount.isVisible = !isRescueMode && Anilist.unreadNotificationCount > 0
                 && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
         trendingBinding.notificationCount.text = Anilist.unreadNotificationCount.toString()
         trendingBinding.searchBar.hint = binding.root.context.getString(R.string.search)
@@ -106,11 +108,16 @@ class MangaPageAdapter : RecyclerView.Adapter<MangaPageAdapter.MangaPageViewHold
         }
         trendingBinding.userAvatar.setOnLongClickListener { view ->
             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            ContextCompat.startActivity(
-                view.context,
-                Intent(view.context, ProfileActivity::class.java)
-                    .putExtra("userId", Anilist.userid), null
-            )
+            val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+            if (!rescueMode) {
+                ContextCompat.startActivity(
+                    view.context,
+                    Intent(view.context, ProfileActivity::class.java)
+                        .putExtra("userId", Anilist.userid), null
+                )
+            } else {
+                ani.dantotsu.toast(view.context.getString(R.string.rescue_mode_active))
+            }
             false
         }
 
@@ -139,7 +146,8 @@ class MangaPageAdapter : RecyclerView.Adapter<MangaPageAdapter.MangaPageViewHold
             )
         }
 
-        binding.mangaIncludeList.isVisible = Anilist.token != null
+        val rescueMode = PrefManager.getVal<Boolean>(PrefName.RescueMode)
+        binding.mangaIncludeList.isVisible = if (rescueMode) MAL.token != null else Anilist.token != null
 
         binding.mangaIncludeList.isChecked = PrefManager.getVal(PrefName.PopularMangaList)
 
@@ -297,15 +305,18 @@ class MangaPageAdapter : RecyclerView.Adapter<MangaPageAdapter.MangaPageViewHold
     }
 
     fun updateAvatar() {
-        if (Anilist.avatar != null && ready.value == true) {
-            trendingBinding.userAvatar.loadImage(Anilist.avatar)
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        val avatarUrl = if (rescueMode) MAL.avatar else Anilist.avatar
+        if (avatarUrl != null && ready.value == true) {
+            trendingBinding.userAvatar.loadImage(avatarUrl)
             trendingBinding.userAvatar.imageTintList = null
         }
     }
 
     fun updateNotificationCount() {
         if (this::binding.isInitialized) {
-            trendingBinding.notificationCount.isVisible = Anilist.unreadNotificationCount > 0
+            val isRescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+            trendingBinding.notificationCount.isVisible = !isRescueMode && Anilist.unreadNotificationCount > 0
                     && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
             trendingBinding.notificationCount.text = Anilist.unreadNotificationCount.toString()
         }

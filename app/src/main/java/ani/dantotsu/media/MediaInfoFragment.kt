@@ -381,11 +381,12 @@ class MediaInfoFragment : Fragment() {
                 }
                 if (!media.users.isNullOrEmpty() && !offline) {
                     val users: ArrayList<User> = media.users ?: arrayListOf()
-                    if (Anilist.token != null && media.userStatus != null) {
+                    val currentUserId = Anilist.userid
+                    if (Anilist.token != null && currentUserId != null && media.userStatus != null) {
                         users.add(
                             0,
                             User(
-                                id = Anilist.userid!!,
+                                id = currentUserId,
                                 name = getString(R.string.you),
                                 pfp = Anilist.avatar,
                                 banner = "",
@@ -475,7 +476,7 @@ class MediaInfoFragment : Fragment() {
                         webChromeClient = MyChrome()
 
                         val trailerId = media.trailer!!
-                        
+
                         addJavascriptInterface(object {
                             @android.webkit.JavascriptInterface
                             fun loadVideo() {
@@ -485,16 +486,16 @@ class MediaInfoFragment : Fragment() {
                                     <head>
                                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
                                         <style>
-                                            * { 
-                                                margin: 0; 
-                                                padding: 0; 
+                                            * {
+                                                margin: 0;
+                                                padding: 0;
                                                 box-sizing: border-box;
                                                 -webkit-tap-highlight-color: transparent;
                                             }
-                                            html, body { 
-                                                width: 100%; 
-                                                height: 100%; 
-                                                background: #000; 
+                                            html, body {
+                                                width: 100%;
+                                                height: 100%;
+                                                background: #000;
                                                 overflow: hidden;
                                             }
                                             iframe {
@@ -506,7 +507,7 @@ class MediaInfoFragment : Fragment() {
                                         </style>
                                     </head>
                                     <body>
-                                        <iframe 
+                                        <iframe
                                             src="https://www.youtube-nocookie.com/embed/$trailerId?autoplay=1&rel=0&modestbranding=1&controls=1&fs=0"
                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                             frameborder="0">
@@ -528,18 +529,18 @@ class MediaInfoFragment : Fragment() {
                             <head>
                                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                                 <style>
-                                    * { 
-                                        margin: 0; 
-                                        padding: 0; 
+                                    * {
+                                        margin: 0;
+                                        padding: 0;
                                         box-sizing: border-box;
                                         -webkit-tap-highlight-color: transparent;
                                         -webkit-touch-callout: none;
                                         -webkit-user-select: none;
                                         user-select: none;
                                     }
-                                    body, html { 
-                                        width: 100%; 
-                                        height: 100%; 
+                                    body, html {
+                                        width: 100%;
+                                        height: 100%;
                                         background: #000;
                                         overflow: hidden;
                                     }

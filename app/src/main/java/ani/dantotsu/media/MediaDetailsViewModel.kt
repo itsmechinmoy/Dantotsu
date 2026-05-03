@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.currContext
 import ani.dantotsu.media.anime.Episode
 import ani.dantotsu.media.anime.SelectorDialogFragment
@@ -85,6 +86,7 @@ class MediaDetailsViewModel : ViewModel() {
     fun loadMedia(m: Media) {
         if (!loading) {
             loading = true
+            val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 if (m.id == 0 && m.format?.startsWith("LOCAL") == true) {
                     m.folderName = m.folderName ?: m.name
@@ -127,12 +129,65 @@ class MediaDetailsViewModel : ViewModel() {
                 } else if (m.id == 0) {
                     m.folderName = m.folderName ?: m.name
                     media.postValue(m)
+                } else if (rescueMode && m.idMAL != null) {
+                    tryWithSuspend {
+                        val isAnime = m.anime != null
+                        val malId = m.idMAL!!
+                        val malNode = if (isAnime)
+                            MAL.query.getAnimeDetails(malId)
+                        else
+                            MAL.query.getMangaDetails(malId)
+                        if (malNode != null) {
+                            val detailed = Media(malNode, isAnime)
+                            detailed.userProgress = m.userProgress ?: detailed.userProgress
+                            detailed.userStatus = m.userStatus ?: detailed.userStatus
+                            detailed.userScore = if (m.userScore != 0) m.userScore else detailed.userScore
+                            detailed.isListPrivate = m.isListPrivate
+                            detailed.userListId = m.userListId
+                            detailed.userRepeat = m.userRepeat
+                            detailed.userUpdatedAt = m.userUpdatedAt ?: detailed.userUpdatedAt
+                            detailed.userCompletedAt = m.userCompletedAt
+                            detailed.userStartedAt = m.userStartedAt
+                            detailed.cameFromContinue = m.cameFromContinue
+                            detailed.selected = m.selected
+                            detailed.isFav = m.isFav
+                            detailed.shareLink = "https://myanimelist.net/${if (isAnime) "anime" else "manga"}/$malId"
+                            media.postValue(detailed)
+                        } else {
+                            val jikanData = if (isAnime)
+                                MAL.jikan.getAnimeById(malId)
+                            else
+                                MAL.jikan.getMangaById(malId)
+                            if (jikanData != null) {
+                                val detailed = Media(jikanData, isAnime)
+                                detailed.userProgress = m.userProgress ?: detailed.userProgress
+                                detailed.userStatus = m.userStatus ?: detailed.userStatus
+                                detailed.userScore = if (m.userScore != 0) m.userScore else detailed.userScore
+                                detailed.isListPrivate = m.isListPrivate
+                                detailed.userListId = m.userListId
+                                detailed.userRepeat = m.userRepeat
+                                detailed.userUpdatedAt = m.userUpdatedAt
+                                detailed.userCompletedAt = m.userCompletedAt
+                                detailed.userStartedAt = m.userStartedAt
+                                detailed.cameFromContinue = m.cameFromContinue
+                                detailed.selected = m.selected
+                                detailed.isFav = m.isFav
+                                detailed.shareLink = "https://myanimelist.net/${if (isAnime) "anime" else "manga"}/$malId"
+                                media.postValue(detailed)
+                            } else {
+                                media.postValue(m)
+                            }
+                        }
+                    }
+                } else if (rescueMode) {
+                    media.postValue(m)
                 } else {
                     media.postValue(Anilist.query.mediaDetails(m))
                 }
                 loading = false
             }
         }
+
         // Prefetch IMDB ID asynchronously to cache it before the player opens
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -147,14 +202,16 @@ class MediaDetailsViewModel : ViewModel() {
 
     fun setMedia(m: Media) {
         media.postValue(m)
-        // Prefetch IMDB ID asynchronously to cache it before the player opens
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                if (m.idIMDB == null) {
-                    m.idIMDB = ani.dantotsu.others.IdMappers.getImdbId(m.id)
+
+        if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    if (m.idIMDB == null) {
+                        m.idIMDB = ani.dantotsu.others.IdMappers.getImdbId(m.id)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
         }
     }

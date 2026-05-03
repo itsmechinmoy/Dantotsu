@@ -98,6 +98,17 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
 
         activity = requireActivity() as SearchActivity
 
+        val rescueMode: Boolean = ani.dantotsu.settings.saving.PrefManager.getVal(
+            ani.dantotsu.settings.saving.PrefName.RescueMode
+        )
+        if (rescueMode) {
+            binding.countryFilter.visibility = View.GONE
+            (binding.searchSource.parent as? View)?.visibility = View.GONE
+            (binding.searchTagsGrid.parent as? View)?.visibility = View.GONE
+            binding.searchFilterTags.visibility = View.GONE
+            binding.searchSeasonCont.visibility = View.GONE
+        }
+
         selectedGenres = activity.aniMangaResult.genres ?: mutableListOf()
         exGenres = activity.aniMangaResult.excludedGenres ?: mutableListOf()
         selectedTags = activity.aniMangaResult.tags ?: mutableListOf()
@@ -241,22 +252,33 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
         }
 
         binding.searchFilterApply.setOnClickListener {
+            val isRescueModeApply: Boolean = ani.dantotsu.settings.saving.PrefManager.getVal(
+                ani.dantotsu.settings.saving.PrefName.RescueMode
+            )
             activity.aniMangaResult.apply {
                 status = binding.searchStatus.text.toString().replace(" ", "_").ifBlank { null }
-                source = binding.searchSource.text.toString().replace(" ", "_").ifBlank { null }
                 format = binding.searchFormat.text.toString().ifBlank { null }
-                season = binding.searchSeason.text.toString().ifBlank { null }
                 if (activity.aniMangaResult.type == "ANIME") {
                     seasonYear = binding.searchYear.text.toString().toIntOrNull()
                 } else {
                     startYear = binding.searchYear.text.toString().toIntOrNull()
                 }
                 sort = activity.aniMangaResult.sort
-                countryOfOrigin = activity.aniMangaResult.countryOfOrigin
                 genres = selectedGenres
-                tags = selectedTags
                 excludedGenres = exGenres
-                excludedTags = exTags
+                if (!isRescueModeApply) {
+                    source = binding.searchSource.text.toString().replace(" ", "_").ifBlank { null }
+                    season = binding.searchSeason.text.toString().ifBlank { null }
+                    countryOfOrigin = activity.aniMangaResult.countryOfOrigin
+                    tags = selectedTags
+                    excludedTags = exTags
+                } else {
+                    source = null
+                    season = null
+                    countryOfOrigin = null
+                    tags = mutableListOf()
+                    excludedTags = mutableListOf()
+                }
             }
             activity.updateChips.invoke()
             activity.search()

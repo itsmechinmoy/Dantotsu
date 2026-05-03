@@ -436,7 +436,7 @@ data class DownloadedType(
 }
 
 private fun bytesToDouble(bytes: Long): Double {
-    if (bytes < 0) return 0.0
+    if (bytes <= 0) return 0.0
     val unit = 1000
     val exp = (ln(bytes.toDouble()) / ln(unit.toDouble())).toInt()
     return bytes / unit.toDouble().pow(exp.toDouble())

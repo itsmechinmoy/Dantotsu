@@ -381,7 +381,7 @@ class OfflineAnimeFragment : Fragment(), OfflineAnimeSearchListener {
             val totalEpisode =
                 if (mediaModel.anime?.nextAiringEpisode != null) (mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
                     ?: "~").toString()) else (mediaModel.anime?.totalEpisodes ?: "~").toString()
-            val chapters = " Chapters"
+            val chapters = " Episodes"
             val totalEpisodesList =
                 if (mediaModel.anime?.nextAiringEpisode != null) (mediaModel.anime.nextAiringEpisode.toString()) else (mediaModel.anime?.totalEpisodes
                     ?: "~").toString()

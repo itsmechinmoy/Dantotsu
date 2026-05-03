@@ -10,10 +10,14 @@ import ani.dantotsu.connections.anilist.api.MediaStreamingEpisode
 import ani.dantotsu.connections.anilist.api.MediaType
 import ani.dantotsu.connections.anilist.api.Query
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.mal.MalAnimeNode
+import ani.dantotsu.connections.mal.MalListEntry
+import ani.dantotsu.connections.mal.JikanMediaData
 import ani.dantotsu.media.anime.Anime
 import ani.dantotsu.media.manga.Manga
 import ani.dantotsu.profile.User
 import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -145,8 +149,141 @@ data class Media(
         this.relation = mediaEdge.relationType?.toString()
     }
 
+    constructor(node: MalAnimeNode, isAnime: Boolean) : this(
+        id = node.id,
+        idMAL = node.id,
+        name = node.alternativeTitles?.en ?: node.title,
+        nameRomaji = node.title,
+        userPreferredName = node.alternativeTitles?.en ?: node.title,
+        cover = node.mainPicture?.large ?: node.mainPicture?.medium,
+        banner = node.mainPicture?.large,
+        status = when (node.status?.lowercase()) {
+            "currently_airing", "currently_publishing" -> "RELEASING"
+            "finished_airing", "finished" -> "FINISHED"
+            "not_yet_aired", "not_yet_published" -> "NOT_YET_RELEASED"
+            "on_hiatus" -> "HIATUS"
+            "discontinued" -> "CANCELLED"
+            else -> node.status?.replace("_", " ")?.uppercase()
+        },
+        isAdult = node.rating == "rx",
+        meanScore = node.mean?.times(10)?.toInt(),
+        popularity = node.popularity,
+        format = node.mediaType?.uppercase(),
+        source = node.source?.replace("_", " "),
+        genres = ArrayList(node.genres?.map { it.name } ?: emptyList()),
+        description = node.synopsis,
+        startDate = parseIsoDate(node.startDate),
+        endDate = parseIsoDate(node.endDate),
+        countryOfOrigin = when (node.mediaType?.lowercase()) {
+            "manhwa" -> "KR"
+            "manhua" -> "CN"
+            else -> if (!isAnime) "JP" else null
+        },
+        userStatus = if (isAnime && node.myListStatus?.isRewatching == true ||
+                         !isAnime && node.myListStatus?.isRereading == true)
+            "REPEATING"
+        else
+            convertMalStatusToAnilist(node.myListStatus?.status, isAnime),
+        userProgress = if (isAnime) node.myListStatus?.numEpisodesWatched else node.myListStatus?.numChaptersRead,
+        userScore = node.myListStatus?.score?.times(10) ?: 0,
+        anime = if (isAnime) Anime(
+            totalEpisodes = if (node.numEpisodes == 0) null else node.numEpisodes,
+            season = node.startSeason?.season,
+            seasonYear = node.startSeason?.year,
+            episodeDuration = node.averageEpisodeDuration?.div(60),
+        ) else null,
+        manga = if (!isAnime) Manga(
+            totalChapters = if (node.numChapters == 0) null else node.numChapters,
+        ) else null,
+        userStartedAt = parseIsoDate(node.myListStatus?.startDate) ?: FuzzyDate(),
+        userCompletedAt = parseIsoDate(node.myListStatus?.finishDate) ?: FuzzyDate(),
+    )
+
+    constructor(entry: MalListEntry, isAnime: Boolean) : this(entry.node, isAnime) {
+        val ls = entry.listStatus
+        this.userProgress = if (isAnime) ls?.numEpisodesWatched else ls?.numChaptersRead
+        this.userScore = ls?.score?.times(10) ?: 0
+        this.userStatus = if (isAnime && ls?.isRewatching == true ||
+                              !isAnime && ls?.isRereading == true)
+            "REPEATING"
+        else
+            convertMalStatusToAnilist(ls?.status, isAnime)
+        this.cameFromContinue = true
+        ls?.startDate?.let { dateStr ->
+            parseIsoDate(dateStr)?.let { this.userStartedAt = it }
+        }
+        ls?.finishDate?.let { dateStr ->
+            parseIsoDate(dateStr)?.let { this.userCompletedAt = it }
+        }
+    }
+
+    constructor(jikan: JikanMediaData, isAnime: Boolean) : this(
+        id = jikan.malId,
+        idMAL = jikan.malId,
+        name = jikan.titleEnglish ?: jikan.title,
+        nameRomaji = jikan.title ?: "",
+        userPreferredName = jikan.titleEnglish ?: jikan.title ?: "",
+        cover = jikan.images?.jpg?.largeImageUrl ?: jikan.images?.jpg?.imageUrl,
+        banner = jikan.images?.jpg?.largeImageUrl,
+        status = when (jikan.status?.lowercase()) {
+            "currently airing", "publishing" -> "RELEASING"
+            "finished airing", "finished" -> "FINISHED"
+            "not yet aired", "not yet published" -> "NOT_YET_RELEASED"
+            "on hiatus" -> "HIATUS"
+            "discontinued" -> "CANCELLED"
+            else -> jikan.status?.replace("_", " ")?.uppercase()
+        },
+        isAdult = jikan.rating?.contains("rx", true) == true,
+        meanScore = jikan.score?.times(10)?.toInt(),
+        popularity = jikan.popularity,
+        format = jikan.type?.uppercase(),
+        source = jikan.source?.replace("_", " "),
+        genres = ArrayList(jikan.genres?.map { it.name } ?: emptyList()),
+        description = jikan.synopsis,
+        startDate = parseIsoDate(if (isAnime) jikan.aired?.from else jikan.published?.from),
+        endDate = parseIsoDate(if (isAnime) jikan.aired?.to else jikan.published?.to),
+        countryOfOrigin = when (jikan.type?.lowercase()) {
+            "manhwa" -> "KR"
+            "manhua" -> "CN"
+            else -> if (!isAnime) "JP" else null
+        },
+        anime = if (isAnime) Anime(
+            totalEpisodes = if (jikan.episodes == 0) null else jikan.episodes,
+            season = jikan.season,
+            seasonYear = jikan.year,
+        ) else null,
+        manga = if (!isAnime) Manga(
+            totalChapters = if (jikan.chapters == 0) null else jikan.chapters,
+        ) else null,
+    )
+
     fun mainName() = name ?: nameMAL ?: nameRomaji
     fun mangaName() = if (countryOfOrigin != "JP") mainName() else nameRomaji
+}
+
+
+private fun parseIsoDate(dateStr: String?): FuzzyDate? {
+    if (dateStr.isNullOrBlank()) return null
+    val parts = dateStr.substringBefore('T').split("-")
+    val year = parts.getOrNull(0)?.toIntOrNull() ?: return null
+    return FuzzyDate(
+        year = year,
+        month = parts.getOrNull(1)?.toIntOrNull(),
+        day = parts.getOrNull(2)?.toIntOrNull(),
+    )
+}
+
+
+private fun convertMalStatusToAnilist(malStatus: String?, isAnime: Boolean): String? {
+    return when (malStatus?.lowercase()) {
+        "watching", "reading" -> "CURRENT"
+        "completed" -> "COMPLETED"
+        "on_hold" -> "PAUSED"
+        "dropped" -> "DROPPED"
+        "plan_to_watch", "plan_to_read" -> "PLANNING"
+        "rewatching", "rereading" -> "REPEATING"
+        else -> null 
+    }
 }
 
 fun Media?.deleteFromList(
@@ -156,25 +293,45 @@ fun Media?.deleteFromList(
     onNotFound: suspend () -> Unit
 ) {
     val id = this?.userListId
+    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
     scope.launch {
         withContext(Dispatchers.IO) {
             this@deleteFromList?.let { media ->
-                val _id = id ?: Anilist.query.userMediaDetails(media).userListId
-                _id?.let { listId ->
+                if (rescueMode) {
+                    
+                    val pending = ani.dantotsu.connections.PendingDeletion(
+                        mediaId = media.id,
+                        idMAL = media.idMAL,
+                        isAnime = media.anime != null,
+                    )
+                    val existing: List<ani.dantotsu.connections.PendingDeletion> =
+                        PrefManager.getVal(PrefName.PendingDeletions, listOf())
+                    val updated = existing.filterNot { it.mediaId == media.id } + pending
+                    PrefManager.setVal(PrefName.PendingDeletions, updated)
+                    val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
+                    PrefManager.setCustomVal("removeList", removeList.minus(media.id))
                     try {
-                        Anilist.mutation.deleteList(listId)
                         MAL.query.deleteList(media.anime != null, media.idMAL)
+                    } catch (_: Exception) { /* MAL delete failed; AniList sync still queued */ }
+                    onSuccess()
+                } else {
+                    val _id = id ?: Anilist.query.userMediaDetails(media).userListId
+                    _id?.let { listId ->
+                        try {
+                            Anilist.mutation.deleteList(listId)
+                            MAL.query.deleteList(media.anime != null, media.idMAL)
 
-                        val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
-                        PrefManager.setCustomVal(
-                            "removeList", removeList.minus(listId)
-                        )
+                            val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
+                            PrefManager.setCustomVal(
+                                "removeList", removeList.minus(media.id)
+                            )
 
-                        onSuccess()
-                    } catch (e: Exception) {
-                        onError(e)
-                    }
-                } ?: onNotFound()
+                            onSuccess()
+                        } catch (e: Exception) {
+                            onError(e)
+                        }
+                    } ?: onNotFound()
+                }
             }
         }
     }

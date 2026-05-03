@@ -18,11 +18,14 @@ import java.security.SecureRandom
 
 object MAL {
     val query: MALQueries = MALQueries()
+    val jikan: JikanQueries = JikanQueries()
     const val clientId = "86b35cf02205a0303da3aaea1c9e33f3"
     var username: String? = null
     var avatar: String? = null
     var token: String? = null
     var userid: Int? = null
+    var episodesWatched: Int? = null
+    var chaptersRead: Int? = null
 
     fun loginIntent(context: Context) {
         val codeVerifierBytes = ByteArray(96)
@@ -73,6 +76,7 @@ object MAL {
                     ?: throw Exception(currContext()?.getString(R.string.refreshing_token_failed))
             token = res.accessToken
             username = PrefManager.getVal(PrefName.MALUserName, null as String?)
+            avatar = PrefManager.getVal(PrefName.MALAvatar, null as String?)
             return@tryWithSuspend true
         } ?: false
     }
@@ -82,6 +86,8 @@ object MAL {
         username = null
         userid = null
         avatar = null
+        episodesWatched = null
+        chaptersRead = null
         PrefManager.removeVal(PrefName.MALToken)
     }
 

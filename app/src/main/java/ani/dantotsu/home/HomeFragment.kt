@@ -21,11 +21,13 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import ani.dantotsu.MainActivity
 import ani.dantotsu.R
 import ani.dantotsu.Refresh
 import ani.dantotsu.blurImage
 import ani.dantotsu.bottomBar
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.connections.anilist.AnilistHomeViewModel
 import ani.dantotsu.connections.anilist.getUserId
 import ani.dantotsu.currContext
@@ -47,7 +49,9 @@ import ani.dantotsu.settings.saving.PrefManager.asLiveBool
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.statusBarHeight
+import ani.dantotsu.tryWithSuspend
 import ani.dantotsu.util.Logger
+import ani.dantotsu.util.customAlertDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -82,34 +86,51 @@ class HomeFragment : Fragment() {
         fun load() {
             Logger.log("Loading HomeFragment")
             if (activity != null && _binding != null) lifecycleScope.launch(Dispatchers.Main) {
-                binding.homeUserName.text = Anilist.username
-                binding.homeUserEpisodesWatched.text = Anilist.episodesWatched.toString()
-                binding.homeUserChaptersRead.text = Anilist.chapterRead.toString()
-                binding.homeUserAvatar.loadImage(Anilist.avatar)
+                val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+                if (rescueMode && MAL.token != null) {
+                    binding.homeUserName.text = MAL.username ?: Anilist.username
+                    binding.homeUserAvatar.loadImage(MAL.avatar ?: Anilist.avatar)
+                } else {
+                    binding.homeUserName.text = Anilist.username
+                    binding.homeUserAvatar.loadImage(Anilist.avatar)
+                }
+
+                if (!rescueMode) {
+                    binding.homeUserEpisodesWatched.text = Anilist.episodesWatched.toString()
+                    binding.homeUserChaptersRead.text = Anilist.chapterRead.toString()
+                    binding.homeNotificationCount.isVisible = Anilist.unreadNotificationCount > 0
+                            && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
+                    binding.homeNotificationCount.text = Anilist.unreadNotificationCount.toString()
+                } else {
+                    binding.homeUserEpisodesWatched.text = MAL.episodesWatched?.toString() ?: "—"
+                    binding.homeUserChaptersRead.text = MAL.chaptersRead?.toString() ?: "—"
+                    binding.homeNotificationCount.isVisible = false
+                }
+
                 val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
+                val bannerUrl = if (rescueMode) (Anilist.bg ?: MAL.avatar) else Anilist.bg
                 blurImage(
                     if (bannerAnimations) binding.homeUserBg else binding.homeUserBgNoKen,
-                    Anilist.bg
+                    bannerUrl
                 )
                 binding.homeUserDataProgressBar.visibility = View.GONE
-                binding.homeNotificationCount.isVisible = Anilist.unreadNotificationCount > 0
-                        && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
-                binding.homeNotificationCount.text = Anilist.unreadNotificationCount.toString()
 
+                val listUserId = Anilist.userid ?: 0
+                val listUsername = if (rescueMode) MAL.username ?: Anilist.username else Anilist.username
                 binding.homeAnimeList.setOnClickListener {
                     ContextCompat.startActivity(
                         requireActivity(), Intent(requireActivity(), ListActivity::class.java)
                             .putExtra("anime", true)
-                            .putExtra("userId", Anilist.userid)
-                            .putExtra("username", Anilist.username), null
+                            .putExtra("userId", listUserId)
+                            .putExtra("username", listUsername), null
                     )
                 }
                 binding.homeMangaList.setOnClickListener {
                     ContextCompat.startActivity(
                         requireActivity(), Intent(requireActivity(), ListActivity::class.java)
                             .putExtra("anime", false)
-                            .putExtra("userId", Anilist.userid)
-                            .putExtra("username", Anilist.username), null
+                            .putExtra("userId", listUserId)
+                            .putExtra("username", listUsername), null
                     )
                 }
 
@@ -142,10 +163,14 @@ class HomeFragment : Fragment() {
         }
         binding.homeUserAvatarContainer.setOnLongClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            ContextCompat.startActivity(
-                requireContext(), Intent(requireContext(), ProfileActivity::class.java)
-                    .putExtra("userId", Anilist.userid), null
-            )
+            if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+                ContextCompat.startActivity(
+                    requireContext(), Intent(requireContext(), ProfileActivity::class.java)
+                        .putExtra("userId", Anilist.userid), null
+                )
+            } else {
+                snackString(getString(R.string.rescue_mode_active))
+            }
             false
         }
 
@@ -477,28 +502,90 @@ class HomeFragment : Fragment() {
 
         var running = false
         val live = Refresh.activity.getOrPut(1) { MutableLiveData(true) }
+
+        PrefManager.getLiveVal(PrefName.RescueMode, false).asLiveBool()
+            .observe(viewLifecycleOwner) { inRescueMode ->
+                
+                val alOnlySections = listOf(
+                    binding.homeFavAnimeContainer,
+                    binding.homeFavMangaContainer,
+                    binding.homeUserStatusContainer,
+                    binding.homeMissingSequelsContainer,
+                )
+                binding.homeRescueModeBanner.visibility =
+                    if (inRescueMode) View.VISIBLE else View.GONE
+                if (inRescueMode) {
+                    alOnlySections.forEach { it.visibility = View.GONE }
+
+                    binding.homeContinueWatchingContainer.visibility = View.VISIBLE
+                    binding.homePlannedAnimeContainer.visibility = View.VISIBLE
+                    binding.homeContinueReadingContainer.visibility = View.VISIBLE
+                    binding.homePlannedMangaContainer.visibility = View.VISIBLE
+                } else {
+                    val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
+                    val alOnlyIndices = listOf(1, 4, 7, 8)
+                    alOnlySections.forEachIndexed { idx, view ->
+                        if (homeLayoutShow.getOrElse(alOnlyIndices[idx]) { true }) {
+                            view.visibility = View.VISIBLE
+                        } else {
+                            view.visibility = View.GONE
+                        }
+                    }
+                }
+            }
+
         live.observe(viewLifecycleOwner) { shouldRefresh ->
             if (!running && shouldRefresh) {
                 running = true
                 scope.launch {
                     withContext(Dispatchers.IO) {
-                        // Get user data first
-                        Anilist.userid =
-                            PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
-                                ?.toIntOrNull()
-                        if (Anilist.userid == null) {
-                            withContext(Dispatchers.Main) {
+                        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+                        if (rescueMode) {
+                            if (MAL.token != null && MAL.episodesWatched == null) {
+                                tryWithSuspend { MAL.query.getUserData() }
+                            }
+                            withContext(Dispatchers.Main) { load() }
+                        } else {
+                            Anilist.userid =
+                                PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
+                                    ?.toIntOrNull()
+                            if (Anilist.userid == null) {
+                                withContext(Dispatchers.Main) {
+                                    getUserId(requireContext()) {
+                                        load()
+                                    }
+                                }
+                            } else {
                                 getUserId(requireContext()) {
                                     load()
                                 }
                             }
-                        } else {
-                            getUserId(requireContext()) {
-                                load()
+                        }
+                        model.setListImages()
+                        model.loaded = true
+                    }
+
+                    if (Anilist.anilistDisabledSignal && !PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+                        withContext(Dispatchers.Main) {
+                            if (isAdded && _binding != null) {
+                                requireContext().customAlertDialog().apply {
+                                    setTitle(R.string.rescue_mode_prompt_title)
+                                    setMessage(R.string.rescue_mode_prompt_message)
+                                    setPosButton(R.string.rescue_mode_enable) {
+                                        PrefManager.setVal(PrefName.RescueMode, true)
+                                        Anilist.anilistDisabledSignal = false
+                                        val intent = Intent(requireContext(), MainActivity::class.java)
+                                        intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                                        startActivity(intent)
+                                        activity?.overridePendingTransition(0, 0)
+                                        activity?.finish()
+                                        activity?.overridePendingTransition(0, 0)
+                                    }
+                                    setNegButton(R.string.no)
+                                    show()
+                                }
                             }
                         }
-                        model.loaded = true
-                        model.setListImages()
                     }
 
                     var empty = true
@@ -509,8 +596,8 @@ class HomeFragment : Fragment() {
                     }
 
                     withContext(Dispatchers.Main) {
-                        homeLayoutShow.indices.forEach { i ->
-                            if (homeLayoutShow.elementAt(i)) {
+                        containers.indices.forEach { i ->
+                            if (homeLayoutShow.getOrElse(i) { true }) {
                                 empty = false
                             } else {
                                 containers[i].visibility = View.GONE
@@ -518,7 +605,7 @@ class HomeFragment : Fragment() {
                         }
 
                         var insertIndex = binding.homeContainer.indexOfChild(binding.homeHiddenItemsContainer) + 1
-                        
+
                         homeLayoutOrder.forEach { i ->
                             val container = containers.getOrNull(i)
                             if (container != null) {
@@ -529,9 +616,14 @@ class HomeFragment : Fragment() {
                         }
                     }
 
+                    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                     val initHomePage = async(Dispatchers.IO) { model.initHomePage() }
-                    val initUserStatus = async(Dispatchers.IO) { model.initUserStatus() }
-                    awaitAll(initHomePage,initUserStatus)
+                    if (!rescueMode) {
+                        val initUserStatus = async(Dispatchers.IO) { model.initUserStatus() }
+                        awaitAll(initHomePage, initUserStatus)
+                    } else {
+                        initHomePage.await()
+                    }
 
                     withContext(Dispatchers.Main) {
                         model.empty.postValue(empty)
@@ -549,7 +641,9 @@ class HomeFragment : Fragment() {
     override fun onResume() {
         if (!model.loaded) Refresh.activity[1]!!.postValue(true)
         if (_binding != null) {
-            binding.homeNotificationCount.isVisible = Anilist.unreadNotificationCount > 0
+            val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+            binding.homeNotificationCount.isVisible = !rescueMode
+                    && Anilist.unreadNotificationCount > 0
                     && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
             binding.homeNotificationCount.text = Anilist.unreadNotificationCount.toString()
         }
