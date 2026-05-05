@@ -380,6 +380,11 @@ class ExoplayerView :
                 4 -> ResourcesCompat.getFont(this, R.font.century_gothic_regular)
                 5 -> ResourcesCompat.getFont(this, R.font.levenim_mt_bold)
                 6 -> ResourcesCompat.getFont(this, R.font.blocky)
+                7 -> ResourcesCompat.getFont(this, R.font.anime_ace_3_bb)
+                8 -> ResourcesCompat.getFont(this, R.font.bahnschrift)
+                9 -> ResourcesCompat.getFont(this, R.font.cinecaption)
+                10 -> ResourcesCompat.getFont(this, R.font.tahoma)
+                11 -> ResourcesCompat.getFont(this, R.font.trebuchet)
                 else -> ResourcesCompat.getFont(this, R.font.poppins_semi_bold)
             }
         val fontSize = PrefManager.getVal<Int>(PrefName.FontSize).toFloat()
@@ -429,6 +434,11 @@ class ExoplayerView :
                 4 -> ResourcesCompat.getFont(this, R.font.century_gothic_regular)
                 5 -> ResourcesCompat.getFont(this, R.font.levenim_mt_bold)
                 6 -> ResourcesCompat.getFont(this, R.font.blocky)
+                7 -> ResourcesCompat.getFont(this, R.font.anime_ace_3_bb)
+                8 -> ResourcesCompat.getFont(this, R.font.bahnschrift)
+                9 -> ResourcesCompat.getFont(this, R.font.cinecaption)
+                10 -> ResourcesCompat.getFont(this, R.font.tahoma)
+                11 -> ResourcesCompat.getFont(this, R.font.trebuchet)
                 else -> ResourcesCompat.getFont(this, R.font.poppins_semi_bold)
             }
 

@@ -40,3 +40,8 @@ crowdin.yml
 
 #vscode
 .vscode
+
+# Node.js
+node_modules/
+package.json
+package-lock.json

@@ -600,6 +600,11 @@ class PlayerSettingsActivity :
                 "Century Gothic",
                 "Levenim MT Bold",
                 "Blocky",
+                "AnimeAce3BB",
+                "Bahnschrift",
+                "Cinecaption",
+                "Tahoma",
+                "Trebuchet",
             )
         binding.videoSubFont.setOnClickListener {
             customAlertDialog().apply {
@@ -690,6 +695,11 @@ class PlayerSettingsActivity :
                     4 -> ResourcesCompat.getFont(this.context, R.font.century_gothic_regular)
                     5 -> ResourcesCompat.getFont(this.context, R.font.levenim_mt_bold)
                     6 -> ResourcesCompat.getFont(this.context, R.font.blocky)
+                    7 -> ResourcesCompat.getFont(this.context, R.font.anime_ace_3_bb)
+                    8 -> ResourcesCompat.getFont(this.context, R.font.bahnschrift)
+                    9 -> ResourcesCompat.getFont(this.context, R.font.cinecaption)
+                    10 -> ResourcesCompat.getFont(this.context, R.font.tahoma)
+                    11 -> ResourcesCompat.getFont(this.context, R.font.trebuchet)
                     else -> ResourcesCompat.getFont(this.context, R.font.poppins_semi_bold)
                 }
 
