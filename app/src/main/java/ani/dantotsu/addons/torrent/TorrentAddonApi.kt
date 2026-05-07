@@ -8,6 +8,7 @@ data class TorrentStreamingSettings(
     val disableUTP: Boolean = false,
     val disableDHT: Boolean = false,
     val disablePEX: Boolean = false,
+    val disableLSD: Boolean = false,
     val enableIPv6: Boolean = false,
     val disableUPNP: Boolean = false,
     val nzbDomain: String = "",

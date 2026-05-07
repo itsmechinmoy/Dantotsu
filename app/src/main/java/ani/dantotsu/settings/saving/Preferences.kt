@@ -159,6 +159,7 @@ enum class PrefName(val data: Pref) {
     TorrentDisableUTP(Pref(Location.Player, Boolean::class, false)),
     TorrentDisableDHT(Pref(Location.Player, Boolean::class, false)),
     TorrentDisablePEX(Pref(Location.Player, Boolean::class, false)),
+    TorrentDisableLSD(Pref(Location.Player, Boolean::class, false)),
     TorrentEnableIPv6(Pref(Location.Player, Boolean::class, false)),
     TorrentDisableUPNP(Pref(Location.Player, Boolean::class, false)),
     TorrentNzbDomain(Pref(Location.Player, String::class, "")),
