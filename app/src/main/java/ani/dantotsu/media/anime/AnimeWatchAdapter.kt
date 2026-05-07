@@ -113,7 +113,7 @@ class AnimeWatchAdapter(
 
         binding.mediaSourceNameContainer.isGone = offline
         binding.mediaSourceSettings.isGone = offline
-        val torrentEnabled = PrefManager.getVal(PrefName.TorrentEnabled)
+        val torrentEnabled: Boolean = PrefManager.getVal(PrefName.TorrentEnabled)
         binding.mediaSourceMagnet.isVisible = !offline && torrentEnabled
         binding.mediaSourceMagnet.setOnClickListener {
             fragment.showTorrentStreamPrompt()

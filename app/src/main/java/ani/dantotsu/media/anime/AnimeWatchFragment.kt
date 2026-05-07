@@ -915,7 +915,7 @@ class AnimeWatchFragment : Fragment() {
                 allStreams = true,
             )
             val animeData = media.anime ?: run {
-                toast(R.string.not_supported, media.mainName())
+                toast(getString(R.string.not_supported, media.mainName()))
                 return@withContext
             }
             val episodes = animeData.episodes?.toMutableMap() ?: mutableMapOf()
