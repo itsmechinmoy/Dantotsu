@@ -1074,6 +1074,7 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="torrent_server_not_running">Torrent server is not running</string>
     <string name="torrent_stream_prompt_title">Stream from Torrent</string>
     <string name="torrent_stream_prompt_hint">Paste a magnet link or torrent URL</string>
+    <string name="direct_torrent_stream">Direct torrent stream</string>
     <string name="upload_torrent_file">Upload .torrent file</string>
     <string name="invalid_torrent_link">Please enter a magnet link or torrent URL</string>
     <string name="torrent_upload_not_supported">This torrent add-on version does not support .torrent uploads</string>

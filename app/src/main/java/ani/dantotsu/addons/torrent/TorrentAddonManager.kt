@@ -159,10 +159,12 @@ class TorrentAddonManager(
     }
 
     fun addTorrent(link: String, title: String, save: Boolean): Torrent {
-        return extension!!.extension.addTorrent(link, title, save)
+        return extension?.extension?.addTorrent(link, title, save)
+            ?: throw IllegalStateException("Torrent extension not available")
     }
 
     fun uploadTorrent(file: ByteArray, fileName: String, title: String, save: Boolean): Torrent {
-        return extension!!.extension.uploadTorrent(file, fileName, title, save)
+        return extension?.extension?.uploadTorrent(file, fileName, title, save)
+            ?: throw IllegalStateException("Torrent extension not available")
     }
 } 

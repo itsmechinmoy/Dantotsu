@@ -95,11 +95,12 @@
                 android:layout_width="40dp"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
+                android:contentDescription="@string/direct_torrent_stream"
                 android:padding="8dp"
                 android:visibility="gone"
                 app:srcCompat="@drawable/ic_round_magnet_24"
                 app:tint="?attr/colorOnBackground"
-                tools:ignore="ContentDescription,ImageContrastCheck"
+                tools:ignore="ImageContrastCheck"
                 tools:visibility="visible" />
 
             <ImageView

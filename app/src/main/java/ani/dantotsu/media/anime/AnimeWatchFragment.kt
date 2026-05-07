@@ -870,7 +870,7 @@ class AnimeWatchFragment : Fragment() {
                     ?: throw IllegalStateException(getString(R.string.torrent_addon_not_available))
                 val fileBytes =
                     requireContext().contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: throw IllegalStateException("Could not read torrent file")
+                        ?: throw IllegalStateException("Failed to read torrent file: URI may be invalid or permission was denied")
                 val fileName = resolveFileName(uri)
                 torrentManager.torrentHash?.let { extension.removeTorrent(it) }
                 val torrent = extension.uploadTorrent(fileBytes, fileName, media.mainName(), false)
@@ -892,15 +892,15 @@ class AnimeWatchFragment : Fragment() {
 
     private suspend fun launchDirectStream(streamLink: String, title: String) {
         withContext(Dispatchers.Main) {
+            val directVideos =
+                listOf(Video(quality = null, format = VideoType.CONTAINER, file = FileUrl(streamLink)))
             val directExtractor = object : VideoExtractor() {
                 override val server: VideoServer = VideoServer("Direct Torrent", "")
                 override suspend fun extract(): VideoContainer {
-                    return VideoContainer(
-                        videos = listOf(Video(quality = null, format = VideoType.CONTAINER, file = FileUrl(streamLink)))
-                    )
+                    return VideoContainer(videos = directVideos)
                 }
             }.apply {
-                videos = listOf(Video(quality = null, format = VideoType.CONTAINER, file = FileUrl(streamLink)))
+                videos = directVideos
             }
             val directEpisode = Episode(
                 number = DIRECT_TORRENT_EPISODE_ID,
