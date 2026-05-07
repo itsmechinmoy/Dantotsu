@@ -19,8 +19,9 @@ data class TorrentStreamingSettings(
 
 interface TorrentAddonApi {
 
-    // Default no-op for compatibility with existing add-on builds that don't support these settings.
-    fun applyStreamingSettings(settings: TorrentStreamingSettings) {}
+    fun applyStreamingSettings(settings: TorrentStreamingSettings) {
+        // Intentionally empty for backward compatibility with add-ons that don't implement this yet.
+    }
 
     fun startServer(path: String, settings: TorrentStreamingSettings) {
         applyStreamingSettings(settings)

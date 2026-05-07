@@ -855,7 +855,7 @@ class AnimeWatchFragment : Fragment() {
                 launchDirectStream(streamLink, media.mainName())
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    toast(getString(R.string.torrent_stream_error, e.message ?: "unexpected error"))
+                    toast(getString(R.string.torrent_stream_error, e.message ?: "unknown error occurred"))
                 }
                 Logger.log(e)
             }
@@ -887,7 +887,7 @@ class AnimeWatchFragment : Fragment() {
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    toast(getString(R.string.torrent_stream_error, e.message ?: "unexpected error"))
+                    toast(getString(R.string.torrent_stream_error, e.message ?: "unknown error occurred"))
                 }
                 Logger.log(e)
             }
@@ -946,8 +946,9 @@ class AnimeWatchFragment : Fragment() {
         if (input.startsWith("magnet:", ignoreCase = true)) return true
         if (input.endsWith(".torrent", ignoreCase = true)) return true
         val uri = Uri.parse(input)
-        return uri.scheme.equals("http", ignoreCase = true) ||
-            uri.scheme.equals("https", ignoreCase = true)
+        val scheme = uri.scheme ?: return false
+        return scheme.equals("http", ignoreCase = true) ||
+            scheme.equals("https", ignoreCase = true)
     }
 
     companion object {
