@@ -20,7 +20,7 @@ data class TorrentStreamingSettings(
 interface TorrentAddonApi {
 
     fun applyStreamingSettings(settings: TorrentStreamingSettings) {
-        // Intentionally empty for backward compatibility with add-ons that don't implement this yet.
+        // Default implementation for backward compatibility with add-ons that don't override this method.
     }
 
     fun startServer(path: String, settings: TorrentStreamingSettings) {

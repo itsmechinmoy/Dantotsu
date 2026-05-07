@@ -1079,6 +1079,8 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="invalid_torrent_link">Please enter a magnet link or torrent URL</string>
     <string name="torrent_upload_not_supported">This torrent add-on version does not support .torrent uploads</string>
     <string name="torrent_stream_error">Couldn\'t start direct torrent stream: %1$s</string>
+    <string name="unknown_error_occurred_short">Unknown error occurred</string>
+    <string name="permission_denied_for_selected_file">Permission denied for selected file</string>
     <string name="download_subtitle">Download Subtitle</string>
     <string name="download_audio_tracks">Download Audio Tracks</string>
     <string name="no_video_selected">No video selected</string>

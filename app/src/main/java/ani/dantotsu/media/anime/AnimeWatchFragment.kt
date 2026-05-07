@@ -855,7 +855,7 @@ class AnimeWatchFragment : Fragment() {
                 launchDirectStream(streamLink, media.mainName())
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    toast(getString(R.string.torrent_stream_error, e.message ?: "unknown error occurred"))
+                    toast(getString(R.string.torrent_stream_error, e.message ?: getString(R.string.unknown_error_occurred_short)))
                 }
                 Logger.log(e)
             }
@@ -883,11 +883,11 @@ class AnimeWatchFragment : Fragment() {
                 }
             } catch (_: SecurityException) {
                 withContext(Dispatchers.Main) {
-                    toast(getString(R.string.torrent_stream_error, "permission denied for selected file"))
+                    toast(getString(R.string.torrent_stream_error, getString(R.string.permission_denied_for_selected_file)))
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    toast(getString(R.string.torrent_stream_error, e.message ?: "unknown error occurred"))
+                    toast(getString(R.string.torrent_stream_error, e.message ?: getString(R.string.unknown_error_occurred_short)))
                 }
                 Logger.log(e)
             }
@@ -931,7 +931,7 @@ class AnimeWatchFragment : Fragment() {
     }
 
     private fun resolveFileName(uri: Uri): String {
-        var name = "upload.torrent"
+        var name = DEFAULT_TORRENT_FILE_NAME
         requireContext().contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { cursor ->
                 if (cursor.moveToFirst()) {
@@ -953,6 +953,7 @@ class AnimeWatchFragment : Fragment() {
 
     companion object {
         private const val DIRECT_TORRENT_EPISODE_ID = "__direct_torrent__"
+        private const val DEFAULT_TORRENT_FILE_NAME = "upload.torrent"
         const val ACTION_DOWNLOAD_STARTED = "ani.dantotsu.ACTION_DOWNLOAD_STARTED"
         const val ACTION_DOWNLOAD_FINISHED = "ani.dantotsu.ACTION_DOWNLOAD_FINISHED"
         const val ACTION_DOWNLOAD_FAILED = "ani.dantotsu.ACTION_DOWNLOAD_FAILED"
