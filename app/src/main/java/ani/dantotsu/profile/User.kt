@@ -16,6 +16,9 @@ data class User(
     val totalEpisodes: Int? = null,
     val nextAiringEpisode: Int? = null,
     val activity: List<Activity> = mutableListOf(),
+    // for follow status
+    var isFollowing: Boolean? = null,
+    var isFollower: Boolean? = null,
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID: Long = 1

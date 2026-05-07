@@ -467,14 +467,22 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     }
 
     override fun onResume() {
+        val extContainer = findViewById<android.widget.FrameLayout>(R.id.fragmentExtensionsContainer)
+        if (extContainer != null) {
+            val hasExtFragment = supportFragmentManager.findFragmentById(R.id.fragmentExtensionsContainer) != null
+            if (hasExtFragment) {
+                supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+                extContainer.visibility = View.GONE
+            }
+        }
+
         if (::navBar.isInitialized)
             navBar.selectTabAt(selected)
-
-        // Explicitly set visibility of key UI elements on resume
         binding.mediaAppBar.visibility = View.VISIBLE
         binding.mediaViewPager.visibility = View.VISIBLE
         binding.mediaCover.visibility = View.VISIBLE
         binding.mediaClose.visibility = View.VISIBLE
+        navBar.isVisible = true
         super.onResume()
         binding.root.requestLayout()
     }

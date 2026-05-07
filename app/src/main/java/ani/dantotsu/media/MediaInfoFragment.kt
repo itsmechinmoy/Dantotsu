@@ -255,6 +255,7 @@ class MediaInfoFragment : Fragment() {
                                 false
                             )
                             bind.itemTitle.text = getString(R.string.producers)
+                            bind.root.tag = "dynamic_view"
                             binding.mediaInfoContainer.addView(bind.root, 1)
 
                             validProducers.forEach { producer ->
@@ -595,6 +596,7 @@ class MediaInfoFragment : Fragment() {
                         """.trimIndent()
                         loadDataWithBaseURL("https://www.youtube-nocookie.com", placeholderHtml, "text/html", "utf-8", null)
                     }
+                    bind.root.tag = "dynamic_view"
                     parent.addView(bind.root)
                 }
 
@@ -643,6 +645,7 @@ class MediaInfoFragment : Fragment() {
                         )
                         bind.itemTitle.setText(R.string.opening)
                         makeText(bind.itemText, media.anime.op)
+                        bind.root.tag = "dynamic_view"
                         parent.addView(bind.root)
                     }
 
@@ -655,6 +658,7 @@ class MediaInfoFragment : Fragment() {
                         )
                         bind.itemTitle.setText(R.string.ending)
                         makeText(bind.itemText, media.anime.ed)
+                        bind.root.tag = "dynamic_view"
                         parent.addView(bind.root)
                     }
                 }
@@ -762,6 +766,7 @@ class MediaInfoFragment : Fragment() {
                         chip.setOnLongClickListener { copyToClipboard(url); true }
                         bind.itemChipGroup.addView(chip)
                     }
+                    bind.root.tag = "dynamic_view"
                     parent.addView(bind.root)
                 }
 
@@ -809,6 +814,7 @@ class MediaInfoFragment : Fragment() {
                                     )
                                 }
                             }
+                            root.tag = "dynamic_view"
                             parent.addView(root)
                         }
                     }
@@ -831,6 +837,7 @@ class MediaInfoFragment : Fragment() {
                                         .putExtra("mediaId", media.id)
                                 )
                             }
+                            root.tag = "dynamic_view"
                             parent.addView(root)
                         }
                     }
@@ -848,6 +855,7 @@ class MediaInfoFragment : Fragment() {
                             LinearLayoutManager.HORIZONTAL,
                             false
                         )
+                        root.tag = "dynamic_view"
                         parent.addView(root)
                     }
                 }
@@ -865,6 +873,7 @@ class MediaInfoFragment : Fragment() {
                             LinearLayoutManager.HORIZONTAL,
                             false
                         )
+                        root.tag = "dynamic_view"
                         parent.addView(root)
                     }
                 }
@@ -882,6 +891,7 @@ class MediaInfoFragment : Fragment() {
                             LinearLayoutManager.HORIZONTAL,
                             false
                         )
+                        root.tag = "dynamic_view"
                         parent.addView(root)
                     }
                 }
@@ -899,6 +909,7 @@ class MediaInfoFragment : Fragment() {
                             LinearLayoutManager.HORIZONTAL,
                             false
                         )
+                        root.tag = "dynamic_view"
                         parent.addView(root)
                     }
                 }

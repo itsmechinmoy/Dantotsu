@@ -117,8 +117,11 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
 
         binding.settingsIncognito.isChecked = PrefManager.getVal(PrefName.Incognito)
         binding.settingsIncognito.setOnCheckedChangeListener { _, isChecked ->
-            PrefManager.setVal(PrefName.Incognito, isChecked)
-            incognitoNotification(requireContext())
+            // Added check to ensure fragment is still active before updating
+            if (isAdded) {
+                PrefManager.setVal(PrefName.Incognito, isChecked)
+                incognitoNotification(requireContext())
+            }
         }
 
         binding.settingsRescueMode.isChecked = PrefManager.getVal(PrefName.RescueMode)
@@ -165,55 +168,59 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
         binding.settingsDownloads.isChecked = PrefManager.getVal(PrefName.OfflineMode)
         binding.settingsDownloads.setOnCheckedChangeListener { _, isChecked ->
             Timer().schedule(300) {
-                when (pageType) {
-                    PageType.MANGA -> {
-                        val intent = Intent(activity, NoInternet::class.java)
-                        intent.putExtra(
-                            "FRAGMENT_CLASS_NAME",
-                            OfflineMangaFragment::class.java.name
-                        )
-                        startActivity(intent)
+                val currentActivity = activity
+                // Ensure fragment is added and activity is not null
+                if (currentActivity != null && isAdded) {
+                    when (pageType) {
+                        PageType.MANGA -> {
+                            val intent = Intent(currentActivity, NoInternet::class.java)
+                            intent.putExtra(
+                                "FRAGMENT_CLASS_NAME",
+                                OfflineMangaFragment::class.java.name
+                            )
+                            startActivity(intent)
+                        }
+
+                        PageType.ANIME -> {
+                            val intent = Intent(currentActivity, NoInternet::class.java)
+                            intent.putExtra(
+                                "FRAGMENT_CLASS_NAME",
+                                OfflineAnimeFragment::class.java.name
+                            )
+                            startActivity(intent)
+                        }
+
+                        PageType.HOME -> {
+                            val intent = Intent(currentActivity, NoInternet::class.java)
+                            intent.putExtra("FRAGMENT_CLASS_NAME", OfflineFragment::class.java.name)
+                            startActivity(intent)
+                        }
+
+                        PageType.OfflineMANGA -> {
+                            val intent = Intent(currentActivity, MainActivity::class.java)
+                            intent.putExtra("FRAGMENT_CLASS_NAME", MangaFragment::class.java.name)
+                            startActivity(intent)
+                        }
+
+                        PageType.OfflineHOME -> {
+                            val intent = Intent(currentActivity, MainActivity::class.java)
+                            intent.putExtra(
+                                "FRAGMENT_CLASS_NAME",
+                                if (Anilist.token != null) HomeFragment::class.java.name else LoginFragment::class.java.name
+                            )
+                            startActivity(intent)
+                        }
+
+                        PageType.OfflineANIME -> {
+                            val intent = Intent(currentActivity, MainActivity::class.java)
+                            intent.putExtra("FRAGMENT_CLASS_NAME", AnimeFragment::class.java.name)
+                            startActivity(intent)
+                        }
                     }
 
-                    PageType.ANIME -> {
-                        val intent = Intent(activity, NoInternet::class.java)
-                        intent.putExtra(
-                            "FRAGMENT_CLASS_NAME",
-                            OfflineAnimeFragment::class.java.name
-                        )
-                        startActivity(intent)
-                    }
-
-                    PageType.HOME -> {
-                        val intent = Intent(activity, NoInternet::class.java)
-                        intent.putExtra("FRAGMENT_CLASS_NAME", OfflineFragment::class.java.name)
-                        startActivity(intent)
-                    }
-
-                    PageType.OfflineMANGA -> {
-                        val intent = Intent(activity, MainActivity::class.java)
-                        intent.putExtra("FRAGMENT_CLASS_NAME", MangaFragment::class.java.name)
-                        startActivity(intent)
-                    }
-
-                    PageType.OfflineHOME -> {
-                        val intent = Intent(activity, MainActivity::class.java)
-                        intent.putExtra(
-                            "FRAGMENT_CLASS_NAME",
-                            if (Anilist.token != null) HomeFragment::class.java.name else LoginFragment::class.java.name
-                        )
-                        startActivity(intent)
-                    }
-
-                    PageType.OfflineANIME -> {
-                        val intent = Intent(activity, MainActivity::class.java)
-                        intent.putExtra("FRAGMENT_CLASS_NAME", AnimeFragment::class.java.name)
-                        startActivity(intent)
-                    }
+                    dismiss()
+                    PrefManager.setVal(PrefName.OfflineMode, isChecked)
                 }
-
-                dismiss()
-                PrefManager.setVal(PrefName.OfflineMode, isChecked)
             }
         }
     }

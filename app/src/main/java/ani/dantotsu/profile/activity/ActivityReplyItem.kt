@@ -49,7 +49,7 @@ class ActivityReplyItem(
 
         val userList = arrayListOf<User>()
         reply.likes?.forEach { i ->
-            userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage))
+            userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage, isFollowing = i.isFollowing, isFollower = i.isFollower))
         }
         binding.activityLikeContainer.setOnLongClickListener {
             UsersDialogFragment().apply {

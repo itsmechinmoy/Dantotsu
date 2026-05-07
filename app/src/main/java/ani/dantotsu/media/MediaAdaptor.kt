@@ -43,6 +43,7 @@ class MediaAdaptor(
     private val matchParent: Boolean = false,
     private val viewPager: ViewPager2? = null,
     private val fav: Boolean = false,
+    private val isOtherUser: Boolean = false,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -420,6 +421,7 @@ class MediaAdaptor(
 
 
     fun longClicked(position: Int): Boolean {
+        if (isOtherUser) return false
         if ((mediaList?.size ?: 0) > position && position != -1) {
             val media = mediaList?.get(position) ?: return false
             if (activity.supportFragmentManager.findFragmentByTag("list") == null) {

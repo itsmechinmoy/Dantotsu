@@ -46,7 +46,8 @@ class AnilistNotificationTask : Task {
                             NotificationType.AIRING.value,
                             NotificationType.MEDIA_MERGE.value,
                             NotificationType.MEDIA_DELETION.value,
-                            NotificationType.MEDIA_DATA_CHANGE.value
+                            NotificationType.MEDIA_DATA_CHANGE.value,
+                            NotificationType.RELATED_MEDIA_ADDITION.value
                         )
                         
                         var userCount = 0

@@ -1022,13 +1022,13 @@ class ProfileViewModel : ViewModel() {
         val res = Anilist.query.initProfilePage(id)
         val mangaList = res?.data?.favoriteManga?.favourites?.manga?.edges?.mapNotNull {
             it.node?.let { i ->
-                Media(i).apply { isFav = true }
+                Media(i)
             }
         }
         mangaFav.postValue(ArrayList(mangaList ?: arrayListOf()))
         val animeList = res?.data?.favoriteAnime?.favourites?.anime?.edges?.mapNotNull {
             it.node?.let { i ->
-                Media(i).apply { isFav = true }
+                Media(i)
             }
         }
         animeFav.postValue(ArrayList(animeList ?: arrayListOf()))
