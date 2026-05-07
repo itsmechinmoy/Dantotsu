@@ -158,7 +158,6 @@ import com.anggrayudi.storage.file.extension
 import java.io.File
 import kotlinx.coroutines.withContext
 import com.bumptech.glide.Glide
-import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -176,6 +175,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Calendar
@@ -253,6 +253,8 @@ class ExoplayerView :
     private var downloadId: String? = null
     private var hasExtSubtitles = false
     private var audioLanguages = mutableListOf<Pair<String, String>>()
+    private val isDlnaModeEnabled: Boolean
+        get() = PrefManager.getVal(PrefName.DLNAEnabled) || PrefManager.getVal(PrefName.UseInternalCast)
 
     companion object {
         var initialized = false
@@ -1325,13 +1327,8 @@ class ExoplayerView :
         if (PrefManager.getVal(PrefName.Cast)) {
             playerView.findViewById<CustomCastButton>(R.id.exo_cast).apply {
                 visibility = View.VISIBLE
-                if (PrefManager.getVal(PrefName.DLNAEnabled) || PrefManager.getVal(PrefName.UseInternalCast)) {
-                    try {
-                        CastButtonFactory.setUpMediaRouteButton(context, this)
-                        dialogFactory = CustomCastThemeFactory()
-                    } catch (e: Exception) {
-                        isCastApiAvailable = false
-                    }
+                if (isDlnaModeEnabled) {
+                    setCastCallback { castViaDlna() }
                 } else {
                     setCastCallback { cast() }
                 }
@@ -3302,6 +3299,54 @@ class ExoplayerView :
         }
     }
 
+    private fun castViaDlna() {
+        val videoURL = video?.file?.url ?: return
+        val title = media.userPreferredName + " : Ep " + episodeTitleArr[currentEpisodeIndex]
+        lifecycleScope.launch {
+            if (PrefManager.getVal(PrefName.DLNADisableUPNP)) {
+                snackString(getString(R.string.dlna_discovery_disabled))
+                return@launch
+            }
+            snackString(getString(R.string.dlna_searching_devices))
+            val devices =
+                withTimeoutOrNull(8000) {
+                    DlnaController.discoverDevices(
+                        enableIPv6 = PrefManager.getVal(PrefName.DLNAEnableIPv6),
+                        disableUpnp = PrefManager.getVal(PrefName.DLNADisableUPNP),
+                    )
+                } ?: emptyList()
+            if (devices.isEmpty()) {
+                snackString(getString(R.string.dlna_no_devices_found))
+                return@launch
+            }
+            customAlertDialog()
+                .setTitle(getString(R.string.select_dlna_device))
+                .singleChoiceItems(devices.map { it.friendlyName }.toTypedArray()) { selected ->
+                    lifecycleScope.launch {
+                        val success =
+                            DlnaController.startPlayback(
+                                device = devices[selected],
+                                mediaUrl = videoURL,
+                                title = title,
+                                controllerName = PrefManager.getVal(PrefName.DLNAFriendlyName),
+                            )
+                        if (success) {
+                            snackString(
+                                getString(
+                                    R.string.dlna_playback_started,
+                                    devices[selected].friendlyName,
+                                ),
+                            )
+                        } else {
+                            snackString(getString(R.string.dlna_playback_failed))
+                        }
+                    }
+                }
+                .setNegButton(R.string.cancel)
+                .show()
+        }
+    }
+
     // Enter PiP Mode
     @Suppress("DEPRECATION")
     private fun enterPipMode() {
@@ -3471,10 +3516,10 @@ class CustomCastButton : MediaRouteButton {
     )
 
     override fun performClick(): Boolean =
-        if (PrefManager.getVal(PrefName.DLNAEnabled) || PrefManager.getVal(PrefName.UseInternalCast)) {
-            super.performClick()
-        } else {
+        if (castCallback != null) {
             castCallback?.let { it() }
             true
+        } else {
+            super.performClick()
         }
 }

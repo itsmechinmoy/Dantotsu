@@ -803,6 +803,12 @@
     <string name="dlna_friendly_name">DLNA Friendly Name</string>
     <string name="dlna_disable_upnp">Disable UPnP</string>
     <string name="dlna_enable_ipv6">Enable IPv6</string>
+    <string name="select_dlna_device">Select DLNA Device</string>
+    <string name="dlna_searching_devices">Searching DLNA devices…</string>
+    <string name="dlna_no_devices_found">No DLNA devices found</string>
+    <string name="dlna_discovery_disabled">DLNA discovery is disabled in settings</string>
+    <string name="dlna_playback_started">Started DLNA playback on %1$s</string>
+    <string name="dlna_playback_failed">Failed to start DLNA playback</string>
     <string name="comments_button">Enable Comments</string>
     <string name="comments_button_desc">Dantotsu\'s very own comments server</string>
 
