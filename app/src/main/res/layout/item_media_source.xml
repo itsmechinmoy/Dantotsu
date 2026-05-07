@@ -91,6 +91,18 @@
 
 
             <ImageView
+                android:id="@+id/mediaSourceMagnet"
+                android:layout_width="40dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:padding="8dp"
+                android:visibility="gone"
+                app:srcCompat="@drawable/ic_round_magnet_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription,ImageContrastCheck"
+                tools:visibility="visible" />
+
+            <ImageView
                 android:id="@+id/mediaSourceSettings"
                 android:layout_width="48dp"
                 android:layout_height="wrap_content"
@@ -378,4 +390,3 @@
     </LinearLayout>
 
 </LinearLayout>
-

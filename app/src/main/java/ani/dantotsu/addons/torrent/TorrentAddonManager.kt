@@ -15,6 +15,7 @@ import ani.dantotsu.media.AddonType
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
+import eu.kanade.tachiyomi.data.torrentServer.model.Torrent
 import eu.kanade.tachiyomi.extension.InstallStep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -138,5 +139,30 @@ class TorrentAddonManager(
         const val TORRENT_PACKAGE = "dantotsu.torrentAddon"
         const val TORRENT_CLASS = "ani.dantotsu.torrentAddon.TorrentAddon"
         const val REPO = "rebelonion/Dantotsu-Torrent-Addon"
+
+        fun buildStreamingSettings(): TorrentStreamingSettings {
+            return TorrentStreamingSettings(
+                enableDLNA = PrefManager.getVal(PrefName.TorrentEnableDLNA),
+                friendlyName = PrefManager.getVal(PrefName.TorrentFriendlyName),
+                disableUTP = PrefManager.getVal(PrefName.TorrentDisableUTP),
+                disableDHT = PrefManager.getVal(PrefName.TorrentDisableDHT),
+                disablePEX = PrefManager.getVal(PrefName.TorrentDisablePEX),
+                enableIPv6 = PrefManager.getVal(PrefName.TorrentEnableIPv6),
+                disableUPNP = PrefManager.getVal(PrefName.TorrentDisableUPNP),
+                nzbDomain = PrefManager.getVal(PrefName.TorrentNzbDomain),
+                nzbPort = PrefManager.getVal(PrefName.TorrentNzbPort),
+                nzbLogin = PrefManager.getVal(PrefName.TorrentNzbLogin),
+                nzbPassword = PrefManager.getVal(PrefName.TorrentNzbPassword),
+                nzbPoolSize = PrefManager.getVal(PrefName.TorrentNzbPoolSize),
+            )
+        }
     }
-}
+
+    fun addTorrent(link: String, title: String, save: Boolean): Torrent {
+        return extension!!.extension.addTorrent(link, title, save)
+    }
+
+    fun uploadTorrent(file: ByteArray, fileName: String, title: String, save: Boolean): Torrent {
+        return extension!!.extension.uploadTorrent(file, fileName, title, save)
+    }
+} 

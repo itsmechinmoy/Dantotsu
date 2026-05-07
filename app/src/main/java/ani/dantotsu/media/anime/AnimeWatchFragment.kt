@@ -5,13 +5,17 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
@@ -28,7 +32,10 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import ani.dantotsu.R
+import ani.dantotsu.FileUrl
 import ani.dantotsu.addons.download.DownloadAddonManager
+import ani.dantotsu.addons.torrent.TorrentAddonManager
+import ani.dantotsu.addons.torrent.TorrentServerService
 import ani.dantotsu.databinding.FragmentMediaSourceBinding
 import ani.dantotsu.download.DownloadedType
 import ani.dantotsu.download.DownloadsManager
@@ -50,6 +57,11 @@ import ani.dantotsu.others.LanguageMapper
 import ani.dantotsu.parsers.AnimeParser
 import ani.dantotsu.parsers.AnimeSources
 import ani.dantotsu.parsers.HAnimeSources
+import ani.dantotsu.parsers.Video
+import ani.dantotsu.parsers.VideoContainer
+import ani.dantotsu.parsers.VideoExtractor
+import ani.dantotsu.parsers.VideoServer
+import ani.dantotsu.parsers.VideoType
 import ani.dantotsu.setBaseline
 import ani.dantotsu.setNavigationTheme
 import ani.dantotsu.toPx
@@ -71,6 +83,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tachiyomi.core.util.lang.launchIO
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -100,6 +113,14 @@ class AnimeWatchFragment : Fragment() {
 
     var continueEp: Boolean = false
     var loaded = false
+
+    private val torrentFilePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            streamFromTorrentFile(uri)
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -789,7 +810,135 @@ class AnimeWatchFragment : Fragment() {
         state = binding.mediaSourceRecycler.layoutManager?.onSaveInstanceState()
     }
 
+    fun showTorrentStreamPrompt() {
+        if (!TorrentServerService.isRunning()) {
+            toast(R.string.torrent_server_not_running)
+            return
+        }
+        val torrentManager = Injekt.get<TorrentAddonManager>()
+        if (!torrentManager.isAvailable(false)) {
+            toast(R.string.torrent_addon_not_available)
+            return
+        }
+        val input =
+            View.inflate(requireContext(), R.layout.dialog_torrent_stream, null)
+        val linkInput = input.findViewById<EditText>(R.id.torrentLinkInput)
+        requireContext().customAlertDialog().apply {
+            setTitle(R.string.torrent_stream_prompt_title)
+            setCustomView(input)
+            setPosButton(R.string.stream) {
+                val link = linkInput.text?.toString()?.trim().orEmpty()
+                if (link.isEmpty()) {
+                    toast(R.string.invalid_torrent_link)
+                    return@setPosButton
+                }
+                streamFromTorrentLink(link)
+            }
+            setNeutralButton(R.string.upload_torrent_file) {
+                torrentFilePickerLauncher.launch(arrayOf("application/x-bittorrent", "*/*"))
+            }
+            setNegButton(R.string.cancel)
+            show()
+        }
+    }
+
+    private fun streamFromTorrentLink(link: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val torrentManager = Injekt.get<TorrentAddonManager>()
+                val extension = torrentManager.extension?.extension
+                    ?: throw IllegalStateException(getString(R.string.torrent_addon_not_available))
+                torrentManager.torrentHash?.let { extension.removeTorrent(it) }
+                val torrent = extension.addTorrent(link, media.mainName(), false)
+                torrentManager.torrentHash = torrent.hash
+                val streamLink = extension.getLink(torrent, 0)
+                launchDirectStream(streamLink, media.mainName())
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    toast(getString(R.string.torrent_stream_error, e.message ?: "unknown error"))
+                }
+                Logger.log(e)
+            }
+        }
+    }
+
+    private fun streamFromTorrentFile(uri: Uri) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val torrentManager = Injekt.get<TorrentAddonManager>()
+                val extension = torrentManager.extension?.extension
+                    ?: throw IllegalStateException(getString(R.string.torrent_addon_not_available))
+                val fileBytes =
+                    requireContext().contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: throw IllegalStateException("Could not read torrent file")
+                val fileName = resolveFileName(uri)
+                torrentManager.torrentHash?.let { extension.removeTorrent(it) }
+                val torrent = extension.uploadTorrent(fileBytes, fileName, media.mainName(), false)
+                torrentManager.torrentHash = torrent.hash
+                val streamLink = extension.getLink(torrent, 0)
+                launchDirectStream(streamLink, media.mainName())
+            } catch (_: UnsupportedOperationException) {
+                withContext(Dispatchers.Main) {
+                    toast(R.string.torrent_upload_not_supported)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    toast(getString(R.string.torrent_stream_error, e.message ?: "unknown error"))
+                }
+                Logger.log(e)
+            }
+        }
+    }
+
+    private suspend fun launchDirectStream(streamLink: String, title: String) {
+        withContext(Dispatchers.Main) {
+            val directExtractor = object : VideoExtractor() {
+                override val server: VideoServer = VideoServer("Direct Torrent", "")
+                override suspend fun extract(): VideoContainer {
+                    return VideoContainer(
+                        videos = listOf(Video(quality = null, format = VideoType.CONTAINER, file = FileUrl(streamLink)))
+                    )
+                }
+            }.apply {
+                videos = listOf(Video(quality = null, format = VideoType.CONTAINER, file = FileUrl(streamLink)))
+            }
+            val directEpisode = Episode(
+                number = DIRECT_TORRENT_EPISODE_ID,
+                title = title,
+                selectedExtractor = directExtractor.server.name,
+                selectedVideo = 0,
+                extractors = mutableListOf(directExtractor),
+                allStreams = true,
+            )
+            val animeData = media.anime ?: run {
+                toast(R.string.not_supported, media.mainName())
+                return@withContext
+            }
+            val episodes = animeData.episodes?.toMutableMap() ?: mutableMapOf()
+            episodes[DIRECT_TORRENT_EPISODE_ID] = directEpisode
+            animeData.episodes = episodes
+            animeData.selectedEpisode = DIRECT_TORRENT_EPISODE_ID
+            Intent(requireActivity(), ExoplayerView::class.java).apply {
+                ExoplayerView.media = media
+                ExoplayerView.initialized = true
+                startActivity(this)
+            }
+        }
+    }
+
+    private fun resolveFileName(uri: Uri): String {
+        var name = "upload.torrent"
+        requireContext().contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    name = cursor.getString(0) ?: name
+                }
+            }
+        return name
+    }
+
     companion object {
+        private const val DIRECT_TORRENT_EPISODE_ID = "__direct_torrent__"
         const val ACTION_DOWNLOAD_STARTED = "ani.dantotsu.ACTION_DOWNLOAD_STARTED"
         const val ACTION_DOWNLOAD_FINISHED = "ani.dantotsu.ACTION_DOWNLOAD_FINISHED"
         const val ACTION_DOWNLOAD_FAILED = "ani.dantotsu.ACTION_DOWNLOAD_FAILED"

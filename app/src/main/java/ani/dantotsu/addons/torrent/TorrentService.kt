@@ -66,7 +66,10 @@ class TorrentServerService : Service() {
         serviceScope.launch {
             val echo = extension.echo()
             if (echo == "") {
-                extension.startServer(filesDir.absolutePath)
+                extension.startServer(
+                    filesDir.absolutePath,
+                    TorrentAddonManager.buildStreamingSettings(),
+                )
             }
         }
     }
