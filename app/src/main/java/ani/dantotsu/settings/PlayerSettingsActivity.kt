@@ -304,7 +304,6 @@ class PlayerSettingsActivity :
         }
 
         binding.playerSettingsDlnaFriendlyName.setOnClickListener {
-            if (!binding.playerSettingsInternalCast.isChecked) return@setOnClickListener
             val input =
                 EditText(this).apply {
                     setText(PrefManager.getVal(PrefName.DLNAFriendlyName))
