@@ -94,7 +94,7 @@ data class MangaImage(
 
     val useTransformation: Boolean = false,
 
-    val page: Page? = null,
+    @Transient val page: Page? = null,
 ) : Serializable {
     constructor(url: String, useTransformation: Boolean = false, page: Page? = null)
             : this(FileUrl(url), useTransformation, page)

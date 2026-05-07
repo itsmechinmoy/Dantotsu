@@ -428,7 +428,7 @@ class Stories @JvmOverloads constructor(
         }
         val userList = arrayListOf<User>()
         story.likes?.forEach { i ->
-            userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage))
+            userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage, isFollowing = i.isFollowing, isFollower = i.isFollower))
         }
         val likeColor = ContextCompat.getColor(context, R.color.yt_red)
         val notLikeColor = ContextCompat.getColor(context, R.color.bg_opp)

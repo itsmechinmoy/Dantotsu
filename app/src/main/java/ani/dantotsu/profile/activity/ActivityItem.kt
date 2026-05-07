@@ -48,7 +48,7 @@ class ActivityItem(
         binding.activityLike.setColorFilter(if (activity.isLiked == true) likeColor else notLikeColor)
         val userList = arrayListOf<User>()
         activity.likes?.forEach { i ->
-            userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage))
+            userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage, isFollowing = i.isFollowing, isFollower = i.isFollower))
         }
         binding.activityRepliesContainer.setOnClickListener {
             RepliesBottomDialog.newInstance(activity.id)

@@ -71,25 +71,11 @@
             android:text="@string/manga_progress" />
 
         <com.google.android.material.chip.Chip
-            android:id="@+id/filterStatus"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/status" />
-
-        <com.google.android.material.chip.Chip
             android:id="@+id/filterMessages"
             style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/messages" />
-
-        <com.google.android.material.chip.Chip
-            android:id="@+id/filterText"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/text" />
 
     </com.google.android.material.chip.ChipGroup>
 

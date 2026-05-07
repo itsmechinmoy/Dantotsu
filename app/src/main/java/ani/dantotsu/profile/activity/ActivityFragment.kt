@@ -15,7 +15,6 @@ import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.api.Activity
-import ani.dantotsu.connections.anilist.api.MediaType
 import ani.dantotsu.databinding.FragmentFeedBinding
 import ani.dantotsu.media.MediaDetailsActivity
 import ani.dantotsu.navBarHeight
@@ -112,20 +111,14 @@ class ActivityFragment : Fragment() {
     private fun applyFilter() {
         val filteredActivities = when (currentFilter) {
             ActivityFilterType.ALL -> allActivities
-            ActivityFilterType.ANIME_PROGRESS -> allActivities.filter { 
-                it.typename == "ListActivity" && it.media?.type == MediaType.ANIME
+            ActivityFilterType.ANIME_PROGRESS -> allActivities.filter {
+                it.type == "ANIME_LIST"
             }
-            ActivityFilterType.MANGA_PROGRESS -> allActivities.filter { 
-                it.typename == "ListActivity" && it.media?.type == MediaType.MANGA
+            ActivityFilterType.MANGA_PROGRESS -> allActivities.filter {
+                it.type == "MANGA_LIST"
             }
-            ActivityFilterType.STATUS -> allActivities.filter { 
-                it.typename == "ListActivity" && it.status != null 
-            }
-            ActivityFilterType.MESSAGES -> allActivities.filter { 
-                it.typename == "MessageActivity" 
-            }
-            ActivityFilterType.TEXT -> allActivities.filter { 
-                it.typename == "TextActivity" 
+            ActivityFilterType.MESSAGES -> allActivities.filter {
+                it.typename == "MessageActivity"
             }
         }
         
@@ -137,9 +130,7 @@ class ActivityFragment : Fragment() {
             ActivityFilterType.ALL -> getString(R.string.nothing_here)
             ActivityFilterType.ANIME_PROGRESS -> getString(R.string.no_anime_progress)
             ActivityFilterType.MANGA_PROGRESS -> getString(R.string.no_manga_progress)
-            ActivityFilterType.STATUS -> getString(R.string.no_status_activities)
             ActivityFilterType.MESSAGES -> getString(R.string.no_messages)
-            ActivityFilterType.TEXT -> getString(R.string.no_text_activities)
         }
     }
 

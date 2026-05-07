@@ -114,8 +114,8 @@ class NotificationFragment : Fragment() {
     private suspend fun getList() {
         val list = when (type) {
             ONE -> getNotificationsFiltered(false) { it.id == getID }
-            MEDIA -> getNotificationsFiltered(type = true) { it.media != null }
-            USER -> getNotificationsFiltered { it.media == null }
+            MEDIA -> getNotificationsFiltered(type = true) { it.media != null || it.notificationType == ani.dantotsu.connections.anilist.api.NotificationType.MEDIA_DELETION.value }
+            USER -> getNotificationsFiltered { it.media == null && it.notificationType != ani.dantotsu.connections.anilist.api.NotificationType.RELATED_MEDIA_ADDITION.value }
             SUBSCRIPTION -> getSubscriptions()
             COMMENT -> getComments()
         }
