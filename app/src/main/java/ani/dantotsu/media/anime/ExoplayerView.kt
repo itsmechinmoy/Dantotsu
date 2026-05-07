@@ -1325,7 +1325,7 @@ class ExoplayerView :
         if (PrefManager.getVal(PrefName.Cast)) {
             playerView.findViewById<CustomCastButton>(R.id.exo_cast).apply {
                 visibility = View.VISIBLE
-                if (PrefManager.getVal(PrefName.UseInternalCast)) {
+                if (PrefManager.getVal(PrefName.DLNAEnabled) || PrefManager.getVal(PrefName.UseInternalCast)) {
                     try {
                         CastButtonFactory.setUpMediaRouteButton(context, this)
                         dialogFactory = CustomCastThemeFactory()
@@ -3471,7 +3471,7 @@ class CustomCastButton : MediaRouteButton {
     )
 
     override fun performClick(): Boolean =
-        if (PrefManager.getVal(PrefName.UseInternalCast)) {
+        if (PrefManager.getVal(PrefName.DLNAEnabled) || PrefManager.getVal(PrefName.UseInternalCast)) {
             super.performClick()
         } else {
             castCallback?.let { it() }

@@ -3,10 +3,12 @@ package ani.dantotsu.settings
 import android.content.res.Resources
 import android.os.Build
 import android.os.Bundle
+import android.text.InputType
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.res.ResourcesCompat
@@ -287,10 +289,56 @@ class PlayerSettingsActivity :
             PrefManager.setVal(PrefName.RotationPlayer, isChecked)
         }
 
-        binding.playerSettingsInternalCast.isChecked = PrefManager.getVal(PrefName.UseInternalCast)
+        val dlnaEnabledByPref =
+            PrefManager.getVal(PrefName.DLNAEnabled) || PrefManager.getVal(PrefName.UseInternalCast)
+        binding.playerSettingsInternalCast.isChecked = dlnaEnabledByPref
         binding.playerSettingsInternalCast.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setVal(PrefName.DLNAEnabled, isChecked)
             PrefManager.setVal(PrefName.UseInternalCast, isChecked)
+            binding.playerSettingsDlnaFriendlyName.isEnabled = isChecked
+            binding.playerSettingsDlnaDisableUpnp.isEnabled = isChecked
+            binding.playerSettingsDlnaEnableIpv6.isEnabled = isChecked
+            binding.playerSettingsDlnaFriendlyName.alpha = if (isChecked) 1f else 0.5f
+            binding.playerSettingsDlnaDisableUpnp.alpha = if (isChecked) 1f else 0.5f
+            binding.playerSettingsDlnaEnableIpv6.alpha = if (isChecked) 1f else 0.5f
         }
+
+        binding.playerSettingsDlnaFriendlyName.setOnClickListener {
+            if (!binding.playerSettingsInternalCast.isChecked) return@setOnClickListener
+            val input =
+                EditText(this).apply {
+                    setText(PrefManager.getVal(PrefName.DLNAFriendlyName))
+                    inputType = InputType.TYPE_CLASS_TEXT
+                    setSelection(text.length)
+                }
+            customAlertDialog().apply {
+                setTitle(getString(R.string.dlna_friendly_name))
+                setCustomView(input)
+                setPosButton(R.string.save) {
+                    val name = input.text.toString().trim()
+                    PrefManager.setVal(PrefName.DLNAFriendlyName, if (name.isEmpty()) "Dantotsu" else name)
+                }
+                setNegButton(R.string.cancel)
+                show()
+            }
+        }
+
+        binding.playerSettingsDlnaDisableUpnp.isChecked = PrefManager.getVal(PrefName.DLNADisableUPNP)
+        binding.playerSettingsDlnaDisableUpnp.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setVal(PrefName.DLNADisableUPNP, isChecked)
+        }
+
+        binding.playerSettingsDlnaEnableIpv6.isChecked = PrefManager.getVal(PrefName.DLNAEnableIPv6)
+        binding.playerSettingsDlnaEnableIpv6.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setVal(PrefName.DLNAEnableIPv6, isChecked)
+        }
+
+        binding.playerSettingsDlnaFriendlyName.isEnabled = dlnaEnabledByPref
+        binding.playerSettingsDlnaDisableUpnp.isEnabled = dlnaEnabledByPref
+        binding.playerSettingsDlnaEnableIpv6.isEnabled = dlnaEnabledByPref
+        binding.playerSettingsDlnaFriendlyName.alpha = if (dlnaEnabledByPref) 1f else 0.5f
+        binding.playerSettingsDlnaDisableUpnp.alpha = if (dlnaEnabledByPref) 1f else 0.5f
+        binding.playerSettingsDlnaEnableIpv6.alpha = if (dlnaEnabledByPref) 1f else 0.5f
 
         binding.playerSettingsAdditionalCodec.isChecked =
             PrefManager.getVal(PrefName.UseAdditionalCodec)

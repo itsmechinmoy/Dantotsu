@@ -799,7 +799,10 @@
     <string name="backup_restore">Backup and Restore</string>
     <string name="restore_settings">Import Settings</string>
     <string name="restore_settings_underline"><u>Restore Settings</u></string>
-    <string name="try_internal_cast_experimental">Try Internal Cast (Experimental)</string>
+    <string name="try_internal_cast_experimental">Enable DLNA (Experimental)</string>
+    <string name="dlna_friendly_name">DLNA Friendly Name</string>
+    <string name="dlna_disable_upnp">Disable UPnP</string>
+    <string name="dlna_enable_ipv6">Enable IPv6</string>
     <string name="comments_button">Enable Comments</string>
     <string name="comments_button_desc">Dantotsu\'s very own comments server</string>
 
