@@ -89,7 +89,6 @@
                     tools:ignore="LabelFor,TextContrastCheck,DuplicateSpeakableTextCheck" />
             </com.google.android.material.textfield.TextInputLayout>
 
-
             <ImageView
                 android:id="@+id/mediaSourceMagnet"
                 android:layout_width="40dp"

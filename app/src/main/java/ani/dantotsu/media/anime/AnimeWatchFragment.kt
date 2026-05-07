@@ -828,7 +828,7 @@ class AnimeWatchFragment : Fragment() {
             setCustomView(input)
             setPosButton(R.string.stream) {
                 val link = linkInput.text?.toString()?.trim().orEmpty()
-                if (link.isEmpty()) {
+                if (!isValidTorrentInput(link)) {
                     toast(R.string.invalid_torrent_link)
                     return@setPosButton
                 }
@@ -855,7 +855,7 @@ class AnimeWatchFragment : Fragment() {
                 launchDirectStream(streamLink, media.mainName())
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    toast(getString(R.string.torrent_stream_error, e.message ?: "unknown error"))
+                    toast(getString(R.string.torrent_stream_error, e.message ?: "unexpected error"))
                 }
                 Logger.log(e)
             }
@@ -870,7 +870,7 @@ class AnimeWatchFragment : Fragment() {
                     ?: throw IllegalStateException(getString(R.string.torrent_addon_not_available))
                 val fileBytes =
                     requireContext().contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: throw IllegalStateException("Failed to read torrent file: URI may be invalid or permission was denied")
+                        ?: throw IllegalStateException("Failed to read torrent file content")
                 val fileName = resolveFileName(uri)
                 torrentManager.torrentHash?.let { extension.removeTorrent(it) }
                 val torrent = extension.uploadTorrent(fileBytes, fileName, media.mainName(), false)
@@ -881,9 +881,13 @@ class AnimeWatchFragment : Fragment() {
                 withContext(Dispatchers.Main) {
                     toast(R.string.torrent_upload_not_supported)
                 }
+            } catch (_: SecurityException) {
+                withContext(Dispatchers.Main) {
+                    toast(getString(R.string.torrent_stream_error, "permission denied for selected file"))
+                }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    toast(getString(R.string.torrent_stream_error, e.message ?: "unknown error"))
+                    toast(getString(R.string.torrent_stream_error, e.message ?: "unexpected error"))
                 }
                 Logger.log(e)
             }
@@ -892,15 +896,15 @@ class AnimeWatchFragment : Fragment() {
 
     private suspend fun launchDirectStream(streamLink: String, title: String) {
         withContext(Dispatchers.Main) {
-            val directVideos =
+            val torrentStreamVideos =
                 listOf(Video(quality = null, format = VideoType.CONTAINER, file = FileUrl(streamLink)))
             val directExtractor = object : VideoExtractor() {
                 override val server: VideoServer = VideoServer("Direct Torrent", "")
                 override suspend fun extract(): VideoContainer {
-                    return VideoContainer(videos = directVideos)
+                    return VideoContainer(videos = torrentStreamVideos)
                 }
             }.apply {
-                videos = directVideos
+                videos = torrentStreamVideos
             }
             val directEpisode = Episode(
                 number = DIRECT_TORRENT_EPISODE_ID,
@@ -935,6 +939,15 @@ class AnimeWatchFragment : Fragment() {
                 }
             }
         return name
+    }
+
+    private fun isValidTorrentInput(input: String): Boolean {
+        if (input.isBlank()) return false
+        if (input.startsWith("magnet:", ignoreCase = true)) return true
+        if (input.endsWith(".torrent", ignoreCase = true)) return true
+        val uri = Uri.parse(input)
+        return uri.scheme.equals("http", ignoreCase = true) ||
+            uri.scheme.equals("https", ignoreCase = true)
     }
 
     companion object {

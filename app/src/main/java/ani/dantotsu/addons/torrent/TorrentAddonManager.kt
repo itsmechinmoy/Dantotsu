@@ -167,4 +167,4 @@ class TorrentAddonManager(
         return extension?.extension?.uploadTorrent(file, fileName, title, save)
             ?: throw IllegalStateException("Torrent extension not available")
     }
-} 
+}
