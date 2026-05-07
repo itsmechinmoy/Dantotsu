@@ -142,14 +142,10 @@ class TorrentAddonManager(
 
         fun buildStreamingSettings(): TorrentStreamingSettings {
             return TorrentStreamingSettings(
-                enableDLNA = PrefManager.getVal(PrefName.TorrentEnableDLNA),
-                friendlyName = PrefManager.getVal(PrefName.TorrentFriendlyName),
                 disableUTP = PrefManager.getVal(PrefName.TorrentDisableUTP),
                 disableDHT = PrefManager.getVal(PrefName.TorrentDisableDHT),
                 disablePEX = PrefManager.getVal(PrefName.TorrentDisablePEX),
                 disableLSD = PrefManager.getVal(PrefName.TorrentDisableLSD),
-                enableIPv6 = PrefManager.getVal(PrefName.TorrentEnableIPv6),
-                disableUPNP = PrefManager.getVal(PrefName.TorrentDisableUPNP),
                 nzbDomain = PrefManager.getVal(PrefName.TorrentNzbDomain),
                 nzbPort = PrefManager.getVal(PrefName.TorrentNzbPort),
                 nzbLogin = PrefManager.getVal(PrefName.TorrentNzbLogin),

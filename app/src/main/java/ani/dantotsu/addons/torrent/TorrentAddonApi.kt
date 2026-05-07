@@ -3,14 +3,10 @@ package ani.dantotsu.addons.torrent
 import eu.kanade.tachiyomi.data.torrentServer.model.Torrent
 
 data class TorrentStreamingSettings(
-    val enableDLNA: Boolean = false,
-    val friendlyName: String = "Dantotsu",
     val disableUTP: Boolean = false,
     val disableDHT: Boolean = false,
     val disablePEX: Boolean = false,
     val disableLSD: Boolean = false,
-    val enableIPv6: Boolean = false,
-    val disableUPNP: Boolean = false,
     val nzbDomain: String = "",
     val nzbPort: Int = 0,
     val nzbLogin: String = "",
