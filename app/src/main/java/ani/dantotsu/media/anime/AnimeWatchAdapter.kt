@@ -18,8 +18,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.FileUrl
 import ani.dantotsu.R
-import ani.dantotsu.addons.torrent.TorrentAddonManager
-import ani.dantotsu.addons.torrent.TorrentServerService
 import ani.dantotsu.currActivity
 import ani.dantotsu.currContext
 import ani.dantotsu.databinding.DialogLayoutBinding
@@ -115,12 +113,8 @@ class AnimeWatchAdapter(
 
         binding.mediaSourceNameContainer.isGone = offline
         binding.mediaSourceSettings.isGone = offline
-        val torrentManager = Injekt.get<TorrentAddonManager>()
-        val torrentRunning =
-            PrefManager.getVal(PrefName.TorrentEnabled) &&
-                torrentManager.isAvailable(false) &&
-                TorrentServerService.isRunning()
-        binding.mediaSourceMagnet.isVisible = !offline && torrentRunning
+        val torrentEnabled = PrefManager.getVal(PrefName.TorrentEnabled)
+        binding.mediaSourceMagnet.isVisible = !offline && torrentEnabled
         binding.mediaSourceMagnet.setOnClickListener {
             fragment.showTorrentStreamPrompt()
         }
