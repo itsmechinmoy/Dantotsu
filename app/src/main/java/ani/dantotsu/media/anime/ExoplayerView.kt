@@ -24,6 +24,7 @@ import android.os.CountDownTimer
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings.System
+import android.text.format.Formatter
 import android.util.AttributeSet
 import android.util.Rational
 import android.util.TypedValue
@@ -101,6 +102,7 @@ import ani.dantotsu.GesturesListener
 import ani.dantotsu.media.EpisodeMapper
 import ani.dantotsu.NoPaddingArrayAdapter
 import ani.dantotsu.R
+import ani.dantotsu.addons.torrent.TorrentAddonManager
 import ani.dantotsu.addons.download.DownloadAddonManager
 import ani.dantotsu.brightnessConverter
 import ani.dantotsu.circularReveal
@@ -175,6 +177,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withTimeoutOrNull
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -188,6 +192,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import androidx.core.net.toUri
 import ani.dantotsu.connections.subtitles.StremioSubtitles
 import ani.dantotsu.connections.subtitles.StremioSub
@@ -291,6 +296,10 @@ class ExoplayerView :
 
     private var pipEnabled = false
     private var aspectRatio = Rational(16, 9)
+    private var torrentStatsJob: Job? = null
+    private var isTorrentStreamPlayback = false
+    private var videoQualityText: String? = null
+    private var torrentTelemetryText: String? = null
 
     private val handler = Handler(Looper.getMainLooper())
     val model: MediaDetailsViewModel by viewModels()
@@ -1569,6 +1578,7 @@ class ExoplayerView :
         val ext = episode.extractors?.find { it.server.name == episode.selectedExtractor } ?: return
         extractor = ext
         video = ext.videos.getOrNull(episode.selectedVideo) ?: return
+        startTorrentTelemetryIfNeeded()
         val subLanguages =
             arrayOf(
                 "Albanian",
@@ -2150,6 +2160,10 @@ class ExoplayerView :
     }
 
     private fun releasePlayer() {
+        torrentStatsJob?.cancel()
+        torrentStatsJob = null
+        isTorrentStreamPlayback = false
+        torrentTelemetryText = null
         isPlayerPlaying = exoPlayer.playWhenReady
         playbackPosition = exoPlayer.currentPosition
         disappeared = false
@@ -2812,7 +2826,8 @@ class ExoplayerView :
 
         aspectRatio = Rational(width, height)
 
-        videoInfo.text = getString(R.string.video_quality, height)
+        videoQualityText = getString(R.string.video_quality, height)
+        renderVideoInfo()
 
         if (exoPlayer.duration < playbackPosition) {
             exoPlayer.seekTo(0)
@@ -2838,6 +2853,69 @@ class ExoplayerView :
                 )
             }
         }
+    }
+
+    private fun startTorrentTelemetryIfNeeded() {
+        torrentStatsJob?.cancel()
+        torrentStatsJob = null
+        torrentTelemetryText = null
+        isTorrentStreamPlayback = detectTorrentStreamPlayback()
+        renderVideoInfo()
+        if (!isTorrentStreamPlayback) return
+
+        torrentStatsJob = lifecycleScope.launch {
+            while (isActive) {
+                val telemetry = withContext(Dispatchers.IO) { buildTorrentTelemetryText() }
+                torrentTelemetryText = telemetry
+                renderVideoInfo()
+                delay(1000)
+            }
+        }
+    }
+
+    private fun detectTorrentStreamPlayback(): Boolean {
+        if (episode.number == "__direct_torrent__") return true
+        val host = runCatching { URI(video?.file?.url ?: "").host?.lowercase(Locale.US) }.getOrNull()
+        val isLocalStream = host == "127.0.0.1" || host == "localhost"
+        return isLocalStream && Injekt.get<TorrentAddonManager>().torrentHash != null
+    }
+
+    private fun buildTorrentTelemetryText(): String? {
+        val manager = Injekt.get<TorrentAddonManager>()
+        val torrentHash = manager.torrentHash ?: return null
+        val torrent = runCatching { manager.getTorrent(torrentHash) }.getOrNull() ?: return null
+
+        val connections = (torrent.active_peers ?: torrent.total_peers ?: 0).coerceAtLeast(0)
+        val seeds = (torrent.connected_seeders ?: 0).coerceAtLeast(0)
+        val downloadRate = formatTorrentRate(torrent.download_speed ?: 0.0)
+        val uploadRate = formatTorrentRate(torrent.upload_speed ?: 0.0)
+        val downloadedData = formatTorrentData(torrent.bytes_read_data ?: torrent.bytes_read ?: 0L)
+        val uploadedData = formatTorrentData(torrent.bytes_written_data ?: torrent.bytes_written ?: 0L)
+
+        return getString(
+            R.string.torrent_player_stats_format,
+            connections,
+            seeds,
+            downloadRate,
+            uploadRate,
+            downloadedData,
+            uploadedData,
+        )
+    }
+
+    private fun formatTorrentRate(bytesPerSecond: Double): String {
+        val normalized = bytesPerSecond.coerceAtLeast(0.0).roundToLong()
+        return "${Formatter.formatShortFileSize(this, normalized)}/s"
+    }
+
+    private fun formatTorrentData(bytes: Long): String {
+        return Formatter.formatShortFileSize(this, bytes.coerceAtLeast(0L))
+    }
+
+    private fun renderVideoInfo() {
+        val quality = videoQualityText?.takeIf { it.isNotBlank() } ?: return
+        val stats = torrentTelemetryText?.takeIf { isTorrentStreamPlayback && it.isNotBlank() }
+        videoInfo.text = if (stats != null) "$quality\n$stats" else quality
     }
 
     // Link Preloading

@@ -164,4 +164,8 @@ class TorrentAddonManager(
         return extension?.extension?.uploadTorrent(file, fileName, title, save)
             ?: throw IllegalStateException("Torrent extension not available")
     }
+
+    fun getTorrent(torrentHash: String): Torrent? {
+        return extension?.extension?.getTorrent(torrentHash)
+    }
 }

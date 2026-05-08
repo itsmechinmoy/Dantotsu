@@ -59,4 +59,9 @@ interface TorrentAddonApi {
     }
 
     fun getLink(torrent: Torrent, index: Int): String
+
+    fun getTorrent(torrentHash: String): Torrent? {
+        // Default implementation for backward compatibility with add-ons that don't expose stats.
+        return null
+    }
 }

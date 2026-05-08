@@ -926,6 +926,7 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="webview_not_installed">WebView not installed</string>
 
     <string name="video_quality">Quality: %1$dp</string>
+    <string name="torrent_player_stats_format">%1$d conns • %2$d seeds\n↓ %3$s • ↑ %4$s\nD %5$s • U %6$s</string>
     <string name="size_unknown">Unknown Size</string>
     <string name="mb_size">%1$s MB</string>
     <string name="button_restore">Restore</string>
