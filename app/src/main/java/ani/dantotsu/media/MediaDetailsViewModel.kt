@@ -39,6 +39,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 
 class MediaDetailsViewModel : ViewModel() {
     val scrolledToTop = MutableLiveData(true)
@@ -152,6 +153,7 @@ class MediaDetailsViewModel : ViewModel() {
                             detailed.selected = m.selected
                             detailed.isFav = m.isFav
                             detailed.shareLink = "https://myanimelist.net/${if (isAnime) "anime" else "manga"}/$malId"
+                            enrichRescueModeDetails(detailed)
                             media.postValue(detailed)
                         } else {
                             val jikanData = if (isAnime)
@@ -173,6 +175,7 @@ class MediaDetailsViewModel : ViewModel() {
                                 detailed.selected = m.selected
                                 detailed.isFav = m.isFav
                                 detailed.shareLink = "https://myanimelist.net/${if (isAnime) "anime" else "manga"}/$malId"
+                                enrichRescueModeDetails(detailed)
                                 media.postValue(detailed)
                             } else {
                                 media.postValue(m)
@@ -197,6 +200,97 @@ class MediaDetailsViewModel : ViewModel() {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    private suspend fun enrichRescueModeDetails(media: Media) {
+        val malId = media.idMAL ?: return
+        supervisorScope {
+            val isAnime = media.anime != null
+            val fullDeferred = async {
+                if (isAnime) MAL.jikan.getAnimeById(malId) else MAL.jikan.getMangaById(malId)
+            }
+            val charactersDeferred = async {
+                if (isAnime) MAL.jikan.getAnimeCharacters(malId) else MAL.jikan.getMangaCharacters(malId)
+            }
+            val staffDeferred = async {
+                if (isAnime) MAL.jikan.getAnimeStaff(malId) else emptyList()
+            }
+
+            val fullData = fullDeferred.await()
+            if (fullData != null) {
+                val fullMapped = Media(fullData, isAnime)
+                if (fullMapped.synonyms.isNotEmpty()) media.synonyms = fullMapped.synonyms
+                if (fullMapped.genres.isNotEmpty()) media.genres = fullMapped.genres
+                if (!fullMapped.externalLinks.isNullOrEmpty()) media.externalLinks = fullMapped.externalLinks
+                if (!fullMapped.relations.isNullOrEmpty()) {
+                    media.relations = fullMapped.relations
+                    media.prequel = fullMapped.prequel
+                    media.sequel = fullMapped.sequel
+                }
+                if (!fullMapped.recommendations.isNullOrEmpty()) {
+                    media.recommendations = fullMapped.recommendations
+                }
+                if (!fullMapped.staff.isNullOrEmpty()) media.staff = fullMapped.staff
+                if (!fullMapped.trailer.isNullOrBlank()) media.trailer = fullMapped.trailer
+                if (isAnime) {
+                    fullMapped.anime?.let { anime ->
+                        if (anime.op.isNotEmpty()) media.anime?.op = anime.op
+                        if (anime.ed.isNotEmpty()) media.anime?.ed = anime.ed
+                        anime.mainStudio?.let { media.anime?.mainStudio = it }
+                        if (!anime.producers.isNullOrEmpty()) media.anime?.producers = anime.producers
+                        anime.season?.let { media.anime?.season = it }
+                        anime.seasonYear?.let { media.anime?.seasonYear = it }
+                    }
+                } else {
+                    fullMapped.manga?.author?.let { media.manga?.author = it }
+                }
+            }
+
+            val mappedCharacters = charactersDeferred.await()
+                .mapNotNull { jChar ->
+                    val character = jChar.character ?: return@mapNotNull null
+                    Character(
+                        id = character.malId,
+                        name = character.name,
+                        image = character.images?.jpg?.largeImageUrl ?: character.images?.jpg?.imageUrl,
+                        banner = media.banner ?: media.cover,
+                        role = jChar.role ?: "",
+                        isFav = false,
+                        voiceActor = jChar.voiceActors
+                            ?.mapNotNull { va ->
+                                va.person?.let { person ->
+                                    Author(
+                                        id = person.malId,
+                                        name = person.name,
+                                        image = person.images?.jpg?.largeImageUrl ?: person.images?.jpg?.imageUrl,
+                                        role = va.language
+                                    )
+                                }
+                            }
+                            ?.let { ArrayList(it) }
+                    )
+                }
+            if (mappedCharacters.isNotEmpty()) {
+                media.characters = ArrayList(mappedCharacters.distinctBy { it.id })
+            }
+
+            val mappedStaff = staffDeferred.await()
+                .mapNotNull { staff ->
+                    val person = staff.person ?: return@mapNotNull null
+                    Author(
+                        id = person.malId,
+                        name = person.name,
+                        image = person.images?.jpg?.largeImageUrl ?: person.images?.jpg?.imageUrl,
+                        role = staff.positions?.joinToString(", ")
+                    )
+                }
+            if (mappedStaff.isNotEmpty()) {
+                media.staff = ArrayList(
+                    ((media.staff ?: arrayListOf()) + mappedStaff).distinctBy { it.id }
+                )
+            }
+
         }
     }
 

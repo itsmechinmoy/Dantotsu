@@ -131,4 +131,28 @@ class JikanQueries {
             wrapper.data
         }
     }
+
+    suspend fun getAnimeCharacters(malId: Int): List<JikanAnimeCharacter> {
+        return tryWithSuspend {
+            client.get("$apiUrl/anime/$malId/characters")
+                .parsed<JikanAnimeCharactersResponse>()
+                .data
+        } ?: emptyList()
+    }
+
+    suspend fun getMangaCharacters(malId: Int): List<JikanAnimeCharacter> {
+        return tryWithSuspend {
+            client.get("$apiUrl/manga/$malId/characters")
+                .parsed<JikanAnimeCharactersResponse>()
+                .data
+        } ?: emptyList()
+    }
+
+    suspend fun getAnimeStaff(malId: Int): List<JikanStaffMember> {
+        return tryWithSuspend {
+            client.get("$apiUrl/anime/$malId/staff")
+                .parsed<JikanStaffResponse>()
+                .data
+        } ?: emptyList()
+    }
 }

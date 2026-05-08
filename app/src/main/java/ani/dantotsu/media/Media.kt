@@ -13,6 +13,7 @@ import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.connections.mal.MalAnimeNode
 import ani.dantotsu.connections.mal.MalListEntry
 import ani.dantotsu.connections.mal.JikanMediaData
+import ani.dantotsu.connections.mal.JikanRelationEntry
 import ani.dantotsu.media.anime.Anime
 import ani.dantotsu.media.manga.Manga
 import ani.dantotsu.profile.User
@@ -23,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.Serializable
+import java.util.Locale
 import ani.dantotsu.connections.anilist.api.Media as ApiMedia
 
 data class Media(
@@ -198,7 +200,121 @@ data class Media(
         ) else null,
         userStartedAt = parseIsoDate(node.myListStatus?.startDate) ?: FuzzyDate(),
         userCompletedAt = parseIsoDate(node.myListStatus?.finishDate) ?: FuzzyDate(),
-    )
+    ) {
+        val allSynonyms = buildList {
+            node.alternativeTitles?.synonyms?.let { addAll(it) }
+            node.alternativeTitles?.en?.takeIf { it.isNotBlank() }?.let { add(it) }
+            node.alternativeTitles?.ja?.takeIf { it.isNotBlank() }?.let { add(it) }
+            node.titleSynonyms?.let { addAll(it) }
+        }.distinct()
+        if (allSynonyms.isNotEmpty()) {
+            this.synonyms = ArrayList(allSynonyms)
+        }
+
+        if (isAnime) {
+            this.anime?.mainStudio = node.studios?.firstOrNull()?.let {
+                Studio(
+                    id = it.id.toString(),
+                    name = it.name,
+                    isFavourite = false,
+                    favourites = null,
+                    imageUrl = null
+                )
+            }
+            this.anime?.producers = node.studios
+                ?.drop(1)
+                ?.map {
+                    Studio(
+                        id = it.id.toString(),
+                        name = it.name,
+                        isFavourite = false,
+                        favourites = null,
+                        imageUrl = null
+                    )
+                }
+                ?.let { ArrayList(it) }
+        } else {
+            this.manga?.author = node.authors?.firstOrNull()?.let {
+                Author(
+                    id = it.id,
+                    name = it.name,
+                    image = null,
+                    role = "Author"
+                )
+            }
+            this.staff = node.authors
+                ?.map {
+                    Author(
+                        id = it.id,
+                        name = it.name,
+                        image = null,
+                        role = "Author"
+                    )
+                }
+                ?.let { ArrayList(it) }
+        }
+
+        this.recommendations = node.recommendations
+            ?.mapNotNull { it.node }
+            ?.map {
+                Media(
+                    id = it.id,
+                    idMAL = it.id,
+                    name = it.alternativeTitles?.en ?: it.title,
+                    nameRomaji = it.title,
+                    userPreferredName = it.alternativeTitles?.en ?: it.title,
+                    cover = it.mainPicture?.large ?: it.mainPicture?.medium,
+                    banner = it.mainPicture?.large,
+                    isAdult = it.rating == "rx",
+                    status = null,
+                    meanScore = it.mean?.times(10)?.toInt(),
+                    popularity = it.popularity,
+                    format = it.mediaType?.uppercase(),
+                    anime = if (isAnime) Anime(totalEpisodes = it.numEpisodes) else null,
+                    manga = if (!isAnime) Manga(totalChapters = it.numChapters) else null
+                )
+            }
+            ?.let { ArrayList(it.distinctBy { media -> media.id }) }
+
+        val relatedNodes = mutableListOf<Pair<MalAnimeNode, String>>()
+        node.relatedAnime?.forEach { rel ->
+            rel.node?.let { relatedNodes.add(it to (rel.relationTypeFormatted ?: rel.relationType ?: "")) }
+        }
+        node.relatedManga?.forEach { rel ->
+            rel.node?.let { relatedNodes.add(it to (rel.relationTypeFormatted ?: rel.relationType ?: "")) }
+        }
+        val mappedRelations = relatedNodes
+            .map { (relatedNode, relation) ->
+                Media(
+                    id = relatedNode.id,
+                    idMAL = relatedNode.id,
+                    name = relatedNode.alternativeTitles?.en ?: relatedNode.title,
+                    nameRomaji = relatedNode.title,
+                    userPreferredName = relatedNode.alternativeTitles?.en ?: relatedNode.title,
+                    cover = relatedNode.mainPicture?.large ?: relatedNode.mainPicture?.medium,
+                    banner = relatedNode.mainPicture?.large,
+                    isAdult = relatedNode.rating == "rx",
+                    status = null,
+                    meanScore = relatedNode.mean?.times(10)?.toInt(),
+                    popularity = relatedNode.popularity,
+                    format = relatedNode.mediaType?.uppercase(),
+                    anime = if (relatedNode.numEpisodes != null || relatedNode.mediaType?.contains("anime", true) == true) {
+                        Anime(totalEpisodes = relatedNode.numEpisodes)
+                    } else null,
+                    manga = if (relatedNode.numEpisodes == null && relatedNode.mediaType?.contains("anime", true) != true) {
+                        Manga(totalChapters = relatedNode.numChapters)
+                    } else null
+                ).apply {
+                    this.relation = relation.uppercase(Locale.US).replace(" ", "_")
+                }
+            }
+            .distinctBy { it.id }
+        if (mappedRelations.isNotEmpty()) {
+            this.relations = ArrayList(mappedRelations)
+            this.prequel = mappedRelations.firstOrNull { it.relation == "PREQUEL" }
+            this.sequel = mappedRelations.firstOrNull { it.relation == "SEQUEL" }
+        }
+    }
 
     constructor(entry: MalListEntry, isAnime: Boolean) : this(entry.node, isAnime) {
         val ls = entry.listStatus
@@ -256,7 +372,158 @@ data class Media(
         manga = if (!isAnime) Manga(
             totalChapters = if (jikan.chapters == 0) null else jikan.chapters,
         ) else null,
-    )
+    ) {
+        this.shareLink = jikan.url
+        this.synonyms = ArrayList(
+            buildList {
+                jikan.titleSynonyms?.let { addAll(it) }
+                jikan.titleJapanese?.takeIf { it.isNotBlank() }?.let { add(it) }
+            }.distinct()
+        )
+        this.genres = ArrayList(
+            buildList {
+                jikan.genres?.forEach { add(it.name) }
+                jikan.themes?.forEach { add(it.name) }
+                jikan.demographics?.forEach { add(it.name) }
+                jikan.explicitGenres?.forEach { add(it.name) }
+            }.distinct()
+        )
+        this.externalLinks = jikan.external
+            ?.map {
+                MediaExternalLink(
+                    id = null,
+                    url = it.url,
+                    site = it.name ?: "External",
+                    siteId = null,
+                    type = null,
+                    language = null,
+                    color = null,
+                    icon = null,
+                    notes = null
+                )
+            }
+            ?.let { ArrayList(it) }
+
+        val mappedRecommendations = jikan.recommendations
+            ?.mapNotNull { it.entry }
+            ?.map {
+                Media(
+                    id = it.malId,
+                    idMAL = it.malId,
+                    name = it.title,
+                    nameRomaji = it.title ?: "",
+                    userPreferredName = it.title ?: "",
+                    cover = it.images?.jpg?.largeImageUrl ?: it.images?.jpg?.imageUrl,
+                    banner = it.images?.jpg?.largeImageUrl,
+                    isAdult = false,
+                    status = null,
+                    meanScore = null,
+                    popularity = null,
+                    format = null,
+                )
+            }
+            ?.distinctBy { it.id }
+            ?.let { ArrayList(it) }
+        if (!mappedRecommendations.isNullOrEmpty()) {
+            this.recommendations = mappedRecommendations
+        }
+
+        fun mapRelationEntry(entry: JikanRelationEntry?, relation: String?): Media? {
+            entry ?: return null
+            return Media(
+                id = entry.malId,
+                idMAL = entry.malId,
+                name = entry.name,
+                nameRomaji = entry.name ?: "",
+                userPreferredName = entry.name ?: "",
+                cover = null,
+                banner = null,
+                isAdult = false,
+                status = null,
+                meanScore = null,
+                popularity = null,
+                format = null,
+            ).apply {
+                this.relation = relation?.uppercase(Locale.US)?.replace(" ", "_")
+            }
+        }
+        val mappedRelations = jikan.relations
+            ?.flatMap { relation ->
+                relation.entry?.mapNotNull { mapRelationEntry(it, relation.relation) } ?: emptyList()
+            }
+            ?.distinctBy { it.id }
+            ?.let { ArrayList(it) }
+        if (!mappedRelations.isNullOrEmpty()) {
+            this.relations = mappedRelations
+            this.prequel = mappedRelations.firstOrNull { it.relation == "PREQUEL" }
+            this.sequel = mappedRelations.firstOrNull { it.relation == "SEQUEL" }
+        }
+
+        if (isAnime) {
+            this.anime?.season = jikan.season?.uppercase(Locale.US)
+            this.anime?.seasonYear = jikan.year
+            this.anime?.op = ArrayList(jikan.theme?.openings ?: emptyList())
+            this.anime?.ed = ArrayList(jikan.theme?.endings ?: emptyList())
+            this.anime?.mainStudio = jikan.studios?.firstOrNull()?.let {
+                Studio(
+                    id = it.malId.toString(),
+                    name = it.name,
+                    isFavourite = false,
+                    favourites = null,
+                    imageUrl = null
+                )
+            }
+            val producerStudios = buildList {
+                jikan.producers?.forEach {
+                    add(
+                        Studio(
+                            id = it.malId.toString(),
+                            name = it.name,
+                            isFavourite = false,
+                            favourites = null,
+                            imageUrl = null
+                        )
+                    )
+                }
+                jikan.licensors?.forEach {
+                    add(
+                        Studio(
+                            id = it.malId.toString(),
+                            name = it.name,
+                            isFavourite = false,
+                            favourites = null,
+                            imageUrl = null
+                        )
+                    )
+                }
+            }.distinctBy { it.id }
+            if (producerStudios.isNotEmpty()) {
+                this.anime?.producers = ArrayList(producerStudios)
+            }
+            this.trailer = jikan.trailer?.youtubeId
+        } else {
+            this.manga?.author = jikan.authors?.firstOrNull()?.person?.let {
+                Author(
+                    id = it.malId,
+                    name = it.name,
+                    image = it.images?.jpg?.imageUrl,
+                    role = jikan.authors?.firstOrNull()?.position ?: "Author"
+                )
+            }
+            this.staff = jikan.authors
+                ?.mapNotNull { author ->
+                    author.person?.let {
+                        Author(
+                            id = it.malId,
+                            name = it.name,
+                            image = it.images?.jpg?.imageUrl,
+                            role = author.position ?: "Author"
+                        )
+                    }
+                }
+                ?.let { ArrayList(it.distinctBy { author -> author.id }) }
+        }
+    }
 
     fun mainName() = name ?: nameMAL ?: nameRomaji
     fun mangaName() = if (countryOfOrigin != "JP") mainName() else nameRomaji

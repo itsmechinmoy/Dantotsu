@@ -208,8 +208,8 @@ class MALQueries {
 
 
     private val detailFields = "mean,status,media_type,synopsis,genres,num_episodes,num_chapters," +
-        "main_picture,alternative_titles,start_date,end_date,start_season,source,rating," +
-        "studios,rank,popularity,recommendations,related_anime,related_manga,my_list_status"
+        "main_picture,alternative_titles,title_synonyms,start_date,end_date,start_season,source,rating," +
+        "average_episode_duration,studios,authors,rank,popularity,recommendations,related_anime,related_manga,my_list_status"
 
     suspend fun getAnimeDetails(malId: Int): MalAnimeNode? {
         return tryWithSuspend {
