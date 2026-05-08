@@ -264,6 +264,7 @@ class ExoplayerView :
     companion object {
         var initialized = false
         lateinit var media: Media
+        private const val DIRECT_TORRENT_EPISODE_ID = "__direct_torrent__"
 
         private const val DEFAULT_MIN_BUFFER_MS = 30000
         private const val DEFAULT_MAX_BUFFER_MS = 60000
@@ -2874,7 +2875,7 @@ class ExoplayerView :
     }
 
     private fun detectTorrentStreamPlayback(): Boolean {
-        if (episode.number == "__direct_torrent__") return true
+        if (episode.number == DIRECT_TORRENT_EPISODE_ID) return true
         val host = runCatching { URI(video?.file?.url ?: "").host?.lowercase(Locale.US) }.getOrNull()
         val isLocalStream = host == "127.0.0.1" || host == "localhost"
         return isLocalStream && Injekt.get<TorrentAddonManager>().torrentHash != null
@@ -2885,8 +2886,8 @@ class ExoplayerView :
         val torrentHash = manager.torrentHash ?: return null
         val torrent = runCatching { manager.getTorrent(torrentHash) }.getOrNull() ?: return null
 
-        val connections = (torrent.active_peers ?: torrent.total_peers ?: 0).coerceAtLeast(0)
-        val seeds = (torrent.connected_seeders ?: 0).coerceAtLeast(0)
+        val connections = torrent.active_peers ?: torrent.total_peers ?: 0
+        val seeds = torrent.connected_seeders ?: 0
         val downloadRate = formatTorrentRate(torrent.download_speed ?: 0.0)
         val uploadRate = formatTorrentRate(torrent.upload_speed ?: 0.0)
         val downloadedData = formatTorrentData(torrent.bytes_read_data ?: torrent.bytes_read ?: 0L)
@@ -2913,9 +2914,15 @@ class ExoplayerView :
     }
 
     private fun renderVideoInfo() {
-        val quality = videoQualityText?.takeIf { it.isNotBlank() } ?: return
+        val quality = videoQualityText?.takeIf { it.isNotBlank() }
         val stats = torrentTelemetryText?.takeIf { isTorrentStreamPlayback && it.isNotBlank() }
-        videoInfo.text = if (stats != null) "$quality\n$stats" else quality
+        videoInfo.text =
+            when {
+                quality != null && stats != null -> "$quality\n$stats"
+                stats != null -> stats
+                quality != null -> quality
+                else -> ""
+            }
     }
 
     // Link Preloading
