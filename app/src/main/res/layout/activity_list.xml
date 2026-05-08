@@ -74,6 +74,16 @@
                     app:tint="?attr/colorOnBackground" />
 
                 <ImageButton
+                    android:id="@+id/listDubbed"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:contentDescription="@string/filter_dubbed"
+                    android:visibility="gone"
+                    app:srcCompat="@drawable/ic_round_mic_24"
+                    app:tint="?attr/colorOnBackground" />
+
+                <ImageButton
                     android:id="@+id/filter"
                     android:layout_width="40dp"
                     android:layout_height="40dp"

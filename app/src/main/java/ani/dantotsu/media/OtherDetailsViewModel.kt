@@ -3,12 +3,18 @@ package ani.dantotsu.media
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import ani.dantotsu.Mapper
+import ani.dantotsu.client
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.anilist.api.MediaExternalLink
 import ani.dantotsu.connections.mal.JikanQueries
 import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.tryWithSuspend
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -17,6 +23,11 @@ import java.util.Locale
 import java.util.TimeZone
 
 class OtherDetailsViewModel : ViewModel() {
+    companion object {
+        private const val DUB_FEED_URL =
+            "https://raw.githubusercontent.com/RockinChaos/AniSchedule/master/readable/dub-episode-feed-readable.json"
+    }
+
     private val character: MutableLiveData<Character> = MutableLiveData(null)
     fun getCharacter(): LiveData<Character> = character
     suspend fun loadCharacter(m: Character) {
@@ -37,18 +48,21 @@ class OtherDetailsViewModel : ViewModel() {
 
     private var cachedAllCalendarData: Map<String, MutableList<Media>>? = null
     private var cachedLibraryCalendarData: Map<String, MutableList<Media>>? = null
+    private var cachedDubAnilistIds: Set<Int>? = null
+    private var cachedDubMalToAnilistId: Map<Int, Int>? = null
+    private var cachedDubSiteMap: Map<Int, List<MediaExternalLink>>? = null
     private val calendar: MutableLiveData<Map<String, MutableList<Media>>> = MutableLiveData(null)
     fun getCalendar(): LiveData<Map<String, MutableList<Media>>> = calendar
-    suspend fun loadCalendar(showOnlyLibrary: Boolean = false) {
+    suspend fun loadCalendar(showOnlyLibrary: Boolean = false, showOnlyDubbed: Boolean = false) {
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         if (rescueMode) {
-            loadCalendarFromJikan(showOnlyLibrary)
+            loadCalendarFromJikan(showOnlyLibrary, showOnlyDubbed)
         } else {
-            loadCalendarFromAnilist(showOnlyLibrary)
+            loadCalendarFromAnilist(showOnlyLibrary, showOnlyDubbed)
         }
     }
 
-    private suspend fun loadCalendarFromAnilist(showOnlyLibrary: Boolean) {
+    private suspend fun loadCalendarFromAnilist(showOnlyLibrary: Boolean, showOnlyDubbed: Boolean) {
         if (cachedAllCalendarData == null || cachedLibraryCalendarData == null) {
             val curr = System.currentTimeMillis() / 1000
             val res = Anilist.query.recentlyUpdated(curr - 86400, curr + (86400 * 6))
@@ -85,15 +99,18 @@ class OtherDetailsViewModel : ViewModel() {
             cachedLibraryCalendarData = libraryMap
         }
 
-        val cacheToUse: Map<String, MutableList<Media>> = if (showOnlyLibrary) {
+        var cacheToUse: Map<String, MutableList<Media>> = if (showOnlyLibrary) {
             cachedLibraryCalendarData ?: emptyMap()
         } else {
             cachedAllCalendarData ?: emptyMap()
         }
+        if (showOnlyDubbed) {
+            cacheToUse = applyDubFilter(cacheToUse, rescueMode = false)
+        }
         calendar.postValue(cacheToUse)
     }
 
-    private suspend fun loadCalendarFromJikan(showOnlyLibrary: Boolean) {
+    private suspend fun loadCalendarFromJikan(showOnlyLibrary: Boolean, showOnlyDubbed: Boolean) {
         if (cachedAllCalendarData == null || cachedLibraryCalendarData == null) {
             val jikan = JikanQueries()
             val df = DateFormat.getDateInstance(DateFormat.FULL)
@@ -239,11 +256,83 @@ class OtherDetailsViewModel : ViewModel() {
             cachedLibraryCalendarData = libraryMap
         }
 
-        val cacheToUse: Map<String, MutableList<Media>> = if (showOnlyLibrary) {
+        var cacheToUse: Map<String, MutableList<Media>> = if (showOnlyLibrary) {
             cachedLibraryCalendarData ?: emptyMap()
         } else {
             cachedAllCalendarData ?: emptyMap()
         }
+        if (showOnlyDubbed) {
+            cacheToUse = applyDubFilter(cacheToUse, rescueMode = true)
+        }
         calendar.postValue(cacheToUse)
     }
+
+    private suspend fun applyDubFilter(
+        data: Map<String, MutableList<Media>>,
+        rescueMode: Boolean
+    ): Map<String, MutableList<Media>> {
+        ensureDubDataLoaded()
+        val dubAnilistIds = cachedDubAnilistIds ?: emptySet()
+        val dubMalToAnilist = cachedDubMalToAnilistId ?: emptyMap()
+        val dubSiteMap = cachedDubSiteMap ?: emptyMap()
+
+        val filteredMap = linkedMapOf<String, MutableList<Media>>()
+        data.forEach { (date, mediaList) ->
+            val filteredList = mediaList.mapNotNull { media ->
+                val matchedAnilistId = when {
+                    dubAnilistIds.contains(media.id) -> media.id
+                    rescueMode -> media.idMAL?.let { dubMalToAnilist[it] }
+                    else -> null
+                } ?: return@mapNotNull null
+
+                media.dubStreamingSites = ArrayList(dubSiteMap[matchedAnilistId] ?: emptyList())
+                media
+            }.toMutableList()
+            if (filteredList.isNotEmpty()) {
+                filteredMap[date] = filteredList
+            }
+        }
+        return filteredMap
+    }
+
+    private suspend fun ensureDubDataLoaded() {
+        if (cachedDubAnilistIds != null && cachedDubMalToAnilistId != null && cachedDubSiteMap != null) {
+            return
+        }
+
+        val feedItems = tryWithSuspend {
+            val response = client.get(DUB_FEED_URL)
+            Mapper.json.decodeFromString<List<DubEpisodeFeedItem>>(response.text)
+        } ?: emptyList()
+
+        val anilistIds = feedItems.map { it.id }.toSet()
+        val malToAnilist = feedItems.mapNotNull { item ->
+            item.idMal?.let { it to item.id }
+        }.toMap()
+
+        cachedDubAnilistIds = anilistIds
+        cachedDubMalToAnilistId = malToAnilist
+
+        if (anilistIds.isEmpty()) {
+            cachedDubSiteMap = emptyMap()
+            return
+        }
+
+        val siteMap = mutableMapOf<Int, List<MediaExternalLink>>()
+        anilistIds.toList().chunked(50).forEach { chunk ->
+            val chunkMap = tryWithSuspend {
+                Anilist.query.getStreamingExternalLinks(chunk)
+            } ?: emptyMap()
+            chunkMap.forEach { (id, links) ->
+                if (links.isNotEmpty()) siteMap[id] = links
+            }
+        }
+        cachedDubSiteMap = siteMap
+    }
 }
+
+@Serializable
+private data class DubEpisodeFeedItem(
+    @SerialName("id") val id: Int,
+    @SerialName("idMal") val idMal: Int? = null,
+)

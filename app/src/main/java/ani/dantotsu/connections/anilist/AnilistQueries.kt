@@ -7,8 +7,10 @@ import ani.dantotsu.checkId
 import ani.dantotsu.connections.anilist.Anilist.authorRoles
 import ani.dantotsu.connections.anilist.Anilist.executeQuery
 import ani.dantotsu.connections.anilist.api.FeedResponse
+import ani.dantotsu.connections.anilist.api.ExternalLinkType
 import ani.dantotsu.connections.anilist.api.FuzzyDate
 import ani.dantotsu.connections.anilist.api.MediaEdge
+import ani.dantotsu.connections.anilist.api.MediaExternalLink
 import ani.dantotsu.connections.anilist.api.MediaList
 import ani.dantotsu.connections.anilist.api.MediaListStatus
 import ani.dantotsu.connections.anilist.api.NotificationResponse
@@ -123,6 +125,24 @@ class AnilistQueries {
         val fetchedMediaList = response?.data?.page?.media ?: return null
         return fetchedMediaList.map {
             Media(it)
+        }
+    }
+
+    suspend fun getStreamingExternalLinks(ids: List<Int>): Map<Int, List<MediaExternalLink>> {
+        if (ids.isEmpty()) return emptyMap()
+
+        val idsString = ids.joinToString(",")
+        val response = executeQuery<Query.MediaList>(
+            """{Page(page:1,perPage:${ids.size}){media(id_in:[${idsString}],type:ANIME,isAdult:false){id externalLinks{site type icon url}}}}""",
+            force = true
+        )
+        val fetchedMediaList = response?.data?.page?.media ?: return emptyMap()
+        return fetchedMediaList.associate { media ->
+            media.id to (
+                    media.externalLinks
+                        ?.filter { it.type == ExternalLinkType.STREAMING && !it.icon.isNullOrBlank() }
+                        ?: emptyList()
+                    )
         }
     }
 

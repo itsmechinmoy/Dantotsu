@@ -125,9 +125,21 @@
             android:textStyle="italic"
             android:transitionName="mediaTitle"
             tools:ignore="TextContrastCheck"
-            tools:text="Relation" />
+        tools:text="Relation" />
 
     </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/itemCompactDubSites"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="6dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        tools:visibility="visible" />
 
     <LinearLayout
         android:layout_width="wrap_content"

@@ -6,11 +6,13 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.text.TextUtils
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
+import android.widget.LinearLayout
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.app.ActivityOptionsCompat
 import androidx.core.content.ContextCompat
@@ -44,6 +46,7 @@ class MediaAdaptor(
     private val viewPager: ViewPager2? = null,
     private val fav: Boolean = false,
     private val isOtherUser: Boolean = false,
+    private val showDubSites: Boolean = false,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -124,6 +127,37 @@ class MediaAdaptor(
                         }
                     } else {
                         b.itemCompactType.visibility = View.GONE
+                    }
+
+                    if (showDubSites && !media.dubStreamingSites.isNullOrEmpty()) {
+                        b.itemCompactDubSites.visibility = View.VISIBLE
+                        b.itemCompactDubSites.removeAllViews()
+                        val iconSize = TypedValue.applyDimension(
+                            TypedValue.COMPLEX_UNIT_DIP,
+                            16f,
+                            b.root.resources.displayMetrics
+                        ).toInt()
+                        val iconMargin = TypedValue.applyDimension(
+                            TypedValue.COMPLEX_UNIT_DIP,
+                            4f,
+                            b.root.resources.displayMetrics
+                        ).toInt()
+                        media.dubStreamingSites
+                            ?.distinctBy { it.site.lowercase() }
+                            ?.take(5)
+                            ?.forEach { link ->
+                                val icon = ImageView(b.root.context).apply {
+                                    layoutParams = LinearLayout.LayoutParams(iconSize, iconSize).also {
+                                        it.marginEnd = iconMargin
+                                    }
+                                    contentDescription = link.site
+                                }
+                                icon.loadImage(link.icon)
+                                b.itemCompactDubSites.addView(icon)
+                            }
+                    } else {
+                        b.itemCompactDubSites.visibility = View.GONE
+                        b.itemCompactDubSites.removeAllViews()
                     }
                     
                     if (media.anime != null) {

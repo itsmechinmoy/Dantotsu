@@ -334,6 +334,7 @@
     <string name="previous">Previous</string>
     <string name="current_page">Current Page</string>
     <string name="dubbed">Dubbed</string>
+    <string name="filter_dubbed">Filter dubbed shows</string>
     <string name="subbed">Subbed</string>
     <string name="prefer_dub">Prefer Dubbed Anime</string>
     <string name="none">None</string>
