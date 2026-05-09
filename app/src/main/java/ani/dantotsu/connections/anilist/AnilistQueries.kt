@@ -136,6 +136,7 @@ class AnilistQueries {
                     fun parse() {
                         val fetchedMedia = response?.data?.media ?: return
                         val user = response?.data?.page
+                        media.isFav = fetchedMedia.isFavourite ?: false
                         media.source = fetchedMedia.source?.toString()
                         media.countryOfOrigin = fetchedMedia.countryOfOrigin
                         media.format = fetchedMedia.format?.toString()
@@ -425,6 +426,7 @@ class AnilistQueries {
                 if (response != null) {
                     fun parse() {
                         val fetchedMedia = response?.data?.media ?: return
+                        media.isFav = fetchedMedia.isFavourite ?: false
 
                         if (fetchedMedia.mediaListEntry != null) {
                             fetchedMedia.mediaListEntry?.apply {
