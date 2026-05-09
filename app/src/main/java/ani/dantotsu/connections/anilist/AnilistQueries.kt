@@ -45,6 +45,7 @@ class AnilistQueries {
     companion object {
 
         const val ITEMS_PER_PAGE = 25
+        private const val MAX_FAVORITE_CHECK_PAGES = 20
     }
 
     private data class MissingSequelsCache(
@@ -1886,7 +1887,7 @@ Page(page:$page,perPage:50) {
     private suspend fun isUserFavMedia(userId: Int, anime: Boolean, id: Int): Boolean {
         var page = 1
         var hasNextPage = true
-        while (hasNextPage) {
+        while (hasNextPage && page <= MAX_FAVORITE_CHECK_PAGES) {
             val response = executeQuery<Query.UserProfileResponse>(
                 """{User(id:$userId){favourites{${if (anime) "anime" else "manga"}(page:$page,perPage:50){pageInfo{hasNextPage}nodes{id}}}}}""",
                 force = true
@@ -1906,7 +1907,7 @@ Page(page:$page,perPage:50) {
     private suspend fun isUserFavCharacter(userId: Int, id: Int): Boolean {
         var page = 1
         var hasNextPage = true
-        while (hasNextPage) {
+        while (hasNextPage && page <= MAX_FAVORITE_CHECK_PAGES) {
             val response = executeQuery<Query.UserProfileResponse>(
                 """{User(id:$userId){favourites{characters(page:$page,perPage:50){pageInfo{hasNextPage}nodes{id}}}}}""",
                 force = true
@@ -1922,7 +1923,7 @@ Page(page:$page,perPage:50) {
     private suspend fun isUserFavStaff(userId: Int, id: Int): Boolean {
         var page = 1
         var hasNextPage = true
-        while (hasNextPage) {
+        while (hasNextPage && page <= MAX_FAVORITE_CHECK_PAGES) {
             val response = executeQuery<Query.UserProfileResponse>(
                 """{User(id:$userId){favourites{staff(page:$page,perPage:50){pageInfo{hasNextPage}nodes{id}}}}}""",
                 force = true
@@ -1938,7 +1939,7 @@ Page(page:$page,perPage:50) {
     private suspend fun isUserFavStudio(userId: Int, id: Int): Boolean {
         var page = 1
         var hasNextPage = true
-        while (hasNextPage) {
+        while (hasNextPage && page <= MAX_FAVORITE_CHECK_PAGES) {
             val response = executeQuery<Query.UserProfileResponse>(
                 """{User(id:$userId){favourites{studios(page:$page,perPage:50){pageInfo{hasNextPage}nodes{id}}}}}""",
                 force = true
