@@ -130,8 +130,18 @@ class ProfileFragment : Fragment() {
             binding.profileFavManga
         )
 
+        val isCurrentUser = user.id == Anilist.userid
         user.favourites?.characters?.nodes?.forEach { i ->
-            favCharacter.add(Character(i.id, i.name.full, i.image.large, i.image.large, "", true))
+            favCharacter.add(
+                Character(
+                    i.id,
+                    i.name.full,
+                    i.image.large,
+                    i.image.large,
+                    "",
+                    isCurrentUser
+                )
+            )
         }
 
         user.favourites?.staff?.nodes?.forEach { i ->

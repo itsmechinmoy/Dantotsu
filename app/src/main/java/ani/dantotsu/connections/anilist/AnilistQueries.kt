@@ -807,15 +807,17 @@ class AnilistQueries {
             response?.data?.recommendationQuery?.recommendations?.forEach {
                 it.mediaRecommendation?.let { json ->
                     val media = Media(json)
-                    media.relation = json.type?.toString()
-                    subMap[media.id] = media
+                    if (media.userStatus == null) {
+                        media.relation = json.type?.toString()
+                        subMap[media.id] = media
+                    }
                 }
             }
             response?.data?.recommendationPlannedQueryAnime?.lists?.flatMap {
                 it.entries ?: emptyList()
             }?.forEach {
                 val media = Media(it)
-                if (media.status in listOf("RELEASING", "FINISHED")) {
+                if (media.status in listOf("RELEASING", "FINISHED") && media.userStatus == null) {
                     media.relation = it.media?.type?.toString()
                     subMap[media.id] = media
                 }
@@ -824,7 +826,7 @@ class AnilistQueries {
                 it.entries ?: emptyList()
             }?.forEach {
                 val media = Media(it)
-                if (media.status in listOf("RELEASING", "FINISHED")) {
+                if (media.status in listOf("RELEASING", "FINISHED") && media.userStatus == null) {
                     media.relation = it.media?.type?.toString()
                     subMap[media.id] = media
                 }
