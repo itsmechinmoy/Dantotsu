@@ -20,7 +20,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.text.bold
 import androidx.core.text.color
 import androidx.core.view.isVisible
-import androidx.core.view.marginBottom
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updateMargins
 import androidx.fragment.app.Fragment
@@ -46,7 +45,6 @@ import ani.dantotsu.media.comments.CommentsFragment
 import ani.dantotsu.media.manga.MangaReadFragment
 import ani.dantotsu.media.novel.NovelReadFragment
 import ani.dantotsu.navBarHeight
-import ani.dantotsu.setBaseline
 import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.others.AndroidBug5497Workaround
 import ani.dantotsu.others.ImageViewDialog
@@ -218,36 +216,38 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             true
         }
         binding.mediaStatus.text = media.status ?: ""
-
-        //Fav Button
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-        val favButton = if (Anilist.userid != null && !rescueMode) {
-            if (media.isFav) binding.mediaFav.setImageDrawable(
-                AppCompatResources.getDrawable(
-                    this,
-                    R.drawable.ic_round_favorite_24
-                )
-            )
 
-            PopImageButton(
-                scope,
-                binding.mediaFav,
-                R.drawable.ic_round_favorite_24,
-                R.drawable.ic_round_favorite_border_24,
-                R.color.bg_opp,
-                R.color.violet_400,
-                media.isFav
-            ) {
-                media.isFav = it
-                Anilist.mutation.toggleFav(media.anime != null, media.id)
-                Refresh.all()
+        fun fav(media: Media):  PopImageButton? {
+            //Fav Button
+            return if (Anilist.userid != null && !rescueMode) {
+                if (media.isFav) binding.mediaFav.setImageDrawable(
+                    AppCompatResources.getDrawable(
+                        this,
+                        R.drawable.ic_round_favorite_24
+                    )
+                )
+
+                PopImageButton(
+                    scope,
+                    binding.mediaFav,
+                    R.drawable.ic_round_favorite_24,
+                    R.drawable.ic_round_favorite_border_24,
+                    R.color.bg_opp,
+                    R.color.violet_400,
+                    media.isFav
+                ) {
+                    media.isFav = it
+                    Anilist.mutation.toggleFav(media.anime != null, media.id)
+                    Refresh.all()
+                }
+            } else {
+                binding.mediaFav.visibility = View.GONE
+                null
             }
-        } else {
-            binding.mediaFav.visibility = View.GONE
-            null
         }
         var isFavSyncRunning = false
-        fun syncMediaFavStateIfNeeded() {
+        fun syncMediaFavStateIfNeeded(favButton: PopImageButton?) {
             if (rescueMode || Anilist.userid == null || favButton == null || media.isFav || isFavSyncRunning) return
             isFavSyncRunning = true
             scope.launch {
@@ -269,7 +269,6 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                 }
             }
         }
-        syncMediaFavStateIfNeeded()
 
         @SuppressLint("ResourceType")
         fun total() {
@@ -360,7 +359,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                             folderName = folderName,
                             isAnime = isAnime,
                             isNovel = isNovel
-                        ) { newId ->
+                        ) { _ ->
                             // Re-trigger it
                             val updatedMedia = media.copy(id = 0)
                             model.loading = false
@@ -371,9 +370,11 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                 }
 
                 scope.launch {
-                    if (media.isFav != favButton?.clicked) favButton?.clicked()
+                    val favIcon = fav(it)
+                    syncMediaFavStateIfNeeded(favIcon)
+                    if (media.isFav != favIcon?.clicked) favIcon?.clicked()
                 }
-                syncMediaFavStateIfNeeded()
+
 
                 binding.mediaNotify.setOnClickListener {
                     val i = Intent(Intent.ACTION_SEND)
