@@ -1,0 +1,159 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches:
+      - dev
+    paths-ignore:
+      - '**/README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set version
+        id: version
+        run: |
+          VER=$(grep -E -o 'versionName = "[^"]*"' app/build.gradle.kts | cut -d'"' -f2)
+          SHA=$(git rev-parse HEAD)
+          VERSION="${VER}+${SHA:0:7}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Generate commit log
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          REPO_URL="https://github.com/itsmechinmoy/better-dantotsu"
+          if [ -n "$LAST_TAG" ]; then
+            COMMIT_LOGS=$(git log ${LAST_TAG}..HEAD --pretty=format:"● %s ~%an [֍](${REPO_URL}/commit/%H)" --max-count=20)
+          else
+            COMMIT_LOGS=$(git log HEAD --pretty=format:"● %s ~%an [֍](${REPO_URL}/commit/%H)" --max-count=20)
+          fi
+          if [ -z "$COMMIT_LOGS" ]; then
+            COMMIT_LOGS="● No new commits"
+          fi
+          {
+            echo "Commits:"
+            echo ""
+            echo "$COMMIT_LOGS"
+            echo ""
+            echo "---"
+          } > commit_log.txt
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Cache Gradle wrapper
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/wrapper
+          key: gradle-wrapper-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-wrapper-
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/configuration-cache
+          key: gradle-deps-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
+          restore-keys: gradle-deps-
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Add Split APK Configuration
+        run: |
+          if ! grep -q "splits {" app/build.gradle.kts; then
+            sed -i '/android {/a\
+            \    splits {\
+            \        abi {\
+            \            isEnable = true\
+            \            reset()\
+            \            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")\
+            \            isUniversalApk = true\
+            \        }\
+            \    }' app/build.gradle.kts
+          fi
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > $GITHUB_WORKSPACE/key.keystore
+
+      - name: Build signed APKs
+        run: |
+          ./gradlew assembleGoogleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/key.keystore \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+
+      - name: Process APKs and generate checksums
+        run: |
+          cd app/build/outputs/apk/google/release/
+
+          # Find universal APK
+          if [ -f "app-google-universal-release.apk" ]; then
+            UNIVERSAL="app-google-universal-release.apk"
+          elif [ -f "app-google-release.apk" ]; then
+            UNIVERSAL="app-google-release.apk"
+          fi
+
+          {
+            echo ""
+            echo "---"
+            echo "### Checksums"
+            echo ""
+            echo "| Variant | SHA-256 |"
+            echo "| ------- | ------- |"
+            if [ -n "$UNIVERSAL" ]; then
+              SHA=$(sha256sum "$UNIVERSAL" | cut -d' ' -f1)
+              echo "| Universal | \`$SHA\` |"
+            fi
+            for apk in app-google-*-release.apk; do
+              [ "$apk" = "$UNIVERSAL" ] && continue
+              [ "$apk" = "app-google-*-release.apk" ] && continue
+              ABI=$(echo "$apk" | sed 's/app-google-//' | sed 's/-release.apk//')
+              SHA=$(sha256sum "$apk" | cut -d' ' -f1)
+              echo "| $ABI | \`$SHA\` |"
+            done
+            echo ""
+            echo "---"
+            echo ""
+            CURRENT_TAG_SAFE=$(echo "v${{ steps.version.outputs.VERSION }}" | sed 's/+/%2B/g')
+            echo "![Total Downloads](https://img.shields.io/github/downloads/itsmechinmoy/better-dantotsu/total?style=for-the-badge&label=TOTAL%20DOWNLOADS&labelColor=black&color=white) ![Current Release](https://img.shields.io/github/downloads/itsmechinmoy/better-dantotsu/${CURRENT_TAG_SAFE}/total?style=for-the-badge&label=CURRENT%20RELEASE&labelColor=black&color=white)"
+          } >> $GITHUB_WORKSPACE/commit_log.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: better-dantotsu-apks
+          retention-days: 7
+          path: app/build/outputs/apk/google/release/*.apk
+
+      - name: Save SHA for next run
+        run: echo "${{ github.sha }}" > last_sha.txt
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ steps.version.outputs.VERSION }}
+          name: better-dantotsu v${{ steps.version.outputs.VERSION }}
+          bodyFile: commit_log.txt
+          artifacts: |
+            app/build/outputs/apk/google/release/*.apk
+            last_sha.txt
+          token: ${{ secrets.GITHUB_TOKEN }}
