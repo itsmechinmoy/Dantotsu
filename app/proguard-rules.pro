@@ -127,3 +127,10 @@
 
 # Prevent stripping Unsafe usage
 -dontwarn sun.misc.Unsafe
+
+#############################################
+# Charts (AAChart)
+#############################################
+
+-keep class com.github.aachartmodel.** { *; }
+-dontwarn com.github.aachartmodel.**

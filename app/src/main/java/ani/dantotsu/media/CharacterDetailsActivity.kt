@@ -86,6 +86,9 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
         binding.characterTitle.text = character.name
         banner.loadImage(character.banner)
         binding.characterCoverImage.loadImage(character.image)
+        binding.characterFav.setImageResource(
+            if (character.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
+        )
         binding.characterCoverImage.setOnLongClickListener {
             ImageViewDialog.newInstance(
                 this,
@@ -129,7 +132,9 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
         }
         model.getCharacter().observe(this) {
             if (it != null && !loaded) {
+                val preservedFavState = character.isFav
                 character = it
+                character.isFav = preservedFavState
                 loaded = true
                 binding.characterProgress.visibility = View.GONE
                 binding.characterRecyclerView.visibility = View.VISIBLE

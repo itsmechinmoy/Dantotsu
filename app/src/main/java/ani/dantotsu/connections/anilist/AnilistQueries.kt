@@ -136,6 +136,7 @@ class AnilistQueries {
                     fun parse() {
                         val fetchedMedia = response?.data?.media ?: return
                         val user = response?.data?.page
+                        media.isFav = fetchedMedia.isFavourite ?: false
                         media.source = fetchedMedia.source?.toString()
                         media.countryOfOrigin = fetchedMedia.countryOfOrigin
                         media.format = fetchedMedia.format?.toString()
@@ -425,6 +426,7 @@ class AnilistQueries {
                 if (response != null) {
                     fun parse() {
                         val fetchedMedia = response?.data?.media ?: return
+                        media.isFav = fetchedMedia.isFavourite ?: false
 
                         if (fetchedMedia.mediaListEntry != null) {
                             fetchedMedia.mediaListEntry?.apply {
@@ -807,15 +809,17 @@ class AnilistQueries {
             response?.data?.recommendationQuery?.recommendations?.forEach {
                 it.mediaRecommendation?.let { json ->
                     val media = Media(json)
-                    media.relation = json.type?.toString()
-                    subMap[media.id] = media
+                    if (media.userStatus == null) {
+                        media.relation = json.type?.toString()
+                        subMap[media.id] = media
+                    }
                 }
             }
             response?.data?.recommendationPlannedQueryAnime?.lists?.flatMap {
                 it.entries ?: emptyList()
             }?.forEach {
                 val media = Media(it)
-                if (media.status in listOf("RELEASING", "FINISHED")) {
+                if (media.status in listOf("RELEASING", "FINISHED") && media.userStatus == null) {
                     media.relation = it.media?.type?.toString()
                     subMap[media.id] = media
                 }
@@ -824,7 +828,7 @@ class AnilistQueries {
                 it.entries ?: emptyList()
             }?.forEach {
                 val media = Media(it)
-                if (media.status in listOf("RELEASING", "FINISHED")) {
+                if (media.status in listOf("RELEASING", "FINISHED") && media.userStatus == null) {
                     media.relation = it.media?.type?.toString()
                     subMap[media.id] = media
                 }
@@ -1843,7 +1847,7 @@ Page(page:$page,perPage:50) {
         val typeIn =
             if (filter == "isFollowing:true,") "type_in:[TEXT,ANIME_LIST,MANGA_LIST,MEDIA_LIST]," else ""
         return executeQuery<FeedResponse>(
-            """{Page(page:$page,perPage:$ITEMS_PER_PAGE){activities(${filter}${typeIn}sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id title{english romaji native userPreferred}bannerImage coverImage{medium large}isAdult}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id recipientId messengerId type replyCount likeCount message(asHtml:true)isLocked isSubscribed isLiked isPrivate siteUrl createdAt recipient{id name bannerImage avatar{medium large}}messenger{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}}""",
+            """{Page(page:$page,perPage:$ITEMS_PER_PAGE){pageInfo{hasNextPage}activities(${filter}${typeIn}sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id title{english romaji native userPreferred}bannerImage coverImage{medium large}isAdult}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id recipientId messengerId type replyCount likeCount message(asHtml:true)isLocked isSubscribed isLiked isPrivate siteUrl createdAt recipient{id name bannerImage avatar{medium large}}messenger{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}}""",
             force = true
         )
     }
