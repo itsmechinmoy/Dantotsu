@@ -246,6 +246,30 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             binding.mediaFav.visibility = View.GONE
             null
         }
+        var isFavSyncRunning = false
+        fun syncMediaFavStateIfNeeded() {
+            if (rescueMode || Anilist.userid == null || favButton == null || media.isFav || isFavSyncRunning) return
+            isFavSyncRunning = true
+            scope.launch {
+                try {
+                    val favType = if (media.anime != null) {
+                        ani.dantotsu.connections.anilist.AnilistMutations.FavType.ANIME
+                    } else {
+                        ani.dantotsu.connections.anilist.AnilistMutations.FavType.MANGA
+                    }
+                    val isUserFav = withContext(Dispatchers.IO) {
+                        Anilist.query.isUserFav(favType, media.id)
+                    }
+                    if (isUserFav) {
+                        media.isFav = true
+                        if (!favButton.clicked) favButton.clicked()
+                    }
+                } finally {
+                    isFavSyncRunning = false
+                }
+            }
+        }
+        syncMediaFavStateIfNeeded()
 
         @SuppressLint("ResourceType")
         fun total() {
@@ -349,6 +373,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                 scope.launch {
                     if (media.isFav != favButton?.clicked) favButton?.clicked()
                 }
+                syncMediaFavStateIfNeeded()
 
                 binding.mediaNotify.setOnClickListener {
                     val i = Intent(Intent.ACTION_SEND)

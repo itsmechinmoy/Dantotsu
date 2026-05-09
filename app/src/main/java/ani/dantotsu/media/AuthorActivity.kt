@@ -84,6 +84,9 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
         author = intent.getSerialized("author") ?: return
         binding.characterTitle.text = author.name
         binding.characterCoverImage.loadImage(author.image)
+        binding.characterFav.setImageResource(
+            if (author.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
+        )
         binding.characterCoverImage.setOnLongClickListener {
             ImageViewDialog.newInstance(
                 this,
@@ -116,7 +119,7 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
         binding.characterFav.setOnClickListener {
             scope.launch {
                 lifecycleScope.launch {
-                    if (Anilist.mutation.toggleFav(AnilistMutations.FavType.CHARACTER, author.id)) {
+                    if (Anilist.mutation.toggleFav(AnilistMutations.FavType.STAFF, author.id)) {
                         author.isFav = !author.isFav
                         binding.characterFav.setImageResource(
                             if (author.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24

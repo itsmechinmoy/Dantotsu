@@ -131,11 +131,11 @@ class ProfileFragment : Fragment() {
         )
 
         user.favourites?.characters?.nodes?.forEach { i ->
-            favCharacter.add(Character(i.id, i.name.full, i.image.large, i.image.large, "", true))
+            favCharacter.add(Character(i.id, i.name.full, i.image.large, i.image.large, "", i.isFavourite))
         }
 
         user.favourites?.staff?.nodes?.forEach { i ->
-            favStaff.add(Author(i.id, i.name.full, i.image.large, ""))
+            favStaff.add(Author(i.id, i.name.full, i.image.large, "", isFav = i.isFavourite))
         }
 
         setFavPeople()
