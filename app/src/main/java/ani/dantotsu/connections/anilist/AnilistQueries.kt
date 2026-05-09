@@ -1883,26 +1883,85 @@ Page(page:$page,perPage:50) {
             .filter { it.timeUntilAiring != null }
     }
 
+    private suspend fun isUserFavMedia(userId: Int, anime: Boolean, id: Int): Boolean {
+        var page = 1
+        var hasNextPage = true
+        while (hasNextPage) {
+            val response = executeQuery<Query.UserProfileResponse>(
+                """{User(id:$userId){favourites{${if (anime) "anime" else "manga"}(page:$page,perPage:50){pageInfo{hasNextPage}nodes{id}}}}}""",
+                force = true
+            )
+            val favPage = if (anime) {
+                response?.data?.user?.favourites?.anime
+            } else {
+                response?.data?.user?.favourites?.manga
+            }
+            if (favPage?.nodes?.any { it.id == id } == true) return true
+            hasNextPage = favPage?.pageInfo?.hasNextPage == true
+            page++
+        }
+        return false
+    }
+
+    private suspend fun isUserFavCharacter(userId: Int, id: Int): Boolean {
+        var page = 1
+        var hasNextPage = true
+        while (hasNextPage) {
+            val response = executeQuery<Query.UserProfileResponse>(
+                """{User(id:$userId){favourites{characters(page:$page,perPage:50){pageInfo{hasNextPage}nodes{id}}}}}""",
+                force = true
+            )
+            val favPage = response?.data?.user?.favourites?.characters
+            if (favPage?.nodes?.any { it.id == id } == true) return true
+            hasNextPage = favPage?.pageInfo?.hasNextPage == true
+            page++
+        }
+        return false
+    }
+
+    private suspend fun isUserFavStaff(userId: Int, id: Int): Boolean {
+        var page = 1
+        var hasNextPage = true
+        while (hasNextPage) {
+            val response = executeQuery<Query.UserProfileResponse>(
+                """{User(id:$userId){favourites{staff(page:$page,perPage:50){pageInfo{hasNextPage}nodes{id}}}}}""",
+                force = true
+            )
+            val favPage = response?.data?.user?.favourites?.staff
+            if (favPage?.nodes?.any { it.id == id } == true) return true
+            hasNextPage = favPage?.pageInfo?.hasNextPage == true
+            page++
+        }
+        return false
+    }
+
+    private suspend fun isUserFavStudio(userId: Int, id: Int): Boolean {
+        var page = 1
+        var hasNextPage = true
+        while (hasNextPage) {
+            val response = executeQuery<Query.UserProfileResponse>(
+                """{User(id:$userId){favourites{studios(page:$page,perPage:50){pageInfo{hasNextPage}nodes{id}}}}}""",
+                force = true
+            )
+            val favPage = response?.data?.user?.favourites?.studios
+            if (favPage?.nodes?.any { it.id == id } == true) return true
+            hasNextPage = favPage?.pageInfo?.hasNextPage == true
+            page++
+        }
+        return false
+    }
+
     suspend fun isUserFav(
         favType: AnilistMutations.FavType,
         id: Int
     ): Boolean {   //anilist isFavourite is broken, so we need to check it manually
-        val res = getUserProfile(Anilist.userid ?: return false)
+        val userId = Anilist.userid ?: return false
         return when (favType) {
-            AnilistMutations.FavType.ANIME -> res?.data?.user?.favourites?.anime?.nodes?.any { it.id == id }
-                ?: false
-
-            AnilistMutations.FavType.MANGA -> res?.data?.user?.favourites?.manga?.nodes?.any { it.id == id }
-                ?: false
-
-            AnilistMutations.FavType.CHARACTER -> res?.data?.user?.favourites?.characters?.nodes?.any { it.id == id }
-                ?: false
-
-            AnilistMutations.FavType.STAFF -> res?.data?.user?.favourites?.staff?.nodes?.any { it.id == id }
-                ?: false
-
-            AnilistMutations.FavType.STUDIO -> res?.data?.user?.favourites?.studios?.nodes?.any { it.id == id }
-                ?: false
+            AnilistMutations.FavType.ANIME -> isUserFavMedia(userId, anime = true, id = id)
+            AnilistMutations.FavType.MANGA -> isUserFavMedia(userId, anime = false, id = id)
+            AnilistMutations.FavType.CHARACTER -> isUserFavCharacter(userId, id)
+            AnilistMutations.FavType.STAFF -> isUserFavStaff(userId, id)
+            AnilistMutations.FavType.STUDIO -> isUserFavStudio(userId, id)
         }
     }
 }
