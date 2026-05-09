@@ -2,6 +2,7 @@ package ani.dantotsu.others
 
 import ani.dantotsu.client
 import ani.dantotsu.Mapper
+import ani.dantotsu.util.Logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -77,8 +78,16 @@ object IdMappers {
             try {
                 val response = client.get("https://api.ani.zip/mappings?anilist_id=$anilistId")
                 val payload = response.text
-                if (payload.isBlank()) return@withContext null
-                val jsonObject = Mapper.json.parseToJsonElement(payload) as? JsonObject ?: return@withContext null
+                if (payload.isBlank()) {
+                    Logger.log("AniZip : empty mapping response for anilist_id=$anilistId")
+                    return@withContext null
+                }
+                val jsonElement = Mapper.json.parseToJsonElement(payload)
+                if (jsonElement !is JsonObject) {
+                    Logger.log("AniZip : unexpected mapping payload type for anilist_id=$anilistId")
+                    return@withContext null
+                }
+                val jsonObject = jsonElement
                 val data = Mapper.json.decodeFromJsonElement<AniZipResponse>(jsonObject)
                 // Accessing the first mapping's imdb_id, if available
                 data.mappings.values.firstOrNull()?.imdbId
