@@ -87,8 +87,7 @@ object IdMappers {
                     Logger.log("AniZip : unexpected mapping payload type for anilist_id=$anilistId")
                     return@withContext null
                 }
-                val jsonObject = jsonElement
-                val data = Mapper.json.decodeFromJsonElement<AniZipResponse>(jsonObject)
+                val data = Mapper.json.decodeFromJsonElement<AniZipResponse>(jsonElement)
                 // Accessing the first mapping's imdb_id, if available
                 data.mappings.values.firstOrNull()?.imdbId
             } catch (e: CancellationException) {
