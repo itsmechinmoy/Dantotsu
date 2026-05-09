@@ -44,10 +44,7 @@ class ChapterLoaderDialog : BottomSheetDialogFragment() {
 
         model.getMedia().observe(viewLifecycleOwner) { m ->
             if (m != null && !loaded) {
-                val selected = m.selected ?: run {
-                    tryWith { dismiss() }
-                    return@observe
-                }
+                val selected = m.selected ?: model.loadSelected(m).also { m.selected = it }
                 loaded = true
                 binding.selectorAutoText.text = chp.title
                 lifecycleScope.launch(Dispatchers.IO) {
