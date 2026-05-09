@@ -44,12 +44,16 @@ class ChapterLoaderDialog : BottomSheetDialogFragment() {
 
         model.getMedia().observe(viewLifecycleOwner) { m ->
             if (m != null && !loaded) {
+                val selected = m.selected ?: run {
+                    tryWith { dismiss() }
+                    return@observe
+                }
                 loaded = true
                 binding.selectorAutoText.text = chp.title
                 lifecycleScope.launch(Dispatchers.IO) {
                     if (model.loadMangaChapterImages(
                             chp,
-                            m.selected!!
+                            selected
                         )
                     ) {
                         val activity = currActivity()
