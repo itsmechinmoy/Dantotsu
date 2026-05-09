@@ -2,6 +2,7 @@ package ani.dantotsu.others
 
 import ani.dantotsu.client
 import ani.dantotsu.Mapper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -41,6 +42,8 @@ object IdMappers {
                 }
 
                 data
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // If 404 or no internet, return null safely
                 e.printStackTrace()
@@ -73,9 +76,12 @@ object IdMappers {
         return withContext(Dispatchers.IO) {
             try {
                 val response = client.get("https://api.ani.zip/mappings?anilist_id=$anilistId")
+                if (!response.text.trimStart().startsWith("{")) return@withContext null
                 val data = Mapper.json.decodeFromString<AniZipResponse>(response.text)
                 // Accessing the first mapping's imdb_id, if available
                 data.mappings.values.firstOrNull()?.imdbId
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
                 null
