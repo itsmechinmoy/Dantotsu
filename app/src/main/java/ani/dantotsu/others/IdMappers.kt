@@ -76,8 +76,10 @@ object IdMappers {
         return withContext(Dispatchers.IO) {
             try {
                 val response = client.get("https://api.ani.zip/mappings?anilist_id=$anilistId")
-                if (!response.text.trimStart().startsWith("{")) return@withContext null
-                val data = Mapper.json.decodeFromString<AniZipResponse>(response.text)
+                val payload = response.text
+                if (payload.isBlank()) return@withContext null
+                val jsonObject = Mapper.json.parseToJsonElement(payload) as? JsonObject ?: return@withContext null
+                val data = Mapper.json.decodeFromJsonElement<AniZipResponse>(jsonObject)
                 // Accessing the first mapping's imdb_id, if available
                 data.mappings.values.firstOrNull()?.imdbId
             } catch (e: CancellationException) {
