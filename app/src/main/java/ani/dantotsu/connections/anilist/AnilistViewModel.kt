@@ -1024,7 +1024,7 @@ class ProfileViewModel : ViewModel() {
         val mangaList = res?.data?.favoriteManga?.favourites?.manga?.edges?.mapNotNull {
             it.node?.let { i ->
                 Media(i).apply {
-                    if (isCurrentUser) isFav = true
+                    isFav = isCurrentUser
                 }
             }
         }
@@ -1032,7 +1032,7 @@ class ProfileViewModel : ViewModel() {
         val animeList = res?.data?.favoriteAnime?.favourites?.anime?.edges?.mapNotNull {
             it.node?.let { i ->
                 Media(i).apply {
-                    if (isCurrentUser) isFav = true
+                    isFav = isCurrentUser
                 }
             }
         }
