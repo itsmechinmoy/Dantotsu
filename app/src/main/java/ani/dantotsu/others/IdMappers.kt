@@ -139,10 +139,10 @@ data class AniZipResponse(
 
 @Serializable
 data class AniZipMapping(
-    @SerialName("imdb_id") val imdbIdRaw: JsonElement? = null
+    @SerialName("imdb_id") private val imdbIdElement: JsonElement? = null
 ) {
     val imdbId: String?
-        get() = when (val el = imdbIdRaw) {
+        get() = when (val el = imdbIdElement) {
             is JsonPrimitive -> el.contentOrNull
             is JsonArray -> el.firstOrNull()?.jsonPrimitive?.contentOrNull
             else -> null
