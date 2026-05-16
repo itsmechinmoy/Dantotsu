@@ -556,10 +556,6 @@ class AnilistQueries {
         return """ Page(page: 1, perPage:30) { $standardPageInformation recommendations(sort: RATING_DESC, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress progressVolumes private score(format:POINT_100) status } chapters volumes isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
     }
 
-    private fun recommendationPlannedQuery(type: String): String {
-        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: PLANNING${if (type == "ANIME") ", sort: MEDIA_POPULARITY_DESC" else ""} ) { lists { entries { media { id mediaListEntry { progress progressVolumes private score(format:POINT_100) status } idMal type isAdult popularity status(version: 2) chapters volumes episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } }"""
-    }
-
     private fun missingSequelsCompletedSourceQuery(): String {
         return """ MediaListCollection( userId: ${Anilist.userid}, type: ANIME, status: COMPLETED, sort: UPDATED_TIME_DESC ) { lists { entries { media { id relations { edges { relationType(version: 2) node { id } } } } } } } """.trimIndent()
     }
@@ -689,8 +685,6 @@ class AnilistQueries {
         )
         if (toShow.getOrNull(6) == true) {
             queries.add("""recommendationQuery: ${recommendationQuery()}""")
-            queries.add("""recommendationPlannedQueryAnime: ${recommendationPlannedQuery("ANIME")}""")
-            queries.add("""recommendationPlannedQueryManga: ${recommendationPlannedQuery("MANGA")}""")
         }
         if (toShow.getOrNull(8) == true) {
             queries.add("""missingSequelsCompletedQuery: ${missingSequelsCompletedSourceQuery()}""")
@@ -813,24 +807,6 @@ class AnilistQueries {
                         media.relation = json.type?.toString()
                         subMap[media.id] = media
                     }
-                }
-            }
-            response?.data?.recommendationPlannedQueryAnime?.lists?.flatMap {
-                it.entries ?: emptyList()
-            }?.forEach {
-                val media = Media(it)
-                if (media.status in listOf("RELEASING", "FINISHED") && media.userStatus == null) {
-                    media.relation = it.media?.type?.toString()
-                    subMap[media.id] = media
-                }
-            }
-            response?.data?.recommendationPlannedQueryManga?.lists?.flatMap {
-                it.entries ?: emptyList()
-            }?.forEach {
-                val media = Media(it)
-                if (media.status in listOf("RELEASING", "FINISHED") && media.userStatus == null) {
-                    media.relation = it.media?.type?.toString()
-                    subMap[media.id] = media
                 }
             }
             val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
