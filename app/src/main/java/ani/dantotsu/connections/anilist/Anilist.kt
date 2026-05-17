@@ -14,6 +14,7 @@ import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.Locale
@@ -340,12 +341,33 @@ object Anilist {
             if (token != null || force) {
                 if (token != null && useToken) headers["Authorization"] = "Bearer $token"
 
-                val json = client.post(
+                val maxRetryAttempts = 1
+                var attempt = 0
+                var json = client.post(
                     "https://graphql.anilist.co/",
                     headers,
                     data = data,
                     cacheTime = cache ?: 10
                 )
+                while ((json.code == 429 || json.code in 500..599) && attempt < maxRetryAttempts) {
+                    val retryAfterSeconds = json.headers["Retry-After"]?.toLongOrNull()
+                    val retryDelayMs = when {
+                        json.code == 429 && retryAfterSeconds != null && retryAfterSeconds > 0 -> {
+                            retryAfterSeconds * 1000L
+                        }
+
+                        else -> 1000L
+                    }.coerceAtMost(5000L)
+                    Logger.log("AniList query retrying after ${retryDelayMs}ms due to HTTP ${json.code}")
+                    delay(retryDelayMs)
+                    attempt++
+                    json = client.post(
+                        "https://graphql.anilist.co/",
+                        headers,
+                        data = data,
+                        cacheTime = cache ?: 10
+                    )
+                }
                 val remaining = json.headers["X-RateLimit-Remaining"]?.toIntOrNull() ?: -1
                 Logger.log("Remaining requests: $remaining")
                 if (json.code == 429) {
@@ -357,6 +379,9 @@ object Anilist {
 
                     toast("Rate limited. Try after $retry seconds")
                     throw Exception("Rate limited after $retry seconds")
+                }
+                if (json.code in 500..599) {
+                    throw Exception("AniList server error (${json.code})")
                 }
 
                 if (json.code == 403 || json.code == 400) {

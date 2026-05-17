@@ -54,7 +54,6 @@ import ani.dantotsu.util.Logger
 import ani.dantotsu.util.customAlertDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
@@ -537,6 +536,7 @@ class HomeFragment : Fragment() {
         live.observe(viewLifecycleOwner) { shouldRefresh ->
             if (!running && shouldRefresh) {
                 running = true
+                val homeRefreshStartedAt = System.currentTimeMillis()
                 scope.launch {
                     withContext(Dispatchers.IO) {
                         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
@@ -561,7 +561,6 @@ class HomeFragment : Fragment() {
                                 }
                             }
                         }
-                        model.setListImages()
                         model.loaded = true
                     }
 
@@ -616,14 +615,8 @@ class HomeFragment : Fragment() {
                         }
                     }
 
-                    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                     val initHomePage = async(Dispatchers.IO) { model.initHomePage() }
-                    if (!rescueMode) {
-                        val initUserStatus = async(Dispatchers.IO) { model.initUserStatus() }
-                        awaitAll(initHomePage, initUserStatus)
-                    } else {
-                        initHomePage.await()
-                    }
+                    initHomePage.await()
 
                     withContext(Dispatchers.Main) {
                         model.empty.postValue(empty)
@@ -632,6 +625,16 @@ class HomeFragment : Fragment() {
 
                     live.postValue(false)
                     _binding?.homeRefresh?.isRefreshing = false
+                    val firstFullRenderMs = System.currentTimeMillis() - homeRefreshStartedAt
+                    val previousFullRenderMs =
+                        PrefManager.getCustomVal("home_first_full_render_ms", -1L)
+                    val comparison = if (previousFullRenderMs >= 0L) {
+                        "prev=${previousFullRenderMs}ms delta=${firstFullRenderMs - previousFullRenderMs}ms"
+                    } else {
+                        "prev=n/a"
+                    }
+                    Logger.log("Home first full render: ${firstFullRenderMs}ms ($comparison)")
+                    PrefManager.setCustomVal("home_first_full_render_ms", firstFullRenderMs)
                     running = false
                 }
             }

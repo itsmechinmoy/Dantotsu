@@ -105,15 +105,17 @@ class AnilistHomeViewModel : ViewModel() {
             return
         }
         val res = Anilist.query.initHomePage()
-        res["currentAnime"]?.let { animeContinue.postValue(it) }
-        res["favoriteAnime"]?.let { animeFav.postValue(it) }
-        res["currentAnimePlanned"]?.let { animePlanned.postValue(it) }
-        res["currentManga"]?.let { mangaContinue.postValue(it) }
-        res["favoriteManga"]?.let { mangaFav.postValue(it) }
-        res["currentMangaPlanned"]?.let { mangaPlanned.postValue(it) }
-        res["recommendations"]?.let { recommendation.postValue(it) }
-        res["missingSequels"]?.let { missingSequels.postValue(it) }
-        res["hidden"]?.let { hidden.postValue(it) }
+        res.currentAnime?.let { animeContinue.postValue(it) }
+        res.favoriteAnime?.let { animeFav.postValue(it) }
+        res.currentAnimePlanned?.let { animePlanned.postValue(it) }
+        res.currentManga?.let { mangaContinue.postValue(it) }
+        res.favoriteManga?.let { mangaFav.postValue(it) }
+        res.currentMangaPlanned?.let { mangaPlanned.postValue(it) }
+        res.recommendations?.let { recommendation.postValue(it) }
+        res.missingSequels?.let { missingSequels.postValue(it) }
+        res.userStatus?.let { userStatus.postValue(it) }
+        res.listImages?.let { listImages.postValue(it) }
+        hidden.postValue(res.hidden)
     }
 
     private suspend fun initHomePageFromMAL() {
