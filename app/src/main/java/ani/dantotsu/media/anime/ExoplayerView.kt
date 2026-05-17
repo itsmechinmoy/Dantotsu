@@ -3148,6 +3148,10 @@ class ExoplayerView :
 
     private fun updateAniProgress() {
         val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
+        if (episodeLength <= 0f) {
+            maybeHandleSubscriptionAfterEpisodeCompletion(false, incognito)
+            return
+        }
         val episodeEnd =
             exoPlayer.currentPosition / episodeLength >
                     PrefManager.getVal<Float>(
