@@ -170,6 +170,9 @@ val Int.dp: Float get() = (this / getSystem().displayMetrics.density)
 val Float.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
 
 lateinit var bottomBar: AnimatedBottomBar
+const val ANIME_TAB_INDEX = 0
+const val HOME_TAB_INDEX = 1
+const val MANGA_TAB_INDEX = 2
 var selectedOption = 1
 
 object Refresh {

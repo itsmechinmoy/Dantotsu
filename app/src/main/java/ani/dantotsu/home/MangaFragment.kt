@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.R
 import ani.dantotsu.Refresh
+import ani.dantotsu.MANGA_TAB_INDEX
 import ani.dantotsu.bottomBar
 import ani.dantotsu.connections.anilist.AniMangaSearchResults
 import ani.dantotsu.connections.anilist.Anilist
@@ -44,10 +45,6 @@ import kotlin.math.max
 import kotlin.math.min
 
 class MangaFragment : Fragment() {
-    companion object {
-        private const val MANGA_TAB_INDEX = 2
-    }
-
     private var _binding: FragmentMangaBinding? = null
     private val binding get() = _binding!!
     private lateinit var mangaPageAdapter: MangaPageAdapter
