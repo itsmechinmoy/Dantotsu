@@ -341,7 +341,8 @@ object Anilist {
             if (token != null || force) {
                 if (token != null && useToken) headers["Authorization"] = "Bearer $token"
 
-                val maxRetryAttempts = 1
+                val maxRetries = 1
+                fun shouldRetry(code: Int) = code == 429 || code in 500..599
                 var attempt = 0
                 var json = client.post(
                     "https://graphql.anilist.co/",
@@ -349,7 +350,7 @@ object Anilist {
                     data = data,
                     cacheTime = cache ?: 10
                 )
-                while ((json.code == 429 || json.code in 500..599) && attempt < maxRetryAttempts) {
+                while (shouldRetry(json.code) && attempt < maxRetries) {
                     val retryAfterSeconds = json.headers["Retry-After"]?.toLongOrNull()
                     val retryDelayMs = when {
                         json.code == 429 && retryAfterSeconds != null && retryAfterSeconds > 0 -> {

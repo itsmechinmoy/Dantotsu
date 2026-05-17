@@ -661,6 +661,12 @@ class AnilistQueries {
             ?.firstOrNull()
     }
 
+    private fun bannerCandidatesQuery(type: String): String {
+        return """MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1, perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries { media { id bannerImage isAdult } } } }"""
+    }
+
+    private val visibleMissingSequelStatuses = setOf("RELEASING", "FINISHED")
+
     suspend fun initHomePage(): HomePagePayload {
         val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
         val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
@@ -704,8 +710,8 @@ class AnilistQueries {
         if (toShow.getOrNull(6) == true) {
             queries.add("""recommendationQuery: ${recommendationQuery()}""")
         }
-        queries.add("""bannerAnimeQuery: MediaListCollection(userId: ${Anilist.userid}, type: ANIME, chunk:1, perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries { media { id bannerImage isAdult } } } }""")
-        queries.add("""bannerMangaQuery: MediaListCollection(userId: ${Anilist.userid}, type: MANGA, chunk:1, perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries { media { id bannerImage isAdult } } } }""")
+        queries.add("""bannerAnimeQuery: ${bannerCandidatesQuery("ANIME")}""")
+        queries.add("""bannerMangaQuery: ${bannerCandidatesQuery("MANGA")}""")
         if (toShow.getOrNull(7) == true) {
             queries.add("""Page1: ${status(1)}""")
             queries.add("""Page2: ${status(2)}""")
@@ -868,7 +874,7 @@ class AnilistQueries {
                         val node = edge.node
                         if (node != null &&
                             node.id in filteredSequelIds &&
-                            node.status?.name in setOf("RELEASING", "FINISHED") &&
+                            node.status?.name in visibleMissingSequelStatuses &&
                             seenIds.add(node.id)
                         ) {
                             sequels.add(Media(node))
