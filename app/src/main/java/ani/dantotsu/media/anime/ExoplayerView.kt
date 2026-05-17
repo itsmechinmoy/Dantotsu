@@ -2746,7 +2746,8 @@ class ExoplayerView :
             } else {
                 true
             }
-        if (shouldPausePlayback && castPlayer?.isPlaying != true) {
+        val isCasting = castPlayer?.isPlaying == true
+        if (shouldPausePlayback && !isCasting) {
             playerView.player?.pause()
         }
         super.onStop()
