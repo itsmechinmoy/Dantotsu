@@ -44,6 +44,10 @@ import kotlin.math.max
 import kotlin.math.min
 
 class MangaFragment : Fragment() {
+    private companion object {
+        const val MANGA_TAB_INDEX = 2
+    }
+
     private var _binding: FragmentMangaBinding? = null
     private val binding get() = _binding!!
     private lateinit var mangaPageAdapter: MangaPageAdapter
@@ -312,8 +316,8 @@ class MangaFragment : Fragment() {
     }
 
     override fun onResume() {
-        if (selectedOption == 2 && !model.loaded) {
-            Refresh.activity[this.hashCode()]!!.postValue(true)
+        if (selectedOption == MANGA_TAB_INDEX && !model.loaded) {
+            Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(false) }.postValue(true)
         }
         //make sure mangaPageAdapter is initialized
         if (mangaPageAdapter.trendingViewPager != null) {
