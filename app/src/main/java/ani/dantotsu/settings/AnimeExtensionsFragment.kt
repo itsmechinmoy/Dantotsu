@@ -52,12 +52,16 @@ class AnimeExtensionsFragment : Fragment(),
             true
 
         lifecycleScope.launch {
-            viewModel.pagerFlow.collectLatest {
-                adapter.submitData(it)
+            viewModel.pagerFlow.collectLatest { it ->
+                binding.allExtensionsRecyclerView.post {
+                    lifecycleScope.launch {
+                        adapter.submitData(it)
+                    }
+                }
             }
         }
 
-        viewModel.invalidatePager() // Force a refresh of the pager
+        viewModel.invalidatePager()
 
         return binding.root
     }
@@ -76,7 +80,7 @@ class AnimeExtensionsFragment : Fragment(),
             val notificationManager =
                 requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val installerSteps = InstallerSteps(notificationManager, context)
-            // Start the installation process
+
             animeExtensionManager.installExtension(pkg)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(
