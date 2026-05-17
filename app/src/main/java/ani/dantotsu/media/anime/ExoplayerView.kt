@@ -3148,10 +3148,6 @@ class ExoplayerView :
 
     private fun updateAniProgress() {
         val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
-        // Guard: if episodeLength is 0f the video never reached STATE_READY (still
-        // buffering / failed to load). Dividing by 0f yields Infinity in JVM float
-        // arithmetic, which would make episodeEnd = true and falsely mark the episode
-        // as watched the moment the user presses back before playback starts.
         if (episodeLength <= 0f) {
             maybeHandleSubscriptionAfterEpisodeCompletion(false, incognito)
             return
