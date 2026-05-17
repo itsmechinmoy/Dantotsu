@@ -3360,10 +3360,7 @@ class ExoplayerView :
                 "${media.id}_${episode.number}",
                 exoPlayer.currentPosition,
             )
-            if (isFinishing) {
-                exoPlayer.pause()
-                castPlayer?.pause()
-            } else if (wasPlaying) {
+            if (!isFinishing && wasPlaying) {
                 exoPlayer.play()
             }
         }
