@@ -76,7 +76,7 @@ class MangaExtensionsFragment : Fragment(),
     }
 
     override fun onInstallClick(pkg: MangaExtension.Available) {
-        if (isAdded) { // Check if the fragment is currently added to its activity
+        if (isAdded) {  // Check if the fragment is currently added to its activity
             val context = requireContext()
             val notificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
