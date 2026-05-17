@@ -29,6 +29,7 @@ import ani.dantotsu.media.MediaAdaptor
 import ani.dantotsu.media.ProgressAdapter
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.px
+import ani.dantotsu.selectedOption
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
@@ -311,7 +312,9 @@ class MangaFragment : Fragment() {
     }
 
     override fun onResume() {
-        if (!model.loaded) Refresh.activity[this.hashCode()]!!.postValue(true)
+        if (selectedOption == 2 && !model.loaded) {
+            Refresh.activity[this.hashCode()]!!.postValue(true)
+        }
         //make sure mangaPageAdapter is initialized
         if (mangaPageAdapter.trendingViewPager != null) {
             binding.root.requestApplyInsets()

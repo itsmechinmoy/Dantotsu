@@ -32,6 +32,7 @@ import ani.dantotsu.media.ProgressAdapter
 import ani.dantotsu.media.SearchActivity
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.px
+import ani.dantotsu.selectedOption
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
@@ -321,7 +322,9 @@ class AnimeFragment : Fragment() {
     }
 
     override fun onResume() {
-        if (!model.loaded) Refresh.activity[this.hashCode()]!!.postValue(true)
+        if (selectedOption == 0 && !model.loaded) {
+            Refresh.activity[this.hashCode()]!!.postValue(true)
+        }
         if (animePageAdapter.trendingViewPager != null) {
             binding.root.requestApplyInsets()
             binding.root.requestLayout()
