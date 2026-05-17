@@ -48,8 +48,8 @@ import kotlin.math.min
 
 
 class AnimeFragment : Fragment() {
-    private companion object {
-        const val ANIME_TAB_INDEX = 0
+    companion object {
+        private const val ANIME_TAB_INDEX = 0
     }
 
     private var _binding: FragmentAnimeBinding? = null
@@ -327,7 +327,7 @@ class AnimeFragment : Fragment() {
 
     override fun onResume() {
         if (selectedOption == ANIME_TAB_INDEX && !model.loaded) {
-            Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(false) }.postValue(true)
+            Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(true) }.postValue(true)
         }
         if (animePageAdapter.trendingViewPager != null) {
             binding.root.requestApplyInsets()
