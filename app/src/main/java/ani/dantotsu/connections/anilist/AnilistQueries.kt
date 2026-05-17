@@ -673,63 +673,58 @@ class AnilistQueries {
         val removedMedia = ArrayList<Media>()
         val toShow = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout).toMutableList()
 
-        val queries = mutableListOf<String>()
-        if (toShow.getOrNull(0) == true) {
-            queries.add("""currentAnime: ${continueMediaQuery("ANIME", "CURRENT")}""")
-            queries.add("""repeatingAnime: ${continueMediaQuery("ANIME", "REPEATING")}""")
-        }
-        if (toShow.getOrNull(1) == true) queries.add("""favoriteAnime: ${favMediaQuery(true, 1)}""")
-        if (toShow.getOrNull(2) == true) queries.add(
-            """plannedAnime: ${
-                continueMediaQuery(
-                    "ANIME",
-                    "PLANNING"
-                )
-            }"""
-        )
-        if (toShow.getOrNull(3) == true) {
-            queries.add("""currentManga: ${continueMediaQuery("MANGA", "CURRENT")}""")
-            queries.add("""repeatingManga: ${continueMediaQuery("MANGA", "REPEATING")}""")
-        }
-        if (toShow.getOrNull(4) == true) queries.add(
-            """favoriteManga: ${
-                favMediaQuery(
-                    false,
-                    1
-                )
-            }"""
-        )
-        if (toShow.getOrNull(5) == true) queries.add(
-            """plannedManga: ${
-                continueMediaQuery(
-                    "MANGA",
-                    "PLANNING"
-                )
-            }"""
-        )
-        if (toShow.getOrNull(6) == true) {
-            queries.add("""recommendationQuery: ${recommendationQuery()}""")
-        }
-        queries.add("""bannerAnimeQuery: ${bannerCandidatesQuery("ANIME")}""")
-        queries.add("""bannerMangaQuery: ${bannerCandidatesQuery("MANGA")}""")
-        if (toShow.getOrNull(7) == true) {
-            queries.add("""Page1: ${status(1)}""")
-            queries.add("""Page2: ${status(2)}""")
-        }
-        if (toShow.getOrNull(8) == true) {
-            queries.add("""missingSequelsCompletedQuery: ${missingSequelsCompletedSourceQuery()}""")
-            queries.add("""missingSequelsAllListQuery: ${missingSequelsAllListSourceQuery()}""")
-        }
-        if (queries.isEmpty() && toShow.getOrNull(8) != true) {
-            return HomePagePayload(hidden = arrayListOf())
+        suspend fun runStartupChunk(chunkQueries: List<String>): Query.HomePageMedia? {
+            if (chunkQueries.isEmpty()) return null
+            val query = "{${chunkQueries.joinToString(",")}}"
+            return executeQuery(query, show = true)
         }
 
-        val response = if (queries.isEmpty()) {
-            null
-        } else {
-            val query = "{${queries.joinToString(",")}}"
-            executeQuery<Query.HomePageMedia>(query, show = true)
+        val coreQueries = mutableListOf<String>()
+        if (toShow.getOrNull(0) == true) {
+            coreQueries.add("""currentAnime: ${continueMediaQuery("ANIME", "CURRENT")}""")
+            coreQueries.add("""repeatingAnime: ${continueMediaQuery("ANIME", "REPEATING")}""")
         }
+        if (toShow.getOrNull(2) == true) {
+            coreQueries.add("""plannedAnime: ${continueMediaQuery("ANIME", "PLANNING")}""")
+        }
+        if (toShow.getOrNull(3) == true) {
+            coreQueries.add("""currentManga: ${continueMediaQuery("MANGA", "CURRENT")}""")
+            coreQueries.add("""repeatingManga: ${continueMediaQuery("MANGA", "REPEATING")}""")
+        }
+        if (toShow.getOrNull(5) == true) {
+            coreQueries.add("""plannedManga: ${continueMediaQuery("MANGA", "PLANNING")}""")
+        }
+
+        val favoriteQueries = mutableListOf<String>()
+        if (toShow.getOrNull(1) == true) favoriteQueries.add("""favoriteAnime: ${favMediaQuery(true, 1)}""")
+        if (toShow.getOrNull(4) == true) favoriteQueries.add("""favoriteManga: ${favMediaQuery(false, 1)}""")
+
+        val recommendationQueries = if (toShow.getOrNull(6) == true) {
+            listOf("""recommendationQuery: ${recommendationQuery()}""")
+        } else emptyList()
+
+        val statusQueries = if (toShow.getOrNull(7) == true) {
+            listOf("""Page1: ${status(1)}""", """Page2: ${status(2)}""")
+        } else emptyList()
+
+        val missingSequelQueries = if (toShow.getOrNull(8) == true) {
+            listOf(
+                """missingSequelsCompletedQuery: ${missingSequelsCompletedSourceQuery()}""",
+                """missingSequelsAllListQuery: ${missingSequelsAllListSourceQuery()}"""
+            )
+        } else emptyList()
+
+        val bannerQueries = listOf(
+            """bannerAnimeQuery: ${bannerCandidatesQuery("ANIME")}""",
+            """bannerMangaQuery: ${bannerCandidatesQuery("MANGA")}"""
+        )
+
+        val coreResponse = runStartupChunk(coreQueries)
+        val favoriteResponse = runStartupChunk(favoriteQueries)
+        val recommendationResponse = runStartupChunk(recommendationQueries)
+        val statusResponse = runStartupChunk(statusQueries)
+        val missingSequelResponse = runStartupChunk(missingSequelQueries)
+        val bannerResponse = runStartupChunk(bannerQueries)
         var currentAnime: ArrayList<Media>? = null
         var favoriteAnime: ArrayList<Media>? = null
         var currentAnimePlanned: ArrayList<Media>? = null
@@ -797,22 +792,22 @@ class AnilistQueries {
 
         if (toShow.getOrNull(0) == true) processMedia(
             "Anime",
-            response?.data?.currentAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
-            response?.data?.repeatingAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed()
+            coreResponse?.data?.currentAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
+            coreResponse?.data?.repeatingAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed()
         )
         if (toShow.getOrNull(2) == true) processMedia(
             "AnimePlanned",
-            response?.data?.plannedAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
+            coreResponse?.data?.plannedAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
             null
         )
         if (toShow.getOrNull(3) == true) processMedia(
             "Manga",
-            response?.data?.currentManga?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
-            response?.data?.repeatingManga?.lists?.flatMap { it.entries ?: emptyList() }?.reversed()
+            coreResponse?.data?.currentManga?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
+            coreResponse?.data?.repeatingManga?.lists?.flatMap { it.entries ?: emptyList() }?.reversed()
         )
         if (toShow.getOrNull(5) == true) processMedia(
             "MangaPlanned",
-            response?.data?.plannedManga?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
+            coreResponse?.data?.plannedManga?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
             null
         )
 
@@ -836,16 +831,16 @@ class AnilistQueries {
 
         if (toShow.getOrNull(1) == true) processFavorites(
             "Anime",
-            response?.data?.favoriteAnime?.favourites?.anime?.edges
+            favoriteResponse?.data?.favoriteAnime?.favourites?.anime?.edges
         )
         if (toShow.getOrNull(4) == true) processFavorites(
             "Manga",
-            response?.data?.favoriteManga?.favourites?.manga?.edges
+            favoriteResponse?.data?.favoriteManga?.favourites?.manga?.edges
         )
 
         if (toShow.getOrNull(6) == true) {
             val subMap = mutableMapOf<Int, Media>()
-            response?.data?.recommendationQuery?.recommendations?.forEach {
+            recommendationResponse?.data?.recommendationQuery?.recommendations?.forEach {
                 it.mediaRecommendation?.let { json ->
                     val media = Media(json)
                     if (media.userStatus == null) {
@@ -860,9 +855,9 @@ class AnilistQueries {
 
         if (toShow.getOrNull(8) == true) {
             val completedEntries =
-                response?.data?.missingSequelsCompletedQuery?.lists?.flatMap { it.entries ?: emptyList() }
+                missingSequelResponse?.data?.missingSequelsCompletedQuery?.lists?.flatMap { it.entries ?: emptyList() }
             val allAnimeEntries =
-                response?.data?.missingSequelsAllListQuery?.lists?.flatMap { it.entries ?: emptyList() }
+                missingSequelResponse?.data?.missingSequelsAllListQuery?.lists?.flatMap { it.entries ?: emptyList() }
             val sequelIds = extractMissingSequelIds(completedEntries)
             val allAnimeIds = extractAnimeIds(allAnimeEntries)
             val filteredSequelIds = sequelIds - allAnimeIds
@@ -918,10 +913,10 @@ class AnilistQueries {
         }
 
         val listImages = arrayListOf(
-            pickBannerImage(response?.data?.bannerAnimeQuery),
-            pickBannerImage(response?.data?.bannerMangaQuery)
+            pickBannerImage(bannerResponse?.data?.bannerAnimeQuery),
+            pickBannerImage(bannerResponse?.data?.bannerMangaQuery)
         )
-        val userStatus = if (toShow.getOrNull(7) == true) collectUserStatus(response) else null
+        val userStatus = if (toShow.getOrNull(7) == true) collectUserStatus(statusResponse) else null
         return HomePagePayload(
             currentAnime = currentAnime,
             favoriteAnime = favoriteAnime,
