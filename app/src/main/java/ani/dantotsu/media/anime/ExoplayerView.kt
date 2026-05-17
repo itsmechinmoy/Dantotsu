@@ -2740,7 +2740,9 @@ class ExoplayerView :
     }
 
     override fun onStop() {
-        if (castPlayer?.isPlaying == false) {
+        if (isFinishing) {
+            playerView.player?.pause()
+        } else if (castPlayer?.isPlaying == false) {
             playerView.player?.pause()
         }
         super.onStop()
@@ -3353,7 +3355,12 @@ class ExoplayerView :
                 "${media.id}_${episode.number}",
                 exoPlayer.currentPosition,
             )
-            if (wasPlaying) exoPlayer.play()
+            if (!isInPictureInPictureMode && isFinishing) {
+                exoPlayer.pause()
+                castPlayer?.pause()
+            } else if (wasPlaying) {
+                exoPlayer.play()
+            }
         }
     }
 
