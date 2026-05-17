@@ -3186,7 +3186,7 @@ class ExoplayerView :
         if (lastSubscriptionPromptEpisode == currentEpisode) return
         lastSubscriptionPromptEpisode = currentEpisode
 
-        val subscriptionsEnabled = PrefManager.getVal<Boolean>(PrefName.SubscriptionCheckingNotifications)
+        val subscriptionsEnabled = PrefManager.getVal<Boolean>(PrefName.SubscriptionPromptAtEnd)
         if (!subscriptionsEnabled) return
 
         val isCompleted = isAnimeCompleted()
@@ -3213,10 +3213,7 @@ class ExoplayerView :
     }
 
     private fun isAnimeCompleted(): Boolean {
-        if (media.userStatus == "COMPLETED") return true
-        val totalEpisodes = media.anime?.totalEpisodes ?: return false
-        val currentEpisodeNumber = media.anime?.selectedEpisode?.toFloatOrNull() ?: return false
-        return currentEpisodeNumber >= totalEpisodes
+        return media.status == "FINISHED"
     }
 
     private fun nextEpisode(
