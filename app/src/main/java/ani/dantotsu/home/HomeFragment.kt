@@ -61,6 +61,10 @@ import kotlin.math.min
 
 
 class HomeFragment : Fragment() {
+    companion object {
+        private const val HOME_FIRST_FULL_RENDER_MS_KEY = "home_first_full_render_ms"
+    }
+
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
     override fun onCreateView(
@@ -627,14 +631,14 @@ class HomeFragment : Fragment() {
                     _binding?.homeRefresh?.isRefreshing = false
                     val firstFullRenderMs = System.currentTimeMillis() - homeRefreshStartedAt
                     val previousFullRenderMs =
-                        PrefManager.getCustomVal("home_first_full_render_ms", -1L)
+                        PrefManager.getCustomVal(HOME_FIRST_FULL_RENDER_MS_KEY, -1L)
                     val comparison = if (previousFullRenderMs >= 0L) {
                         "prev=${previousFullRenderMs}ms delta=${firstFullRenderMs - previousFullRenderMs}ms"
                     } else {
                         "prev=n/a"
                     }
                     Logger.log("Home first full render: ${firstFullRenderMs}ms ($comparison)")
-                    PrefManager.setCustomVal("home_first_full_render_ms", firstFullRenderMs)
+                    PrefManager.setCustomVal(HOME_FIRST_FULL_RENDER_MS_KEY, firstFullRenderMs)
                     running = false
                 }
             }
