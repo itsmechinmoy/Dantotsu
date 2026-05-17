@@ -3213,7 +3213,11 @@ class ExoplayerView :
     }
 
     private fun isAnimeCompleted(): Boolean {
-        return media.status == "FINISHED"
+        if (media.status == "FINISHED") return true
+        if (media.userStatus == "COMPLETED") return true
+        val totalEpisodes = media.anime?.totalEpisodes ?: return false
+        val currentEpisodeNumber = media.anime?.selectedEpisode?.toFloatOrNull() ?: return false
+        return currentEpisodeNumber >= totalEpisodes
     }
 
     private fun nextEpisode(
