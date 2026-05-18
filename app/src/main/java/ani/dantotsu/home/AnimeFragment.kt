@@ -299,7 +299,7 @@ class AnimeFragment : Fragment() {
                         }
                     }
                     model.loaded = true
-                    model.initPage(
+                    model.initAnimePage(
                         seasonIndex = 1,
                         popularOnList = PrefManager.getVal(PrefName.PopularAnimeList)
                     )

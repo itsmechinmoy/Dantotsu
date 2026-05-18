@@ -353,7 +353,7 @@ class AnilistAnimeViewModel : ViewModel() {
         mostFavAnime.postValue(list["mostFav"])
     }
 
-    suspend fun initPage(seasonIndex: Int, popularOnList: Boolean) {
+    suspend fun initAnimePage(seasonIndex: Int, popularOnList: Boolean) {
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         if (rescueMode) {
             loadTrending(seasonIndex)
@@ -361,7 +361,7 @@ class AnilistAnimeViewModel : ViewModel() {
             loadPopular("ANIME", sort = Anilist.sortBy[1], onList = popularOnList)
             return
         }
-        val res = Anilist.query.initAnimePage(seasonIndex, popularOnList)
+        val res = Anilist.query.fetchAnimePageData(seasonIndex, popularOnList)
         trending.postValue(res.trending)
         updated.postValue(res.media["recentUpdates"])
         popularMovies.postValue(res.media["trendingMovies"])
@@ -561,7 +561,7 @@ class AnilistMangaViewModel : ViewModel() {
         mostFavManga.postValue(list["mostFav"])
     }
 
-    suspend fun initPage(popularOnList: Boolean) {
+    suspend fun initMangaPage(popularOnList: Boolean) {
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         if (rescueMode) {
             loadTrending()
@@ -569,7 +569,7 @@ class AnilistMangaViewModel : ViewModel() {
             loadPopular("MANGA", sort = Anilist.sortBy[1], onList = popularOnList)
             return
         }
-        val res = Anilist.query.initMangaPage(popularOnList)
+        val res = Anilist.query.fetchMangaPageData(popularOnList)
         trending.postValue(res.trending)
         popularManga.postValue(res.media["trendingManga"])
         popularManhwa.postValue(res.media["trendingManhwa"])

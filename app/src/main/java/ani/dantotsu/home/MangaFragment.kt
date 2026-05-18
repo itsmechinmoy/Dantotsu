@@ -287,7 +287,7 @@ class MangaFragment : Fragment() {
                         }
                     }
                     model.loaded = true
-                    model.initPage(
+                    model.initMangaPage(
                         popularOnList = PrefManager.getVal(PrefName.PopularMangaList)
                     )
 
