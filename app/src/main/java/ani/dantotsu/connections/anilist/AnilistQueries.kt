@@ -495,15 +495,15 @@ class AnilistQueries {
         return responseArray
     }
 
-    private fun parseUserStatusFromHomeResponse(response: Query.HomePageMedia?): ArrayList<User>? {
+    private fun parseUserStatusFromHomeData(homeData: Query.HomePageMedia.Data?): ArrayList<User>? {
         val list = mutableListOf<User>()
         val threeDaysAgo = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_MONTH, -3)
         }.timeInMillis
-        if (response?.data?.page1 != null && response.data.page2 != null) {
+        if (homeData?.page1 != null && homeData.page2 != null) {
             val activities = listOf(
-                response.data.page1.activities,
-                response.data.page2.activities
+                homeData.page1.activities,
+                homeData.page2.activities
             ).asSequence().flatten()
                 .filter { it.typename != "MessageActivity" }
                 .filter { if (Anilist.adult) true else it.media?.isAdult != true }
@@ -554,7 +554,7 @@ class AnilistQueries {
         if (toShow.getOrNull(7) != true) return null
         val query = """{Page1:${status(1)}Page2:${status(2)}}"""
         val response = executeQuery<Query.HomePageMedia>(query)
-        return parseUserStatusFromHomeResponse(response)
+        return parseUserStatusFromHomeData(response?.data)
     }
 
     private fun favMediaQuery(anime: Boolean, page: Int, id: Int? = Anilist.userid): String {
@@ -834,7 +834,7 @@ class AnilistQueries {
             homeData?.page1 != null &&
             homeData.page2 != null
         ) {
-            parseUserStatusFromHomeResponse(response)
+            parseUserStatusFromHomeData(homeData)
         } else {
             null
         }
