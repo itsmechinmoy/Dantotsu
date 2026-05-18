@@ -1584,7 +1584,7 @@ class AnilistQueries {
         list
     }
 
-    suspend fun fetchAnimePageData(seasonIndex: Int, popularOnList: Boolean): AnimePageInitResult = coroutineScope {
+    suspend fun fetchAnimePageData(seasonIndex: Int, popularOnList: Boolean): AnimePageInitResult {
         val list = mutableMapOf<String, ArrayList<Media>>()
         val (season, year) = Anilist.currentSeasons[seasonIndex]
         val showAdultOnly = getPreference(PrefName.AdultOnly)
@@ -1656,7 +1656,7 @@ class AnilistQueries {
         list
     }
 
-    suspend fun fetchMangaPageData(popularOnList: Boolean): MangaPageInitResult = coroutineScope {
+    suspend fun fetchMangaPageData(popularOnList: Boolean): MangaPageInitResult {
         val list = mutableMapOf<String, ArrayList<Media>>()
         val showAdultOnly = getPreference(PrefName.AdultOnly)
         val popularOnListFilter = if (popularOnList) null else false
