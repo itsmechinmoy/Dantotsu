@@ -828,7 +828,11 @@ class AnilistQueries {
             val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
             returnMap["recommendations"] = list
         }
-        val userStatus = if (toShow.getOrNull(7) == true) {
+        val userStatus = if (
+            toShow.getOrNull(7) == true &&
+            response?.data?.page1 != null &&
+            response.data.page2 != null
+        ) {
             parseUserStatusFromHomeResponse(response)
         } else {
             null
