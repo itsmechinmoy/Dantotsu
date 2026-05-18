@@ -133,7 +133,7 @@ abstract class BaseImageAdapter(
                             MotionEvent.ACTION_MOVE -> {
                                 if (!oneHandZoomActive) {
                                     val started =
-                                        event.eventTime - downTime >= ONE_HAND_ZOOM_HOLD_MS && abs(
+                                        event.eventTime - downTime >= ONE_HAND_ZOOM_HOLD_MILLIS && abs(
                                             event.y - downY
                                         ) > touchSlop && abs(
                                             event.x - downX
@@ -150,7 +150,10 @@ abstract class BaseImageAdapter(
                                     val maxScale = imageView.maxScale
                                     val height = imageView.height.coerceAtLeast(1)
                                     val delta = (downY - event.y) / height
-                                    val target = (startZoom + delta * (maxScale - minScale) * 2f)
+                                    val target = (
+                                        startZoom + delta * (maxScale - minScale) *
+                                                ONE_HAND_ZOOM_SENSITIVITY_MULTIPLIER
+                                        )
                                         .coerceIn(minScale, maxScale)
                                     imageView.setScaleAndCenter(target, imageView.center)
                                     return@setOnTouchListener true
@@ -191,8 +194,9 @@ abstract class BaseImageAdapter(
     abstract suspend fun loadImage(position: Int, parent: View): Boolean
 
     companion object {
-        private const val ONE_HAND_ZOOM_HOLD_MS = 200L
+        private const val ONE_HAND_ZOOM_HOLD_MILLIS = 200L
         private const val ONE_HAND_ZOOM_HORIZONTAL_TOLERANCE_MULTIPLIER = 3
+        private const val ONE_HAND_ZOOM_SENSITIVITY_MULTIPLIER = 2f
 
         suspend fun Context.loadBitmapOld(
             link: FileUrl,
@@ -244,15 +248,16 @@ abstract class BaseImageAdapter(
                                     .skipMemoryCache(true)
                                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                             } else {
-                                mangaCache.get(link.url)?.let { imageData ->
-                                    val bitmap = imageData.fetchAndProcessImage(
-                                        imageData.page,
-                                        imageData.source
-                                    )
-                                    it.load(bitmap)
+                                val cachedBitmap = mangaCache.get(link.url)?.let { imageData ->
+                                    imageData.fetchAndProcessImage(imageData.page, imageData.source)
+                                }
+                                if (cachedBitmap != null) {
+                                    it.load(cachedBitmap)
                                         .skipMemoryCache(true)
                                         .diskCacheStrategy(DiskCacheStrategy.NONE)
-                                } ?: it.load(GlideUrl(link.url) { link.headers })
+                                } else {
+                                    it.load(GlideUrl(link.url) { link.headers })
+                                }
                             }
                         }
                         ?.let {
