@@ -52,8 +52,12 @@ class AnimeExtensionsFragment : Fragment(),
             true
 
         lifecycleScope.launch {
-            viewModel.pagerFlow.collectLatest {
-                adapter.submitData(it)
+            viewModel.pagerFlow.collectLatest { it ->
+                binding.allExtensionsRecyclerView.post {
+                    lifecycleScope.launch {
+                        adapter.submitData(it)
+                    }
+                }
             }
         }
 
