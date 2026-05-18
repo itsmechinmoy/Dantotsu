@@ -109,6 +109,10 @@ abstract class BaseImageAdapter(
                     activity.handleController(event = event)
             })
             view.findViewById<View>(R.id.imgProgCover).apply {
+                val imageView =
+                    view.findViewById<com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView>(
+                        R.id.imgProgImageNoGestures
+                    )
                 val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
                 var downX = 0f
                 var downY = 0f
@@ -116,8 +120,7 @@ abstract class BaseImageAdapter(
                 var startZoom = 1f
                 var oneHandZoomActive = false
                 setOnTouchListener { _, event ->
-                    val imageView = view.findViewById<View>(R.id.imgProgImageNoGestures)
-                    if (settings.oneHandZoom && imageView is com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView) {
+                    if (settings.oneHandZoom && imageView != null) {
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
                                 downX = event.x
@@ -130,9 +133,11 @@ abstract class BaseImageAdapter(
                             MotionEvent.ACTION_MOVE -> {
                                 if (!oneHandZoomActive) {
                                     val started =
-                                        event.eventTime - downTime >= 200L && abs(event.y - downY) > touchSlop && abs(
+                                        event.eventTime - downTime >= ONE_HAND_ZOOM_HOLD_MS && abs(
+                                            event.y - downY
+                                        ) > touchSlop && abs(
                                             event.x - downX
-                                        ) <= touchSlop * 3
+                                        ) <= touchSlop * ONE_HAND_ZOOM_HORIZONTAL_TOLERANCE_MULTIPLIER
                                     if (started) {
                                         oneHandZoomActive = true
                                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -186,6 +191,9 @@ abstract class BaseImageAdapter(
     abstract suspend fun loadImage(position: Int, parent: View): Boolean
 
     companion object {
+        private const val ONE_HAND_ZOOM_HOLD_MS = 200L
+        private const val ONE_HAND_ZOOM_HORIZONTAL_TOLERANCE_MULTIPLIER = 3
+
         suspend fun Context.loadBitmapOld(
             link: FileUrl,
             transforms: List<BitmapTransformation>
