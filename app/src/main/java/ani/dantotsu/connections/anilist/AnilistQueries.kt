@@ -1587,7 +1587,7 @@ class AnilistQueries {
     suspend fun initAnimePage(seasonIndex: Int, popularOnList: Boolean): AnimePageInitResult = coroutineScope {
         val list = mutableMapOf<String, ArrayList<Media>>()
         val (season, year) = Anilist.currentSeasons[seasonIndex]
-        val adultOnly = getPreference(PrefName.AdultOnly)
+        val showAdultOnly = getPreference(PrefName.AdultOnly)
 
         fun filterRecentUpdates(page: Page?): ArrayList<Media> {
             val listOnly = getPreference(PrefName.RecentlyListOnly)
@@ -1595,8 +1595,8 @@ class AnilistQueries {
             return page?.airingSchedules?.mapNotNull { i ->
                 i.media?.takeIf { !idArr.contains(it.id) }?.let {
                     val shouldAdd = when {
-                        !listOnly && adultOnly && it.isAdult == true -> true
-                        !listOnly && !adultOnly && it.countryOfOrigin == "JP" && it.isAdult == false -> true
+                        !listOnly && showAdultOnly && it.isAdult == true -> true
+                        !listOnly && !showAdultOnly && it.countryOfOrigin == "JP" && it.isAdult == false -> true
                         listOnly && it.mediaListEntry != null -> true
                         else -> false
                     }
@@ -1614,8 +1614,8 @@ class AnilistQueries {
             trendingMovies:${buildQueryString("POPULARITY_DESC","ANIME","MOVIE")}
             topRated:${buildQueryString("SCORE_DESC","ANIME")}
             mostFav:${buildQueryString("FAVOURITES_DESC","ANIME")}
-            seasonalTrending:${pageMediaQuery(1, 12, Anilist.sortBy[2], "ANIME", season = season, seasonYear = year, adultOnly = adultOnly)}
-            popular:${pageMediaQuery(1, 50, Anilist.sortBy[1], "ANIME", onList = if (popularOnList) null else false, adultOnly = adultOnly)}
+            seasonalTrending:${pageMediaQuery(1, 12, Anilist.sortBy[2], "ANIME", season = season, seasonYear = year, adultOnly = showAdultOnly)}
+            popular:${pageMediaQuery(1, 50, Anilist.sortBy[1], "ANIME", onList = if (popularOnList) null else false, adultOnly = showAdultOnly)}
         }""".prepare()
 
         val data = executeQuery<Query.AnimeList>(query, force = true)?.data
@@ -1657,15 +1657,15 @@ class AnilistQueries {
 
     suspend fun initMangaPage(popularOnList: Boolean): MangaPageInitResult = coroutineScope {
         val list = mutableMapOf<String, ArrayList<Media>>()
-        val adultOnly = getPreference(PrefName.AdultOnly)
+        val showAdultOnly = getPreference(PrefName.AdultOnly)
         val query = """{
             trendingManga:${buildQueryString("POPULARITY_DESC","MANGA", country = "JP")}
             trendingManhwa:${buildQueryString("POPULARITY_DESC","MANGA", country = "KR")}
             trendingNovel:${buildQueryString("POPULARITY_DESC","MANGA", format = "NOVEL", country = "JP")}
             topRated:${buildQueryString("SCORE_DESC","MANGA")}
             mostFav:${buildQueryString("FAVOURITES_DESC","MANGA")}
-            trending:${pageMediaQuery(1, 10, Anilist.sortBy[2], "MANGA", adultOnly = adultOnly)}
-            popular:${pageMediaQuery(1, 50, Anilist.sortBy[1], "MANGA", onList = if (popularOnList) null else false, adultOnly = adultOnly)}
+            trending:${pageMediaQuery(1, 10, Anilist.sortBy[2], "MANGA", adultOnly = showAdultOnly)}
+            popular:${pageMediaQuery(1, 50, Anilist.sortBy[1], "MANGA", onList = if (popularOnList) null else false, adultOnly = showAdultOnly)}
         }""".prepare()
 
         val data = executeQuery<Query.MangaList>(query, force = true)?.data
