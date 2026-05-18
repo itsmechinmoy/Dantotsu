@@ -412,6 +412,19 @@ class SettingsNotificationActivity : AppCompatActivity() {
                     ),
                     Settings(
                         type = 2,
+                        name = getString(R.string.subscription_prompt_at_end),
+                        desc = getString(R.string.subscription_prompt_at_end_desc),
+                        icon = R.drawable.ic_round_smart_button_24,
+                        isChecked = PrefManager.getVal(PrefName.SubscriptionPromptAtEnd),
+                        switch = { isChecked, _ ->
+                            PrefManager.setVal(
+                                PrefName.SubscriptionPromptAtEnd,
+                                isChecked
+                            )
+                        }
+                    ),
+                    Settings(
+                        type = 2,
                         name = getString(R.string.use_alarm_manager_reliable),
                         desc = getString(R.string.use_alarm_manager_reliable_desc),
                         icon = R.drawable.ic_anilist,
