@@ -657,11 +657,11 @@ class AnilistQueries {
         return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1,perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries{ media { id bannerImage isAdult } } } } """
     }
 
-    private fun extractBannerImage(collection: ani.dantotsu.connections.anilist.api.MediaListCollection?): String? {
+    private fun selectRandomBannerImage(collection: ani.dantotsu.connections.anilist.api.MediaListCollection?): String? {
         return collection?.lists?.mapNotNull {
             it.entries?.filter { entry -> entry.media?.isAdult != true }?.mapNotNull { entry ->
                 val imageUrl = entry.media?.bannerImage
-                if (imageUrl != null && imageUrl != "null") imageUrl else null
+                if (!imageUrl.isNullOrBlank() && !imageUrl.equals("null", ignoreCase = true)) imageUrl else null
             }
         }?.flatten()?.randomOrNull()
     }
@@ -836,8 +836,8 @@ class AnilistQueries {
         }
         val homeData = response?.data
         val bannerImages = arrayListOf<String?>(
-            extractBannerImage(homeData?.bannerAnime),
-            extractBannerImage(homeData?.bannerManga)
+            selectRandomBannerImage(homeData?.bannerAnime),
+            selectRandomBannerImage(homeData?.bannerManga)
         )
         val userStatus = if (
             toShow.getOrNull(7) == true &&
