@@ -1627,7 +1627,7 @@ class AnilistQueries {
             list["mostFav"] = mediaList(mostFav)
         }
 
-        AnimePageInitResult(
+        return AnimePageInitResult(
             media = list,
             trending = data?.seasonalTrending?.media?.map { Media(it) }?.toMutableList(),
             popular = pageToSearchResult(
@@ -1679,7 +1679,7 @@ class AnilistQueries {
             list["mostFav"] = mediaList(mostFav)
         }
 
-        MangaPageInitResult(
+        return MangaPageInitResult(
             media = list,
             trending = data?.trending?.media?.map { Media(it) }?.toMutableList(),
             popular = pageToSearchResult(
