@@ -54,7 +54,6 @@ import ani.dantotsu.util.Logger
 import ani.dantotsu.util.customAlertDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
@@ -616,14 +615,8 @@ class HomeFragment : Fragment() {
                         }
                     }
 
-                    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                     val initHomePage = async(Dispatchers.IO) { model.initHomePage() }
-                    if (!rescueMode) {
-                        val initUserStatus = async(Dispatchers.IO) { model.initUserStatus() }
-                        awaitAll(initHomePage, initUserStatus)
-                    } else {
-                        initHomePage.await()
-                    }
+                    initHomePage.await()
 
                     withContext(Dispatchers.Main) {
                         model.empty.postValue(empty)

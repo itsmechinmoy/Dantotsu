@@ -47,6 +47,11 @@ class AnilistQueries {
         const val ITEMS_PER_PAGE = 25
     }
 
+    data class HomePageInitResult(
+        val media: Map<String, ArrayList<Media>>,
+        val userStatus: ArrayList<User>? = null
+    )
+
     private data class MissingSequelsCache(
         val sourceIds: Set<Int>,
         val media: ArrayList<Media>,
@@ -490,12 +495,7 @@ class AnilistQueries {
         return responseArray
     }
 
-    suspend fun getUserStatus(): ArrayList<User>? {
-        val toShow: List<Boolean> =
-            PrefManager.getVal(PrefName.HomeLayout)
-        if (toShow.getOrNull(7) != true) return null
-        val query = """{Page1:${status(1)}Page2:${status(2)}}"""
-        val response = executeQuery<Query.HomePageMedia>(query)
+    private fun parseUserStatusFromHomeResponse(response: Query.HomePageMedia?): ArrayList<User>? {
         val list = mutableListOf<User>()
         val threeDaysAgo = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_MONTH, -3)
@@ -546,6 +546,15 @@ class AnilistQueries {
             list.addAll(0, anilistActivities)
             return list.toCollection(ArrayList())
         } else return null
+    }
+
+    suspend fun getUserStatus(): ArrayList<User>? {
+        val toShow: List<Boolean> =
+            PrefManager.getVal(PrefName.HomeLayout)
+        if (toShow.getOrNull(7) != true) return null
+        val query = """{Page1:${status(1)}Page2:${status(2)}}"""
+        val response = executeQuery<Query.HomePageMedia>(query)
+        return parseUserStatusFromHomeResponse(response)
     }
 
     private fun favMediaQuery(anime: Boolean, page: Int, id: Int? = Anilist.userid): String {
@@ -643,7 +652,7 @@ class AnilistQueries {
         return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status , sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status updatedAt media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
     }
 
-    suspend fun initHomePage(): Map<String, ArrayList<Media>> {
+    suspend fun initHomePage(): HomePageInitResult {
         val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
         val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
         val removedMedia = ArrayList<Media>()
@@ -686,12 +695,19 @@ class AnilistQueries {
         if (toShow.getOrNull(6) == true) {
             queries.add("""recommendationQuery: ${recommendationQuery()}""")
         }
+        if (toShow.getOrNull(7) == true) {
+            queries.add("""Page1:${status(1)}""")
+            queries.add("""Page2:${status(2)}""")
+        }
         if (toShow.getOrNull(8) == true) {
             queries.add("""missingSequelsCompletedQuery: ${missingSequelsCompletedSourceQuery()}""")
             queries.add("""missingSequelsAllListQuery: ${missingSequelsAllListSourceQuery()}""")
         }
         if (queries.isEmpty() && toShow.getOrNull(8) != true) {
-            return mutableMapOf("hidden" to arrayListOf())
+            return HomePageInitResult(
+                media = mutableMapOf("hidden" to arrayListOf()),
+                userStatus = null
+            )
         }
 
         val response = if (queries.isEmpty()) {
@@ -812,6 +828,11 @@ class AnilistQueries {
             val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
             returnMap["recommendations"] = list
         }
+        val userStatus = if (toShow.getOrNull(7) == true) {
+            parseUserStatusFromHomeResponse(response)
+        } else {
+            null
+        }
 
         if (toShow.getOrNull(8) == true) {
             val completedEntries =
@@ -858,7 +879,10 @@ class AnilistQueries {
         }
 
         returnMap["hidden"] = sortedHidden
-        return returnMap
+        return HomePageInitResult(
+            media = returnMap,
+            userStatus = userStatus
+        )
     }
 
 
