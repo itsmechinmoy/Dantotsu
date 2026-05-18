@@ -2740,7 +2740,14 @@ class ExoplayerView :
     }
 
     override fun onStop() {
-        if (castPlayer?.isPlaying == false) {
+        val shouldPausePlayback =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                !isInPictureInPictureMode
+            } else {
+                true
+            }
+        val isCasting = castPlayer?.isPlaying == true
+        if (shouldPausePlayback && !isCasting) {
             playerView.player?.pause()
         }
         super.onStop()
@@ -3354,7 +3361,9 @@ class ExoplayerView :
                 "${media.id}_${episode.number}",
                 exoPlayer.currentPosition,
             )
-            if (wasPlaying) exoPlayer.play()
+            if (!isFinishing && wasPlaying) {
+                exoPlayer.play()
+            }
         }
     }
 
