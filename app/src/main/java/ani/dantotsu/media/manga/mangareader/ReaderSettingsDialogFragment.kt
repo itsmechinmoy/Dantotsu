@@ -162,6 +162,12 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
             settings.longClickImage = isChecked
             activity.applySettings()
         }
+
+        binding.readerOneHandZoom.isChecked = settings.oneHandZoom
+        binding.readerOneHandZoom.setOnCheckedChangeListener { _, isChecked ->
+            settings.oneHandZoom = isChecked
+            activity.applySettings()
+        }
     }
 
     override fun onDestroy() {

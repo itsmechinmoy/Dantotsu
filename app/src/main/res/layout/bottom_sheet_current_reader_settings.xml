@@ -494,6 +494,24 @@
             app:drawableTint="?attr/colorPrimary"
             app:showText="false"
             app:thumbTint="@color/button_switch_track" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/readerOneHandZoom"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="false"
+            android:drawableStart="@drawable/ic_round_touch_app_24"
+            android:drawablePadding="16dp"
+            android:elegantTextHeight="true"
+            android:fontFamily="@font/poppins_bold"
+            android:minHeight="64dp"
+            android:text="@string/one_hand_zoom"
+            android:textAlignment="viewStart"
+            android:textColor="?attr/colorOnBackground"
+            app:cornerRadius="0dp"
+            app:drawableTint="?attr/colorPrimary"
+            app:showText="false"
+            app:thumbTint="@color/button_switch_track" />
     </LinearLayout>
 
 </androidx.core.widget.NestedScrollView>

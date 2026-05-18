@@ -22,6 +22,7 @@ data class CurrentReaderSettings(
     var volumeButtons: Boolean = PrefManager.getVal(PrefName.VolumeButtonsReader),
     var wrapImages: Boolean = PrefManager.getVal(PrefName.WrapImages),
     var longClickImage: Boolean = PrefManager.getVal(PrefName.LongClickImage),
+    var oneHandZoom: Boolean = false,
     var cropBorders: Boolean = PrefManager.getVal(PrefName.CropBorders),
     var cropBorderThreshold: Int = PrefManager.getVal(PrefName.CropBorderThreshold)
 ) : Serializable {
@@ -66,4 +67,3 @@ data class CurrentReaderSettings(
         }
     }
 }
-

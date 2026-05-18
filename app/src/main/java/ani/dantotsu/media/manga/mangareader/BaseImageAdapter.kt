@@ -9,6 +9,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewConfiguration
 import androidx.core.view.GestureDetectorCompat
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
@@ -31,6 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uy.kohesive.injekt.api.get
 import java.io.File
+import kotlin.math.abs
 
 abstract class BaseImageAdapter(
     val activity: MangaReaderActivity,
@@ -107,7 +109,58 @@ abstract class BaseImageAdapter(
                     activity.handleController(event = event)
             })
             view.findViewById<View>(R.id.imgProgCover).apply {
+                val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+                var downX = 0f
+                var downY = 0f
+                var downTime = 0L
+                var startZoom = 1f
+                var oneHandZoomActive = false
                 setOnTouchListener { _, event ->
+                    val imageView = view.findViewById<View>(R.id.imgProgImageNoGestures)
+                    if (settings.oneHandZoom && imageView is com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView) {
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                downX = event.x
+                                downY = event.y
+                                downTime = event.eventTime
+                                startZoom = imageView.scale
+                                oneHandZoomActive = false
+                            }
+
+                            MotionEvent.ACTION_MOVE -> {
+                                if (!oneHandZoomActive) {
+                                    val started =
+                                        event.eventTime - downTime >= 200L && abs(event.y - downY) > touchSlop && abs(
+                                            event.x - downX
+                                        ) <= touchSlop * 3
+                                    if (started) {
+                                        oneHandZoomActive = true
+                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                        parent.requestDisallowInterceptTouchEvent(true)
+                                    }
+                                }
+
+                                if (oneHandZoomActive) {
+                                    val minScale = imageView.minScale
+                                    val maxScale = imageView.maxScale
+                                    val height = imageView.height.coerceAtLeast(1)
+                                    val delta = (downY - event.y) / height
+                                    val target = (startZoom + delta * (maxScale - minScale) * 2f)
+                                        .coerceIn(minScale, maxScale)
+                                    imageView.setScaleAndCenter(target, imageView.center)
+                                    return@setOnTouchListener true
+                                }
+                            }
+
+                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                if (oneHandZoomActive) {
+                                    oneHandZoomActive = false
+                                    parent.requestDisallowInterceptTouchEvent(false)
+                                    return@setOnTouchListener true
+                                }
+                            }
+                        }
+                    }
                     detector.onTouchEvent(event)
                     false
                 }
@@ -191,8 +244,7 @@ abstract class BaseImageAdapter(
                                     it.load(bitmap)
                                         .skipMemoryCache(true)
                                         .diskCacheStrategy(DiskCacheStrategy.NONE)
-                                }
-
+                                } ?: it.load(GlideUrl(link.url) { link.headers })
                             }
                         }
                         ?.let {

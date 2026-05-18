@@ -84,13 +84,13 @@ class ImageViewDialog : BottomSheetDialogFragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val binding = _binding ?: return@launch
 
-            var bitmap = context.loadBitmapOld(image, trans1 ?: listOf())
-            var bitmap2 =
-                if (image2 != null) context.loadBitmapOld(image2, trans2 ?: listOf()) else null
+            var bitmap = context.loadBitmap(image, trans1 ?: listOf())
             if (bitmap == null) {
-                bitmap = context.loadBitmap(image, trans1 ?: listOf())
-                bitmap2 =
-                    if (image2 != null) context.loadBitmap(image2, trans2 ?: listOf()) else null
+                bitmap = context.loadBitmapOld(image, trans1 ?: listOf())
+            }
+            var bitmap2 = if (image2 != null) context.loadBitmap(image2, trans2 ?: listOf()) else null
+            if (bitmap2 == null && image2 != null) {
+                bitmap2 = context.loadBitmapOld(image2, trans2 ?: listOf())
             }
 
             bitmap =

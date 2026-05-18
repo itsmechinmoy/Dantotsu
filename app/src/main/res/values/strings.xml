@@ -400,6 +400,7 @@
     <string name="planned_anime">Planned Anime</string>
     <string name="planned_manga">Planned Manga</string>
     <string name="image_long_clicking">Open image by Long Clicking</string>
+    <string name="one_hand_zoom">One-hand Zoom (Tap + Hold + Swipe)</string>
     <string name="always_continue_content">Always continue previous items</string>
     <string name="open_animanga_directly">Open Anime/Manga search directly</string>
     <string name="open_animanga_directly_info">Open Anime/Manga search on their respective pages directly</string>
