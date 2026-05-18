@@ -53,6 +53,18 @@ class AnilistQueries {
         val bannerImages: ArrayList<String?>? = null
     )
 
+    data class AnimePageInitResult(
+        val media: Map<String, ArrayList<Media>>,
+        val trending: MutableList<Media>?,
+        val popular: AniMangaSearchResults?
+    )
+
+    data class MangaPageInitResult(
+        val media: Map<String, ArrayList<Media>>,
+        val trending: MutableList<Media>?,
+        val popular: AniMangaSearchResults?
+    )
+
     private data class MissingSequelsCache(
         val sourceIds: Set<Int>,
         val media: ArrayList<Media>,
@@ -1463,6 +1475,48 @@ class AnilistQueries {
         }
     }
 
+    private fun pageMediaQuery(
+        page: Int,
+        perPage: Int,
+        sort: String,
+        type: String,
+        season: String? = null,
+        seasonYear: Int? = null,
+        onList: Boolean? = null,
+        country: String? = null,
+        format: String? = null,
+        adultOnly: Boolean = false
+    ): String {
+        val seasonPart = season?.let { "season:$it, " } ?: ""
+        val seasonYearPart = seasonYear?.let { "seasonYear:$it, " } ?: ""
+        val onListPart = onList?.let { "onList:$it, " } ?: ""
+        val countryPart = country?.let { "countryOfOrigin:$it, " } ?: ""
+        val formatPart = format?.let { "format:$it, " } ?: ""
+        val isAdultPart = if (adultOnly) "isAdult:true, " else "isAdult:false, "
+        return """Page(page:$page,perPage:$perPage){$standardPageInformation media(sort:$sort, type:$type, $seasonPart$seasonYearPart$onListPart$countryPart$formatPart$isAdultPart){${standardMediaInformation()}}}"""
+    }
+
+    private fun pageToSearchResult(
+        page: Page?,
+        type: String,
+        perPage: Int,
+        sort: String,
+        onList: Boolean?
+    ): AniMangaSearchResults? {
+        val items = page?.media?.map { Media(it) }?.toMutableList() ?: return null
+        val pageInfo = page.pageInfo ?: return null
+        return AniMangaSearchResults(
+            type = type,
+            perPage = perPage,
+            sort = sort,
+            isAdult = false,
+            onList = onList,
+            results = items,
+            page = pageInfo.currentPage ?: 0,
+            hasNextPage = pageInfo.hasNextPage == true
+        )
+    }
+
     private fun queryMangaList(): String {
         return buildString {
             append(
@@ -1530,6 +1584,61 @@ class AnilistQueries {
         list
     }
 
+    suspend fun initAnimePage(seasonIndex: Int, popularOnList: Boolean): AnimePageInitResult = coroutineScope {
+        val list = mutableMapOf<String, ArrayList<Media>>()
+        val (season, year) = Anilist.currentSeasons[seasonIndex]
+        val adultOnly = getPreference(PrefName.AdultOnly)
+
+        fun filterRecentUpdates(page: Page?): ArrayList<Media> {
+            val listOnly = getPreference(PrefName.RecentlyListOnly)
+            val idArr = mutableSetOf<Int>()
+            return page?.airingSchedules?.mapNotNull { i ->
+                i.media?.takeIf { !idArr.contains(it.id) }?.let {
+                    val shouldAdd = when {
+                        !listOnly && adultOnly && it.isAdult == true -> true
+                        !listOnly && !adultOnly && it.countryOfOrigin == "JP" && it.isAdult == false -> true
+                        listOnly && it.mediaListEntry != null -> true
+                        else -> false
+                    }
+                    if (shouldAdd) {
+                        idArr.add(it.id)
+                        Media(it)
+                    } else null
+                }
+            }?.toCollection(ArrayList()) ?: arrayListOf()
+        }
+
+        val query = """{
+            recentUpdates:${recentAnimeUpdates(1)}
+            recentUpdates2:${recentAnimeUpdates(2)}
+            trendingMovies:${buildQueryString("POPULARITY_DESC","ANIME","MOVIE")}
+            topRated:${buildQueryString("SCORE_DESC","ANIME")}
+            mostFav:${buildQueryString("FAVOURITES_DESC","ANIME")}
+            seasonalTrending:${pageMediaQuery(1, 12, Anilist.sortBy[2], "ANIME", season = season, seasonYear = year, adultOnly = adultOnly)}
+            popular:${pageMediaQuery(1, 50, Anilist.sortBy[1], "ANIME", onList = if (popularOnList) null else false, adultOnly = adultOnly)}
+        }""".prepare()
+
+        val data = executeQuery<Query.AnimeList>(query, force = true)?.data
+        data?.apply {
+            list["recentUpdates"] = filterRecentUpdates(recentUpdates)
+            list["trendingMovies"] = mediaList(trendingMovies)
+            list["topRated"] = mediaList(topRated)
+            list["mostFav"] = mediaList(mostFav)
+        }
+
+        AnimePageInitResult(
+            media = list,
+            trending = data?.seasonalTrending?.media?.map { Media(it) }?.toMutableList(),
+            popular = pageToSearchResult(
+                page = data?.popular,
+                type = "ANIME",
+                perPage = 50,
+                sort = Anilist.sortBy[1],
+                onList = if (popularOnList) null else false
+            )
+        )
+    }
+
     suspend fun loadMangaList(): Map<String, ArrayList<Media>> = coroutineScope {
         val list = mutableMapOf<String, ArrayList<Media>>()
 
@@ -1544,6 +1653,41 @@ class AnilistQueries {
         }
 
         list
+    }
+
+    suspend fun initMangaPage(popularOnList: Boolean): MangaPageInitResult = coroutineScope {
+        val list = mutableMapOf<String, ArrayList<Media>>()
+        val adultOnly = getPreference(PrefName.AdultOnly)
+        val query = """{
+            trendingManga:${buildQueryString("POPULARITY_DESC","MANGA", country = "JP")}
+            trendingManhwa:${buildQueryString("POPULARITY_DESC","MANGA", country = "KR")}
+            trendingNovel:${buildQueryString("POPULARITY_DESC","MANGA", format = "NOVEL", country = "JP")}
+            topRated:${buildQueryString("SCORE_DESC","MANGA")}
+            mostFav:${buildQueryString("FAVOURITES_DESC","MANGA")}
+            trending:${pageMediaQuery(1, 10, Anilist.sortBy[2], "MANGA", adultOnly = adultOnly)}
+            popular:${pageMediaQuery(1, 50, Anilist.sortBy[1], "MANGA", onList = if (popularOnList) null else false, adultOnly = adultOnly)}
+        }""".prepare()
+
+        val data = executeQuery<Query.MangaList>(query, force = true)?.data
+        data?.apply {
+            list["trendingManga"] = mediaList(trendingManga)
+            list["trendingManhwa"] = mediaList(trendingManhwa)
+            list["trendingNovel"] = mediaList(trendingNovel)
+            list["topRated"] = mediaList(topRated)
+            list["mostFav"] = mediaList(mostFav)
+        }
+
+        MangaPageInitResult(
+            media = list,
+            trending = data?.trending?.media?.map { Media(it) }?.toMutableList(),
+            popular = pageToSearchResult(
+                page = data?.popular,
+                type = "MANGA",
+                perPage = 50,
+                sort = Anilist.sortBy[1],
+                onList = if (popularOnList) null else false
+            )
+        )
     }
 
     suspend fun recentlyUpdated(

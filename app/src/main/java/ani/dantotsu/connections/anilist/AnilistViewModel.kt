@@ -353,6 +353,23 @@ class AnilistAnimeViewModel : ViewModel() {
         mostFavAnime.postValue(list["mostFav"])
     }
 
+    suspend fun initPage(seasonIndex: Int, popularOnList: Boolean) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            loadTrending(seasonIndex)
+            loadAllFromMAL()
+            loadPopular("ANIME", sort = Anilist.sortBy[1], onList = popularOnList)
+            return
+        }
+        val res = Anilist.query.initAnimePage(seasonIndex, popularOnList)
+        trending.postValue(res.trending)
+        updated.postValue(res.media["recentUpdates"])
+        popularMovies.postValue(res.media["trendingMovies"])
+        topRatedAnime.postValue(res.media["topRated"])
+        mostFavAnime.postValue(res.media["mostFav"])
+        animePopular.postValue(res.popular)
+    }
+
     private suspend fun loadAllFromMAL() {
         tryWithSuspend {
             MAL.query.getAnimeRanking("airing", 15)?.data?.let { entries ->
@@ -542,6 +559,24 @@ class AnilistMangaViewModel : ViewModel() {
         popularNovel.postValue(list["trendingNovel"])
         topRatedManga.postValue(list["topRated"])
         mostFavManga.postValue(list["mostFav"])
+    }
+
+    suspend fun initPage(popularOnList: Boolean) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            loadTrending()
+            loadAllFromMAL()
+            loadPopular("MANGA", sort = Anilist.sortBy[1], onList = popularOnList)
+            return
+        }
+        val res = Anilist.query.initMangaPage(popularOnList)
+        trending.postValue(res.trending)
+        popularManga.postValue(res.media["trendingManga"])
+        popularManhwa.postValue(res.media["trendingManhwa"])
+        popularNovel.postValue(res.media["trendingNovel"])
+        topRatedManga.postValue(res.media["topRated"])
+        mostFavManga.postValue(res.media["mostFav"])
+        mangaPopular.postValue(res.popular)
     }
 
     private suspend fun loadAllFromMAL() {
