@@ -559,7 +559,6 @@ class HomeFragment : Fragment() {
                                 }
                             }
                         }
-                        model.setListImages()
                         model.loaded = true
                     }
 

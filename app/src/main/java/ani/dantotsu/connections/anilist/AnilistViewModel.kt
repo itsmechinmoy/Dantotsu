@@ -102,6 +102,7 @@ class AnilistHomeViewModel : ViewModel() {
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         if (rescueMode) {
             initHomePageFromMAL()
+            setListImages()
             return
         }
         val res = Anilist.query.initHomePage()
@@ -115,6 +116,7 @@ class AnilistHomeViewModel : ViewModel() {
         res.media["missingSequels"]?.let { missingSequels.postValue(it) }
         res.media["hidden"]?.let { hidden.postValue(it) }
         res.userStatus?.let { userStatus.postValue(it) }
+        res.bannerImages?.let { listImages.postValue(it) }
     }
 
     private suspend fun initHomePageFromMAL() {

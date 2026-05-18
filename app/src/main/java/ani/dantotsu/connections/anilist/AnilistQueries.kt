@@ -49,7 +49,8 @@ class AnilistQueries {
 
     data class HomePageInitResult(
         val media: Map<String, ArrayList<Media>>,
-        val userStatus: ArrayList<User>? = null
+        val userStatus: ArrayList<User>? = null,
+        val bannerImages: ArrayList<String?>? = null
     )
 
     private data class MissingSequelsCache(
@@ -652,6 +653,19 @@ class AnilistQueries {
         return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status , sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status updatedAt media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
     }
 
+    private fun bannerImageCollectionQuery(type: String): String {
+        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1,perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries{ media { id bannerImage isAdult } } } } """
+    }
+
+    private fun extractBannerImage(collection: ani.dantotsu.connections.anilist.api.MediaListCollection?): String? {
+        return collection?.lists?.mapNotNull {
+            it.entries?.filter { entry -> entry.media?.isAdult != true }?.mapNotNull { entry ->
+                val imageUrl = entry.media?.bannerImage
+                if (imageUrl != null && imageUrl != "null") imageUrl else null
+            }
+        }?.flatten()?.randomOrNull()
+    }
+
     suspend fun initHomePage(): HomePageInitResult {
         val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
         val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
@@ -703,19 +717,11 @@ class AnilistQueries {
             queries.add("""missingSequelsCompletedQuery: ${missingSequelsCompletedSourceQuery()}""")
             queries.add("""missingSequelsAllListQuery: ${missingSequelsAllListSourceQuery()}""")
         }
-        if (queries.isEmpty() && toShow.getOrNull(8) != true) {
-            return HomePageInitResult(
-                media = mutableMapOf("hidden" to arrayListOf()),
-                userStatus = null
-            )
-        }
+        queries.add("""bannerAnime: ${bannerImageCollectionQuery("ANIME")}""")
+        queries.add("""bannerManga: ${bannerImageCollectionQuery("MANGA")}""")
 
-        val response = if (queries.isEmpty()) {
-            null
-        } else {
-            val query = "{${queries.joinToString(",")}}"
-            executeQuery<Query.HomePageMedia>(query, show = true)
-        }
+        val query = "{${queries.joinToString(",")}}"
+        val response = executeQuery<Query.HomePageMedia>(query, show = true)
         val returnMap = mutableMapOf<String, ArrayList<Media>>()
 
         fun processMedia(
@@ -829,6 +835,10 @@ class AnilistQueries {
             returnMap["recommendations"] = list
         }
         val homeData = response?.data
+        val bannerImages = arrayListOf<String?>(
+            extractBannerImage(homeData?.bannerAnime),
+            extractBannerImage(homeData?.bannerManga)
+        )
         val userStatus = if (
             toShow.getOrNull(7) == true &&
             homeData?.page1 != null &&
@@ -886,7 +896,8 @@ class AnilistQueries {
         returnMap["hidden"] = sortedHidden
         return HomePageInitResult(
             media = returnMap,
-            userStatus = userStatus
+            userStatus = userStatus,
+            bannerImages = bannerImages
         )
     }
 

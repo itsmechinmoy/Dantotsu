@@ -152,6 +152,8 @@ class Query {
             @SerialName("recommendationPlannedQueryManga") val recommendationPlannedQueryManga: ani.dantotsu.connections.anilist.api.MediaListCollection?,
             @SerialName("missingSequelsCompletedQuery") val missingSequelsCompletedQuery: ani.dantotsu.connections.anilist.api.MediaListCollection?,
             @SerialName("missingSequelsAllListQuery") val missingSequelsAllListQuery: ani.dantotsu.connections.anilist.api.MediaListCollection?,
+            @SerialName("bannerAnime") val bannerAnime: ani.dantotsu.connections.anilist.api.MediaListCollection?,
+            @SerialName("bannerManga") val bannerManga: ani.dantotsu.connections.anilist.api.MediaListCollection?,
             @SerialName("Page1") val page1: ActivityPage?,
             @SerialName("Page2") val page2: ActivityPage?
         )
