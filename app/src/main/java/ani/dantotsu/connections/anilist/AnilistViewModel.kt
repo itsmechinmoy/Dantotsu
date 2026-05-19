@@ -362,7 +362,7 @@ class AnilistAnimeViewModel : ViewModel() {
             return
         }
         val res = Anilist.query.fetchAnimePageData(seasonIndex, popularOnList)
-        trending.postValue(res.trending)
+        res.trending?.let { trending.postValue(it) }
         updated.postValue(res.media["recentUpdates"])
         popularMovies.postValue(res.media["trendingMovies"])
         topRatedAnime.postValue(res.media["topRated"])
@@ -570,7 +570,7 @@ class AnilistMangaViewModel : ViewModel() {
             return
         }
         val res = Anilist.query.fetchMangaPageData(popularOnList)
-        trending.postValue(res.trending)
+        res.trending?.let { trending.postValue(it) }
         popularManga.postValue(res.media["trendingManga"])
         popularManhwa.postValue(res.media["trendingManhwa"])
         popularNovel.postValue(res.media["trendingNovel"])
