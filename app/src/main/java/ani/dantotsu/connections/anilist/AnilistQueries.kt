@@ -700,7 +700,7 @@ class AnilistQueries {
                 allListEntries += allListSource?.lists?.flatMap { it.entries ?: emptyList() } ?: emptyList()
                 hasNextAllListChunk = allListSource?.hasNextChunk == true
             }
-            chunk += 1
+            chunk++
         }
 
         return Pair(
@@ -728,15 +728,17 @@ class AnilistQueries {
         val recommendationMap = mutableMapOf<Int, Media>()
         collectRecommendationMedia(firstPage?.recommendations, recommendationMap)
 
-        var currentPage = firstPage?.pageInfo?.currentPage ?: 1
+        val firstPageNumber = firstPage?.pageInfo?.currentPage ?: 1
+        var fetchedPages = 1
         var hasNextPage = firstPage?.pageInfo?.hasNextPage == true
-        while (hasNextPage && currentPage < maxRecommendationPages) {
-            currentPage += 1
-            val recommendationPage = executeQuery<Query.Page>(recommendationPageQuery(currentPage))
+        while (hasNextPage && fetchedPages < maxRecommendationPages) {
+            val recommendationPageNumber = firstPageNumber + fetchedPages
+            val recommendationPage = executeQuery<Query.Page>(recommendationPageQuery(recommendationPageNumber))
                 ?.data
                 ?.page
             collectRecommendationMedia(recommendationPage?.recommendations, recommendationMap)
             hasNextPage = recommendationPage?.pageInfo?.hasNextPage == true
+            fetchedPages++
         }
 
         return ArrayList(recommendationMap.values).apply { sortByDescending { it.meanScore } }
