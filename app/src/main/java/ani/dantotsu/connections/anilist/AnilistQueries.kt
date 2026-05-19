@@ -574,10 +574,10 @@ class AnilistQueries {
         return """User(id:${id}){id favourites{${if (anime) "anime" else "manga"}(page:$page){$standardPageInformation edges{favouriteOrder node{id idMal isAdult mediaListEntry{ progress private score(format:POINT_100) status } chapters isFavourite format episodes nextAiringEpisode{episode}meanScore isFavourite format startDate{year month day} title{english romaji userPreferred}type status(version:2)bannerImage coverImage{large}}}}}}"""
     }
 
-    private val homeListChunk = 1
-    private val homeListPerChunk = 500
+    private val homeListChunkIndex = 1
+    private val homeListChunkSize = 500
     private val recommendationPerPage = 50
-    private val recommendationPageCount = 4
+    private val maxRecommendationPages = 4
 
     private fun recommendationQuery(page: Int = 1): String {
         return """ Page(page: $page, perPage:$recommendationPerPage) { $standardPageInformation recommendations(sort: RATING_DESC, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress progressVolumes private score(format:POINT_100) status } chapters volumes isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
@@ -588,12 +588,12 @@ class AnilistQueries {
     }
 
     private fun missingSequelsCompletedSourceQuery(): String {
-        return """ MediaListCollection( userId: ${Anilist.userid}, type: ANIME, status: COMPLETED, chunk: $homeListChunk, perChunk: $homeListPerChunk, sort: UPDATED_TIME_DESC ) { lists { entries { media { id relations { edges { relationType(version: 2) node { id } } } } } } } """.trimIndent()
+        return """ MediaListCollection( userId: ${Anilist.userid}, type: ANIME, status: COMPLETED, chunk: $homeListChunkIndex, perChunk: $homeListChunkSize, sort: UPDATED_TIME_DESC ) { lists { entries { media { id relations { edges { relationType(version: 2) node { id } } } } } } } """.trimIndent()
     }
 
     private fun missingSequelsAllListSourceQuery(): String {
         return """
-            MediaListCollection( userId: ${Anilist.userid}, type: ANIME, chunk: $homeListChunk, perChunk: $homeListPerChunk ) { lists { entries { media { id } } } } """.trimIndent()
+            MediaListCollection( userId: ${Anilist.userid}, type: ANIME, chunk: $homeListChunkIndex, perChunk: $homeListChunkSize ) { lists { entries { media { id } } } } """.trimIndent()
     }
     private val batchSize = 50
     private fun missingSequelsLookupQuery(ids: List<Int>): String {
@@ -671,7 +671,7 @@ class AnilistQueries {
     }
 
     private fun continueMediaQuery(type: String, status: String): String {
-        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status, chunk: $homeListChunk, perChunk: $homeListPerChunk, sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status updatedAt media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
+        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status, chunk: $homeListChunkIndex, perChunk: $homeListChunkSize, sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status updatedAt media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
     }
 
     private fun bannerImageCollectionQuery(type: String): String {
@@ -857,18 +857,18 @@ class AnilistQueries {
             }
 
             mergeRecommendations(response?.data?.recommendationQuery?.recommendations)
-            if (subMap.size < recommendationPerPage * recommendationPageCount) {
-                val extraRecommendations = coroutineScope {
-                    (2..recommendationPageCount).map { page ->
-                        async {
-                            executeQuery<Query.Page>(recommendationPageQuery(page))
-                                ?.data
-                                ?.page
-                                ?.recommendations
-                        }
-                    }.awaitAll()
+            var hasNextRecommendationPage =
+                response?.data?.recommendationQuery?.pageInfo?.hasNextPage == true
+            if (hasNextRecommendationPage) {
+                for (page in 2..maxRecommendationPages) {
+                    val recommendationPage = executeQuery<Query.Page>(recommendationPageQuery(page))
+                        ?.data
+                        ?.page
+                        ?: break
+                    mergeRecommendations(recommendationPage.recommendations)
+                    hasNextRecommendationPage = recommendationPage.pageInfo?.hasNextPage == true
+                    if (!hasNextRecommendationPage) break
                 }
-                extraRecommendations.forEach { mergeRecommendations(it) }
             }
             val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
             returnMap["recommendations"] = list
