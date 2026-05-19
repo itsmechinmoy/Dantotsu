@@ -861,9 +861,11 @@ class AnilistQueries {
                 val recommendationPages = coroutineScope {
                     (2..maxRecommendationPages).map { page ->
                         async {
-                            executeQuery<Query.Page>(recommendationPageQuery(page))
-                                ?.data
-                                ?.page
+                            runCatching {
+                                executeQuery<Query.Page>(recommendationPageQuery(page))
+                                    ?.data
+                                    ?.page
+                            }.getOrNull()
                         }
                     }.awaitAll()
                 }
