@@ -575,9 +575,9 @@ class AnilistQueries {
     }
 
     private val homeListChunkIndex = 1
-    private val homeListChunkSize = 500
-    private val recommendationPerPage = 50
-    private val maxRecommendationPages = 4
+    private val homeListChunkSize = 250
+    private val recommendationPerPage = 40
+    private val maxRecommendationPages = 3
 
     private fun recommendationQuery(page: Int = 1): String {
         return """ Page(page: $page, perPage:$recommendationPerPage) { $standardPageInformation recommendations(sort: RATING_DESC, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress progressVolumes private score(format:POINT_100) status } chapters volumes isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
@@ -857,17 +857,18 @@ class AnilistQueries {
             }
 
             mergeRecommendations(response?.data?.recommendationQuery?.recommendations)
-            var hasNextRecommendationPage =
-                response?.data?.recommendationQuery?.pageInfo?.hasNextPage == true
-            if (hasNextRecommendationPage) {
-                for (page in 2..maxRecommendationPages) {
-                    val recommendationPage = executeQuery<Query.Page>(recommendationPageQuery(page))
-                        ?.data
-                        ?.page
-                        ?: break
-                    mergeRecommendations(recommendationPage.recommendations)
-                    hasNextRecommendationPage = recommendationPage.pageInfo?.hasNextPage == true
-                    if (!hasNextRecommendationPage) break
+            if (response?.data?.recommendationQuery?.pageInfo?.hasNextPage == true) {
+                val recommendationPages = coroutineScope {
+                    (2..maxRecommendationPages).map { page ->
+                        async {
+                            executeQuery<Query.Page>(recommendationPageQuery(page))
+                                ?.data
+                                ?.page
+                        }
+                    }.awaitAll()
+                }
+                recommendationPages.forEach { page ->
+                    mergeRecommendations(page?.recommendations)
                 }
             }
             val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
