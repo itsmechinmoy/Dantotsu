@@ -102,18 +102,21 @@ class AnilistHomeViewModel : ViewModel() {
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         if (rescueMode) {
             initHomePageFromMAL()
+            setListImages()
             return
         }
         val res = Anilist.query.initHomePage()
-        res["currentAnime"]?.let { animeContinue.postValue(it) }
-        res["favoriteAnime"]?.let { animeFav.postValue(it) }
-        res["currentAnimePlanned"]?.let { animePlanned.postValue(it) }
-        res["currentManga"]?.let { mangaContinue.postValue(it) }
-        res["favoriteManga"]?.let { mangaFav.postValue(it) }
-        res["currentMangaPlanned"]?.let { mangaPlanned.postValue(it) }
-        res["recommendations"]?.let { recommendation.postValue(it) }
-        res["missingSequels"]?.let { missingSequels.postValue(it) }
-        res["hidden"]?.let { hidden.postValue(it) }
+        res.media["currentAnime"]?.let { animeContinue.postValue(it) }
+        res.media["favoriteAnime"]?.let { animeFav.postValue(it) }
+        res.media["currentAnimePlanned"]?.let { animePlanned.postValue(it) }
+        res.media["currentManga"]?.let { mangaContinue.postValue(it) }
+        res.media["favoriteManga"]?.let { mangaFav.postValue(it) }
+        res.media["currentMangaPlanned"]?.let { mangaPlanned.postValue(it) }
+        res.media["recommendations"]?.let { recommendation.postValue(it) }
+        res.media["missingSequels"]?.let { missingSequels.postValue(it) }
+        res.media["hidden"]?.let { hidden.postValue(it) }
+        res.userStatus?.let { userStatus.postValue(it) }
+        res.bannerImages?.let { listImages.postValue(it) }
     }
 
     private suspend fun initHomePageFromMAL() {
@@ -350,6 +353,23 @@ class AnilistAnimeViewModel : ViewModel() {
         mostFavAnime.postValue(list["mostFav"])
     }
 
+    suspend fun initAnimePage(seasonIndex: Int, popularOnList: Boolean) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            loadTrending(seasonIndex)
+            loadAllFromMAL()
+            loadPopular("ANIME", sort = Anilist.sortBy[1], onList = popularOnList)
+            return
+        }
+        val res = Anilist.query.fetchAnimePageData(seasonIndex, popularOnList)
+        res.trending?.let { trending.postValue(it) }
+        updated.postValue(res.media["recentUpdates"])
+        popularMovies.postValue(res.media["trendingMovies"])
+        topRatedAnime.postValue(res.media["topRated"])
+        mostFavAnime.postValue(res.media["mostFav"])
+        animePopular.postValue(res.popular)
+    }
+
     private suspend fun loadAllFromMAL() {
         tryWithSuspend {
             MAL.query.getAnimeRanking("airing", 15)?.data?.let { entries ->
@@ -539,6 +559,24 @@ class AnilistMangaViewModel : ViewModel() {
         popularNovel.postValue(list["trendingNovel"])
         topRatedManga.postValue(list["topRated"])
         mostFavManga.postValue(list["mostFav"])
+    }
+
+    suspend fun initMangaPage(popularOnList: Boolean) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            loadTrending()
+            loadAllFromMAL()
+            loadPopular("MANGA", sort = Anilist.sortBy[1], onList = popularOnList)
+            return
+        }
+        val res = Anilist.query.fetchMangaPageData(popularOnList)
+        res.trending?.let { trending.postValue(it) }
+        popularManga.postValue(res.media["trendingManga"])
+        popularManhwa.postValue(res.media["trendingManhwa"])
+        popularNovel.postValue(res.media["trendingNovel"])
+        topRatedManga.postValue(res.media["topRated"])
+        mostFavManga.postValue(res.media["mostFav"])
+        mangaPopular.postValue(res.popular)
     }
 
     private suspend fun loadAllFromMAL() {

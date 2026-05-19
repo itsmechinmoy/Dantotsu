@@ -319,6 +319,7 @@ class MainActivity : AppCompatActivity() {
             mainViewPager.adapter =
                 ViewPagerAdapter(supportFragmentManager, lifecycle)
             mainViewPager.setPageTransformer(ZoomOutPageTransformer())
+            mainViewPager.setCurrentItem(selectedOption, false)
             navbar.selectTabAt(selectedOption)
             navbar.setOnTabSelectListener(object :
                 AnimatedBottomBar.OnTabSelectListener {
@@ -333,14 +334,6 @@ class MainActivity : AppCompatActivity() {
                     mainViewPager.setCurrentItem(newIndex, false)
                 }
             })
-            if (mainViewPager.currentItem != selectedOption) {
-                mainViewPager.post {
-                    mainViewPager.setCurrentItem(
-                        selectedOption,
-                        false
-                    )
-                }
-            }
             binding.includedNavbar.navbarContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 bottomMargin = navBarHeight
             }

@@ -47,6 +47,24 @@ class AnilistQueries {
         const val ITEMS_PER_PAGE = 25
     }
 
+    data class HomePageInitResult(
+        val media: Map<String, ArrayList<Media>>,
+        val userStatus: ArrayList<User>? = null,
+        val bannerImages: ArrayList<String?>? = null
+    )
+
+    data class AnimePageInitResult(
+        val media: Map<String, ArrayList<Media>>,
+        val trending: MutableList<Media>?,
+        val popular: AniMangaSearchResults?
+    )
+
+    data class MangaPageInitResult(
+        val media: Map<String, ArrayList<Media>>,
+        val trending: MutableList<Media>?,
+        val popular: AniMangaSearchResults?
+    )
+
     private data class MissingSequelsCache(
         val sourceIds: Set<Int>,
         val media: ArrayList<Media>,
@@ -490,20 +508,15 @@ class AnilistQueries {
         return responseArray
     }
 
-    suspend fun getUserStatus(): ArrayList<User>? {
-        val toShow: List<Boolean> =
-            PrefManager.getVal(PrefName.HomeLayout)
-        if (toShow.getOrNull(7) != true) return null
-        val query = """{Page1:${status(1)}Page2:${status(2)}}"""
-        val response = executeQuery<Query.HomePageMedia>(query)
+    private fun parseUserStatusFromHomeData(homeData: Query.HomePageMedia.Data?): ArrayList<User>? {
         val list = mutableListOf<User>()
         val threeDaysAgo = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_MONTH, -3)
         }.timeInMillis
-        if (response?.data?.page1 != null && response.data.page2 != null) {
+        if (homeData?.page1 != null && homeData.page2 != null) {
             val activities = listOf(
-                response.data.page1.activities,
-                response.data.page2.activities
+                homeData.page1.activities,
+                homeData.page2.activities
             ).asSequence().flatten()
                 .filter { it.typename != "MessageActivity" }
                 .filter { if (Anilist.adult) true else it.media?.isAdult != true }
@@ -548,21 +561,34 @@ class AnilistQueries {
         } else return null
     }
 
+    suspend fun getUserStatus(): ArrayList<User>? {
+        val toShow: List<Boolean> =
+            PrefManager.getVal(PrefName.HomeLayout)
+        if (toShow.getOrNull(7) != true) return null
+        val query = """{Page1:${status(1)}Page2:${status(2)}}"""
+        val response = executeQuery<Query.HomePageMedia>(query)
+        return parseUserStatusFromHomeData(response?.data)
+    }
+
     private fun favMediaQuery(anime: Boolean, page: Int, id: Int? = Anilist.userid): String {
         return """User(id:${id}){id favourites{${if (anime) "anime" else "manga"}(page:$page){$standardPageInformation edges{favouriteOrder node{id idMal isAdult mediaListEntry{ progress private score(format:POINT_100) status } chapters isFavourite format episodes nextAiringEpisode{episode}meanScore isFavourite format startDate{year month day} title{english romaji userPreferred}type status(version:2)bannerImage coverImage{large}}}}}}"""
     }
 
-    private fun recommendationQuery(): String {
-        return """ Page(page: 1, perPage:30) { $standardPageInformation recommendations(sort: RATING_DESC, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress progressVolumes private score(format:POINT_100) status } chapters volumes isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
+    private val homeListChunkIndex = 1
+    private val homeListChunkSize = 250
+    private val recommendationPerPage = 40
+
+    private fun recommendationQuery(page: Int = 1): String {
+        return """ Page(page: $page, perPage:$recommendationPerPage) { $standardPageInformation recommendations(sort: RATING_DESC, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress progressVolumes private score(format:POINT_100) status } chapters volumes isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
     }
 
     private fun missingSequelsCompletedSourceQuery(): String {
-        return """ MediaListCollection( userId: ${Anilist.userid}, type: ANIME, status: COMPLETED, sort: UPDATED_TIME_DESC ) { lists { entries { media { id relations { edges { relationType(version: 2) node { id } } } } } } } """.trimIndent()
+        return """ MediaListCollection( userId: ${Anilist.userid}, type: ANIME, status: COMPLETED, chunk: $homeListChunkIndex, perChunk: $homeListChunkSize, sort: UPDATED_TIME_DESC ) { lists { entries { media { id relations { edges { relationType(version: 2) node { id } } } } } } } """.trimIndent()
     }
 
     private fun missingSequelsAllListSourceQuery(): String {
         return """
-            MediaListCollection( userId: ${Anilist.userid}, type: ANIME ) { lists { entries { media { id } } } } """.trimIndent()
+            MediaListCollection( userId: ${Anilist.userid}, type: ANIME, chunk: $homeListChunkIndex, perChunk: $homeListChunkSize ) { lists { entries { media { id } } } } """.trimIndent()
     }
     private val batchSize = 50
     private fun missingSequelsLookupQuery(ids: List<Int>): String {
@@ -640,10 +666,23 @@ class AnilistQueries {
     }
 
     private fun continueMediaQuery(type: String, status: String): String {
-        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status , sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status updatedAt media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
+        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, status: $status, chunk: $homeListChunkIndex, perChunk: $homeListChunkSize, sort: UPDATED_TIME ) { lists { entries { progress private score(format:POINT_100) status updatedAt media { id idMal type isAdult status chapters episodes nextAiringEpisode {episode} meanScore isFavourite format bannerImage coverImage{large} title { english romaji userPreferred } } } } } """
     }
 
-    suspend fun initHomePage(): Map<String, ArrayList<Media>> {
+    private fun bannerImageCollectionQuery(type: String): String {
+        return """ MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1,perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries{ media { id bannerImage isAdult } } } } """
+    }
+
+    private fun selectRandomBannerImage(collection: ani.dantotsu.connections.anilist.api.MediaListCollection?): String? {
+        return collection?.lists?.mapNotNull {
+            it.entries?.filter { entry -> entry.media?.isAdult != true }?.mapNotNull { entry ->
+                val imageUrl = entry.media?.bannerImage
+                if (!imageUrl.isNullOrBlank() && !imageUrl.equals("null", ignoreCase = true)) imageUrl else null
+            }
+        }?.flatten()?.randomOrNull()
+    }
+
+    suspend fun initHomePage(): HomePageInitResult {
         val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
         val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
         val removedMedia = ArrayList<Media>()
@@ -684,22 +723,21 @@ class AnilistQueries {
             }"""
         )
         if (toShow.getOrNull(6) == true) {
-            queries.add("""recommendationQuery: ${recommendationQuery()}""")
+            queries.add("""recommendationQuery: ${recommendationQuery(1)}""")
+        }
+        if (toShow.getOrNull(7) == true) {
+            queries.add("""Page1:${status(1)}""")
+            queries.add("""Page2:${status(2)}""")
         }
         if (toShow.getOrNull(8) == true) {
             queries.add("""missingSequelsCompletedQuery: ${missingSequelsCompletedSourceQuery()}""")
             queries.add("""missingSequelsAllListQuery: ${missingSequelsAllListSourceQuery()}""")
         }
-        if (queries.isEmpty() && toShow.getOrNull(8) != true) {
-            return mutableMapOf("hidden" to arrayListOf())
-        }
+        queries.add("""bannerAnime: ${bannerImageCollectionQuery("ANIME")}""")
+        queries.add("""bannerManga: ${bannerImageCollectionQuery("MANGA")}""")
 
-        val response = if (queries.isEmpty()) {
-            null
-        } else {
-            val query = "{${queries.joinToString(",")}}"
-            executeQuery<Query.HomePageMedia>(query, show = true)
-        }
+        val query = "{${queries.joinToString(",")}}"
+        val response = executeQuery<Query.HomePageMedia>(query, show = true)
         val returnMap = mutableMapOf<String, ArrayList<Media>>()
 
         fun processMedia(
@@ -809,8 +847,21 @@ class AnilistQueries {
                     }
                 }
             }
-            val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
-            returnMap["recommendations"] = list
+            returnMap["recommendations"] = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
+        }
+        val homeData = response?.data
+        val bannerImages = arrayListOf<String?>(
+            selectRandomBannerImage(homeData?.bannerAnime),
+            selectRandomBannerImage(homeData?.bannerManga)
+        )
+        val userStatus = if (
+            toShow.getOrNull(7) == true &&
+            homeData?.page1 != null &&
+            homeData.page2 != null
+        ) {
+            parseUserStatusFromHomeData(homeData)
+        } else {
+            null
         }
 
         if (toShow.getOrNull(8) == true) {
@@ -858,7 +909,11 @@ class AnilistQueries {
         }
 
         returnMap["hidden"] = sortedHidden
-        return returnMap
+        return HomePageInitResult(
+            media = returnMap,
+            userStatus = userStatus,
+            bannerImages = bannerImages
+        )
     }
 
 
@@ -1423,6 +1478,48 @@ class AnilistQueries {
         }
     }
 
+    private fun pageMediaQuery(
+        page: Int,
+        perPage: Int,
+        sort: String,
+        type: String,
+        season: String? = null,
+        seasonYear: Int? = null,
+        onList: Boolean? = null,
+        country: String? = null,
+        format: String? = null,
+        adultOnly: Boolean = false
+    ): String {
+        val seasonPart = season?.let { "season:$it, " } ?: ""
+        val seasonYearPart = seasonYear?.let { "seasonYear:$it, " } ?: ""
+        val onListPart = onList?.let { "onList:$it, " } ?: ""
+        val countryPart = country?.let { "countryOfOrigin:$it, " } ?: ""
+        val formatPart = format?.let { "format:$it, " } ?: ""
+        val isAdultPart = if (adultOnly) "isAdult:true" else "isAdult:false"
+        return """Page(page:$page,perPage:$perPage){$standardPageInformation media(sort:$sort, type:$type, $seasonPart$seasonYearPart$onListPart$countryPart$formatPart$isAdultPart){${standardMediaInformation()}}}"""
+    }
+
+    private fun pageToSearchResult(
+        page: Page?,
+        type: String,
+        perPage: Int,
+        sort: String,
+        onList: Boolean?
+    ): AniMangaSearchResults? {
+        val items = page?.media?.map { Media(it) }?.toMutableList() ?: return null
+        val pageInfo = page.pageInfo ?: return null
+        return AniMangaSearchResults(
+            type = type,
+            perPage = perPage,
+            sort = sort,
+            isAdult = false,
+            onList = onList,
+            results = items,
+            page = pageInfo.currentPage ?: 0,
+            hasNextPage = pageInfo.hasNextPage == true
+        )
+    }
+
     private fun queryMangaList(): String {
         return buildString {
             append(
@@ -1490,6 +1587,62 @@ class AnilistQueries {
         list
     }
 
+    suspend fun fetchAnimePageData(seasonIndex: Int, popularOnList: Boolean): AnimePageInitResult {
+        val list = mutableMapOf<String, ArrayList<Media>>()
+        val (season, year) = Anilist.currentSeasons[seasonIndex]
+        val showAdultOnly = getPreference(PrefName.AdultOnly)
+        val popularOnListFilter = if (popularOnList) null else false
+
+        fun filterRecentUpdates(page: Page?): ArrayList<Media> {
+            val listOnly = getPreference(PrefName.RecentlyListOnly)
+            val idArr = mutableSetOf<Int>()
+            return page?.airingSchedules?.mapNotNull { i ->
+                i.media?.takeIf { !idArr.contains(it.id) }?.let {
+                    val shouldAdd = when {
+                        !listOnly && showAdultOnly && it.isAdult == true -> true
+                        !listOnly && !showAdultOnly && it.countryOfOrigin == "JP" && it.isAdult == false -> true
+                        listOnly && it.mediaListEntry != null -> true
+                        else -> false
+                    }
+                    if (shouldAdd) {
+                        idArr.add(it.id)
+                        Media(it)
+                    } else null
+                }
+            }?.toCollection(ArrayList()) ?: arrayListOf()
+        }
+
+        val query = """{
+            recentUpdates:${recentAnimeUpdates(1)}
+            recentUpdates2:${recentAnimeUpdates(2)}
+            trendingMovies:${buildQueryString("POPULARITY_DESC","ANIME","MOVIE")}
+            topRated:${buildQueryString("SCORE_DESC","ANIME")}
+            mostFav:${buildQueryString("FAVOURITES_DESC","ANIME")}
+            seasonalTrending:${pageMediaQuery(1, 12, Anilist.sortBy[2], "ANIME", season = season, seasonYear = year, adultOnly = showAdultOnly)}
+            popular:${pageMediaQuery(1, 50, Anilist.sortBy[1], "ANIME", onList = popularOnListFilter, adultOnly = showAdultOnly)}
+        }""".prepare()
+
+        val data = executeQuery<Query.AnimeList>(query, force = true)?.data
+        data?.apply {
+            list["recentUpdates"] = filterRecentUpdates(recentUpdates)
+            list["trendingMovies"] = mediaList(trendingMovies)
+            list["topRated"] = mediaList(topRated)
+            list["mostFav"] = mediaList(mostFav)
+        }
+
+        return AnimePageInitResult(
+            media = list,
+            trending = data?.seasonalTrending?.media?.map { Media(it) }?.toMutableList(),
+            popular = pageToSearchResult(
+                page = data?.popular,
+                type = "ANIME",
+                perPage = 50,
+                sort = Anilist.sortBy[1],
+                onList = popularOnListFilter
+            )
+        )
+    }
+
     suspend fun loadMangaList(): Map<String, ArrayList<Media>> = coroutineScope {
         val list = mutableMapOf<String, ArrayList<Media>>()
 
@@ -1504,6 +1657,42 @@ class AnilistQueries {
         }
 
         list
+    }
+
+    suspend fun fetchMangaPageData(popularOnList: Boolean): MangaPageInitResult {
+        val list = mutableMapOf<String, ArrayList<Media>>()
+        val showAdultOnly = getPreference(PrefName.AdultOnly)
+        val popularOnListFilter = if (popularOnList) null else false
+        val query = """{
+            trendingManga:${buildQueryString("POPULARITY_DESC","MANGA", country = "JP")}
+            trendingManhwa:${buildQueryString("POPULARITY_DESC","MANGA", country = "KR")}
+            trendingNovel:${buildQueryString("POPULARITY_DESC","MANGA", format = "NOVEL", country = "JP")}
+            topRated:${buildQueryString("SCORE_DESC","MANGA")}
+            mostFav:${buildQueryString("FAVOURITES_DESC","MANGA")}
+            trending:${pageMediaQuery(1, 10, Anilist.sortBy[2], "MANGA", adultOnly = showAdultOnly)}
+            popular:${pageMediaQuery(1, 50, Anilist.sortBy[1], "MANGA", onList = popularOnListFilter, adultOnly = showAdultOnly)}
+        }""".prepare()
+
+        val data = executeQuery<Query.MangaList>(query, force = true)?.data
+        data?.apply {
+            list["trendingManga"] = mediaList(trendingManga)
+            list["trendingManhwa"] = mediaList(trendingManhwa)
+            list["trendingNovel"] = mediaList(trendingNovel)
+            list["topRated"] = mediaList(topRated)
+            list["mostFav"] = mediaList(mostFav)
+        }
+
+        return MangaPageInitResult(
+            media = list,
+            trending = data?.trending?.media?.map { Media(it) }?.toMutableList(),
+            popular = pageToSearchResult(
+                page = data?.popular,
+                type = "MANGA",
+                perPage = 50,
+                sort = Anilist.sortBy[1],
+                onList = popularOnListFilter
+            )
+        )
     }
 
     suspend fun recentlyUpdated(
