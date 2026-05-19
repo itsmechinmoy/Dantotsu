@@ -2740,7 +2740,14 @@ class ExoplayerView :
     }
 
     override fun onStop() {
-        if (castPlayer?.isPlaying == false) {
+        val shouldPausePlayback =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                !isInPictureInPictureMode
+            } else {
+                true
+            }
+        val isCasting = castPlayer?.isPlaying == true
+        if (shouldPausePlayback && !isCasting) {
             playerView.player?.pause()
         }
         super.onStop()
@@ -3186,7 +3193,7 @@ class ExoplayerView :
         if (lastSubscriptionPromptEpisode == currentEpisode) return
         lastSubscriptionPromptEpisode = currentEpisode
 
-        val subscriptionsEnabled = PrefManager.getVal<Boolean>(PrefName.SubscriptionCheckingNotifications)
+        val subscriptionsEnabled = PrefManager.getVal<Boolean>(PrefName.SubscriptionPromptAtEnd)
         if (!subscriptionsEnabled) return
 
         val isCompleted = isAnimeCompleted()
@@ -3213,6 +3220,7 @@ class ExoplayerView :
     }
 
     private fun isAnimeCompleted(): Boolean {
+        if (media.status == "FINISHED") return true
         if (media.userStatus == "COMPLETED") return true
         val totalEpisodes = media.anime?.totalEpisodes ?: return false
         val currentEpisodeNumber = media.anime?.selectedEpisode?.toFloatOrNull() ?: return false
@@ -3353,7 +3361,9 @@ class ExoplayerView :
                 "${media.id}_${episode.number}",
                 exoPlayer.currentPosition,
             )
-            if (wasPlaying) exoPlayer.play()
+            if (!isFinishing && wasPlaying) {
+                exoPlayer.play()
+            }
         }
     }
 
