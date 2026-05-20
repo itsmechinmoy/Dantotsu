@@ -261,7 +261,7 @@ object EpisodeMapper {
             // Logger.log("EpisodeMapper: S$season Current media ${current.id} has ${relations?.size ?: 0} relations")
 
             val prequel = relations?.find {
-                it.relation == "PREQUEL" &&
+                (it.relation != null && (it.relation == "PREQUEL" || it.relation!!.startsWith("PREQUEL\n"))) &&
                         (it.format == "TV" || it.format == "TV_SHORT" || it.format == "ONA")
             }
 

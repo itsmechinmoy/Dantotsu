@@ -4,7 +4,6 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import ani.dantotsu.connections.anilist.Anilist
-import ani.dantotsu.connections.mal.JikanQueries
 import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -15,24 +14,307 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import ani.dantotsu.media.anime.Anime
+import ani.dantotsu.media.manga.Manga
 
 class OtherDetailsViewModel : ViewModel() {
     private val character: MutableLiveData<Character> = MutableLiveData(null)
     fun getCharacter(): LiveData<Character> = character
     suspend fun loadCharacter(m: Character) {
-        if (character.value == null) character.postValue(Anilist.query.getCharacterDetails(m))
+        if (character.value != null) return
+        if (PrefManager.getVal(PrefName.RescueMode)) {
+            tryWithSuspend {
+                val jikanData = MAL.jikan.getCharacterFull(m.id)
+                if (jikanData != null) {
+                    m.description = jikanData.about
+
+                    parseCharacterAboutFields(m, jikanData.about)
+
+                    jikanData.images?.jpg?.largeImageUrl?.let { m.image = it }
+                        ?: jikanData.images?.jpg?.imageUrl?.let { m.image = it }
+
+                    val roles = arrayListOf<Media>()
+
+                    jikanData.anime.forEach { role ->
+                        role.anime?.let { animeEntry ->
+                            val media = Media(
+                                id = animeEntry.malId,
+                                idMAL = animeEntry.malId,
+                                name = animeEntry.title,
+                                nameRomaji = animeEntry.title ?: "",
+                                userPreferredName = animeEntry.title ?: "",
+                                cover = animeEntry.images?.jpg?.largeImageUrl ?: animeEntry.images?.jpg?.imageUrl,
+                                isAdult = false,
+                                format = "TV",
+                                anime = Anime(null, null, null)
+                            )
+                            media.relation = role.role
+                            roles.add(media)
+                        }
+                    }
+
+                    jikanData.manga.forEach { role ->
+                        role.manga?.let { mangaEntry ->
+                            val media = Media(
+                                id = mangaEntry.malId,
+                                idMAL = mangaEntry.malId,
+                                name = mangaEntry.title,
+                                nameRomaji = mangaEntry.title ?: "",
+                                userPreferredName = mangaEntry.title ?: "",
+                                cover = mangaEntry.images?.jpg?.largeImageUrl ?: mangaEntry.images?.jpg?.imageUrl,
+                                isAdult = false,
+                                format = "MANGA",
+                                manga = Manga()
+                            )
+                            media.relation = role.role
+                            roles.add(media)
+                        }
+                    }
+                    roles.sortByDescending { it.idMAL }
+                    m.roles = roles
+                    
+                    val voiceActors = arrayListOf<Author>()
+                    jikanData.voices.forEach { voice ->
+                        voice.person?.let { person ->
+                            val vActor = Author(
+                                id = person.malId,
+                                name = person.name,
+                                image = person.images?.jpg?.imageUrl,
+                                role = voice.language
+                            )
+                            voiceActors.add(vActor)
+                        }
+                    }
+                    m.voiceActor = voiceActors
+                }
+            }
+            character.postValue(m)
+            return
+        }
+        character.postValue(Anilist.query.getCharacterDetails(m))
+    }
+
+    private fun parseCharacterAboutFields(m: Character, about: String?) {
+        if (about.isNullOrBlank()) return
+        val lines = about.lines()
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("Age:", ignoreCase = true) && m.age == null) {
+                m.age = trimmed.substringAfter(":").trim()
+            }
+            if (trimmed.startsWith("Gender:", ignoreCase = true) && m.gender == null) {
+                m.gender = trimmed.substringAfter(":").trim()
+            }
+            if (trimmed.startsWith("Birthday:", ignoreCase = true) && m.dateOfBirth == null) {
+                val raw = trimmed.substringAfter(":").trim()
+                if (raw.isNotBlank()) {
+                    m.dateOfBirth = ani.dantotsu.connections.anilist.api.FuzzyDate()
+                    m.description = about.replace(trimmed, "").trim()
+                    try {
+                        val parts = raw.replace(Regex("[^\\w\\s,]"), "").trim().split("\\s+".toRegex())
+                        if (parts.isNotEmpty()) {
+                            val months = mapOf(
+                                "january" to 1, "february" to 2, "march" to 3, "april" to 4,
+                                "may" to 5, "june" to 6, "july" to 7, "august" to 8,
+                                "september" to 9, "october" to 10, "november" to 11, "december" to 12
+                            )
+                            val monthNum = months[parts[0].lowercase()]
+                            val day = if (parts.size > 1) parts[1].filter { it.isDigit() }.toIntOrNull() else null
+                            m.dateOfBirth = ani.dantotsu.connections.anilist.api.FuzzyDate(
+                                month = monthNum,
+                                day = day
+                            )
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        }
     }
 
     private val studio: MutableLiveData<Studio> = MutableLiveData(null)
     fun getStudio(): LiveData<Studio> = studio
     suspend fun loadStudio(m: Studio) {
+        if (studio.value != null) return
+        if (PrefManager.getVal(PrefName.RescueMode)) {
+            tryWithSuspend {
+                val yearMedia = mutableMapOf<String, ArrayList<Media>>()
+                val seenIds = mutableSetOf<Int>()
+                var page = 1
+                var hasNext = true
+
+                while (hasNext && page <= 10) {
+                    val resp = MAL.jikan.getProducerAnime(m.id.toIntOrNull() ?: 0, page) ?: break
+                    resp.data.forEach { jikanData ->
+                        if (!seenIds.contains(jikanData.malId)) {
+                            seenIds.add(jikanData.malId)
+                            val media = Media(jikanData, isAnime = true)
+                            val status = jikanData.status?.uppercase() ?: ""
+                            val year = jikanData.aired?.from?.take(4) ?: "TBA"
+                            val title = if (status.contains("CANCEL")) "CANCELLED" else year
+                            if (!yearMedia.containsKey(title)) yearMedia[title] = arrayListOf()
+                            yearMedia[title]?.add(media)
+                        }
+                    }
+                    hasNext = resp.pagination?.hasNextPage == true
+                    if (hasNext) {
+                        kotlinx.coroutines.delay(350)
+                        page++
+                    }
+                }
+
+                if (yearMedia.contains("CANCELLED")) {
+                    val cancelled = yearMedia["CANCELLED"]!!
+                    yearMedia.remove("CANCELLED")
+                    yearMedia["CANCELLED"] = cancelled
+                }
+                m.yearMedia = yearMedia
+            }
+            studio.postValue(m)
+            return
+        }
         if (studio.value == null) studio.postValue(Anilist.query.getStudioDetails(m))
     }
 
     private val author: MutableLiveData<Author> = MutableLiveData(null)
     fun getAuthor(): LiveData<Author> = author
     suspend fun loadAuthor(m: Author) {
-        if (author.value == null) author.postValue(Anilist.query.getAuthorDetails(m))
+        if (author.value != null) return
+        if (PrefManager.getVal(PrefName.RescueMode)) {
+            tryWithSuspend {
+                val jikanData = MAL.jikan.getPersonFull(m.id)
+                if (jikanData != null) {
+                    if (!jikanData.about.isNullOrBlank()) {
+                        m.about = jikanData.about
+                    }
+
+                    jikanData.images?.jpg?.largeImageUrl?.let { m.image = it }
+                        ?: jikanData.images?.jpg?.imageUrl?.let { m.image = it }
+
+                    if (!jikanData.birthday.isNullOrBlank()) {
+                        try {
+                            val isoFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+                            val parsed = isoFormat.parse(jikanData.birthday.take(19))
+                            if (parsed != null) {
+                                val displayFormat = java.text.SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
+                                m.dateOfBirth = displayFormat.format(parsed)
+                            }
+                        } catch (_: Exception) {
+                            m.dateOfBirth = jikanData.birthday.substringBefore("T")
+                        }
+                    }
+                    
+                    val yearMedia = mutableMapOf<String, ArrayList<Media>>()
+
+                    jikanData.anime.forEach { role ->
+                        role.anime?.let { animeEntry ->
+                            val positionKey = role.position?.ifBlank { "Other" } ?: "Other"
+                            val title = "$positionKey (Anime)"
+                            if (!yearMedia.containsKey(title)) yearMedia[title] = arrayListOf()
+                            val media = Media(
+                                id = animeEntry.malId,
+                                idMAL = animeEntry.malId,
+                                name = animeEntry.title,
+                                nameRomaji = animeEntry.title ?: "",
+                                userPreferredName = animeEntry.title ?: "",
+                                cover = animeEntry.images?.jpg?.largeImageUrl ?: animeEntry.images?.jpg?.imageUrl,
+                                isAdult = false,
+                                format = "TV",
+                                anime = Anime(null, null, null)
+                            )
+                            media.relation = role.position
+                            yearMedia[title]?.add(media)
+                        }
+                    }
+
+                    jikanData.manga.forEach { role ->
+                        role.manga?.let { mangaEntry ->
+                            val positionKey = role.position?.ifBlank { "Other" } ?: "Other"
+                            val title = "$positionKey (Manga)"
+                            if (!yearMedia.containsKey(title)) yearMedia[title] = arrayListOf()
+                            val media = Media(
+                                id = mangaEntry.malId,
+                                idMAL = mangaEntry.malId,
+                                name = mangaEntry.title,
+                                nameRomaji = mangaEntry.title ?: "",
+                                userPreferredName = mangaEntry.title ?: "",
+                                cover = mangaEntry.images?.jpg?.largeImageUrl ?: mangaEntry.images?.jpg?.imageUrl,
+                                isAdult = false,
+                                format = "MANGA",
+                                manga = Manga()
+                            )
+                            media.relation = role.position
+                            yearMedia[title]?.add(media)
+                        }
+                    }
+
+                    val voiceMediaMap = mutableMapOf<Int, Media>()
+                    jikanData.voices.forEach { voice ->
+                        voice.anime?.let { animeEntry ->
+                            val characterInfo = if (voice.character != null) {
+                                "${voice.character.name ?: ""}${if (!voice.role.isNullOrBlank()) " (${voice.role})" else ""}"
+                            } else ""
+                            
+                            val existing = voiceMediaMap[animeEntry.malId]
+                            if (existing != null) {
+                                if (characterInfo.isNotEmpty()) {
+                                    existing.relation = if (existing.relation.isNullOrBlank()) {
+                                        characterInfo
+                                    } else {
+                                        "${existing.relation} / $characterInfo"
+                                    }
+                                }
+                            } else {
+                                val media = Media(
+                                    id = animeEntry.malId,
+                                    idMAL = animeEntry.malId,
+                                    name = animeEntry.title,
+                                    nameRomaji = animeEntry.title ?: "",
+                                    userPreferredName = animeEntry.title ?: "",
+                                    cover = animeEntry.images?.jpg?.largeImageUrl ?: animeEntry.images?.jpg?.imageUrl,
+                                    isAdult = false,
+                                    format = "TV",
+                                    anime = Anime(null, null, null)
+                                )
+                                media.relation = characterInfo
+                                voiceMediaMap[animeEntry.malId] = media
+                            }
+                        }
+                    }
+                    if (voiceMediaMap.isNotEmpty()) {
+                        yearMedia["Voice Roles (Anime)"] = ArrayList(voiceMediaMap.values)
+                    }
+
+                    yearMedia.forEach { (_, list) ->
+                        list.sortByDescending { it.idMAL }
+                    }
+
+                    val sortedYearMedia = linkedMapOf<String, ArrayList<Media>>()
+                    yearMedia.entries
+                        .sortedByDescending { it.value.size }
+                        .forEach { sortedYearMedia[it.key] = it.value }
+                    m.yearMedia = sortedYearMedia
+
+                    val characters = arrayListOf<Character>()
+                    jikanData.voices.forEach { voice ->
+                        voice.character?.let { charEntry ->
+                            val c = Character(
+                                id = charEntry.malId,
+                                name = charEntry.name,
+                                image = charEntry.images?.jpg?.imageUrl ?: charEntry.images?.webp?.imageUrl,
+                                banner = null,
+                                role = voice.role ?: "",
+                                isFav = false
+                            )
+                            characters.add(c)
+                        }
+                    }
+                    m.character = characters
+                }
+            }
+            author.postValue(m)
+            return
+        }
+        author.postValue(Anilist.query.getAuthorDetails(m))
     }
 
     private var cachedAllCalendarData: Map<String, MutableList<Media>>? = null
@@ -95,7 +377,7 @@ class OtherDetailsViewModel : ViewModel() {
 
     private suspend fun loadCalendarFromJikan(showOnlyLibrary: Boolean) {
         if (cachedAllCalendarData == null || cachedLibraryCalendarData == null) {
-            val jikan = JikanQueries()
+            val jikan = MAL.jikan
             val df = DateFormat.getDateInstance(DateFormat.FULL)
 
             val tf = DateFormat.getTimeInstance(DateFormat.SHORT)
@@ -106,7 +388,6 @@ class OtherDetailsViewModel : ViewModel() {
 
             val allMap = mutableMapOf<String, MutableList<Media>>()
             val libraryMap = mutableMapOf<String, MutableList<Media>>()
-
 
             val watchingMalIds = mutableSetOf<Int>()
             val watchedEpisodesMap = mutableMapOf<Int, Int>()
@@ -127,7 +408,6 @@ class OtherDetailsViewModel : ViewModel() {
                 }
             }
 
-
             for (offsetDay in -1..6) {
                 val cal = Calendar.getInstance()
                 cal.add(Calendar.DAY_OF_YEAR, offsetDay)
@@ -147,7 +427,6 @@ class OtherDetailsViewModel : ViewModel() {
                             seenIds.add(jikanData.malId)
                             val media = Media(jikanData, isAnime = true)
                             media.userProgress = watchedEpisodesMap[jikanData.malId]
-                            
 
                             val fromDateStr = jikanData.aired?.from
                             var airedEps: Int? = null
@@ -176,7 +455,6 @@ class OtherDetailsViewModel : ViewModel() {
                             }
                             media.anime?.nextAiringEpisode = airedEps
 
-
                             val nextEp = watchedEpisodesMap[jikanData.malId]?.let { it + 1 }
                             
                             var timeStr = ""
@@ -189,7 +467,6 @@ class OtherDetailsViewModel : ViewModel() {
                                     parser.timeZone = TimeZone.getTimeZone(bTz)
                                     val parsedTime = parser.parse(bTime)
                                     if (parsedTime != null) {
-
                                         val targetCal = Calendar.getInstance(TimeZone.getTimeZone(bTz))
                                         targetCal.time = cal.time
                                         val timeCal = Calendar.getInstance(TimeZone.getTimeZone(bTz))

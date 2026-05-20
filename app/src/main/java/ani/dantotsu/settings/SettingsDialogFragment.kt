@@ -34,6 +34,7 @@ import ani.dantotsu.setSafeOnClickListener
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.startMainActivity
+import ani.dantotsu.openLinkInCustomTab
 import ani.dantotsu.util.customAlertDialog
 import eu.kanade.tachiyomi.util.system.getSerializableCompat
 import java.util.Timer
@@ -106,7 +107,12 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
         }
         binding.settingsUserAvatar.setOnClickListener {
             if (isRescueMode) {
-                snackString(getString(R.string.rescue_mode_active))
+                val malUsername = MAL.username
+                if (!malUsername.isNullOrBlank()) {
+                    openLinkInCustomTab("https://myanimelist.net/profile/$malUsername")
+                } else {
+                    snackString(getString(R.string.rescue_mode_active))
+                }
                 return@setOnClickListener
             }
             ContextCompat.startActivity(
