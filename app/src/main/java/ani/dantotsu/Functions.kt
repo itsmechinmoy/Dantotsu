@@ -855,6 +855,18 @@ fun openLinkInBrowser(link: String?) {
     }
 }
 
+fun openLinkInCustomTab(link: String?) {
+    link?.let {
+        try {
+            val builder = androidx.browser.customtabs.CustomTabsIntent.Builder()
+            val customTabsIntent = builder.build()
+            customTabsIntent.launchUrl(currContext()!!, android.net.Uri.parse(it))
+        } catch (e: Exception) {
+            openLinkInBrowser(it)
+        }
+    }
+}
+
 fun openLinkInYouTube(link: String?) {
     link?.let {
         try {
@@ -1035,11 +1047,22 @@ fun copyToClipboard(string: String, toast: Boolean = true) {
     }
 }
 
+private val activeTimers = java.util.Collections.synchronizedMap(java.util.WeakHashMap<android.view.ViewGroup, android.os.CountDownTimer>())
+
 fun countDown(media: Media, view: ViewGroup) {
     if (media.anime?.nextAiringEpisode != null && media.anime.nextAiringEpisodeTime != null
         && (media.anime.nextAiringEpisodeTime!! - System.currentTimeMillis() / 1000) <= 86400 * 28.toLong()
     ) {
+        activeTimers[view]?.cancel()
+        for (i in view.childCount - 1 downTo 0) {
+            val child = view.getChildAt(i)
+            if (child.tag == "countdown_view") {
+                view.removeViewAt(i)
+            }
+        }
+
         val v = ItemCountDownBinding.inflate(LayoutInflater.from(view.context), view, false)
+        v.root.tag = "countdown_view"
         view.addView(v.root, 0)
         v.mediaCountdownText.text =
             currActivity()?.getString(
@@ -1047,7 +1070,7 @@ fun countDown(media: Media, view: ViewGroup) {
                 media.anime.nextAiringEpisode!! + 1
             )
 
-        object : CountDownTimer(
+        val timer = object : CountDownTimer(
             (media.anime.nextAiringEpisodeTime!! + 10000) * 1000 - System.currentTimeMillis(),
             1000
         ) {
@@ -1066,7 +1089,9 @@ fun countDown(media: Media, view: ViewGroup) {
                 v.mediaCountdownContainer.visibility = View.GONE
                 snackString(currContext()?.getString(R.string.congrats_vro))
             }
-        }.start()
+        }
+        activeTimers[view] = timer
+        timer.start()
     }
 }
 

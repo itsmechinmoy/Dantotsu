@@ -39,7 +39,10 @@ import ani.dantotsu.media.MediaAdaptor
 import ani.dantotsu.media.MediaListViewActivity
 import ani.dantotsu.media.user.ListActivity
 import ani.dantotsu.navBarHeight
+import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.profile.ProfileActivity
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import ani.dantotsu.setSafeOnClickListener
 import ani.dantotsu.setSlideIn
 import ani.dantotsu.setSlideUp
@@ -169,7 +172,19 @@ class HomeFragment : Fragment() {
                         .putExtra("userId", Anilist.userid), null
                 )
             } else {
-                snackString(getString(R.string.rescue_mode_active))
+                val malUsername = MAL.username
+                if (!malUsername.isNullOrBlank()) {
+                    try {
+                        CustomTabsIntent.Builder().build().launchUrl(
+                            requireContext(),
+                            Uri.parse("https://myanimelist.net/profile/$malUsername")
+                        )
+                    } catch (e: Exception) {
+                        openLinkInBrowser("https://myanimelist.net/profile/$malUsername")
+                    }
+                } else {
+                    snackString(getString(R.string.rescue_mode_active))
+                }
             }
             false
         }
@@ -505,30 +520,17 @@ class HomeFragment : Fragment() {
 
         PrefManager.getLiveVal(PrefName.RescueMode, false).asLiveBool()
             .observe(viewLifecycleOwner) { inRescueMode ->
-                
-                val alOnlySections = listOf(
-                    binding.homeFavAnimeContainer,
-                    binding.homeFavMangaContainer,
-                    binding.homeUserStatusContainer,
-                    binding.homeMissingSequelsContainer,
-                )
                 binding.homeRescueModeBanner.visibility =
                     if (inRescueMode) View.VISIBLE else View.GONE
-                if (inRescueMode) {
-                    alOnlySections.forEach { it.visibility = View.GONE }
-
-                    binding.homeContinueWatchingContainer.visibility = View.VISIBLE
-                    binding.homePlannedAnimeContainer.visibility = View.VISIBLE
-                    binding.homeContinueReadingContainer.visibility = View.VISIBLE
-                    binding.homePlannedMangaContainer.visibility = View.VISIBLE
-                } else {
-                    val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
-                    val alOnlyIndices = listOf(1, 4, 7, 8)
-                    alOnlySections.forEachIndexed { idx, view ->
-                        if (homeLayoutShow.getOrElse(alOnlyIndices[idx]) { true }) {
-                            view.visibility = View.VISIBLE
+                val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
+                containers.indices.forEach { i ->
+                    if (inRescueMode && i == 7) {
+                        containers[i].visibility = View.GONE
+                    } else {
+                        if (homeLayoutShow.getOrElse(i) { true }) {
+                            containers[i].visibility = View.VISIBLE
                         } else {
-                            view.visibility = View.GONE
+                            containers[i].visibility = View.GONE
                         }
                     }
                 }
@@ -588,6 +590,7 @@ class HomeFragment : Fragment() {
                         }
                     }
 
+                    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                     var empty = true
                     val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
                     var homeLayoutOrder: List<Int> = PrefManager.getVal(PrefName.HomeLayoutOrder)
@@ -597,10 +600,14 @@ class HomeFragment : Fragment() {
 
                     withContext(Dispatchers.Main) {
                         containers.indices.forEach { i ->
-                            if (homeLayoutShow.getOrElse(i) { true }) {
-                                empty = false
-                            } else {
+                            if (rescueMode && i == 7) {
                                 containers[i].visibility = View.GONE
+                            } else {
+                                if (homeLayoutShow.getOrElse(i) { true }) {
+                                    empty = false
+                                } else {
+                                    containers[i].visibility = View.GONE
+                                }
                             }
                         }
 
@@ -616,7 +623,6 @@ class HomeFragment : Fragment() {
                         }
                     }
 
-                    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                     val initHomePage = async(Dispatchers.IO) { model.initHomePage() }
                     if (!rescueMode) {
                         val initUserStatus = async(Dispatchers.IO) { model.initUserStatus() }

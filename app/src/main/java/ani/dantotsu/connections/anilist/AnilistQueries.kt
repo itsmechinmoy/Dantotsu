@@ -240,13 +240,13 @@ class AnilistQueries {
                             fetchedMedia.relations?.edges?.forEach { mediaEdge ->
                                 val m = Media(mediaEdge)
                                 media.relations?.add(m)
-                                if (m.relation == "SEQUEL") {
+                                if (m.relation == "SEQUEL" || m.relation?.startsWith("SEQUEL\n") == true) {
                                     media.sequel =
                                         if ((media.sequel?.popularity ?: 0) < (m.popularity
                                                 ?: 0)
                                         ) m else media.sequel
 
-                                } else if (m.relation == "PREQUEL") {
+                                } else if (m.relation == "PREQUEL" || m.relation?.startsWith("PREQUEL\n") == true) {
                                     media.prequel =
                                         if ((media.prequel?.popularity ?: 0) < (m.popularity
                                                 ?: 0)

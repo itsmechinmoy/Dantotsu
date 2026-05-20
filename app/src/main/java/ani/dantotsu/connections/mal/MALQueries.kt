@@ -28,12 +28,44 @@ class MALQueries {
         @kotlinx.serialization.SerialName("manga_statistics") val mangaStatistics: MalMangaStatistics? = null,
     )
 
+    private suspend fun executeRequest(
+        requestBlock: suspend () -> com.lagradost.nicehttp.NiceResponse
+    ): com.lagradost.nicehttp.NiceResponse {
+        var lastResponse: com.lagradost.nicehttp.NiceResponse? = null
+        var lastException: Exception? = null
+        var delayMs = 1000L
+        val maxAttempts = 3
+
+        for (attempt in 1..maxAttempts) {
+            try {
+                val response = requestBlock()
+                lastResponse = response
+                if (response.code != 429) {
+                    return response
+                }
+            } catch (e: Exception) {
+                lastException = e
+            }
+
+            if (attempt < maxAttempts) {
+                val jitter = (0..200).random().toLong()
+                kotlinx.coroutines.delay(delayMs + jitter)
+                delayMs *= 2
+            }
+        }
+
+        return lastResponse ?: throw (lastException ?: Exception("Request failed after $maxAttempts attempts"))
+    }
+
     suspend fun getUserData(): Boolean {
+        val headers = authHeader ?: return false
         val res = tryWithSuspend {
-            client.get(
-                "$apiUrl/users/@me?fields=anime_statistics,manga_statistics",
-                authHeader ?: return@tryWithSuspend null
-            ).parsed<MalUser>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/users/@me?fields=anime_statistics,manga_statistics",
+                    headers
+                )
+            }.parsed<MalUser>()
         } ?: return false
         MAL.userid = res.id
         MAL.username = res.name
@@ -83,6 +115,7 @@ class MALQueries {
         end: FuzzyDate? = null
     ) {
         if (idMAL == null) return
+        val headers = authHeader ?: return
         val data = mutableMapOf("status" to convertStatus(isAnime, status))
         if (progress != null)
             data[if (isAnime) "num_watched_episodes" else "num_chapters_read"] = progress.toString()
@@ -96,26 +129,30 @@ class MALQueries {
         if (end != null && !end.isEmpty())
             data["finish_date"] = end.toMALString()
         tryWithSuspend {
-            client.put(
-                "$apiUrl/${if (isAnime) "anime" else "manga"}/$idMAL/my_list_status",
-                authHeader ?: return@tryWithSuspend null,
-                data = data,
-            )
+            executeRequest {
+                client.put(
+                    "$apiUrl/${if (isAnime) "anime" else "manga"}/$idMAL/my_list_status",
+                    headers,
+                    data = data,
+                )
+            }
         }
     }
 
     suspend fun deleteList(isAnime: Boolean, idMAL: Int?) {
         if (idMAL == null) return
+        val headers = authHeader ?: return
         tryWithSuspend {
-            client.delete(
-                "$apiUrl/${if (isAnime) "anime" else "manga"}/$idMAL/my_list_status",
-                authHeader ?: return@tryWithSuspend null
-            )
+            executeRequest {
+                client.delete(
+                    "$apiUrl/${if (isAnime) "anime" else "manga"}/$idMAL/my_list_status",
+                    headers
+                )
+            }
         }
     }
 
-
-    private val listFields = "list_status,num_episodes,num_chapters,main_picture,mean,media_type,status,genres"
+    private val listFields = "list_status,num_episodes,num_chapters,main_picture,mean,media_type,status,genres,start_date,start_season"
 
     suspend fun getUserAnimeList(
         status: String? = null,
@@ -123,13 +160,16 @@ class MALQueries {
         limit: Int = 100,
         offset: Int = 0,
     ): MalListResponse? {
+        val headers = authHeader ?: return null
         val statusParam = status?.let { "&status=$it" } ?: ""
         val offsetParam = if (offset > 0) "&offset=$offset" else ""
         return tryWithSuspend {
-            client.get(
-                "$apiUrl/users/@me/animelist?fields=$listFields&sort=$sort&limit=$limit$offsetParam&nsfw=1$statusParam",
-                authHeader ?: return@tryWithSuspend null
-            ).parsed<MalListResponse>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/users/@me/animelist?fields=$listFields&sort=$sort&limit=$limit$offsetParam&nsfw=1$statusParam",
+                    headers
+                )
+            }.parsed<MalListResponse>()
         }
     }
 
@@ -139,29 +179,34 @@ class MALQueries {
         limit: Int = 100,
         offset: Int = 0,
     ): MalListResponse? {
+        val headers = authHeader ?: return null
         val statusParam = status?.let { "&status=$it" } ?: ""
         val offsetParam = if (offset > 0) "&offset=$offset" else ""
         return tryWithSuspend {
-            client.get(
-                "$apiUrl/users/@me/mangalist?fields=$listFields&sort=$sort&limit=$limit$offsetParam&nsfw=1$statusParam",
-                authHeader ?: return@tryWithSuspend null
-            ).parsed<MalListResponse>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/users/@me/mangalist?fields=$listFields&sort=$sort&limit=$limit$offsetParam&nsfw=1$statusParam",
+                    headers
+                )
+            }.parsed<MalListResponse>()
         }
     }
 
-
-    private val rankingFields = "mean,status,media_type,num_episodes,num_chapters,main_picture,genres,my_list_status"
+    private val rankingFields = "mean,status,media_type,num_episodes,num_chapters,main_picture,genres,my_list_status,start_date,start_season"
 
     suspend fun getAnimeRanking(
         rankingType: String = "all",
         limit: Int = 15,
         offset: Int = 0,
     ): MalRankingResponse? {
+        val headers = preferredHeader()
         return tryWithSuspend {
-            client.get(
-                "$apiUrl/anime/ranking?ranking_type=$rankingType&limit=$limit&offset=$offset&fields=$rankingFields",
-                preferredHeader()
-            ).parsed<MalRankingResponse>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/anime/ranking?ranking_type=$rankingType&limit=$limit&offset=$offset&fields=$rankingFields",
+                    headers
+                )
+            }.parsed<MalRankingResponse>()
         }
     }
 
@@ -170,11 +215,14 @@ class MALQueries {
         limit: Int = 15,
         offset: Int = 0,
     ): MalRankingResponse? {
+        val headers = preferredHeader()
         return tryWithSuspend {
-            client.get(
-                "$apiUrl/manga/ranking?ranking_type=$rankingType&limit=$limit&offset=$offset&fields=$rankingFields",
-                preferredHeader()
-            ).parsed<MalRankingResponse>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/manga/ranking?ranking_type=$rankingType&limit=$limit&offset=$offset&fields=$rankingFields",
+                    headers
+                )
+            }.parsed<MalRankingResponse>()
         }
     }
 
@@ -184,11 +232,14 @@ class MALQueries {
         offset: Int = 0,
     ): MalRankingResponse? {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val headers = preferredHeader()
         return tryWithSuspend {
-            client.get(
-                "$apiUrl/anime?q=$encodedQuery&limit=$limit&offset=$offset&fields=$rankingFields",
-                preferredHeader()
-            ).parsed<MalRankingResponse>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/anime?q=$encodedQuery&limit=$limit&offset=$offset&fields=$rankingFields",
+                    headers
+                )
+            }.parsed<MalRankingResponse>()
         }
     }
 
@@ -198,38 +249,46 @@ class MALQueries {
         offset: Int = 0,
     ): MalRankingResponse? {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val headers = preferredHeader()
         return tryWithSuspend {
-            client.get(
-                "$apiUrl/manga?q=$encodedQuery&limit=$limit&offset=$offset&fields=$rankingFields",
-                preferredHeader()
-            ).parsed<MalRankingResponse>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/manga?q=$encodedQuery&limit=$limit&offset=$offset&fields=$rankingFields",
+                    headers
+                )
+            }.parsed<MalRankingResponse>()
         }
     }
 
-
+    private val recRelFields = "%7Bnode%7Bid,title,main_picture,num_episodes,num_chapters,mean,media_type,status,alternative_titles,rating,popularity%7D%7D"
     private val detailFields = "mean,status,media_type,synopsis,genres,num_episodes,num_chapters," +
-        "main_picture,alternative_titles,start_date,end_date,start_season,source,rating," +
-        "studios,rank,popularity,recommendations,related_anime,related_manga,my_list_status"
+        "main_picture,alternative_titles,title_synonyms,start_date,end_date,start_season,source,rating," +
+        "average_episode_duration,studios,authors,rank,popularity,my_list_status," +
+        "recommendations$recRelFields,related_anime$recRelFields,related_manga$recRelFields"
 
     suspend fun getAnimeDetails(malId: Int): MalAnimeNode? {
+        val headers = preferredHeader()
         return tryWithSuspend {
-            client.get(
-                "$apiUrl/anime/$malId?fields=$detailFields",
-                preferredHeader()
-            ).parsed<MalAnimeNode>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/anime/$malId?fields=$detailFields",
+                    headers
+                )
+            }.parsed<MalAnimeNode>()
         }
     }
 
     suspend fun getMangaDetails(malId: Int): MalAnimeNode? {
+        val headers = preferredHeader()
         return tryWithSuspend {
-            client.get(
-                "$apiUrl/manga/$malId?fields=$detailFields",
-                preferredHeader()
-            ).parsed<MalAnimeNode>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/manga/$malId?fields=$detailFields",
+                    headers
+                )
+            }.parsed<MalAnimeNode>()
         }
     }
-
-
 
     suspend fun getSeasonalAnime(
         year: Int,
@@ -237,11 +296,14 @@ class MALQueries {
         sort: String = "anime_num_list_users",
         limit: Int = 15,
     ): MalRankingResponse? {
+        val headers = preferredHeader()
         return tryWithSuspend {
-            client.get(
-                "$apiUrl/anime/season/$year/$season?sort=$sort&limit=$limit&fields=$rankingFields",
-                preferredHeader()
-            ).parsed<MalRankingResponse>()
+            executeRequest {
+                client.get(
+                    "$apiUrl/anime/season/$year/$season?sort=$sort&limit=$limit&fields=$rankingFields",
+                    headers
+                )
+            }.parsed<MalRankingResponse>()
         }
     }
 
@@ -257,4 +319,50 @@ class MALQueries {
         }
     }
 
+    suspend fun getAnimeSuggestions(limit: Int = 15): MalRankingResponse? {
+        val headers = authHeader ?: return null
+        return tryWithSuspend {
+            executeRequest {
+                client.get(
+                    "$apiUrl/anime/suggestions?limit=$limit&fields=$rankingFields",
+                    headers
+                )
+            }.parsed<MalRankingResponse>()
+        }
+    }
+
+    private val sequelListFields = "list_status,num_episodes,main_picture,mean,media_type,status,related_anime${recRelFields}"
+
+    suspend fun getCompletedAnimeWithRelations(limit: Int = 100): MalListResponse? {
+        val headers = authHeader ?: return null
+        return tryWithSuspend {
+            executeRequest {
+                client.get(
+                    "$apiUrl/users/@me/animelist?fields=$sequelListFields&status=completed&sort=list_updated_at&limit=$limit&nsfw=1",
+                    headers
+                )
+            }.parsed<MalListResponse>()
+        }
+    }
+
+    suspend fun getAllUserAnimeIds(): Set<Int> {
+        val allIds = mutableSetOf<Int>()
+        var offset = 0
+        val batchSize = 100
+        val headers = authHeader ?: return emptySet()
+        while (true) {
+            val response = tryWithSuspend {
+                executeRequest {
+                    client.get(
+                        "$apiUrl/users/@me/animelist?fields=&sort=list_updated_at&limit=$batchSize&offset=$offset&nsfw=1",
+                        headers
+                    )
+                }.parsed<MalListResponse>()
+            } ?: break
+            response.data.forEach { allIds.add(it.node.id) }
+            if (response.data.size < batchSize || response.paging?.next == null) break
+            offset += batchSize
+        }
+        return allIds
+    }
 }

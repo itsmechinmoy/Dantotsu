@@ -14,7 +14,10 @@ import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.databinding.ItemFollowerBinding
 import ani.dantotsu.databinding.ItemFollowerGridBinding
 import ani.dantotsu.loadImage
+import ani.dantotsu.openLinkInCustomTab
 import ani.dantotsu.setAnimation
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,14 +27,24 @@ import kotlinx.coroutines.withContext
 class UsersAdapter(private val user: MutableList<User>, private val grid: Boolean = false) :
     RecyclerView.Adapter<UsersAdapter.UsersViewHolder>() {
 
+    private val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+
     inner class UsersViewHolder(val binding: ViewBinding) :
         RecyclerView.ViewHolder(binding.root) {
         init {
             itemView.setOnClickListener {
-                ContextCompat.startActivity(
-                    binding.root.context, Intent(binding.root.context, ProfileActivity::class.java)
-                        .putExtra("userId", user[bindingAdapterPosition].id), null
-                )
+                val pos = bindingAdapterPosition
+                if (pos < 0 || pos >= user.size) return@setOnClickListener
+                val u = user[pos]
+                if (rescueMode) {
+                    val malUrl = u.banner ?: "https://myanimelist.net/profile/${u.name}"
+                    openLinkInCustomTab(malUrl)
+                } else {
+                    ContextCompat.startActivity(
+                        binding.root.context, Intent(binding.root.context, ProfileActivity::class.java)
+                            .putExtra("userId", u.id), null
+                    )
+                }
             }
         }
     }
@@ -64,9 +77,13 @@ class UsersAdapter(private val user: MutableList<User>, private val grid: Boolea
         } else {
             val b = holder.binding as ItemFollowerBinding
             b.profileUserAvatar.loadImage(user.pfp)
-            b.profileBannerImage.loadImage(user.banner ?: user.pfp)
+            if (rescueMode) {
+                b.profileBannerImage.loadImage(user.pfp)
+            } else {
+                b.profileBannerImage.loadImage(user.banner ?: user.pfp)
+            }
             b.profileUserName.text = user.name
-            if (user.id == Anilist.userid || user.isFollowing == null) {
+            if (rescueMode || user.id == Anilist.userid || user.isFollowing == null) {
                 b.followStatusChip.isVisible = false
             } else {
                 b.followStatusChip.isVisible = true

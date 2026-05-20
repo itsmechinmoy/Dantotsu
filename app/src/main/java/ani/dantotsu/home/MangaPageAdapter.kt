@@ -31,6 +31,7 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaAdaptor
 import ani.dantotsu.media.MediaListViewActivity
 import ani.dantotsu.media.SearchActivity
+import ani.dantotsu.openLinkInCustomTab
 import ani.dantotsu.profile.ProfileActivity
 import ani.dantotsu.px
 import ani.dantotsu.setSafeOnClickListener
@@ -116,7 +117,12 @@ class MangaPageAdapter : RecyclerView.Adapter<MangaPageAdapter.MangaPageViewHold
                         .putExtra("userId", Anilist.userid), null
                 )
             } else {
-                ani.dantotsu.toast(view.context.getString(R.string.rescue_mode_active))
+                val malUsername = MAL.username
+                if (!malUsername.isNullOrBlank()) {
+                    openLinkInCustomTab("https://myanimelist.net/profile/$malUsername")
+                } else {
+                    ani.dantotsu.toast(view.context.getString(R.string.rescue_mode_active))
+                }
             }
             false
         }
