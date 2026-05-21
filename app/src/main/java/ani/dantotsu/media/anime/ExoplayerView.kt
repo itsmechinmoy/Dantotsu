@@ -300,7 +300,7 @@ class ExoplayerView :
     private var isSeeking = false
     private var isFastForwarding = false
     private var playerErrorRetryCount = 0
-        
+
     // Subtitle label to select the next time onTracksChanged fires (after setMediaItem+prepare).
     // Volatile so it is safely read from the Player.Listener callback thread.
     @Volatile private var pendingSubtitleLabel: String? = null
@@ -1646,25 +1646,30 @@ class ExoplayerView :
                 else -> ext.subtitles.find { it.language == subLang }
             }
 
-        // Subtitles
         hasExtSubtitles = ext.subtitles.isNotEmpty()
 
-        // Fix: Fetch IMDB ID and Episode Mapping asynchronously if missing (needed for online subtitles)
+        if (subtitle == null && hasExtSubtitles) {
+            val savedLang = PrefManager.getNullableCustomVal("subLang_${media.id}", null, String::class.java)
+            if (savedLang != "None") {
+                subtitle = ext.subtitles.getOrNull(0)
+            }
+        }
+        pendingSubtitleLabel = subtitle?.language
+
         if (isOnline(this)) {
-             lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                 try {
-                     if (media.idIMDB == null) {
-                         media.idIMDB = IdMappers.getImdbId(media.id)
-                     }
-                     // Prefetch episode mapping so SubtitleDialogFragment doesn't have visual label pop
-                     val selectedEpisodeStr = media.anime?.selectedEpisode ?: "1"
-                     val episodeNum = selectedEpisodeStr.toIntOrNull() ?: 1
-                     val currentEpisode = media.anime?.episodes?.get(selectedEpisodeStr)
-                     EpisodeMapper.mapEpisode(media, episodeNum, currentEpisode)
-                 } catch (e: Exception) {
-                     e.printStackTrace()
-                 }
-             }
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    if (media.idIMDB == null) {
+                        media.idIMDB = IdMappers.getImdbId(media.id)
+                    }
+                    val selectedEpisodeStr = media.anime?.selectedEpisode ?: "1"
+                    val episodeNum = selectedEpisodeStr.toIntOrNull() ?: 1
+                    val currentEpisode = media.anime?.episodes?.get(selectedEpisodeStr)
+                    EpisodeMapper.mapEpisode(media, episodeNum, currentEpisode)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
 
         if (hasExtSubtitles || media.idIMDB != null) {
@@ -1683,7 +1688,7 @@ class ExoplayerView :
             val subtitleId = buildSubtitleId(index, subtitle.language, resolvedSubtitleUrl)
             val subtitleLangCodeRaw = LanguageMapper.getLanguageCode(subtitle.language)
             val subtitleLanguageCode =
-                // Some extension labels map to "all" (not a valid BCP-47/ISO track language),
+            // Some extension labels map to "all" (not a valid BCP-47/ISO track language),
                 // and some may be blank, so normalize both cases to "und" for Media3 track metadata.
                 subtitleLangCodeRaw.takeUnless { it.equals("all", ignoreCase = true) || it.isBlank() } ?: "und"
             val subtitleMime =
@@ -2144,7 +2149,12 @@ class ExoplayerView :
             onSetTrackGroupOverride(dummyTrack, TRACK_TYPE_TEXT)
         }
 
-        val isDisabled = subtitle == null && hasExtSubtitles && !PrefManager.getVal<Boolean>(PrefName.Subtitles)
+        val savedLang = PrefManager.getNullableCustomVal("subLang_${media.id}", null, String::class.java)
+        val isDisabled = if (hasExtSubtitles) {
+            savedLang == "None"
+        } else {
+            subtitle == null && !PrefManager.getVal<Boolean>(PrefName.Subtitles)
+        }
         exoPlayer.trackSelectionParameters =
             exoPlayer.trackSelectionParameters
                 .buildUpon()
@@ -2373,7 +2383,7 @@ class ExoplayerView :
                 inStyles = false
                 continue
             } else if (trimmedLine.equals("[V4+ Styles]", ignoreCase = true) ||
-                       trimmedLine.equals("[V4 Styles]", ignoreCase = true)) {
+                trimmedLine.equals("[V4 Styles]", ignoreCase = true)) {
                 inStyles = true
                 inEvents = false
                 continue
@@ -2415,7 +2425,7 @@ class ExoplayerView :
 
             // Process dialogue lines in [Events] section
             if (inEvents && (trimmedLine.startsWith("Dialogue:", ignoreCase = true) ||
-                             trimmedLine.startsWith("Comment:", ignoreCase = true))) {
+                        trimmedLine.startsWith("Comment:", ignoreCase = true))) {
                 var modifiedLine = line
 
                 // Remove \pos(x,y) - positioning
@@ -3274,7 +3284,7 @@ class ExoplayerView :
             // Clear transient subtitle caches (online + local) on player exit
             val episodeId = "${media.id}-${media.anime?.selectedEpisode ?: ""}"
             clearTransientSubtitleCache(episodeId)
-            
+
             disappeared = false
             functionstarted = false
             releasePlayer()
