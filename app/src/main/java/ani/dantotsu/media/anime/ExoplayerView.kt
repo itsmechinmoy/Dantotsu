@@ -300,10 +300,11 @@ class ExoplayerView :
     private var isSeeking = false
     private var isFastForwarding = false
     private var playerErrorRetryCount = 0
-
+        
     // Subtitle label to select the next time onTracksChanged fires (after setMediaItem+prepare).
     // Volatile so it is safely read from the Player.Listener callback thread.
     @Volatile private var pendingSubtitleLabel: String? = null
+    @Volatile private var initialSubtitleLabel: String? = null
 
     var rotation = 0
 
@@ -1654,22 +1655,22 @@ class ExoplayerView :
                 subtitle = ext.subtitles.getOrNull(0)
             }
         }
-        pendingSubtitleLabel = subtitle?.language
+        initialSubtitleLabel = subtitle?.language
 
         if (isOnline(this)) {
-            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    if (media.idIMDB == null) {
-                        media.idIMDB = IdMappers.getImdbId(media.id)
-                    }
-                    val selectedEpisodeStr = media.anime?.selectedEpisode ?: "1"
-                    val episodeNum = selectedEpisodeStr.toIntOrNull() ?: 1
-                    val currentEpisode = media.anime?.episodes?.get(selectedEpisodeStr)
-                    EpisodeMapper.mapEpisode(media, episodeNum, currentEpisode)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+             lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                 try {
+                     if (media.idIMDB == null) {
+                         media.idIMDB = IdMappers.getImdbId(media.id)
+                     }
+                     val selectedEpisodeStr = media.anime?.selectedEpisode ?: "1"
+                     val episodeNum = selectedEpisodeStr.toIntOrNull() ?: 1
+                     val currentEpisode = media.anime?.episodes?.get(selectedEpisodeStr)
+                     EpisodeMapper.mapEpisode(media, episodeNum, currentEpisode)
+                 } catch (e: Exception) {
+                     e.printStackTrace()
+                 }
+             }
         }
 
         if (hasExtSubtitles || media.idIMDB != null) {
@@ -1688,7 +1689,7 @@ class ExoplayerView :
             val subtitleId = buildSubtitleId(index, subtitle.language, resolvedSubtitleUrl)
             val subtitleLangCodeRaw = LanguageMapper.getLanguageCode(subtitle.language)
             val subtitleLanguageCode =
-            // Some extension labels map to "all" (not a valid BCP-47/ISO track language),
+                // Some extension labels map to "all" (not a valid BCP-47/ISO track language),
                 // and some may be blank, so normalize both cases to "und" for Media3 track metadata.
                 subtitleLangCodeRaw.takeUnless { it.equals("all", ignoreCase = true) || it.isBlank() } ?: "und"
             val subtitleMime =
@@ -2383,7 +2384,7 @@ class ExoplayerView :
                 inStyles = false
                 continue
             } else if (trimmedLine.equals("[V4+ Styles]", ignoreCase = true) ||
-                trimmedLine.equals("[V4 Styles]", ignoreCase = true)) {
+                       trimmedLine.equals("[V4 Styles]", ignoreCase = true)) {
                 inStyles = true
                 inEvents = false
                 continue
@@ -2425,7 +2426,7 @@ class ExoplayerView :
 
             // Process dialogue lines in [Events] section
             if (inEvents && (trimmedLine.startsWith("Dialogue:", ignoreCase = true) ||
-                        trimmedLine.startsWith("Comment:", ignoreCase = true))) {
+                             trimmedLine.startsWith("Comment:", ignoreCase = true))) {
                 var modifiedLine = line
 
                 // Remove \pos(x,y) - positioning
@@ -3025,7 +3026,8 @@ class ExoplayerView :
     override fun onTracksChanged(tracks: Tracks) {
         // Consume any pending subtitle label set by applyLocalSubtitle / applySubtitleFromFile.
         // This fires reliably once ExoPlayer has parsed all tracks after setMediaItem+prepare.
-        val pendingLabel = pendingSubtitleLabel
+        val userLabel = pendingSubtitleLabel
+        val pendingLabel = userLabel ?: initialSubtitleLabel
         android.util.Log.d("LocalSubDebug", "onTracksChanged: pendingLabel=$pendingLabel, totalGroups=${tracks.groups.size}")
         if (pendingLabel != null) {
             var matched = false
@@ -3038,9 +3040,10 @@ class ExoplayerView :
                         if (trackLabel == pendingLabel) {
                             android.util.Log.d("LocalSubDebug", "onTracksChanged: MATCH FOUND for '$pendingLabel' at group=$groupIndex track=$trackIndex, selecting")
                             pendingSubtitleLabel = null
+                            initialSubtitleLabel = null
                             matched = true
                             onSetTrackGroupOverride(group, TRACK_TYPE_TEXT, trackIndex)
-                            snackString("Subtitle loaded: $pendingLabel")
+                            if (userLabel != null) snackString("Subtitle loaded: $pendingLabel")
                             break
                         }
                     }
@@ -3284,7 +3287,7 @@ class ExoplayerView :
             // Clear transient subtitle caches (online + local) on player exit
             val episodeId = "${media.id}-${media.anime?.selectedEpisode ?: ""}"
             clearTransientSubtitleCache(episodeId)
-
+            
             disappeared = false
             functionstarted = false
             releasePlayer()
