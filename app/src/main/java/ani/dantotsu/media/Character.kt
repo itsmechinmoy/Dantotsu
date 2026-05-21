@@ -6,7 +6,7 @@ import java.io.Serializable
 data class Character(
     val id: Int,
     val name: String?,
-    val image: String?,
+    var image: String?,
     val banner: String?,
     val role: String,
     var isFav: Boolean,
@@ -15,5 +15,5 @@ data class Character(
     var gender: String? = null,
     var dateOfBirth: FuzzyDate? = null,
     var roles: ArrayList<Media>? = null,
-    val voiceActor: ArrayList<Author>? = null,
+    var voiceActor: ArrayList<Author>? = null,
 ) : Serializable

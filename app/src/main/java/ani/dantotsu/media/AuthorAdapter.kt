@@ -16,6 +16,7 @@ import java.io.Serializable
 
 class AuthorAdapter(
     private val authorList: MutableList<Author>,
+    private val clickEnabled: Boolean = true
 ) : RecyclerView.Adapter<AuthorAdapter.AuthorViewHolder>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AuthorViewHolder {
         val binding =
@@ -37,6 +38,7 @@ class AuthorAdapter(
         RecyclerView.ViewHolder(binding.root) {
         init {
             itemView.setOnClickListener {
+                if (!clickEnabled) return@setOnClickListener
                 val author = authorList[bindingAdapterPosition]
                 ContextCompat.startActivity(
                     itemView.context,
