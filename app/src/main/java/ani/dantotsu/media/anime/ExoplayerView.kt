@@ -1647,6 +1647,7 @@ class ExoplayerView :
                 else -> ext.subtitles.find { it.language == subLang }
             }
 
+        // Subtitles
         hasExtSubtitles = ext.subtitles.isNotEmpty()
 
         if (subtitle == null && hasExtSubtitles) {
@@ -1657,12 +1658,14 @@ class ExoplayerView :
         }
         initialSubtitleLabel = subtitle?.language
 
+        // Fix: Fetch IMDB ID and Episode Mapping asynchronously if missing (needed for online subtitles)
         if (isOnline(this)) {
              lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                  try {
                      if (media.idIMDB == null) {
                          media.idIMDB = IdMappers.getImdbId(media.id)
                      }
+                     // Prefetch episode mapping so SubtitleDialogFragment doesn't have visual label pop
                      val selectedEpisodeStr = media.anime?.selectedEpisode ?: "1"
                      val episodeNum = selectedEpisodeStr.toIntOrNull() ?: 1
                      val currentEpisode = media.anime?.episodes?.get(selectedEpisodeStr)
