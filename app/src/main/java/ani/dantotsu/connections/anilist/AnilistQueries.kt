@@ -53,6 +53,11 @@ class AnilistQueries {
         val cachedAt: Long
     ) : Serializable
 
+    private data class UserStatusCache(
+        val users: ArrayList<User>,
+        val cachedAt: Long
+    ) : Serializable
+
     suspend fun getUserData(): Boolean {
         val response: Query.Viewer?
         measureTimeMillis {
@@ -114,7 +119,7 @@ class AnilistQueries {
 
     suspend fun getMediaList(ids: List<Int>): List<Media>? {
         if (ids.isEmpty()) return null
-        
+
         val idsString = ids.joinToString(",")
         val response = executeQuery<Query.MediaList>(
             """{Page(page:1,perPage:50){media(id_in:[${idsString}],isAdult:false){id mediaListEntry{progress private score(format:POINT_100) status} idMal type isAdult popularity status(version:2) chapters episodes nextAiringEpisode{episode} meanScore isFavourite format bannerImage coverImage{large} title{english romaji userPreferred} startDate{year}}}}""",
@@ -240,13 +245,13 @@ class AnilistQueries {
                             fetchedMedia.relations?.edges?.forEach { mediaEdge ->
                                 val m = Media(mediaEdge)
                                 media.relations?.add(m)
-                                if (m.relation == "SEQUEL" || m.relation?.startsWith("SEQUEL\n") == true) {
+                                if (m.relation == "SEQUEL") {
                                     media.sequel =
                                         if ((media.sequel?.popularity ?: 0) < (m.popularity
                                                 ?: 0)
                                         ) m else media.sequel
 
-                                } else if (m.relation == "PREQUEL" || m.relation?.startsWith("PREQUEL\n") == true) {
+                                } else if (m.relation == "PREQUEL") {
                                     media.prequel =
                                         if ((media.prequel?.popularity ?: 0) < (m.popularity
                                                 ?: 0)
@@ -494,6 +499,7 @@ class AnilistQueries {
         val toShow: List<Boolean> =
             PrefManager.getVal(PrefName.HomeLayout)
         if (toShow.getOrNull(7) != true) return null
+        loadUserStatusCache()?.let { return it }
         val query = """{Page1:${status(1)}Page2:${status(2)}}"""
         val response = executeQuery<Query.HomePageMedia>(query)
         val list = mutableListOf<User>()
@@ -544,7 +550,9 @@ class AnilistQueries {
                 )
             }
             list.addAll(0, anilistActivities)
-            return list.toCollection(ArrayList())
+            val result = list.toCollection(ArrayList())
+            saveUserStatusCache(result)
+            return result
         } else return null
     }
 
@@ -629,6 +637,24 @@ class AnilistQueries {
         PrefManager.setCustomVal(
             "missing_sequels_cache",
             MissingSequelsCache(ids, media, System.currentTimeMillis())
+        )
+    }
+
+    private fun loadUserStatusCache(): ArrayList<User>? {
+        val cached = PrefManager.getNullableCustomVal(
+            "user_status_cache",
+            null,
+            UserStatusCache::class.java
+        ) ?: return null
+        val cacheExpired = System.currentTimeMillis() - cached.cachedAt > 15 * 60 * 1000L
+        if (cacheExpired) return null
+        return ArrayList(cached.users)
+    }
+
+    private fun saveUserStatusCache(users: ArrayList<User>) {
+        PrefManager.setCustomVal(
+            "user_status_cache",
+            UserStatusCache(users, System.currentTimeMillis())
         )
     }
 
@@ -884,13 +910,13 @@ class AnilistQueries {
         )
         if (image.url.isNullOrEmpty() || image.checkTime()) {
             val response =
-                    executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1,perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries{ media { id bannerImage isAdult } } } } } """)
+                executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1,perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries{ media { id bannerImage isAdult } } } } } """)
             val random: String? = response?.data?.mediaListCollection?.lists?.mapNotNull {
-                    it.entries?.filter { i -> i.media?.isAdult != true }?.mapNotNull { entry ->
-                        val imageUrl = entry.media?.bannerImage
-                        if (imageUrl != null && imageUrl != "null") imageUrl else null
-                    }
-                }?.flatten()?.randomOrNull()
+                it.entries?.filter { i -> i.media?.isAdult != true }?.mapNotNull { entry ->
+                    val imageUrl = entry.media?.bannerImage
+                    if (imageUrl != null && imageUrl != "null") imageUrl else null
+                }
+            }?.flatten()?.randomOrNull()
             if (random == null) return null
             PrefManager.setCustomVal("banner_${type}_url", random)
             PrefManager.setCustomVal("banner_${type}_time", System.currentTimeMillis())
@@ -899,10 +925,11 @@ class AnilistQueries {
     }
 
     suspend fun getBannerImages(): ArrayList<String?> {
-        val default = arrayListOf<String?>(null, null)
-        default[0] = bannerImage("ANIME")
-        default[1] = bannerImage("MANGA")
-        return default
+        return coroutineScope {
+            val anime = async { bannerImage("ANIME") }
+            val manga = async { bannerImage("MANGA") }
+            arrayListOf(anime.await(), manga.await())
+        }
     }
 
     suspend fun getMediaLists(
