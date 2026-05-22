@@ -304,6 +304,7 @@ class ExoplayerView :
     // Subtitle label to select the next time onTracksChanged fires (after setMediaItem+prepare).
     // Volatile so it is safely read from the Player.Listener callback thread.
     @Volatile private var pendingSubtitleLabel: String? = null
+    @Volatile private var initialSubtitleLabel: String? = null
 
     var rotation = 0
 
@@ -1649,6 +1650,14 @@ class ExoplayerView :
         // Subtitles
         hasExtSubtitles = ext.subtitles.isNotEmpty()
 
+        if (subtitle == null && hasExtSubtitles) {
+            val savedLang = PrefManager.getNullableCustomVal("subLang_${media.id}", null, String::class.java)
+            if (savedLang != "None") {
+                subtitle = ext.subtitles.getOrNull(0)
+            }
+        }
+        initialSubtitleLabel = subtitle?.language
+
         // Fix: Fetch IMDB ID and Episode Mapping asynchronously if missing (needed for online subtitles)
         if (isOnline(this)) {
              lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -2144,7 +2153,12 @@ class ExoplayerView :
             onSetTrackGroupOverride(dummyTrack, TRACK_TYPE_TEXT)
         }
 
-        val isDisabled = subtitle == null && hasExtSubtitles && !PrefManager.getVal<Boolean>(PrefName.Subtitles)
+        val savedLang = PrefManager.getNullableCustomVal("subLang_${media.id}", null, String::class.java)
+        val isDisabled = if (hasExtSubtitles) {
+            savedLang == "None"
+        } else {
+            subtitle == null && !PrefManager.getVal<Boolean>(PrefName.Subtitles)
+        }
         exoPlayer.trackSelectionParameters =
             exoPlayer.trackSelectionParameters
                 .buildUpon()
@@ -3015,7 +3029,8 @@ class ExoplayerView :
     override fun onTracksChanged(tracks: Tracks) {
         // Consume any pending subtitle label set by applyLocalSubtitle / applySubtitleFromFile.
         // This fires reliably once ExoPlayer has parsed all tracks after setMediaItem+prepare.
-        val pendingLabel = pendingSubtitleLabel
+        val userLabel = pendingSubtitleLabel
+        val pendingLabel = userLabel ?: initialSubtitleLabel
         android.util.Log.d("LocalSubDebug", "onTracksChanged: pendingLabel=$pendingLabel, totalGroups=${tracks.groups.size}")
         if (pendingLabel != null) {
             var matched = false
@@ -3028,9 +3043,10 @@ class ExoplayerView :
                         if (trackLabel == pendingLabel) {
                             android.util.Log.d("LocalSubDebug", "onTracksChanged: MATCH FOUND for '$pendingLabel' at group=$groupIndex track=$trackIndex, selecting")
                             pendingSubtitleLabel = null
+                            initialSubtitleLabel = null
                             matched = true
                             onSetTrackGroupOverride(group, TRACK_TYPE_TEXT, trackIndex)
-                            snackString("Subtitle loaded: $pendingLabel")
+                            if (userLabel != null) snackString("Subtitle loaded: $pendingLabel")
                             break
                         }
                     }
