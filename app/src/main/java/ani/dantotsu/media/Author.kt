@@ -12,6 +12,7 @@ data class Author(
     var dateOfBirth: String? = null,
     var dateOfDeath: String? = null,
     var homeTown: String? = null,
+    var about: String? = null,
     var yearMedia: MutableMap<String, ArrayList<Media>>? = null,
     var character: ArrayList<Character>? = null,
     var isFav: Boolean = false

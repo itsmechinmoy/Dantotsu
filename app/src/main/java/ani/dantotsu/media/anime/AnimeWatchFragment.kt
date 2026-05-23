@@ -177,6 +177,11 @@ class AnimeWatchFragment : Fragment() {
         continueEp = model.continueMedia ?: false
         model.getMedia().observe(viewLifecycleOwner) {
             if (it != null) {
+                if (this::media.isInitialized) {
+                    if (it.anime != null && it.anime?.episodes == null) {
+                        it.anime?.episodes = media.anime?.episodes
+                    }
+                }
                 media = it
                 media.selected = model.loadSelected(media)
                 if (media.format == "LOCAL") {

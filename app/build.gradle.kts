@@ -94,7 +94,7 @@ kotlin {
     jvmToolchain(17)
     compilerOptions {
         freeCompilerArgs.addAll(
-            "-Xcontext-receivers",
+            "-XXLanguage:+ContextParameters",
             "-Xmulti-platform"
         )
     }

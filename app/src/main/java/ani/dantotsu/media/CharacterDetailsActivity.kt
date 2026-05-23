@@ -96,7 +96,12 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
                 character.image
             )
         }
-        val link = "https://anilist.co/character/${character.id}"
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        val link = if (rescueMode) {
+            "https://myanimelist.net/character/${character.id}"
+        } else {
+            "https://anilist.co/character/${character.id}"
+        }
         binding.characterShare.setOnClickListener {
             val i = Intent(Intent.ACTION_SEND)
             i.type = "text/plain"
@@ -107,28 +112,32 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
             openLinkInBrowser(link)
             true
         }
-        lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                character.isFav =
-                    Anilist.query.isUserFav(AnilistMutations.FavType.CHARACTER, character.id)
-            }
-            withContext(Dispatchers.Main) {
-                binding.characterFav.setImageResource(
-                    if (character.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
-                )
-            }
-        }
-        binding.characterFav.setOnClickListener {
+        if (!rescueMode) {
             lifecycleScope.launch {
-                if (Anilist.mutation.toggleFav(AnilistMutations.FavType.CHARACTER, character.id)) {
-                    character.isFav = !character.isFav
+                withContext(Dispatchers.IO) {
+                    character.isFav =
+                        Anilist.query.isUserFav(AnilistMutations.FavType.CHARACTER, character.id)
+                }
+                withContext(Dispatchers.Main) {
                     binding.characterFav.setImageResource(
                         if (character.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
                     )
-                } else {
-                    snackString("Failed to toggle favorite")
                 }
             }
+            binding.characterFav.setOnClickListener {
+                lifecycleScope.launch {
+                    if (Anilist.mutation.toggleFav(AnilistMutations.FavType.CHARACTER, character.id)) {
+                        character.isFav = !character.isFav
+                        binding.characterFav.setImageResource(
+                            if (character.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
+                        )
+                    } else {
+                        snackString("Failed to toggle favorite")
+                    }
+                }
+            }
+        } else {
+            binding.characterFav.visibility = View.GONE
         }
         model.getCharacter().observe(this) {
             if (it != null && !loaded) {
@@ -139,25 +148,23 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
                 binding.characterProgress.visibility = View.GONE
                 binding.characterRecyclerView.visibility = View.VISIBLE
 
-                val roles = character.roles
-                if (roles != null) {
-                    val mediaAdaptor = MediaAdaptor(0, roles, this, matchParent = true)
-                    val concatAdaptor =
-                        ConcatAdapter(CharacterDetailsAdapter(character, this), mediaAdaptor)
+                val roles = character.roles ?: arrayListOf()
+                val mediaAdaptor = MediaAdaptor(0, roles, this, matchParent = true)
+                val concatAdaptor =
+                    ConcatAdapter(CharacterDetailsAdapter(character, this), mediaAdaptor)
 
-                    val gridSize = (screenWidth / 124f).toInt()
-                    val gridLayoutManager = GridLayoutManager(this, gridSize)
-                    gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                        override fun getSpanSize(position: Int): Int {
-                            return when (position) {
-                                0 -> gridSize
-                                else -> 1
-                            }
+                val gridSize = (screenWidth / 124f).toInt()
+                val gridLayoutManager = GridLayoutManager(this, gridSize)
+                gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int {
+                        return when (position) {
+                            0 -> gridSize
+                            else -> 1
                         }
                     }
-                    binding.characterRecyclerView.adapter = concatAdaptor
-                    binding.characterRecyclerView.layoutManager = gridLayoutManager
                 }
+                binding.characterRecyclerView.adapter = concatAdaptor
+                binding.characterRecyclerView.layoutManager = gridLayoutManager
             }
         }
 

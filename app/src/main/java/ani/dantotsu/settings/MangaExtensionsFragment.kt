@@ -54,7 +54,11 @@ class MangaExtensionsFragment : Fragment(),
 
         lifecycleScope.launch {
             viewModel.pagerFlow.collectLatest { pagingData ->
-                adapter.submitData(pagingData)
+                binding.allExtensionsRecyclerView.post {
+                    lifecycleScope.launch {
+                        adapter.submitData(pagingData)
+                    }
+                }
             }
         }
 

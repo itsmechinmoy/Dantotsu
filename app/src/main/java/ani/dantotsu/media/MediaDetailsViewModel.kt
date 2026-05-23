@@ -39,6 +39,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 
 class MediaDetailsViewModel : ViewModel() {
     val scrolledToTop = MutableLiveData(true)
@@ -152,7 +153,14 @@ class MediaDetailsViewModel : ViewModel() {
                             detailed.selected = m.selected
                             detailed.isFav = m.isFav
                             detailed.shareLink = "https://myanimelist.net/${if (isAnime) "anime" else "manga"}/$malId"
+                            if (isAnime) {
+                                detailed.anime?.episodes = m.anime?.episodes
+                            } else {
+                                detailed.manga?.chapters = m.manga?.chapters
+                            }
+                            enrichRescueModeDetails(detailed)
                             media.postValue(detailed)
+                            launchBackgroundEnrichment(detailed)
                         } else {
                             val jikanData = if (isAnime)
                                 MAL.jikan.getAnimeById(malId)
@@ -173,7 +181,14 @@ class MediaDetailsViewModel : ViewModel() {
                                 detailed.selected = m.selected
                                 detailed.isFav = m.isFav
                                 detailed.shareLink = "https://myanimelist.net/${if (isAnime) "anime" else "manga"}/$malId"
+                                if (isAnime) {
+                                    detailed.anime?.episodes = m.anime?.episodes
+                                } else {
+                                    detailed.manga?.chapters = m.manga?.chapters
+                                }
+                                enrichRescueModeDetails(detailed)
                                 media.postValue(detailed)
+                                launchBackgroundEnrichment(detailed)
                             } else {
                                 media.postValue(m)
                             }
@@ -188,15 +203,415 @@ class MediaDetailsViewModel : ViewModel() {
             }
         }
 
-        // Prefetch IMDB ID asynchronously to cache it before the player opens
+        if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    if (m.idIMDB == null) {
+                        m.idIMDB = ani.dantotsu.others.IdMappers.getImdbId(m.id)
+                    }
+                } catch (e: Exception) {
+                    ani.dantotsu.util.Logger.log(e)
+                }
+            }
+        }
+    }
+
+    private suspend fun enrichRescueModeDetails(media: Media) {
+        val malId = media.idMAL ?: return
+        supervisorScope {
+            val isAnime = media.anime != null
+            val fullDeferred = async {
+                if (isAnime) MAL.jikan.getAnimeById(malId) else MAL.jikan.getMangaById(malId)
+            }
+            val charactersDeferred = async {
+                if (isAnime) MAL.jikan.getAnimeCharacters(malId) else MAL.jikan.getMangaCharacters(malId)
+            }
+            val staffDeferred = async {
+                if (isAnime) MAL.jikan.getAnimeStaff(malId) else emptyList()
+            }
+            val reviewsDeferred = async {
+                if (isAnime) MAL.jikan.getAnimeReviews(malId) else MAL.jikan.getMangaReviews(malId)
+            }
+            val recommendationsDeferred = async {
+                MAL.jikan.getRecommendations(isAnime, malId)
+            }
+
+            val fullData = fullDeferred.await()
+            if (fullData != null) {
+                val fullMapped = Media(fullData, isAnime)
+                if (media.description.isNullOrBlank() && !fullMapped.description.isNullOrBlank()) {
+                    media.description = fullMapped.description
+                }
+                if (fullMapped.synonyms.isNotEmpty()) media.synonyms = fullMapped.synonyms
+                if (fullMapped.genres.isNotEmpty()) media.genres = fullMapped.genres
+                if (!fullMapped.externalLinks.isNullOrEmpty()) media.externalLinks = fullMapped.externalLinks
+                if ((media.meanScore == null || media.meanScore == 0) && fullMapped.meanScore != null) {
+                    media.meanScore = fullMapped.meanScore
+                }
+                if (media.source.isNullOrBlank() && !fullMapped.source.isNullOrBlank()) {
+                    media.source = fullMapped.source
+                }
+                if (!fullMapped.relations.isNullOrEmpty()) {
+                    if (media.relations.isNullOrEmpty() || (fullMapped.relations?.size ?: 0) > (media.relations?.size ?: 0)) {
+                        media.relations = fullMapped.relations
+                    }
+                    if (media.prequel == null) media.prequel = fullMapped.prequel
+                    if (media.sequel == null) media.sequel = fullMapped.sequel
+                }
+                if (!fullMapped.staff.isNullOrEmpty()) {
+                    media.staff = ArrayList(
+                        ((media.staff ?: arrayListOf()) + fullMapped.staff!!).distinctBy { it.id }
+                    )
+                }
+                if (!fullMapped.recommendations.isNullOrEmpty() &&
+                    (fullMapped.recommendations?.size ?: 0) > (media.recommendations?.size ?: 0)) {
+                    media.recommendations = fullMapped.recommendations
+                }
+                if (!fullMapped.trailer.isNullOrBlank()) media.trailer = fullMapped.trailer
+                if (isAnime) {
+                    fullMapped.anime?.let { anime ->
+                        if (anime.op.isNotEmpty()) media.anime?.op = anime.op
+                        if (anime.ed.isNotEmpty()) media.anime?.ed = anime.ed
+                        anime.mainStudio?.let { media.anime?.mainStudio = it }
+                        if (!anime.producers.isNullOrEmpty()) media.anime?.producers = anime.producers
+                        anime.season?.let { media.anime?.season = it }
+                        anime.seasonYear?.let { media.anime?.seasonYear = it }
+                        if (media.anime?.nextAiringEpisodeTime == null && anime.nextAiringEpisodeTime != null) {
+                            media.anime?.nextAiringEpisodeTime = anime.nextAiringEpisodeTime
+                        }
+                        val estimated = anime.nextAiringEpisode ?: 0
+                        val watched = media.userProgress ?: 0
+                        val nextAiring = if (watched > 0) {
+                            if (watched >= (estimated + 1)) watched else estimated
+                        } else {
+                            estimated
+                        }
+                        media.anime?.nextAiringEpisode = nextAiring
+                    }
+                } else {
+                    fullMapped.manga?.author?.let { media.manga?.author = it }
+                }
+            }
+
+            val jRecommendations = try { recommendationsDeferred.await() } catch (_: Exception) { null }
+            val mappedRecommendations = jRecommendations
+                ?.mapNotNull { it.entry }
+                ?.map {
+                    Media(
+                        id = it.malId,
+                        idMAL = it.malId,
+                        name = it.title,
+                        nameRomaji = it.title ?: "",
+                        userPreferredName = it.title ?: "",
+                        cover = it.images?.jpg?.largeImageUrl ?: it.images?.jpg?.imageUrl,
+                        banner = it.images?.jpg?.largeImageUrl,
+                        isAdult = false,
+                        status = null,
+                        meanScore = null,
+                        popularity = null,
+                        format = null,
+                    )
+                }
+                ?.distinctBy { it.id }
+                ?.let { ArrayList(it) }
+            
+            if (!mappedRecommendations.isNullOrEmpty()) {
+                if (media.recommendations.isNullOrEmpty() || mappedRecommendations.size > (media.recommendations?.size ?: 0)) {
+                    media.recommendations = mappedRecommendations
+                }
+            }
+
+            val mappedCharacters = charactersDeferred.await()
+                .mapNotNull { jChar ->
+                    val character = jChar.character ?: return@mapNotNull null
+                    Character(
+                        id = character.malId,
+                        name = character.name,
+                        image = character.images?.jpg?.largeImageUrl ?: character.images?.jpg?.imageUrl,
+                        banner = media.banner ?: media.cover,
+                        role = jChar.role ?: "",
+                        isFav = false,
+                        voiceActor = jChar.voiceActors
+                            ?.mapNotNull { va ->
+                                va.person?.let { person ->
+                                    Author(
+                                        id = person.malId,
+                                        name = person.name,
+                                        image = person.images?.jpg?.largeImageUrl ?: person.images?.jpg?.imageUrl,
+                                        role = va.language
+                                    )
+                                }
+                            }
+                            ?.let { ArrayList(it) }
+                    )
+                }
+            if (mappedCharacters.isNotEmpty()) {
+                media.characters = ArrayList(mappedCharacters.distinctBy { it.id })
+            }
+
+            val mappedStaff = staffDeferred.await()
+                .mapNotNull { staff ->
+                    val person = staff.person ?: return@mapNotNull null
+                    Author(
+                        id = person.malId,
+                        name = person.name,
+                        image = person.images?.jpg?.largeImageUrl ?: person.images?.jpg?.imageUrl,
+                        role = staff.positions?.joinToString(", ")
+                    )
+                }
+
+            val mangaAuthors = if (!isAnime && fullData != null) {
+                fullData.authors?.mapNotNull { author ->
+                    val person = author.person ?: return@mapNotNull null
+                    Author(
+                        id = person.malId,
+                        name = person.name,
+                        image = person.images?.jpg?.largeImageUrl ?: person.images?.jpg?.imageUrl,
+                        role = author.position
+                    )
+                } ?: emptyList()
+            } else emptyList()
+
+            val allStaff = (mappedStaff + mangaAuthors).distinctBy { it.id }
+            if (allStaff.isNotEmpty()) {
+                media.staff = ArrayList(
+                    ((media.staff ?: arrayListOf()) + allStaff).distinctBy { it.id }
+                )
+            }
+
+            mapJikanReviews(media, reviewsDeferred.await(), isAnime, malId)
+        }
+    }
+
+    private fun launchBackgroundEnrichment(media: Media) {
+        val malId = media.idMAL ?: return
+        val isAnime = media.anime != null
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                if (m.idIMDB == null) {
-                    m.idIMDB = ani.dantotsu.others.IdMappers.getImdbId(m.id)
+                fetchRelationCovers(media, isAnime)
+
+                enrichRecommendationDetails(media, isAnime)
+
+                this@MediaDetailsViewModel.media.postValue(media)
+            } catch (_: Exception) {}
+        }
+    }
+
+    private suspend fun enrichRecommendationDetails(media: Media, isAnime: Boolean) {
+        val recs = media.recommendations?.take(15) ?: return
+        val recsToEnrich = recs.filter { rec ->
+            rec.meanScore == null || rec.meanScore == 0 ||
+            (rec.anime != null && rec.anime?.totalEpisodes == null) ||
+            (rec.manga != null && rec.manga?.totalChapters == null)
+        }
+        if (recsToEnrich.isEmpty()) return
+        kotlinx.coroutines.supervisorScope {
+            val deferreds = recsToEnrich.map { rec ->
+                async {
+                    try {
+                        val recMalId = rec.idMAL ?: return@async
+                        val isRecAnime = rec.anime != null
+                        
+                        val coverUrl: String?
+                        val score: Int?
+                        val statusStr: String?
+                        val episodesCount: Int?
+                        val chaptersCount: Int?
+
+                        val node = if (isRecAnime) MAL.query.getAnimeDetails(recMalId) else MAL.query.getMangaDetails(recMalId)
+                        if (node != null) {
+                            coverUrl = node.mainPicture?.large ?: node.mainPicture?.medium
+                            score = ((node.mean ?: 0f) * 10f).toInt()
+                            statusStr = node.status?.replace("_", " ")?.uppercase(java.util.Locale.US)
+                            episodesCount = node.numEpisodes
+                            chaptersCount = node.numChapters
+                        } else {
+                            val jikanNode = if (isRecAnime) MAL.jikan.getAnimeById(recMalId) else MAL.jikan.getMangaById(recMalId)
+                            if (jikanNode != null) {
+                                coverUrl = jikanNode.images?.jpg?.largeImageUrl ?: jikanNode.images?.jpg?.imageUrl
+                                score = ((jikanNode.score ?: 0f) * 10f).toInt()
+                                statusStr = jikanNode.status?.replace("_", " ")?.uppercase(java.util.Locale.US)
+                                episodesCount = jikanNode.episodes
+                                chaptersCount = jikanNode.chapters
+                            } else {
+                                coverUrl = null
+                                score = null
+                                statusStr = null
+                                episodesCount = null
+                                chaptersCount = null
+                            }
+                        }
+
+                        if (coverUrl != null || score != null || statusStr != null) {
+                            if (coverUrl != null) {
+                                rec.cover = rec.cover ?: coverUrl
+                            }
+                            if (score != null) {
+                                rec.meanScore = score
+                            }
+                            if (statusStr != null) {
+                                rec.status = statusStr
+                            }
+                            if (isRecAnime) {
+                                if (episodesCount != null) {
+                                    rec.anime?.totalEpisodes = episodesCount
+                                }
+                            } else {
+                                if (chaptersCount != null) {
+                                    rec.manga?.totalChapters = chaptersCount
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
+            deferreds.forEach { it.await() }
+        }
+        media.recommendations = ArrayList(recs)
+    }
+
+
+    private fun mapJikanReviews(
+        media: Media,
+        jikanReviews: List<ani.dantotsu.connections.mal.JikanReview>,
+        isAnime: Boolean,
+        malId: Int
+    ) {
+        if (jikanReviews.isEmpty()) return
+        val mapped = jikanReviews.mapNotNull { review ->
+            val reviewText = review.review ?: return@mapNotNull null
+            val summary = if (reviewText.length > 200) reviewText.take(200) + "…" else reviewText
+            val userName = review.user?.username ?: "Anonymous"
+            val userAvatar = review.user?.images?.jpg?.imageUrl
+            val createdAt = try {
+                java.time.Instant.parse(review.date ?: "").epochSecond.toInt()
+            } catch (_: Exception) { 0 }
+            ani.dantotsu.connections.anilist.api.Query.Review(
+                id = review.malId,
+                mediaId = malId,
+                mediaType = if (isAnime) "ANIME" else "MANGA",
+                summary = summary,
+                body = reviewText,
+                rating = review.reactions?.overall ?: 0,
+                ratingAmount = review.reactions?.overall ?: 0,
+                userRating = "NO_VOTE",
+                score = (review.score ?: 0) * 10,
+                private = false,
+                siteUrl = review.url ?: "https://myanimelist.net",
+                createdAt = createdAt,
+                updatedAt = null,
+                user = ani.dantotsu.connections.anilist.api.User(
+                    id = review.malId,
+                    name = userName,
+                    avatar = ani.dantotsu.connections.anilist.api.UserAvatar(
+                        large = userAvatar,
+                        medium = userAvatar
+                    ),
+                    bannerImage = null,
+                    isFollowing = null,
+                    isFollower = null,
+                    options = null,
+                    mediaListOptions = null,
+                    favourites = null,
+                    statistics = null,
+                    unreadNotificationCount = null,
+                )
+            )
+        }
+        if (mapped.isNotEmpty()) {
+            media.review = ArrayList(mapped.take(5))
+        }
+    }
+
+    private suspend fun fetchRelationCovers(media: Media, isAnime: Boolean) {
+        val relationsToFetch = mutableListOf<Media>()
+        media.prequel?.let { if (it.cover == null) relationsToFetch.add(it) }
+        media.sequel?.let { if (it.cover == null) relationsToFetch.add(it) }
+        media.relations?.forEach { rel ->
+            if (rel.cover == null && !relationsToFetch.contains(rel)) relationsToFetch.add(rel)
+        }
+        if (relationsToFetch.isEmpty()) return
+
+        kotlinx.coroutines.supervisorScope {
+            val deferreds = relationsToFetch.take(8).map { rel ->
+                async {
+                    val relMalId = rel.idMAL ?: return@async
+                    val relIsAnime = rel.anime != null || rel.relation?.contains("ANIME", true) == true
+                            || (rel.manga == null)
+                    try {
+                        val coverUrl: String?
+                        val score: Int?
+                        val statusStr: String?
+                        val episodesCount: Int?
+                        val chaptersCount: Int?
+                        var resolvedFmt: String? = null
+
+                        val node = if (relIsAnime) MAL.query.getAnimeDetails(relMalId) else MAL.query.getMangaDetails(relMalId)
+                        if (node != null) {
+                            coverUrl = node.mainPicture?.large ?: node.mainPicture?.medium
+                            score = ((node.mean ?: 0f) * 10f).toInt()
+                            statusStr = node.status?.replace("_", " ")?.uppercase(java.util.Locale.US)
+                            episodesCount = node.numEpisodes
+                            chaptersCount = node.numChapters
+                            resolvedFmt = node.mediaType?.uppercase(java.util.Locale.US)
+                        } else {
+                            val jikanNode = if (relIsAnime) MAL.jikan.getAnimeById(relMalId) else MAL.jikan.getMangaById(relMalId)
+                            if (jikanNode != null) {
+                                coverUrl = jikanNode.images?.jpg?.largeImageUrl ?: jikanNode.images?.jpg?.imageUrl
+                                score = ((jikanNode.score ?: 0f) * 10f).toInt()
+                                statusStr = jikanNode.status?.replace("_", " ")?.uppercase(java.util.Locale.US)
+                                episodesCount = jikanNode.episodes
+                                chaptersCount = jikanNode.chapters
+                                val typeStr = jikanNode.type?.uppercase(java.util.Locale.US)
+                                resolvedFmt = when (typeStr) {
+                                    "LIGHT NOVEL", "NOVEL" -> "NOVEL"
+                                    "ONE-SHOT" -> "ONE_SHOT"
+                                    "DOUJINSHI" -> "DOUJINSHI"
+                                    "MANHWA" -> "MANHWA"
+                                    "MANHUA" -> "MANHUA"
+                                    else -> typeStr ?: if (relIsAnime) "TV" else "MANGA"
+                                }
+                            } else {
+                                coverUrl = null
+                                score = null
+                                statusStr = null
+                                episodesCount = null
+                                chaptersCount = null
+                            }
+                        }
+
+                        if (coverUrl != null || score != null || statusStr != null) {
+                            if (coverUrl != null) {
+                                rel.cover = coverUrl
+                                rel.banner = coverUrl
+                            }
+                            if (score != null && rel.meanScore == null) {
+                                rel.meanScore = score
+                            }
+                            if (statusStr != null && rel.status == null) {
+                                rel.status = statusStr
+                            }
+                            if (relIsAnime) {
+                                if (episodesCount != null) {
+                                    rel.anime?.totalEpisodes = episodesCount
+                                }
+                            } else {
+                                if (chaptersCount != null) {
+                                    rel.manga?.totalChapters = chaptersCount
+                                }
+                            }
+                            if (resolvedFmt != null) {
+                                rel.format = resolvedFmt
+                                val rawRelation = rel.relation?.substringBefore("\n") ?: ""
+                                if (rawRelation.isNotEmpty()) {
+                                    rel.relation = "$rawRelation\n$resolvedFmt"
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            deferreds.forEach { it.await() }
         }
     }
 
@@ -210,7 +625,7 @@ class MediaDetailsViewModel : ViewModel() {
                         m.idIMDB = ani.dantotsu.others.IdMappers.getImdbId(m.id)
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    ani.dantotsu.util.Logger.log(e)
                 }
             }
         }

@@ -179,6 +179,11 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         continueEp = model.continueMedia ?: false
         model.getMedia().observe(viewLifecycleOwner) {
             if (it != null) {
+                if (this::media.isInitialized) {
+                    if (it.manga != null && it.manga?.chapters == null) {
+                        it.manga?.chapters = media.manga?.chapters
+                    }
+                }
                 media = it
                 progress = View.GONE
                 binding.mediaInfoProgressBar.visibility = progress

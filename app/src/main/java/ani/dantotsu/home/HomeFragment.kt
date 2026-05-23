@@ -3,6 +3,7 @@ package ani.dantotsu.home
 import android.animation.ObjectAnimator
 import android.content.Intent
 import android.graphics.drawable.Animatable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
@@ -10,6 +11,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LayoutAnimationController
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -39,6 +41,7 @@ import ani.dantotsu.media.MediaAdaptor
 import ani.dantotsu.media.MediaListViewActivity
 import ani.dantotsu.media.user.ListActivity
 import ani.dantotsu.navBarHeight
+import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.profile.ProfileActivity
 import ani.dantotsu.setSafeOnClickListener
 import ani.dantotsu.setSlideIn
@@ -169,7 +172,19 @@ class HomeFragment : Fragment() {
                         .putExtra("userId", Anilist.userid), null
                 )
             } else {
-                snackString(getString(R.string.rescue_mode_active))
+                val malUsername = MAL.username
+                if (!malUsername.isNullOrBlank()) {
+                    try {
+                        CustomTabsIntent.Builder().build().launchUrl(
+                            requireContext(),
+                            Uri.parse("https://myanimelist.net/profile/$malUsername")
+                        )
+                    } catch (e: Exception) {
+                        openLinkInBrowser("https://myanimelist.net/profile/$malUsername")
+                    }
+                } else {
+                    snackString(getString(R.string.rescue_mode_active))
+                }
             }
             false
         }
@@ -505,7 +520,7 @@ class HomeFragment : Fragment() {
 
         PrefManager.getLiveVal(PrefName.RescueMode, false).asLiveBool()
             .observe(viewLifecycleOwner) { inRescueMode ->
-                
+
                 val alOnlySections = listOf(
                     binding.homeFavAnimeContainer,
                     binding.homeFavMangaContainer,
@@ -561,7 +576,6 @@ class HomeFragment : Fragment() {
                                 }
                             }
                         }
-                        model.setListImages()
                         model.loaded = true
                     }
 
@@ -618,11 +632,12 @@ class HomeFragment : Fragment() {
 
                     val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                     val initHomePage = async(Dispatchers.IO) { model.initHomePage() }
+                    val setListImages = async(Dispatchers.IO) { model.setListImages() }
                     if (!rescueMode) {
                         val initUserStatus = async(Dispatchers.IO) { model.initUserStatus() }
-                        awaitAll(initHomePage, initUserStatus)
+                        awaitAll(initHomePage, initUserStatus, setListImages)
                     } else {
-                        initHomePage.await()
+                        awaitAll(initHomePage, setListImages)
                     }
 
                     withContext(Dispatchers.Main) {

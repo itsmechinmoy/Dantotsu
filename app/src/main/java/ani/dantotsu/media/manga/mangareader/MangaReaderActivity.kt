@@ -1142,9 +1142,9 @@ class MangaReaderActivity : AppCompatActivity() {
         if (lastSubscriptionPromptChapter == chapterKey) return
         lastSubscriptionPromptChapter = chapterKey
 
-        if (!PrefManager.getVal<Boolean>(PrefName.SubscriptionCheckingNotifications)) return
+        if (!PrefManager.getVal<Boolean>(PrefName.SubscriptionPromptAtEnd)) return
 
-        val isCompleted = isMangaCompleted()
+        val isCompleted = isCompletedForSubscriptionPrompt()
         val alreadySubscribed = SubscriptionHelper.getSubscriptions().containsKey(media.id)
         if (isCompleted) {
             if (alreadySubscribed) {
@@ -1181,6 +1181,15 @@ class MangaReaderActivity : AppCompatActivity() {
         val totalChapters = media.manga?.totalChapters ?: return false
         val chapterNumber = MediaNameAdapter.findChapterNumber(chapter.number) ?: return false
         return chapterNumber >= totalChapters
+    }
+
+    private fun isCompletedForSubscriptionPrompt(): Boolean {
+        val isNovel = media.format?.contains("NOVEL", ignoreCase = true) == true
+        return if (isNovel) {
+            media.status == "FINISHED"
+        } else {
+            isMangaCompleted()
+        }
     }
 
 

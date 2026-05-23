@@ -94,7 +94,12 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
                 author.image
             )
         }
-        val link = "https://anilist.co/staff/${author.id}"
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        val link = if (rescueMode) {
+            "https://myanimelist.net/people/${author.id}"
+        } else {
+            "https://anilist.co/staff/${author.id}"
+        }
         binding.characterShare.setOnClickListener {
             val i = Intent(Intent.ACTION_SEND)
             i.type = "text/plain"
@@ -105,19 +110,19 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
             openLinkInBrowser(link)
             true
         }
-        lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                author.isFav =
-                    Anilist.query.isUserFav(AnilistMutations.FavType.STAFF, author.id)
+        if (!rescueMode) {
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    author.isFav =
+                        Anilist.query.isUserFav(AnilistMutations.FavType.STAFF, author.id)
+                }
+                withContext(Dispatchers.Main) {
+                    binding.characterFav.setImageResource(
+                        if (author.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
+                    )
+                }
             }
-            withContext(Dispatchers.Main) {
-                binding.characterFav.setImageResource(
-                    if (author.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
-                )
-            }
-        }
-        binding.characterFav.setOnClickListener {
-            scope.launch {
+            binding.characterFav.setOnClickListener {
                 lifecycleScope.launch {
                     if (Anilist.mutation.toggleFav(AnilistMutations.FavType.STAFF, author.id)) {
                         author.isFav = !author.isFav
@@ -129,6 +134,8 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
                     }
                 }
             }
+        } else {
+            binding.characterFav.visibility = View.GONE
         }
         model.getAuthor().observe(this) {
             if (it != null) {
@@ -156,9 +163,14 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
                     }
                 }
                 val desc = createDesc(author)
-                val markWon = Markwon.builder(this).usePlugin(SoftBreakAddsNewLinePlugin.create())
-                    .usePlugin(SpoilerPlugin()).build()
-                markWon.setMarkdown(binding.authorCharacterDesc, desc)
+                if (desc.isNotBlank()) {
+                    binding.authorCharacterDesc.visibility = View.VISIBLE
+                    val markWon = Markwon.builder(this).usePlugin(SoftBreakAddsNewLinePlugin.create())
+                        .usePlugin(SpoilerPlugin()).build()
+                    markWon.setMarkdown(binding.authorCharacterDesc, desc)
+                } else {
+                    binding.authorCharacterDesc.visibility = View.GONE
+                }
                 for (i in keys.indices) {
                     val medias = map[keys[i]]!!
                     val empty = if (medias.size >= 4) medias.size % 4 else 4 - medias.size
@@ -196,17 +208,26 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
     }
 
     private fun createDesc(author: Author): String {
-        val age = if (author.age != null) "${getString(R.string.age)} ${author.age}" else ""
+        val age = if (author.age != null) "**${getString(R.string.age)}** ${author.age}" else ""
         val yearsActive =
-            if (author.yearsActive != null) "${getString(R.string.years_active)} ${author.yearsActive}" else ""
+            if (author.yearsActive != null) "**${getString(R.string.years_active)}** ${author.yearsActive}" else ""
         val dob =
-            if (author.dateOfBirth != null) "${getString(R.string.birthday)} ${author.dateOfBirth}" else ""
+            if (author.dateOfBirth != null) "**${getString(R.string.birthday)}** ${author.dateOfBirth}" else ""
         val homeTown =
-            if (author.homeTown != null) "${getString(R.string.hometown)} ${author.homeTown}" else ""
+            if (author.homeTown != null) "**${getString(R.string.hometown)}** ${author.homeTown}" else ""
         val dod =
-            if (author.dateOfDeath != null) "${getString(R.string.date_of_death)} ${author.dateOfDeath}" else ""
+            if (author.dateOfDeath != null) "**${getString(R.string.date_of_death)}** ${author.dateOfDeath}" else ""
+        val about = author.about ?: ""
 
-        return "$age $yearsActive $dob $homeTown $dod"
+        val infoLine = listOf(age, yearsActive, dob, homeTown, dod)
+            .filter { it.isNotBlank() }
+            .joinToString("  \n")
+
+        return if (about.isNotBlank()) {
+            if (infoLine.isNotBlank()) "$infoLine\n\n$about" else about
+        } else {
+            infoLine
+        }
     }
 
 

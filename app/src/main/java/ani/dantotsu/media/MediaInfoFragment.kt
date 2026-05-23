@@ -191,7 +191,7 @@ class MediaInfoFragment : Fragment() {
                     true
                 }
                 binding.mediaInfoMeanScore.text =
-                    if (media.meanScore != null) (media.meanScore / 10.0).toString() else "??"
+                    media.meanScore?.let { (it / 10.0).toString() } ?: "??"
                 binding.mediaInfoStatus.text = media.status
                 binding.mediaInfoFormat.text = media.format
                 binding.mediaInfoSource.text = media.source
@@ -770,7 +770,7 @@ class MediaInfoFragment : Fragment() {
                     parent.addView(bind.root)
                 }
 
-                if (!media.relations.isNullOrEmpty() && !offline) {
+                if ((!media.relations.isNullOrEmpty() || media.sequel != null || media.prequel != null) && !offline) {
                     if (media.sequel != null || media.prequel != null) {
                         ItemQuelsBinding.inflate(
                             LayoutInflater.from(context),

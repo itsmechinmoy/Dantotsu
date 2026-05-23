@@ -24,11 +24,11 @@ class CharacterDetailsAdapter(private val character: Character, private val acti
         val desc =
             (if (character.id == 4004)
                 "![za wardo](https://media1.tenor.com/m/_z1tmCJnL2wAAAAd/za-warudo.gif) \n" else "") +
-                    (if (character.age != "null") "${currActivity()!!.getString(R.string.age)} ${character.age}" else "") +
-                    (if (character.dateOfBirth.toString() != "")
-                        "${currActivity()!!.getString(R.string.birthday)} ${character.dateOfBirth.toString()}" else "") +
-                    (if (character.gender != "null")
-                        currActivity()!!.getString(R.string.gender) + " " + when (character.gender) {
+                    (if (character.age != null && character.age != "null") "**${currActivity()!!.getString(R.string.age)}** ${character.age}  \n" else "") +
+                    (if (character.dateOfBirth != null && character.dateOfBirth.toString() != "??" && character.dateOfBirth.toString().isNotEmpty())
+                        "**${currActivity()!!.getString(R.string.birthday)}** ${character.dateOfBirth.toString()}  \n" else "") +
+                    (if (character.gender != null && character.gender != "null")
+                        "**${currActivity()!!.getString(R.string.gender)}** " + when (character.gender) {
                             currActivity()!!.getString(R.string.male) -> currActivity()!!.getString(
                                 R.string.male
                             )
@@ -38,7 +38,7 @@ class CharacterDetailsAdapter(private val character: Character, private val acti
                             )
 
                             else -> character.gender
-                        } else "") + "\n" + character.description
+                        } + "  \n" else "") + "\n" + (character.description ?: "")
 
         binding.characterDesc.isTextSelectable
         val markWon = buildMarkwon(activity)

@@ -67,6 +67,8 @@ data class MalAnimeNode(
     val recommendations: List<MalRecommendationEdge>? = null,
     @SerialName("related_anime") val relatedAnime: List<MalRelatedEdge>? = null,
     @SerialName("related_manga") val relatedManga: List<MalRelatedEdge>? = null,
+    val authors: List<MalStudio>? = null,
+    @SerialName("title_synonyms") val titleSynonyms: List<String>? = null,
     @SerialName("my_list_status") val myListStatus: MalListStatus? = null,
 )
 
@@ -149,6 +151,7 @@ data class JikanPagination(
 @Serializable
 data class JikanImages(
     val jpg: JikanImageUrls? = null,
+    val webp: JikanImageUrls? = null,
 )
 
 @Serializable
@@ -192,16 +195,33 @@ data class JikanMediaData(
     val volumes: Int? = null,
     val type: String? = null,
     val status: String? = null,
+    val url: String? = null,
     val aired: JikanAired? = null,
     val published: JikanAired? = null,
     val duration: String? = null,
     val rating: String? = null,
     val season: String? = null,
     val year: Int? = null,
+    @SerialName("title_synonyms") val titleSynonyms: List<String>? = null,
     val genres: List<JikanGenre>? = null,
+    @SerialName("explicit_genres") val explicitGenres: List<JikanGenre>? = null,
+    val themes: List<JikanGenre>? = null,
+    val demographics: List<JikanGenre>? = null,
     val studios: List<JikanStudio>? = null,
+    val producers: List<JikanStudio>? = null,
+    val licensors: List<JikanStudio>? = null,
+    val authors: List<JikanAuthor>? = null,
+    val theme: JikanTheme? = null,
+    val trailer: JikanTrailer? = null,
+    val relations: List<JikanRelation>? = null,
+    val recommendations: List<JikanRecommendation>? = null,
+    val external: List<JikanExternal>? = null,
+    val streaming: List<JikanExternal>? = null,
     val source: String? = null,
     val broadcast: JikanBroadcast? = null,
+    val favorites: Int? = null,
+    val members: Int? = null,
+    @SerialName("scored_by") val scoredBy: Int? = null,
 )
 
 @Serializable
@@ -222,3 +242,325 @@ data class JikanSearchResponse(
 data class JikanSingleResponse(
     val data: JikanMediaData? = null,
 )
+
+@Serializable
+data class JikanTrailer(
+    @SerialName("youtube_id") val youtubeId: String? = null,
+    @SerialName("embed_url") val embedUrl: String? = null,
+) {
+    fun effectiveYoutubeId(): String? {
+        if (!youtubeId.isNullOrBlank()) return youtubeId
+        val url = embedUrl ?: return null
+        val regex = Regex("""youtube(?:-nocookie)?\.com/embed/([\w-]+)""")
+        return regex.find(url)?.groupValues?.getOrNull(1)
+    }
+}
+
+@Serializable
+data class JikanTheme(
+    val openings: List<String>? = null,
+    val endings: List<String>? = null,
+)
+
+@Serializable
+data class JikanExternal(
+    val name: String? = null,
+    val url: String? = null,
+)
+
+@Serializable
+data class JikanRecommendation(
+    val entry: JikanRecommendationEntry? = null,
+)
+
+@Serializable
+data class JikanRecommendationsResponse(
+    val data: List<JikanRecommendation> = emptyList()
+)
+
+@Serializable
+data class JikanRecommendationEntry(
+    @SerialName("mal_id") val malId: Int,
+    val title: String? = null,
+    val images: JikanImages? = null,
+)
+
+@Serializable
+data class JikanRelation(
+    val relation: String? = null,
+    val entry: List<JikanRelationEntry>? = null,
+)
+
+@Serializable
+data class JikanRelationEntry(
+    @SerialName("mal_id") val malId: Int,
+    val type: String? = null,
+    val name: String? = null,
+    val url: String? = null,
+)
+
+@Serializable
+data class JikanAuthor(
+    val person: JikanPersonRef? = null,
+    val position: String? = null,
+)
+
+@Serializable
+data class JikanCharacterRef(
+    @SerialName("mal_id") val malId: Int,
+    val url: String? = null,
+    val images: JikanImages? = null,
+    val name: String? = null,
+    val favorites: Int? = null,
+)
+
+@Serializable
+data class JikanPersonRef(
+    @SerialName("mal_id") val malId: Int,
+    val url: String? = null,
+    val images: JikanImages? = null,
+    val name: String? = null,
+)
+
+@Serializable
+data class JikanAnimeCharacter(
+    val character: JikanCharacterRef? = null,
+    val role: String? = null,
+    @SerialName("voice_actors") val voiceActors: List<JikanPersonVoiceActor>? = null,
+)
+
+@Serializable
+data class JikanPersonVoiceActor(
+    val person: JikanPersonRef? = null,
+    val language: String? = null,
+)
+
+@Serializable
+data class JikanStaffMember(
+    val person: JikanPersonRef? = null,
+    val positions: List<String>? = null,
+)
+
+@Serializable
+data class JikanAnimeCharactersResponse(
+    val data: List<JikanAnimeCharacter> = emptyList(),
+    val pagination: JikanPagination? = null,
+)
+
+@Serializable
+data class JikanStaffResponse(
+    val data: List<JikanStaffMember> = emptyList(),
+    val pagination: JikanPagination? = null,
+)
+
+@Serializable
+data class JikanReviewResponse(
+    val data: List<JikanReview> = emptyList(),
+    val pagination: JikanPagination? = null,
+)
+
+@Serializable
+data class JikanReview(
+    @SerialName("mal_id") val malId: Int,
+    val url: String? = null,
+    val type: String? = null,
+    val reactions: JikanReviewReactions? = null,
+    val date: String? = null,
+    val review: String? = null,
+    val score: Int? = null,
+    val tags: List<String>? = null,
+    @SerialName("is_spoiler") val isSpoiler: Boolean = false,
+    @SerialName("is_preliminary") val isPreliminary: Boolean = false,
+    val user: JikanReviewUser? = null,
+)
+
+@Serializable
+data class JikanReviewReactions(
+    val overall: Int? = null,
+    val nice: Int? = null,
+    @SerialName("love_it") val loveIt: Int? = null,
+    val funny: Int? = null,
+    val confusing: Int? = null,
+    val informative: Int? = null,
+    @SerialName("well_written") val wellWritten: Int? = null,
+    val creative: Int? = null,
+)
+
+@Serializable
+data class JikanReviewUser(
+    val username: String? = null,
+    val url: String? = null,
+    val images: JikanImages? = null,
+)
+
+@Serializable
+data class JikanCharacterSearchResponse(
+    val data: List<JikanCharacterRef> = emptyList(),
+    val pagination: JikanPagination? = null,
+)
+
+@Serializable
+data class JikanPersonSearchResponse(
+    val data: List<JikanPersonRef> = emptyList(),
+    val pagination: JikanPagination? = null,
+)
+
+@Serializable
+data class JikanProducerSearchResponse(
+    val data: List<JikanProducer> = emptyList(),
+    val pagination: JikanPagination? = null,
+)
+
+@Serializable
+data class JikanProducer(
+    @SerialName("mal_id") val malId: Int,
+    val name: String? = null,
+    val url: String? = null,
+    val images: JikanImages? = null,
+    val favorites: Int? = null,
+)
+
+@Serializable
+data class JikanUserSearchResponse(
+    val data: List<JikanUserRef> = emptyList(),
+    val pagination: JikanPagination? = null,
+)
+
+@Serializable
+data class JikanUserProfileResponse(
+    val data: JikanUserRef? = null
+)
+
+@Serializable
+data class JikanUserRef(
+    val username: String? = null,
+    val url: String? = null,
+    val images: JikanImages? = null,
+)
+
+@Serializable
+data class JikanUserFavoritesResponse(
+    val data: JikanUserFavoritesData? = null
+)
+
+@Serializable
+data class JikanUserFavoritesData(
+    val anime: List<JikanFavoriteEntry> = emptyList(),
+    val manga: List<JikanFavoriteEntry> = emptyList(),
+)
+
+@Serializable
+data class JikanFavoriteEntry(
+    @SerialName("mal_id") val malId: Int,
+    val url: String? = null,
+    val images: JikanImages? = null,
+    val title: String? = null,
+    val type: String? = null,
+    @SerialName("start_year") val startYear: Int? = null,
+)
+
+
+@Serializable
+data class JikanCharacterFullResponse(
+    val data: JikanCharacterFullData
+)
+
+@Serializable
+data class JikanPersonFullResponse(
+    val data: JikanPersonFullData
+)
+
+@Serializable
+data class JikanCharacterFullData(
+    @SerialName("mal_id") val malId: Int,
+    val name: String? = null,
+    val url: String? = null,
+    val images: JikanImages? = null,
+    val about: String? = null,
+    val anime: List<JikanCharacterAnimeRole> = emptyList(),
+    val manga: List<JikanCharacterMangaRole> = emptyList(),
+    val voices: List<JikanCharacterVoiceActor> = emptyList()
+)
+
+@Serializable
+data class JikanPersonFullData(
+    @SerialName("mal_id") val malId: Int,
+    val name: String? = null,
+    val url: String? = null,
+    val images: JikanImages? = null,
+    val birthday: String? = null,
+    val favorites: Int? = null,
+    val about: String? = null,
+    val anime: List<JikanPersonAnimeRole> = emptyList(),
+    val manga: List<JikanPersonMangaRole> = emptyList(),
+    val voices: List<JikanPersonVoiceRole> = emptyList()
+)
+
+@Serializable
+data class JikanRoleMedia(
+    @SerialName("mal_id") val malId: Int,
+    val title: String? = null,
+    val url: String? = null,
+    val images: JikanImages? = null,
+)
+
+@Serializable
+data class JikanCharacterAnimeRole(
+    val role: String? = null,
+    val anime: JikanRoleMedia? = null
+)
+
+@Serializable
+data class JikanCharacterMangaRole(
+    val role: String? = null,
+    val manga: JikanRoleMedia? = null
+)
+
+@Serializable
+data class JikanCharacterVoiceActor(
+    val language: String? = null,
+    val person: JikanPersonRef? = null
+)
+
+@Serializable
+data class JikanPersonAnimeRole(
+    val position: String? = null,
+    val anime: JikanRoleMedia? = null
+)
+
+@Serializable
+data class JikanPersonMangaRole(
+    val position: String? = null,
+    val manga: JikanRoleMedia? = null
+)
+
+@Serializable
+data class JikanPersonVoiceRole(
+    val role: String? = null,
+    val anime: JikanRoleMedia? = null,
+    val character: JikanCharacterRef? = null
+)
+
+@Serializable
+data class JikanProducerFullResponse(
+    val data: JikanProducerFullData? = null
+)
+
+@Serializable
+data class JikanProducerFullData(
+    @SerialName("mal_id") val malId: Int,
+    val url: String? = null,
+    val titles: List<JikanProducerTitle>? = null,
+    val images: JikanImages? = null,
+    val favorites: Int? = null,
+    val count: Int? = null,
+    val established: String? = null,
+    val about: String? = null,
+)
+
+@Serializable
+data class JikanProducerTitle(
+    val type: String? = null,
+    val title: String? = null,
+)
+

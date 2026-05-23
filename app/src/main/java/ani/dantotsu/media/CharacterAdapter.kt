@@ -16,7 +16,8 @@ import ani.dantotsu.setAnimation
 import java.io.Serializable
 
 class CharacterAdapter(
-    private val characterList: MutableList<Character>
+    private val characterList: MutableList<Character>,
+    private val clickEnabled: Boolean = true
 ) : RecyclerView.Adapter<CharacterAdapter.CharacterViewHolder>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CharacterViewHolder {
         val binding =
@@ -39,6 +40,7 @@ class CharacterAdapter(
         RecyclerView.ViewHolder(binding.root) {
         init {
             itemView.setOnClickListener {
+                if (!clickEnabled) return@setOnClickListener
                 val char = characterList[bindingAdapterPosition]
                 ContextCompat.startActivity(
                     itemView.context,
