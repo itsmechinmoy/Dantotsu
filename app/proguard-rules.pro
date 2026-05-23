@@ -43,8 +43,7 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
--keep,allowoptimization class kotlinx.serialization.** { public protected *; }
-
+-keep class kotlinx.serialization.** { *; }
 
 #############################################
 # Core App / Extensions
