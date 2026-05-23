@@ -3,6 +3,7 @@ package ani.dantotsu.home
 import android.animation.ObjectAnimator
 import android.content.Intent
 import android.graphics.drawable.Animatable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
@@ -10,6 +11,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LayoutAnimationController
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -41,8 +43,6 @@ import ani.dantotsu.media.user.ListActivity
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.profile.ProfileActivity
-import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 import ani.dantotsu.setSafeOnClickListener
 import ani.dantotsu.setSlideIn
 import ani.dantotsu.setSlideUp
@@ -520,17 +520,30 @@ class HomeFragment : Fragment() {
 
         PrefManager.getLiveVal(PrefName.RescueMode, false).asLiveBool()
             .observe(viewLifecycleOwner) { inRescueMode ->
+
+                val alOnlySections = listOf(
+                    binding.homeFavAnimeContainer,
+                    binding.homeFavMangaContainer,
+                    binding.homeUserStatusContainer,
+                    binding.homeMissingSequelsContainer,
+                )
                 binding.homeRescueModeBanner.visibility =
                     if (inRescueMode) View.VISIBLE else View.GONE
-                val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
-                containers.indices.forEach { i ->
-                    if (inRescueMode && i == 7) {
-                        containers[i].visibility = View.GONE
-                    } else {
-                        if (homeLayoutShow.getOrElse(i) { true }) {
-                            containers[i].visibility = View.VISIBLE
+                if (inRescueMode) {
+                    alOnlySections.forEach { it.visibility = View.GONE }
+
+                    binding.homeContinueWatchingContainer.visibility = View.VISIBLE
+                    binding.homePlannedAnimeContainer.visibility = View.VISIBLE
+                    binding.homeContinueReadingContainer.visibility = View.VISIBLE
+                    binding.homePlannedMangaContainer.visibility = View.VISIBLE
+                } else {
+                    val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
+                    val alOnlyIndices = listOf(1, 4, 7, 8)
+                    alOnlySections.forEachIndexed { idx, view ->
+                        if (homeLayoutShow.getOrElse(alOnlyIndices[idx]) { true }) {
+                            view.visibility = View.VISIBLE
                         } else {
-                            containers[i].visibility = View.GONE
+                            view.visibility = View.GONE
                         }
                     }
                 }
@@ -563,7 +576,6 @@ class HomeFragment : Fragment() {
                                 }
                             }
                         }
-                        model.setListImages()
                         model.loaded = true
                     }
 
@@ -590,7 +602,6 @@ class HomeFragment : Fragment() {
                         }
                     }
 
-                    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                     var empty = true
                     val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
                     var homeLayoutOrder: List<Int> = PrefManager.getVal(PrefName.HomeLayoutOrder)
@@ -600,14 +611,10 @@ class HomeFragment : Fragment() {
 
                     withContext(Dispatchers.Main) {
                         containers.indices.forEach { i ->
-                            if (rescueMode && i == 7) {
-                                containers[i].visibility = View.GONE
+                            if (homeLayoutShow.getOrElse(i) { true }) {
+                                empty = false
                             } else {
-                                if (homeLayoutShow.getOrElse(i) { true }) {
-                                    empty = false
-                                } else {
-                                    containers[i].visibility = View.GONE
-                                }
+                                containers[i].visibility = View.GONE
                             }
                         }
 
@@ -623,12 +630,14 @@ class HomeFragment : Fragment() {
                         }
                     }
 
+                    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                     val initHomePage = async(Dispatchers.IO) { model.initHomePage() }
+                    val setListImages = async(Dispatchers.IO) { model.setListImages() }
                     if (!rescueMode) {
                         val initUserStatus = async(Dispatchers.IO) { model.initUserStatus() }
-                        awaitAll(initHomePage, initUserStatus)
+                        awaitAll(initHomePage, initUserStatus, setListImages)
                     } else {
-                        initHomePage.await()
+                        awaitAll(initHomePage, setListImages)
                     }
 
                     withContext(Dispatchers.Main) {
