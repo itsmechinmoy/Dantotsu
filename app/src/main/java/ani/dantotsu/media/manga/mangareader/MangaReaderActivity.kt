@@ -109,6 +109,7 @@ class MangaReaderActivity : AppCompatActivity() {
     private val scope = lifecycleScope
 
     var defaultSettings = CurrentReaderSettings()
+    val autoScroll = MangaReaderAutoScroll() 
 
     private lateinit var media: Media
     private lateinit var chapter: MangaChapter
@@ -167,6 +168,7 @@ class MangaReaderActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        autoScroll.destroy()
         mangaCache.clear()
         RPCManager.clearPresence(this)
         super.onDestroy()
@@ -610,7 +612,7 @@ class MangaReaderActivity : AppCompatActivity() {
             }
         }
 
-        if (defaultSettings.layout != PAGED) {
+                if (defaultSettings.layout != PAGED) {
 
             binding.mangaReaderRecyclerContainer.visibility = View.VISIBLE
             binding.mangaReaderRecyclerContainer.controller.settings.isRotationEnabled =
@@ -756,8 +758,20 @@ class MangaReaderActivity : AppCompatActivity() {
                 }
 
                 scrollToPosition(currentPage / (dualPage { 2 } ?: 1) - 1)
+                
+                autoScroll.attach(this, defaultSettings.direction)
+                autoScroll.speedSeconds = PrefManager.getCustomVal("manga_auto_scroll_speed", 3f)
+                
+                val autoScrollEnabled = PrefManager.getCustomVal("manga_auto_scroll_enabled", false)
+                if (autoScrollEnabled && !autoScroll.isRunning) {
+                    autoScroll.start()
+                } else if (!autoScrollEnabled && autoScroll.isRunning) {
+                    autoScroll.stop()
+                }
             }
         } else {
+            autoScroll.stop()
+            
             binding.mangaReaderRecyclerContainer.visibility = View.GONE
             binding.mangaReaderPager.apply {
                 binding.mangaReaderSwipy.child = this
@@ -811,7 +825,7 @@ class MangaReaderActivity : AppCompatActivity() {
                 } else false
             }
         }
-    }
+
 
     private var onVolumeUp: (() -> Unit)? = null
     private var onVolumeDown: (() -> Unit)? = null
