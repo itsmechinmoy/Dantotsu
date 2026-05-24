@@ -825,6 +825,7 @@ class MangaReaderActivity : AppCompatActivity() {
                 } else false
             }
         }
+    }
 
 
     private var onVolumeUp: (() -> Unit)? = null
