@@ -558,7 +558,7 @@
                     android:layout_height="36dp"
                     android:background="?android:attr/selectableItemBackground"
                     android:padding="8dp"
-                    android:src="@drawable/ic_round_remove_24"
+                    android:src="@drawable/ic_remove"
                     app:tint="?attr/colorOnBackground" />
             </androidx.cardview.widget.CardView>
 
@@ -588,7 +588,7 @@
                     android:layout_height="36dp"
                     android:background="?android:attr/selectableItemBackground"
                     android:padding="8dp"
-                    android:src="@drawable/ic_round_add_24"
+                    android:src="@drawable/ic_add"
                     app:tint="?attr/colorOnBackground" />
             </androidx.cardview.widget.CardView>
 
