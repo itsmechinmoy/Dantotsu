@@ -23,7 +23,14 @@ data class CurrentReaderSettings(
     var wrapImages: Boolean = PrefManager.getVal(PrefName.WrapImages),
     var longClickImage: Boolean = PrefManager.getVal(PrefName.LongClickImage),
     var cropBorders: Boolean = PrefManager.getVal(PrefName.CropBorders),
-    var cropBorderThreshold: Int = PrefManager.getVal(PrefName.CropBorderThreshold)
+    var cropBorderThreshold: Int = PrefManager.getVal(PrefName.CropBorderThreshold),
+    var dataSaverMode: Int = PrefManager.getVal(PrefName.DataSaverMode),
+    var dataSaverImageQuality: Int = PrefManager.getVal(PrefName.DataSaverImageQuality),
+    var dataSaverImageFormatJpeg: Boolean = PrefManager.getVal(PrefName.DataSaverImageFormatJpeg),
+    var dataSaverIgnoreJpeg: Boolean = PrefManager.getVal(PrefName.DataSaverIgnoreJpeg),
+    var dataSaverIgnoreGif: Boolean = PrefManager.getVal(PrefName.DataSaverIgnoreGif),
+    var dataSaverServer: String = PrefManager.getVal(PrefName.DataSaverServer),
+    var dataSaverColorBW: Boolean = PrefManager.getVal(PrefName.DataSaverColorBW)
 ) : Serializable {
 
     enum class Directions {

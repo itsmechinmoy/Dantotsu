@@ -15,9 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileNotFoundException
-import java.io.FileOutputStream
+import exh.util.createDataSaver
 
 data class ImageData(
     val page: Page,
@@ -29,8 +27,20 @@ data class ImageData(
     ): Bitmap? {
         return withContext(Dispatchers.IO) {
             try {
+                // Get the DataSaver and compress the URL if enabled
+                val dataSaver = createDataSaver()
+                val compressedUrl = dataSaver.compress(page.imageUrl ?: "")
+                
+                // Create a new Page with the compressed URL for fetching
+                val originalUrl = page.imageUrl
+                page.imageUrl = compressedUrl
+                
                 // Fetch the image
                 val response = httpSource.getImage(page)
+                
+                // Restore the original URL
+                page.imageUrl = originalUrl
+                
                 Logger.log("Response: ${response.code} - ${response.message}")
 
                 // Convert the Response to an InputStream

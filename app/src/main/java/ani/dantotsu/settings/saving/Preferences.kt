@@ -180,6 +180,15 @@ enum class PrefName(val data: Pref) {
     LongClickImage(Pref(Location.Reader, Boolean::class, true)),
     CropBorders(Pref(Location.Reader, Boolean::class, false)),
     CropBorderThreshold(Pref(Location.Reader, Int::class, 10)),
+    
+    // Data Saver
+    DataSaverMode(Pref(Location.Reader, Int::class, 0)), // 0=NONE, 1=BANDWIDTH_HERO, 2=WSRV_NL
+    DataSaverImageQuality(Pref(Location.Reader, Int::class, 80)),
+    DataSaverImageFormatJpeg(Pref(Location.Reader, Boolean::class, false)), // false=WebP, true=JPEG
+    DataSaverIgnoreJpeg(Pref(Location.Reader, Boolean::class, false)),
+    DataSaverIgnoreGif(Pref(Location.Reader, Boolean::class, true)),
+    DataSaverServer(Pref(Location.Reader, String::class, "")), // For Bandwidth Hero server URL
+    DataSaverColorBW(Pref(Location.Reader, Boolean::class, false)),
 
     //Novel Reader
     CurrentThemeName(Pref(Location.NovelReader, String::class, "Default")),

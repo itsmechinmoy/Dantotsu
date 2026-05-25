@@ -9,6 +9,8 @@ import ani.dantotsu.R
 import ani.dantotsu.databinding.BottomSheetCurrentReaderSettingsBinding
 import ani.dantotsu.settings.CurrentReaderSettings
 import ani.dantotsu.settings.CurrentReaderSettings.Directions
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 
 class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
     private var _binding: BottomSheetCurrentReaderSettingsBinding? = null
@@ -162,7 +164,59 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
             settings.longClickImage = isChecked
             activity.applySettings()
         }
-    }
+
+        // Data Saver Settings
+        val dataSaverModes = listOf(
+            binding.dataSaverNone,
+            binding.dataSaverBandwidthHero,
+            binding.dataSaverWsrvNl
+        )
+        
+        val dataSaverModeNames = arrayOf("Disabled", "Bandwidth Hero", "WSRV.NL")
+        
+        // Set initial state
+        binding.dataSaverModeText.text = dataSaverModeNames[settings.dataSaverMode]
+        dataSaverModes[settings.dataSaverMode].alpha = 1f
+        
+        binding.dataSaverQualitySlider.value = settings.dataSaverImageQuality.toFloat()
+        binding.dataSaverIgnoreJpeg.isChecked = settings.dataSaverIgnoreJpeg
+        binding.dataSaverIgnoreGif.isChecked = settings.dataSaverIgnoreGif
+        binding.dataSaverImageFormat.isChecked = settings.dataSaverImageFormatJpeg
+        
+        dataSaverModes.forEachIndexed { index, button ->
+            button.setOnClickListener {
+                dataSaverModes.forEach { it.alpha = 0.33f }
+                button.alpha = 1f
+                settings.dataSaverMode = index
+                binding.dataSaverModeText.text = dataSaverModeNames[index]
+                PrefManager.setVal(PrefName.DataSaverMode, index)
+                activity.applySettings()
+            }
+        }
+        
+        binding.dataSaverQualitySlider.addOnChangeListener { _, value, _ ->
+            settings.dataSaverImageQuality = value.toInt()
+            PrefManager.setVal(PrefName.DataSaverImageQuality, value.toInt())
+            activity.applySettings()
+        }
+        
+        binding.dataSaverIgnoreJpeg.setOnCheckedChangeListener { _, isChecked ->
+            settings.dataSaverIgnoreJpeg = isChecked
+            PrefManager.setVal(PrefName.DataSaverIgnoreJpeg, isChecked)
+            activity.applySettings()
+        }
+        
+        binding.dataSaverIgnoreGif.setOnCheckedChangeListener { _, isChecked ->
+            settings.dataSaverIgnoreGif = isChecked
+            PrefManager.setVal(PrefName.DataSaverIgnoreGif, isChecked)
+            activity.applySettings()
+        }
+        
+        binding.dataSaverImageFormat.setOnCheckedChangeListener { _, isChecked ->
+            settings.dataSaverImageFormatJpeg = isChecked
+            PrefManager.setVal(PrefName.DataSaverImageFormatJpeg, isChecked)
+            activity.applySettings()
+        }
 
     override fun onDestroy() {
         _binding = null

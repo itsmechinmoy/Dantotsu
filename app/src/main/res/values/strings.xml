@@ -1171,7 +1171,19 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="no_messages">No messages</string>
     <string name="no_text_activities">No text activities</string>
 
-    <string name="show_logcat">Show Logcat</string>
+     <string name="show_logcat">Show Logcat</string>
     <string name="show_crash_report">Show Crash Report</string>
+
+    <!-- Data Saver Strings -->
+    <string name="data_saver">Data Saver</string>
+    <string name="data_saver_mode">Mode</string>
+    <string name="disabled">Disabled</string>
+    <string name="bandwidth_hero">Bandwidth Hero</string>
+    <string name="wsrv_nl">WSRV.NL</string>
+    <string name="data_saver_quality">Image Quality (10-100)</string>
+    <string name="data_saver_ignore_jpeg">Skip JPEG images</string>
+    <string name="data_saver_ignore_gif">Skip GIF images</string>
+    <string name="data_saver_image_format_jpeg">Convert to JPEG</string>
+    <string name="data_saver_image_format_info">When disabled, images are converted to WebP format. When enabled, images are converted to JPEG</string>
 
 </resources>
