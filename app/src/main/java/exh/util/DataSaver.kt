@@ -27,9 +27,11 @@ private class BandwidthHeroDataSaver : DataSaver {
     private val dataSavedServer: String = PrefManager.getVal(PrefName.DataSaverServer).trimEnd('/')
     private val ignoreJpg: Boolean = PrefManager.getVal(PrefName.DataSaverIgnoreJpeg)
     private val ignoreGif: Boolean = PrefManager.getVal(PrefName.DataSaverIgnoreGif)
-    private val format = if ((PrefManager.getVal(PrefName.DataSaverImageFormatJpeg) as Boolean)) "1" else "0"
+    private val imageFormatJpeg: Boolean = PrefManager.getVal(PrefName.DataSaverImageFormatJpeg)
+    private val format = if (imageFormatJpeg) "1" else "0"
     private val quality: Int = PrefManager.getVal(PrefName.DataSaverImageQuality)
-    private val colorBW = if ((PrefManager.getVal(PrefName.DataSaverColorBW) as Boolean)) "1" else "0"
+    private val colorBWEnabled: Boolean = PrefManager.getVal(PrefName.DataSaverColorBW)
+    private val colorBW = if (colorBWEnabled) "1" else "0"
 
     override fun compress(imageUrl: String): String {
         return if (dataSavedServer.isNotBlank() && !imageUrl.contains(dataSavedServer)) {
