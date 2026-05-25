@@ -562,7 +562,7 @@
                     android:background="?selectableItemBackgroundBorderless"
                     android:contentDescription="@string/bandwidth_hero"
                     android:scaleType="centerInside"
-                    android:src="@drawable/ic_round_cloud_download_24"
+                    android:src="@drawable/ic_round_refresh_24"
                     app:tint="?attr/colorPrimary" />
 
                 <ImageButton
@@ -574,7 +574,7 @@
                     android:background="?selectableItemBackgroundBorderless"
                     android:contentDescription="@string/wsrv_nl"
                     android:scaleType="centerInside"
-                    android:src="@drawable/ic_round_image_24"
+                    android:src="@drawable/ic_round_photo_size_select_actual_24"
                     app:tint="?attr/colorPrimary" />
             </LinearLayout>
         </LinearLayout>
