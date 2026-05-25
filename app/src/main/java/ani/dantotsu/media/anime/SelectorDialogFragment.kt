@@ -142,7 +142,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 fun fail(resId: Int){
                     snackString(getString(resId))
                     tryWith {
-                        dismiss()
+                        dismissAllowingStateLoss()
                     }
                 }
                 fun initializeVideoServerSelector(ep: Episode, onEpisodeDownloadHandler: EpisodeDownloadHandler? = null) {
@@ -374,7 +374,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 media!!.selected!!.server = null
                                 model.saveSelected(media!!.id, media!!.selected!!)
                                 tryWith {
-                                    dismiss()
+                                    dismissAllowingStateLoss()
                                 }
                             }
 
@@ -459,7 +459,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                         startEpisodeDownload(episodeName, selectedServerName, selectedSubtitles, selectedAudioTracks)
                                     }
                                     tryWith{
-                                        dismiss()
+                                        dismissAllowingStateLoss()
                                     }
                                 }
                             })
@@ -538,12 +538,12 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                         "startExo no launch"
                                     )
                                 }
-                                dismiss()
+                                dismissAllowingStateLoss()
                             } catch (e: Exception) {
                                 Injekt.get<CrashlyticsInterface>().logException(e)
                                 Logger.log(e)
                                 toast("Error starting video: ${e.message}")
-                                dismiss()
+                                dismissAllowingStateLoss()
                             }
                         }
                     } else {
@@ -558,7 +558,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                         Uri.parse("market://details?id=$amnis")
                                     )
                                 )
-                                dismiss()
+                                dismissAllowingStateLoss()
                             } catch (e: ActivityNotFoundException) {
                                 startActivity(
                                     Intent(
@@ -574,7 +574,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             }
         }
 
-        dismiss()
+        dismissAllowingStateLoss()
         if (launch!!) {
             stopAddingToList()
             val intent = Intent(activity, ExoplayerView::class.java)
@@ -739,7 +739,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             }
                             show()
                         }
-                        dismiss()
+                        dismissAllowingStateLoss()
                         return@setSafeOnClickListener
                     }
                     selectedVideo?.file?.url?.let { url ->
@@ -876,7 +876,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         setDataAndType(Uri.parse(video.file.url), "video/*")
                     }
                     copyToClipboard(video.file.url, true)
-                    dismiss()
+                    dismissAllowingStateLoss()
                     startActivity(Intent.createChooser(intent, "Open Video in :"))
                     true
                 }
