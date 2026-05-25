@@ -1,6 +1,7 @@
 package ani.dantotsu.util
 
 import android.os.Bundle
+import android.text.InputFilter
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -9,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.core.widget.addTextChangedListener
+import ani.dantotsu.InputFilterMinMax
 import ani.dantotsu.R
 import ani.dantotsu.buildMarkwon
 import ani.dantotsu.connections.anilist.Anilist
@@ -33,6 +35,7 @@ class ActivityMarkdownCreator : AppCompatActivity() {
     private var text: String = ""
     private var ping: String? = null
     private var parentId: Int = 0
+    private var mediaId: Int = 0
     private var isPreviewMode: Boolean = false
 
     enum class MarkdownFormat(
@@ -85,6 +88,12 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         val editId = intent.getIntExtra("edit", -1)
         val userId = intent.getIntExtra("userId", -1)
         parentId = intent.getIntExtra("parentId", -1)
+        mediaId = intent.getIntExtra("mediaId", -1)
+        if (type == "review" && mediaId == -1) {
+            toast("Error: No media ID")
+            finish()
+            return
+        }
         when (type) {
             "replyActivity" -> if (parentId == -1) {
                 toast("Error: No parent ID")
@@ -97,6 +106,25 @@ class ActivityMarkdownCreator : AppCompatActivity() {
                     binding.privateCheckbox.visibility = ViewGroup.VISIBLE
                 }
             }
+        }
+        if (type == "review") {
+            binding.summaryLayout.visibility = ViewGroup.VISIBLE
+            binding.scoreLayout.visibility = ViewGroup.VISIBLE
+            binding.summaryLayout.hint = getString(R.string.review_summary)
+            binding.editText.hint = getString(R.string.review_body)
+            val fmt = Anilist.scoreFormat ?: "POINT_100"
+            val (maxVal, suffix, isDecimal) = when (fmt) {
+                "POINT_100" -> Triple(100, "/ 100", false)
+                "POINT_10_DECIMAL" -> Triple(10, "/ 10", true)
+                "POINT_10" -> Triple(10, "/ 10", false)
+                "POINT_5" -> Triple(5, "/ 5", false)
+                "POINT_3" -> Triple(3, "/ 3", false)
+                else -> Triple(100, "/ 100", false)
+            }
+            binding.scoreLayout.suffixText = suffix
+            binding.scoreInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                (if (isDecimal) android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL else 0)
+            binding.scoreInput.filters = arrayOf(InputFilterMinMax(0.0, maxVal.toDouble()))
         }
         var private = false
         binding.privateCheckbox.setOnCheckedChangeListener { _, isChecked ->
@@ -118,8 +146,13 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         }
 
         binding.createButton.setOnClickListener {
-            if (text.isBlank()) {
+            if (text.isBlank() || (type == "review" && binding.summaryInput.text.isNullOrBlank())) {
                 toast(getString(R.string.cannot_be_empty))
+                return@setOnClickListener
+            }
+            val scoreRaw = binding.scoreInput.text.toString().toDoubleOrNull()
+            if (type == "review" && scoreRaw != null && (scoreRaw < 0 || scoreRaw > 100)) {
+                toast("Score must be 0-100")
                 return@setOnClickListener
             }
             customAlertDialog().apply {
@@ -134,7 +167,21 @@ class ActivityMarkdownCreator : AppCompatActivity() {
                             } else {
                                 Anilist.mutation.postActivity(text)
                             }
-                            //"review" -> Anilist.mutation.postReview(text)
+                            "review" -> {
+                                val fmt = Anilist.scoreFormat ?: "POINT_100"
+                                val multiplier = when (fmt) {
+                                    "POINT_100" -> 1
+                                    "POINT_10_DECIMAL" -> 10
+                                    "POINT_10" -> 10
+                                    "POINT_5" -> 20
+                                    "POINT_3" -> 33
+                                    else -> 1
+                                }
+                                Anilist.mutation.postReview(
+                                    binding.summaryInput.text.toString().trim(), text,
+                                    mediaId, (scoreRaw?.times(multiplier)?.toInt() ?: 0)
+                                )
+                            }
                             "replyActivity" -> if (isEdit) {
                                 Anilist.mutation.postReply(parentId, text, editId)
                             } else {

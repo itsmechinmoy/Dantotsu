@@ -6,8 +6,8 @@ import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
@@ -34,6 +34,10 @@ class ReviewActivity : AppCompatActivity() {
     private var currentPage: Int = 1
     private var hasNextPage: Boolean = true
 
+    private val reviewLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { loadReviews() }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,14 +60,13 @@ class ReviewActivity : AppCompatActivity() {
         binding.followerList.visibility = View.GONE
         binding.followFilterButton.setImageResource(R.drawable.ic_add)
         binding.followFilterButton.setOnClickListener {
-            ContextCompat.startActivity(
-                this,
+            reviewLauncher.launch(
                 Intent(this, ActivityMarkdownCreator::class.java)
-                    .putExtra("type", "review"),
-                null
+                    .putExtra("type", "review")
+                    .putExtra("mediaId", mediaId)
             )
         }
-        binding.followFilterButton.visibility = View.GONE
+        binding.followFilterButton.visibility = View.VISIBLE
         binding.listTitle.text = getString(R.string.reviews)
         binding.listRecyclerView.adapter = adapter
         binding.listRecyclerView.layoutManager = LinearLayoutManager(
@@ -71,27 +74,34 @@ class ReviewActivity : AppCompatActivity() {
             LinearLayoutManager.VERTICAL,
             false
         )
-        binding.listProgressBar.visibility = View.VISIBLE
         binding.listBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
+        binding.listRecyclerView.setOnTouchListener { _, event ->
+            if (event?.action == MotionEvent.ACTION_UP) {
+                if (hasNextPage && !binding.listRecyclerView.canScrollVertically(1) && !binding.followRefresh.isVisible
+                    && binding.listRecyclerView.adapter!!.itemCount != 0 &&
+                    (binding.listRecyclerView.layoutManager as LinearLayoutManager).findLastVisibleItemPosition() == (binding.listRecyclerView.adapter!!.itemCount - 1)
+                ) {
+                    binding.followRefresh.visibility = ViewGroup.VISIBLE
+                    loadPage(++currentPage) {
+                        binding.followRefresh.visibility = ViewGroup.GONE
+                    }
+                }
+            }
+            false
+        }
+        loadReviews()
+    }
+
+    private fun loadReviews() {
+        reviews.clear()
+        currentPage = 1
+        hasNextPage = true
+        binding.listProgressBar.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
             val response = Anilist.query.getReviews(mediaId)?.data?.page
             withContext(Dispatchers.Main) {
                 binding.listProgressBar.visibility = View.GONE
-                binding.listRecyclerView.setOnTouchListener { _, event ->
-                    if (event?.action == MotionEvent.ACTION_UP) {
-                        if (hasNextPage && !binding.listRecyclerView.canScrollVertically(1) && !binding.followRefresh.isVisible
-                            && binding.listRecyclerView.adapter!!.itemCount != 0 &&
-                            (binding.listRecyclerView.layoutManager as LinearLayoutManager).findLastVisibleItemPosition() == (binding.listRecyclerView.adapter!!.itemCount - 1)
-                        ) {
-                            binding.followRefresh.visibility = ViewGroup.VISIBLE
-                            loadPage(++currentPage) {
-                                binding.followRefresh.visibility = ViewGroup.GONE
-                            }
-                        }
-                    }
-                    false
-                }
                 currentPage = response?.pageInfo?.currentPage ?: 1
                 hasNextPage = response?.pageInfo?.hasNextPage ?: false
                 response?.reviews?.let {

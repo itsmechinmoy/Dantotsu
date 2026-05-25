@@ -78,6 +78,50 @@
             android:orientation="vertical"
             android:padding="16dp">
 
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/summaryLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone"
+                android:hint="@string/review_summary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/summaryInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/poppins_semi_bold"
+                    android:inputType="text"
+                    android:padding="16dp"
+                    android:textColor="?attr/colorOnBackground"
+                    android:textSize="16sp"
+                    tools:ignore="LabelFor" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/scoreLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone"
+                android:hint="@string/score"
+                app:startIconDrawable="@drawable/ic_round_star_24"
+                app:suffixText="/100">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/scoreInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/poppins_bold"
+                    android:inputType="number"
+                    android:maxLength="3"
+                    android:padding="16dp"
+                    android:textColor="?attr/colorOnBackground"
+                    android:textSize="16sp"
+                    tools:ignore="LabelFor" />
+            </com.google.android.material.textfield.TextInputLayout>
+
             <EditText
                 android:id="@+id/editText"
                 android:layout_width="match_parent"
