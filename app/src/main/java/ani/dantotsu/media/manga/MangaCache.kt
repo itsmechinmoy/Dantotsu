@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import android.util.LruCache
 import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
+import ani.dantotsu.util.createDataSaver
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
@@ -29,22 +30,50 @@ data class ImageData(
     ): Bitmap? {
         return withContext(Dispatchers.IO) {
             try {
-                // Fetch the image
-                val response = httpSource.getImage(page)
-                Logger.log("Response: ${response.code} - ${response.message}")
+                val dataSaver = createDataSaver()
+                val compressedUrl = dataSaver.compress(page.imageUrl ?: "")
+                
+                val originalUrl = page.imageUrl
+                var bitmap: Bitmap? = null
+                var success = false
 
-                // Convert the Response to an InputStream
-                val inputStream = response.body.byteStream()
+                if (compressedUrl != originalUrl) {
+                    try {
+                        page.imageUrl = compressedUrl
+                        val response = httpSource.getImage(page)
+                        Logger.log("DataSaver Response: ${response.code} - ${response.message}")
+                        if (response.isSuccessful) {
+                            bitmap = response.use {
+                                it.body.byteStream().use { inputStream ->
+                                    BitmapFactory.decodeStream(inputStream)
+                                }
+                            }
+                            if (bitmap != null) {
+                                success = true
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Logger.log("DataSaver failed, falling back to original: ${e.message}")
+                    } finally {
+                        page.imageUrl = originalUrl
+                    }
+                }
 
-                // Convert InputStream to Bitmap
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-
-                inputStream.close()
-                //saveImage(bitmap, context.contentResolver, page.imageUrl!!, Bitmap.CompressFormat.JPEG, 100)
+                if (!success) {
+                    if (compressedUrl != originalUrl) {
+                        Logger.log("DataSaver failed or was blocked by Cloudflare; falling back to original URL: $originalUrl")
+                    }
+                    val response = httpSource.getImage(page)
+                    Logger.log("Response: ${response.code} - ${response.message}")
+                    bitmap = response.use {
+                        it.body.byteStream().use { inputStream ->
+                            BitmapFactory.decodeStream(inputStream)
+                        }
+                    }
+                }
 
                 return@withContext bitmap
             } catch (e: Exception) {
-                // Handle any exceptions
                 Logger.log("An error occurred: ${e.message}")
                 snackString("An error occurred: ${e.message}")
                 return@withContext null
