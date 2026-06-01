@@ -142,7 +142,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 fun fail(resId: Int){
                     snackString(getString(resId))
                     tryWith {
-                        dismiss()
+                        dismissAllowingStateLoss()
                     }
                 }
                 fun initializeVideoServerSelector(ep: Episode, onEpisodeDownloadHandler: EpisodeDownloadHandler? = null) {
@@ -169,6 +169,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         scope.launch(Dispatchers.IO) {
                             model.loadEpisodeVideos(ep, media!!.selected!!.sourceIndex)
                             withContext(Dispatchers.Main) {
+                                if (_binding == null || !isAdded) return@withContext
                                 adapter.addAll(ep.extractors)
                                 binding.selectorProgressBar.visibility = View.GONE
                                 if (adapter.itemCount == 0) {
@@ -373,7 +374,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 media!!.selected!!.server = null
                                 model.saveSelected(media!!.id, media!!.selected!!)
                                 tryWith {
-                                    dismiss()
+                                    dismissAllowingStateLoss()
                                 }
                             }
 
@@ -405,14 +406,17 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
                             if (ep.extractors?.filter { it.server.name == selected } == null) {
                                 scope.launch{
-                                    if(!withContext(Dispatchers.IO){
+                                    val success = withContext(Dispatchers.IO){
                                         loadEpisodeSingleServer(ep.number, selected!!)
-                                    }){
-                                        withContext(Dispatchers.Main) {
+                                    }
+                                    withContext(Dispatchers.Main) {
+                                        if (_binding == null || !isAdded) return@withContext
+                                        if (!success) {
                                             failToList()
+                                        } else {
+                                            load()
                                         }
                                     }
-                                    else load()
                                 }
                             } else load()
                         }
@@ -428,43 +432,43 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
                     if (ep != null) {
                         val downloadHandler =
-                        EpisodeDownloadHandler(_onFinishingUserSelection = { selectedServerName,
-                                                                             selectedSubtitles,
-                                                                             selectedAudioTracks ->
-                            binding.selectorListContainer.visibility = View.GONE
-                            binding.selectorAutoListContainer.visibility = View.VISIBLE
-                            binding.selectorTitle.text = "Starting Download"
-                            binding.selectorAutoText.text =
-                                "Starting download using server:\n$selectedServerName"
-                            binding.selectorCancel.visibility = View.GONE
+                            EpisodeDownloadHandler(_onFinishingUserSelection = { selectedServerName,
+                                                                                 selectedSubtitles,
+                                                                                 selectedAudioTracks ->
+                                binding.selectorListContainer.visibility = View.GONE
+                                binding.selectorAutoListContainer.visibility = View.VISIBLE
+                                binding.selectorTitle.text = "Starting Download"
+                                binding.selectorAutoText.text =
+                                    "Starting download using server:\n$selectedServerName"
+                                binding.selectorCancel.visibility = View.GONE
 
-                            scope.launch(Dispatchers.IO) {
-                                val serverSelectionScope = CoroutineScope(Dispatchers.IO)
-                                val serverSelectionTasks = mutableListOf<Deferred<Unit>>()
-                                for (episodeName in episodes!!.drop(1)) {
-                                    serverSelectionTasks.add(serverSelectionScope.async {
-                                        if(!loadEpisodeSingleServer(episodeName, selectedServerName)){
-                                            Log.d("AnimeDownloader", "Error loading server $selectedServerName for episode $episodeName")
-                                            fail(R.string.auto_select_server_error)
-                                        }
-                                    })
-                                }
-                                serverSelectionTasks.awaitAll()
+                                scope.launch(Dispatchers.IO) {
+                                    val serverSelectionScope = CoroutineScope(Dispatchers.IO)
+                                    val serverSelectionTasks = mutableListOf<Deferred<Unit>>()
+                                    for (episodeName in episodes!!.drop(1)) {
+                                        serverSelectionTasks.add(serverSelectionScope.async {
+                                            if(!loadEpisodeSingleServer(episodeName, selectedServerName)){
+                                                Log.d("AnimeDownloader", "Error loading server $selectedServerName for episode $episodeName")
+                                                fail(R.string.auto_select_server_error)
+                                            }
+                                        })
+                                    }
+                                    serverSelectionTasks.awaitAll()
 
-                                for(episodeName in episodes!!){
-                                    startEpisodeDownload(episodeName, selectedServerName, selectedSubtitles, selectedAudioTracks)
+                                    for(episodeName in episodes!!){
+                                        startEpisodeDownload(episodeName, selectedServerName, selectedSubtitles, selectedAudioTracks)
+                                    }
+                                    tryWith{
+                                        dismissAllowingStateLoss()
+                                    }
                                 }
-                                tryWith{
-                                    dismiss()
-                                }
-                            }
-                        })
+                            })
                         initializeVideoServerSelector(ep, downloadHandler)
                     }
                 }
             }
         }
-      super.onViewCreated(view, savedInstanceState)
+        super.onViewCreated(view, savedInstanceState)
     }
 
     private val externalPlayerResult = registerForActivityResult(
@@ -494,6 +498,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     @OptIn(DelicateCoroutinesApi::class)
     @SuppressLint("UnsafeOptInUsageError")
     fun startExoplayer(media: Media) {
+        if (!isAdded || _binding == null) return
         prevEpisode = null
 
         episode?.let { ep ->
@@ -533,12 +538,12 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                         "startExo no launch"
                                     )
                                 }
-                                dismiss()
+                                dismissAllowingStateLoss()
                             } catch (e: Exception) {
                                 Injekt.get<CrashlyticsInterface>().logException(e)
                                 Logger.log(e)
                                 toast("Error starting video: ${e.message}")
-                                dismiss()
+                                dismissAllowingStateLoss()
                             }
                         }
                     } else {
@@ -553,7 +558,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                         Uri.parse("market://details?id=$amnis")
                                     )
                                 )
-                                dismiss()
+                                dismissAllowingStateLoss()
                             } catch (e: ActivityNotFoundException) {
                                 startActivity(
                                     Intent(
@@ -569,7 +574,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             }
         }
 
-        dismiss()
+        dismissAllowingStateLoss()
         if (launch!!) {
             stopAddingToList()
             val intent = Intent(activity, ExoplayerView::class.java)
@@ -734,7 +739,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             }
                             show()
                         }
-                        dismiss()
+                        dismissAllowingStateLoss()
                         return@setSafeOnClickListener
                     }
                     selectedVideo?.file?.url?.let { url ->
@@ -746,17 +751,17 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             }
                         }
                     }
-                    
+
                     val subtitleNames = subtitles.map { it.language }
                     var selectedSubtitles: MutableList<String> = mutableListOf()
                     var selectedAudioTracks: MutableList<String> = mutableListOf()
 
                     val currContext = currContext() ?: requireContext()
-                    
+
                     fun go(){
                         onEpisodeDownloadHandler?.onFinishingUserSelection(extractor.server.name, selectedSubtitles, selectedAudioTracks)
                     }
-                    
+
                     fun checkAudioTracks() {
                         val audioTracks = extractor.audioTracks.map { it.lang }
                         if (audioTracks.isNotEmpty()) {
@@ -871,7 +876,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         setDataAndType(Uri.parse(video.file.url), "video/*")
                     }
                     copyToClipboard(video.file.url, true)
-                    dismiss()
+                    dismissAllowingStateLoss()
                     startActivity(Intent.createChooser(intent, "Open Video in :"))
                     true
                 }
