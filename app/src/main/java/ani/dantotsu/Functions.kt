@@ -74,6 +74,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.getSystemService
 import androidx.core.content.FileProvider
+import androidx.core.graphics.ColorUtils
 import androidx.core.math.MathUtils.clamp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -161,6 +162,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import androidx.core.view.isVisible
+import androidx.core.net.toUri
+import kotlin.time.Duration.Companion.milliseconds
 
 
 var statusBarHeight = 0
@@ -228,7 +231,7 @@ fun initActivity(a: Activity) {
             && a.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
         ) {
             window.decorView.rootWindowInsets?.displayCutout?.apply {
-                if (boundingRects.size > 0) {
+                if (boundingRects.isNotEmpty()) {
                     statusBarHeight = min(boundingRects[0].width(), boundingRects[0].height())
                 }
             }
@@ -275,17 +278,19 @@ fun Activity.showSystemBarsRetractView() {
 fun Activity.setNavigationTheme() {
     val tv = TypedValue()
     theme.resolveAttribute(android.R.attr.colorBackground, tv, true)
-    if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && tv.isColorType)
-        || (tv.type >= TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= TypedValue.TYPE_LAST_COLOR_INT)
-    ) {
-        window.navigationBarColor = tv.data
+
+    val color = tv.data
+
+    if (Build.VERSION.SDK_INT < 35) {
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = color
     }
 }
 
 /**
  * Sets clipToPadding false and sets the combined height of navigation bars as bottom padding.
  *
- * When nesting multiple scrolling views, only call this method on the inner most scrolling view.
+ * When nesting multiple scrolling views, only call this method on the innermost scrolling view.
  */
 fun ViewGroup.setBaseline(view: View, includeSystemNavBar: Boolean = true) {
     fun updateLayout() {
@@ -370,7 +375,19 @@ fun Activity.reloadActivity() {
     Refresh.all()
     finish()
     startActivity(Intent(this, this::class.java))
-    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        overrideActivityTransition(
+            Activity.OVERRIDE_TRANSITION_OPEN,
+            android.R.anim.fade_in,
+            android.R.anim.fade_out
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        overridePendingTransition(
+            android.R.anim.fade_in,
+            android.R.anim.fade_out
+        )
+    }
     initActivity(this)
 }
 
@@ -389,30 +406,46 @@ fun Activity.restartApp() {
     PrefManager.setCustomVal("reload", true)
 }
 
-open class BottomSheetDialogFragment : BottomSheetDialogFragment() {
+open class BottomSheetDialogFragment :
+    BottomSheetDialogFragment() {
+
     override fun onStart() {
         super.onStart()
+
         dialog?.window?.let { window ->
             WindowCompat.setDecorFitsSystemWindows(window, false)
-            val immersiveMode: Boolean = PrefManager.getVal(PrefName.ImmersiveMode)
-            if (immersiveMode) {
-                WindowInsetsControllerCompat(
-                    window, window.decorView
-                ).hide(WindowInsetsCompat.Type.statusBars())
+
+            val controller = WindowInsetsControllerCompat(window, window.decorView)
+
+            if (PrefManager.getVal(PrefName.ImmersiveMode)) {
+                controller.hide(WindowInsetsCompat.Type.statusBars())
             }
-            if (this.resources.configuration.orientation != Configuration.ORIENTATION_PORTRAIT) {
+
+            if (resources.configuration.orientation != Configuration.ORIENTATION_PORTRAIT) {
                 val behavior = BottomSheetBehavior.from(requireView().parent as View)
                 behavior.state = BottomSheetBehavior.STATE_EXPANDED
             }
-            window.navigationBarColor =
-                requireContext().getThemeColor(com.google.android.material.R.attr.colorSurface)
+
+            val surfaceColor = requireContext().getThemeColor(
+                com.google.android.material.R.attr.colorSurface
+            )
+
+            // Deprecated on Android 15 (API 35)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                @Suppress("DEPRECATION")
+                window.navigationBarColor = surfaceColor
+            }
+
+            // Match navigation bar icon color to the background
+            controller.isAppearanceLightNavigationBars =
+                ColorUtils.calculateLuminance(surfaceColor) > 0.5
         }
     }
 
     override fun show(manager: FragmentManager, tag: String?) {
-        val ft = manager.beginTransaction()
-        ft.add(this, tag)
-        ft.commitAllowingStateLoss()
+        manager.beginTransaction()
+            .add(this, tag)
+            .commitAllowingStateLoss()
     }
 }
 
@@ -647,8 +680,8 @@ fun List<ShowResponse>.sortByTitle(string: String): List<ShowResponse> {
 
 fun MutableList<ShowResponse>.sortByTitle(string: String) {
     val temp: MutableMap<Int, Int> = mutableMapOf()
-    for (i in 0 until this.size) {
-        temp[i] = levenshtein(string.lowercase(), this[i].name.lowercase())
+    for ((i, element) in this.withIndex()) {
+        temp[i] = levenshtein(string.lowercase(), element.name.lowercase())
     }
     val c = temp.toList().sortedBy { (_, value) -> value }.toMap()
     val a = ArrayList(c.keys.toList().subList(0, min(this.size, 25)))
@@ -680,11 +713,11 @@ fun ImageView.loadImage(url: String?, size: Int = 0) {
 }
 
 fun ImageView.loadImage(file: FileUrl?, size: Int = 0) {
-    file?.url = PrefManager.getVal<String>(PrefName.ImageUrl).ifEmpty { file?.url ?: "" }
+    file?.url = PrefManager.getVal<String>(PrefName.ImageUrl).ifEmpty { file.url }
     if (file?.url?.isNotEmpty() == true) {
         tryWith {
             if (file.url.startsWith("content://")) {
-                Glide.with(this.context).load(Uri.parse(file.url)).transition(withCrossFade())
+                Glide.with(this.context).load(file.url.toUri()).transition(withCrossFade())
                     .override(size).into(this)
             } else {
                 val glideUrl = GlideUrl(file.url) { file.headers }
@@ -696,11 +729,11 @@ fun ImageView.loadImage(file: FileUrl?, size: Int = 0) {
 }
 
 fun ImageView.loadImage(file: FileUrl?, width: Int = 0, height: Int = 0) {
-    file?.url = PrefManager.getVal<String>(PrefName.ImageUrl).ifEmpty { file?.url ?: "" }
+    file?.url = PrefManager.getVal<String>(PrefName.ImageUrl).ifEmpty { file.url }
     if (file?.url?.isNotEmpty() == true) {
         tryWith {
             if (file.url.startsWith("content://")) {
-                Glide.with(this.context).load(Uri.parse(file.url)).transition(withCrossFade())
+                Glide.with(this.context).load(file.url.toUri()).transition(withCrossFade())
                     .override(width, height).into(this)
             } else {
                 val glideUrl = GlideUrl(file.url) { file.headers }
@@ -843,7 +876,7 @@ fun openLinkInBrowser(link: String?) {
             val sendIntent = Intent().apply {
                 action = Intent.ACTION_VIEW
                 addCategory(Intent.CATEGORY_BROWSABLE)
-                data = Uri.parse(link)
+                data = link.toUri()
                 selector = emptyBrowserIntent
             }
             currContext()!!.startActivity(sendIntent)
@@ -860,7 +893,7 @@ fun openLinkInCustomTab(link: String?) {
         try {
             val builder = androidx.browser.customtabs.CustomTabsIntent.Builder()
             val customTabsIntent = builder.build()
-            customTabsIntent.launchUrl(currContext()!!, android.net.Uri.parse(it))
+            customTabsIntent.launchUrl(currContext()!!, it.toUri())
         } catch (e: Exception) {
             openLinkInBrowser(it)
         }
@@ -872,7 +905,7 @@ fun openLinkInYouTube(link: String?) {
         try {
             val videoIntent = Intent(Intent.ACTION_VIEW).apply {
                 addCategory(Intent.CATEGORY_BROWSABLE)
-                data = Uri.parse(link)
+                data = link.toUri()
                 setPackage("com.google.android.youtube")
             }
             currContext()!!.startActivity(videoIntent)
@@ -1047,7 +1080,7 @@ fun copyToClipboard(string: String, toast: Boolean = true) {
     }
 }
 
-private val activeTimers = java.util.Collections.synchronizedMap(java.util.WeakHashMap<android.view.ViewGroup, android.os.CountDownTimer>())
+private val activeTimers = java.util.Collections.synchronizedMap(java.util.WeakHashMap<ViewGroup, CountDownTimer>())
 
 fun countDown(media: Media, view: ViewGroup) {
     if (media.anime?.nextAiringEpisode != null && media.anime.nextAiringEpisodeTime != null
@@ -1168,7 +1201,7 @@ class EmptyAdapter(private val count: Int) : RecyclerView.Adapter<RecyclerView.V
 
     override fun getItemCount(): Int = count
 
-    inner class EmptyViewHolder(view: View) : RecyclerView.ViewHolder(view)
+    class EmptyViewHolder(view: View) : RecyclerView.ViewHolder(view)
 }
 
 fun getAppString(res: Int): String {
@@ -1401,12 +1434,12 @@ suspend fun View.pop() {
         ObjectAnimator.ofFloat(this@pop, "scaleX", 1f, 1.25f).setDuration(120).start()
         ObjectAnimator.ofFloat(this@pop, "scaleY", 1f, 1.25f).setDuration(120).start()
     }
-    delay(120)
+    delay(120.milliseconds)
     currActivity()?.runOnUiThread {
         ObjectAnimator.ofFloat(this@pop, "scaleX", 1.25f, 1f).setDuration(100).start()
         ObjectAnimator.ofFloat(this@pop, "scaleY", 1.25f, 1f).setDuration(100).start()
     }
-    delay(100)
+    delay(100.milliseconds)
 }
 
 fun blurImage(imageView: ImageView, banner: String?) {
@@ -1419,9 +1452,7 @@ fun blurImage(imageView: ImageView, banner: String?) {
             if (PrefManager.getVal(PrefName.BlurBanners)) {
                 Glide.with(context as Context)
                     .load(
-                        if (banner.startsWith("http")) GlideUrl(url) else if (banner.startsWith("content://")) Uri.parse(
-                            url
-                        ) else File(url)
+                        if (banner.startsWith("http")) GlideUrl(url) else if (banner.startsWith("content://")) url.toUri() else File(url)
                     )
                     .diskCacheStrategy(DiskCacheStrategy.RESOURCE).override(400)
                     .apply(RequestOptions.bitmapTransform(BlurTransformation(radius, sampling)))
@@ -1430,9 +1461,7 @@ fun blurImage(imageView: ImageView, banner: String?) {
             } else {
                 Glide.with(context as Context)
                     .load(
-                        if (banner.startsWith("http")) GlideUrl(url) else if (banner.startsWith("content://")) Uri.parse(
-                            url
-                        ) else File(url)
+                        if (banner.startsWith("http")) GlideUrl(url) else if (banner.startsWith("content://")) url.toUri() else File(url)
                     )
                     .diskCacheStrategy(DiskCacheStrategy.RESOURCE).override(400)
                     .into(imageView)
