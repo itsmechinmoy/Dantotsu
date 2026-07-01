@@ -17,7 +17,7 @@ class AniMarkdown { //istg anilist has the worst api
 
         private fun String.convertImageToHtml(): String {
             val regex = """!\[(.*?)]\((.*?)\)""".toRegex()
-            val anilistRegex = """img\(.*?\)""".toRegex()
+            val anilistRegex = """img\d*\((.*?)\)""".toRegex()
             val markdownImage = regex.replace(this) { matchResult ->
                 val altText = matchResult.groupValues[1]
                 val imageUrl = matchResult.groupValues[2]
@@ -39,11 +39,12 @@ class AniMarkdown { //istg anilist has the worst api
         }
 
         private fun String.convertYoutubeToHtml(): String {
-            val regex = """<div class='youtube' id='(.*?)'></div>""".toRegex()
-            return regex.replace(this) { matchResult ->
-                val url = matchResult.groupValues[1]
+            val divRegex = """<div class='youtube' id='(.*?)'></div>""".toRegex()
+            val markdownRegex = """youtube\((.*?)\)""".toRegex()
+
+            fun getYoutubeEmbedHtml(url: String): String {
                 val id = getYoutubeId(url)
-                if (id.isNotEmpty()) {
+                return if (id.isNotEmpty()) {
                     """<div>
                     <a href="https://www.youtube.com/watch?v=$id"><img src="https://i3.ytimg.com/vi/$id/maxresdefault.jpg" alt="$url"></a>
                     <align center>
@@ -53,6 +54,21 @@ class AniMarkdown { //istg anilist has the worst api
                 } else {
                     """<a href="$url">Youtube Video</a>"""
                 }
+            }
+
+            val step1 = markdownRegex.replace(this) { matchResult ->
+                getYoutubeEmbedHtml(matchResult.groupValues[1])
+            }
+            return divRegex.replace(step1) { matchResult ->
+                getYoutubeEmbedHtml(matchResult.groupValues[1])
+            }
+        }
+
+        private fun String.convertWebmToHtml(): String {
+            val regex = """webm\((.*?)\)""".toRegex()
+            return regex.replace(this) { matchResult ->
+                val videoUrl = matchResult.groupValues[1]
+                """<video src="$videoUrl" controls loop muted autoplay></video>"""
             }
         }
 
@@ -90,6 +106,7 @@ class AniMarkdown { //istg anilist has the worst api
                 .convertImageToHtml()
                 .convertLinkToHtml()
                 .convertYoutubeToHtml()
+                .convertWebmToHtml()
                 .convertCenterToHtml()
                 .replaceLeftovers()
                 .underlineToHtml()
