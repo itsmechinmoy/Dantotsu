@@ -35,7 +35,7 @@ class OfflineMangaParser : MangaParser() {
                 val scanlator = downloadManager.mangaDownloadedTypes.find { items ->
                     items.titleName == mangaLink &&
                             items.chapterName == it
-                }?.scanlator ?: "Unknown"
+                }?.scanlator?.trim()?.takeIf { it.isNotBlank() } ?: "Unknown"
                 val chapter = MangaChapter(
                     it!!,
                     "$mangaLink/$it",

@@ -30,7 +30,7 @@ class LocalMangaParser : MangaParser() {
                 number = sChapter.name,
                 link = sChapter.url,
                 title = "",
-                scanlator = sChapter.scanlator ?: "Unknown",
+                scanlator = sChapter.scanlator?.trim()?.takeIf { it.isNotBlank() } ?: "Unknown",
                 sChapter = sChapter,
                 date = sChapter.date_upload
             )

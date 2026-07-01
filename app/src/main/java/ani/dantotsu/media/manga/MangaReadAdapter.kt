@@ -129,6 +129,7 @@ class MangaReadAdapter(
                 showUserTextListener = { MainScope().launch { binding.mediaSourceTitle.text = it } }
             }
         }
+        hiddenScanlators.clear()
         media.selected?.scanlators?.let {
             hiddenScanlators.addAll(it)
         }
@@ -353,7 +354,6 @@ class MangaReadAdapter(
                         if (media.selected!!.scanlators != null) {
                             checkBox.isChecked =
                                 media.selected!!.scanlators?.contains(option) != true
-                            scanlatorSelectionListener?.onScanlatorsSelected()
                         } else {
                             checkBox.isChecked = true
                         }
