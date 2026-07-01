@@ -1101,7 +1101,7 @@ fun countDown(media: Media, view: ViewGroup) {
             )
 
         val timer = object : CountDownTimer(
-            (media.anime.nextAiringEpisodeTime!! + 10000) * 1000 - System.currentTimeMillis(),
+            media.anime.nextAiringEpisodeTime!! * 1000 - System.currentTimeMillis(),
             1000
         ) {
             override fun onTick(millisUntilFinished: Long) {
