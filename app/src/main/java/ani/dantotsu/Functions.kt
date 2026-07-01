@@ -40,7 +40,6 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
-import android.telephony.TelephonyManager
 import android.text.InputFilter
 import android.text.Spanned
 import android.util.AttributeSet
@@ -71,7 +70,6 @@ import androidx.annotation.AttrRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.getSystemService
 import androidx.core.content.FileProvider
 import androidx.core.graphics.ColorUtils
@@ -151,7 +149,6 @@ import java.io.OutputStream
 import java.lang.reflect.Field
 import java.util.Calendar
 import java.util.Locale
-import java.util.TimeZone
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.collections.set
@@ -399,7 +396,7 @@ fun Activity.restartApp() {
         ComponentName(this@restartApp.packageName, this@restartApp::class.qualifiedName!!)
     try {
         startActivity(Intent().setComponent(component))
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         startActivity(mainIntent)
     }
     finishAndRemoveTask()
@@ -880,7 +877,7 @@ fun openLinkInBrowser(link: String?) {
                 selector = emptyBrowserIntent
             }
             currContext()!!.startActivity(sendIntent)
-        } catch (e: ActivityNotFoundException) {
+        } catch (_: ActivityNotFoundException) {
             snackString("No browser found")
         } catch (e: Exception) {
             Logger.log(e)
@@ -894,7 +891,7 @@ fun openLinkInCustomTab(link: String?) {
             val builder = androidx.browser.customtabs.CustomTabsIntent.Builder()
             val customTabsIntent = builder.build()
             customTabsIntent.launchUrl(currContext()!!, it.toUri())
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             openLinkInBrowser(it)
         }
     }
@@ -909,7 +906,7 @@ fun openLinkInYouTube(link: String?) {
                 setPackage("com.google.android.youtube")
             }
             currContext()!!.startActivity(videoIntent)
-        } catch (e: ActivityNotFoundException) {
+        } catch (_: ActivityNotFoundException) {
             openLinkInBrowser(link)
         } catch (e: Exception) {
             Logger.log(e)
@@ -1337,7 +1334,7 @@ fun getCurrentBrightnessValue(context: Context): Float {
                 field.isAccessible = true
                 return try {
                     field.get(powerManager)?.toString()?.toInt() ?: 255
-                } catch (e: IllegalAccessException) {
+                } catch (_: IllegalAccessException) {
                     255
                 }
             }
@@ -1363,23 +1360,24 @@ fun brightnessConverter(it: Float, fromLog: Boolean) =
         else it, 0.001f, 1f
     )
 
+// NOTE:Unused legacy function
 
-fun checkCountry(context: Context): Boolean {
-    val telMgr = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-    return when (telMgr.simState) {
-        TelephonyManager.SIM_STATE_ABSENT -> {
-            val tz = TimeZone.getDefault().id
-            tz.equals("Asia/Kolkata", ignoreCase = true)
-        }
-
-        TelephonyManager.SIM_STATE_READY -> {
-            val countryCodeValue = telMgr.networkCountryIso
-            countryCodeValue.equals("in", ignoreCase = true)
-        }
-
-        else -> false
-    }
-}
+//fun checkCountry(context: Context): Boolean {
+//    val telMgr = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+//    return when (telMgr.simState) {
+//        TelephonyManager.SIM_STATE_ABSENT -> {
+//            val tz = TimeZone.getDefault().id
+//            tz.equals("Asia/Kolkata", ignoreCase = true)
+//        }
+//
+//        TelephonyManager.SIM_STATE_READY -> {
+//            val countryCodeValue = telMgr.networkCountryIso
+//            countryCodeValue.equals("in", ignoreCase = true)
+//        }
+//
+//        else -> false
+//    }
+//}
 
 const val INCOGNITO_CHANNEL_ID = 26
 
@@ -1496,12 +1494,13 @@ fun openOrCopyAnilistLink(link: String) {
         val id =
             link.substringAfter("https://anilist.co/$mangaAnime/").substringBefore("/")
                 .toIntOrNull()
-        if (id != null && currContext() != null) {
-            ContextCompat.startActivity(
-                currContext()!!,
-                Intent(currContext()!!, MediaDetailsActivity::class.java)
-                    .putExtra("mediaId", id),
-                null
+        val context = currContext()
+
+        if (id != null && context != null) {
+            context.startActivity(
+                Intent(context, MediaDetailsActivity::class.java).apply {
+                    putExtra("mediaId", id)
+                }
             )
         } else {
             copyToClipboard(link, true)
@@ -1516,11 +1515,7 @@ fun openOrCopyAnilistLink(link: String) {
             } else {
                 intent.putExtra("username", username)
             }
-            ContextCompat.startActivity(
-                currContext()!!,
-                intent,
-                null
-            )
+            currContext()?.startActivity(intent)
         } else {
             copyToClipboard(link, true)
         }

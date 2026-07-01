@@ -65,6 +65,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import nl.joery.animatedbottombar.AnimatedBottomBar
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.milliseconds
 
 
 class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener {
@@ -123,10 +124,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         // Ui init
 
 
-
-        binding.mediaBottomBarContainer?.let {
-            it.setPadding(0, 0, 0, navBarHeight)
-        }
+        binding.mediaBottomBarContainer?.setPadding(0, 0, 0, navBarHeight)
 
         AndroidBug5497Workaround.assistActivity(this) { keyboardVisible ->
             // Optionally hide nav bar when keyboard is visible
@@ -481,6 +479,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        if (!::navBar.isInitialized) return
         val rightMargin = if (resources.configuration.orientation ==
             Configuration.ORIENTATION_LANDSCAPE
         ) navBarHeight else 0
@@ -493,6 +492,9 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     }
 
     override fun onResume() {
+        super.onResume()
+        if (!::binding.isInitialized) return
+
         val extContainer = findViewById<android.widget.FrameLayout>(R.id.fragmentExtensionsContainer)
         if (extContainer != null) {
             val hasExtFragment = supportFragmentManager.findFragmentById(R.id.fragmentExtensionsContainer) != null
@@ -508,8 +510,8 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         binding.mediaViewPager.visibility = View.VISIBLE
         binding.mediaCover.visibility = View.VISIBLE
         binding.mediaClose.visibility = View.VISIBLE
-        navBar.isVisible = true
-        super.onResume()
+        if (::navBar.isInitialized)
+            navBar.isVisible = true
         binding.root.requestLayout()
     }
 
@@ -563,6 +565,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     private var screenWidth: Float = 0f
 
     override fun onOffsetChanged(appBar: AppBarLayout, i: Int) {
+        if (!::binding.isInitialized) return
         if (mMaxScrollSize == 0) mMaxScrollSize = appBar.totalScrollRange
         val percentage = abs(i) * 100 / mMaxScrollSize
 
@@ -639,7 +642,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         suspend fun clicked() {
             ObjectAnimator.ofFloat(image, "scaleX", 1f, 0f).setDuration(69).start()
             ObjectAnimator.ofFloat(image, "scaleY", 1f, 0f).setDuration(100).start()
-            delay(100)
+            delay(100.milliseconds)
 
             if (clicked) {
                 ObjectAnimator.ofArgb(
@@ -652,10 +655,10 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             } else image.setImageDrawable(AppCompatResources.getDrawable(context, d2))
             ObjectAnimator.ofFloat(image, "scaleX", 0f, 1.5f).setDuration(120).start()
             ObjectAnimator.ofFloat(image, "scaleY", 0f, 1.5f).setDuration(100).start()
-            delay(120)
+            delay(120.milliseconds)
             ObjectAnimator.ofFloat(image, "scaleX", 1.5f, 1f).setDuration(100).start()
             ObjectAnimator.ofFloat(image, "scaleY", 1.5f, 1f).setDuration(100).start()
-            delay(200)
+            delay(200.milliseconds)
             if (clicked) {
                 ObjectAnimator.ofArgb(
                     image,

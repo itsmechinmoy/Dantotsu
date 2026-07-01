@@ -11,8 +11,8 @@ object AnilistLinkParser {
         ANIME,
         MANGA
     }
-    private val ANIME_URL_PATTERN = Regex("""https://anilist\.co/anime/(\d+)/?[^\s]*""")
-    private val MANGA_URL_PATTERN = Regex("""https://anilist\.co/manga/(\d+)/?[^\s]*""")
+    private val ANIME_URL_PATTERN = Regex("""https://anilist\.co/anime/(\d+)/?\S*""")
+    private val MANGA_URL_PATTERN = Regex("""https://anilist\.co/manga/(\d+)/?\S*""")
     fun extractAnilistLinks(text: String): List<AnilistLink> {
         val links = mutableListOf<AnilistLink>()
 
@@ -78,6 +78,46 @@ object AnilistLinkParser {
         result = result.replace(Regex("""(<br>\s*){3,}"""), "<br><br>")
         
         // Trim leading/trailing whitespace
+        result = result.trim()
+
+        return result
+    }
+
+    /**
+     * Like [removeAnilistUrlsFromHtml] but substitutes each AniList URL with the
+     * corresponding media title from [titleMap] (mediaId → title).
+     * URLs whose ID is not present in [titleMap] are removed entirely.
+     */
+    fun replaceAnilistUrlsInHtml(html: String, titleMap: Map<Int, String>): String {
+        var result = html
+
+        // Pattern 1: <a href="AniListUrl">AniListUrl</a> — bare URL auto-linked → replace with title
+        val linkTagSamePattern = Regex("""<a\s+href=["'](https://anilist\.co/(?:anime|manga)/(\d+)[^"']*)["'][^>]*>\s*\1\s*</a>""")
+        result = linkTagSamePattern.replace(result) { matchResult ->
+            val id = matchResult.groupValues[2].toIntOrNull()
+            titleMap[id]?.let { "<u><b>$it</b></u>" } ?: ""
+        }
+
+        // Pattern 2: <a href="AniListUrl">custom text</a> — keep user's link text, remove anchor
+        val linkTagWithTextPattern = Regex("""<a\s+href=["']https://anilist\.co/(?:anime|manga)/\d+[^"']*["'][^>]*>(.*?)</a>""")
+        result = linkTagWithTextPattern.replace(result) { matchResult ->
+            matchResult.groupValues[1]
+        }
+
+        // Pattern 3: bare AniList URLs not wrapped in an anchor
+        result = ANIME_URL_PATTERN.replace(result) { matchResult ->
+            val id = matchResult.groupValues[1].toIntOrNull()
+            titleMap[id]?.let { "<u><b>$it</b></u>" } ?: ""
+        }
+        result = MANGA_URL_PATTERN.replace(result) { matchResult ->
+            val id = matchResult.groupValues[1].toIntOrNull()
+            titleMap[id]?.let { "<u><b>$it</b></u>" } ?: ""
+        }
+
+        // Clean up whitespace artifacts
+        result = result.replace(Regex("""\s{2,}"""), " ")
+        result = result.replace(Regex("""\s+([.,!?;:])"""), "$1")
+        result = result.replace(Regex("""(<br>\s*){3,}"""), "<br><br>")
         result = result.trim()
 
         return result

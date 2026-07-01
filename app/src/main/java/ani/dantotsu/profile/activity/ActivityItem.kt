@@ -5,12 +5,14 @@ import android.view.View
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import ani.dantotsu.R
 import ani.dantotsu.blurImage
 import ani.dantotsu.buildMarkwon
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.api.Activity
 import ani.dantotsu.databinding.ItemActivityBinding
+import ani.dantotsu.home.status.AnilistLinkPreviewView
 import ani.dantotsu.loadImage
 import ani.dantotsu.profile.User
 import ani.dantotsu.profile.UsersDialogFragment
@@ -18,13 +20,16 @@ import ani.dantotsu.setAnimation
 import ani.dantotsu.snackString
 import ani.dantotsu.util.ActivityMarkdownCreator
 import ani.dantotsu.util.AniMarkdown.Companion.getBasicAniHTML
+import ani.dantotsu.util.AnilistLinkParser
 import com.xwray.groupie.GroupieAdapter
 import com.xwray.groupie.viewbinding.BindableItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.view.isNotEmpty
 
 class ActivityItem(
     private val activity: Activity,
@@ -32,9 +37,15 @@ class ActivityItem(
     val clickCallback: (Int, type: String) -> Unit,
 ) : BindableItem<ItemActivityBinding>() {
     private lateinit var binding: ItemActivityBinding
+    private var previewJob: Job? = null
 
     override fun bind(viewBinding: ItemActivityBinding, position: Int) {
         binding = viewBinding
+        // Cancel any in-flight preview fetch from a previous bind (recycled view)
+        previewJob?.cancel()
+        previewJob = null
+        binding.activityLinkPreviewContainer.removeAllViews()
+        binding.activityLinkPreviewContainer.visibility = View.GONE
         val context = binding.root.context
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         setAnimation(binding.root.context, binding.root)
@@ -139,11 +150,13 @@ class ActivityItem(
                 binding.activityContent.visibility = View.VISIBLE
                 binding.activityPrivate.visibility = View.GONE
                 if (!(context as android.app.Activity).isDestroyed) {
+                    val rawText = activity.text ?: ""
+                    val anilistLinks = AnilistLinkParser.extractAnilistLinks(rawText)
+                    val html = getBasicAniHTML(rawText)
+                    val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(html)
                     val markwon = buildMarkwon(context, false)
-                    markwon.setMarkdown(
-                        binding.activityContent,
-                        getBasicAniHTML(activity.text ?: "")
-                    )
+                    markwon.setMarkdown(binding.activityContent, cleanedHtml)
+                    addLinkPreviews(anilistLinks, rawText)
                 }
                 binding.activityAvatarContainer.setOnClickListener {
                     clickCallback(activity.userId ?: -1, "USER")
@@ -153,13 +166,12 @@ class ActivityItem(
                 }
                 binding.activityEdit.isVisible = activity.userId == Anilist.userid
                 binding.activityEdit.setOnClickListener {
-                    ContextCompat.startActivity(
-                        context,
-                        Intent(context, ActivityMarkdownCreator::class.java)
-                            .putExtra("type", "activity")
-                            .putExtra("other", activity.text)
-                            .putExtra("edit", activity.id),
-                        null
+                    context.startActivity(
+                        Intent(context, ActivityMarkdownCreator::class.java).apply {
+                            putExtra("type","activity")
+                            putExtra("other",activity.text)
+                            putExtra("edit",activity.id)
+                        }
                     )
                 }
             }
@@ -170,11 +182,13 @@ class ActivityItem(
                 binding.activityPrivate.visibility =
                     if (activity.isPrivate == true) View.VISIBLE else View.GONE
                 if (!(context as android.app.Activity).isDestroyed) {
+                    val rawMessage = activity.message ?: ""
+                    val anilistLinks = AnilistLinkParser.extractAnilistLinks(rawMessage)
+                    val html = getBasicAniHTML(rawMessage)
+                    val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(html)
                     val markwon = buildMarkwon(context, false)
-                    markwon.setMarkdown(
-                        binding.activityContent,
-                        getBasicAniHTML(activity.message ?: "")
-                    )
+                    markwon.setMarkdown(binding.activityContent, cleanedHtml)
+                    addLinkPreviews(anilistLinks, rawMessage)
                 }
                 binding.activityAvatarContainer.setOnClickListener {
                     clickCallback(activity.messengerId ?: -1, "USER")
@@ -185,16 +199,57 @@ class ActivityItem(
                 binding.activityEdit.isVisible = false
                 binding.activityEdit.isVisible = activity.messenger?.id == Anilist.userid
                 binding.activityEdit.setOnClickListener {
-                    ContextCompat.startActivity(
-                        context,
-                        Intent(context, ActivityMarkdownCreator::class.java)
-                            .putExtra("type", "message")
-                            .putExtra("other", activity.message)
-                            .putExtra("edit", activity.id)
-                            .putExtra("userId", activity.recipientId),
-                        null
+                    context.startActivity(
+                        Intent(context, ActivityMarkdownCreator::class.java).apply{
+                            putExtra("type","message")
+                            putExtra("other",activity.message)
+                            putExtra("edit",activity.id)
+                            putExtra("userId",activity.recipientId)
+                        }
                     )
                 }
+            }
+        }
+    }
+
+    private fun addLinkPreviews(links: List<AnilistLinkParser.AnilistLink>, originalText: String) {
+        binding.activityLinkPreviewContainer.removeAllViews()
+        if (links.isEmpty()) {
+            binding.activityLinkPreviewContainer.visibility = View.GONE
+            return
+        }
+        binding.activityLinkPreviewContainer.visibility = View.VISIBLE
+        val mediaIds = links.map { it.id }.distinct()
+        val fragmentActivity = binding.root.context as? FragmentActivity ?: return
+        previewJob = fragmentActivity.lifecycleScope.launch {
+            val mediaList = withContext(Dispatchers.IO) {
+                Anilist.query.getMediaList(mediaIds)
+            }
+            // Check that the view hasn't been recycled since we started
+            if (!fragmentActivity.isDestroyed) {
+                val mediaMap = mediaList?.associateBy { it.id } ?: emptyMap()
+                // Re-render the text view: replace AniList URLs with media titles
+                if (mediaMap.isNotEmpty()) {
+                    val titleMap = mediaMap.mapValues { (_, media) -> media.userPreferredName }
+                    val htmlWithTitles = AnilistLinkParser.replaceAnilistUrlsInHtml(
+                        getBasicAniHTML(originalText), titleMap
+                    )
+                    val markwon = buildMarkwon(fragmentActivity, false)
+                    markwon.setMarkdown(binding.activityContent, htmlWithTitles)
+                }
+                // Add preview cards
+                binding.activityLinkPreviewContainer.removeAllViews()
+                links.forEach { link ->
+                    val media = mediaMap[link.id]
+                    if (media != null) {
+                        val previewView = AnilistLinkPreviewView(fragmentActivity)
+                        previewView.setMediaData(media)
+                        binding.activityLinkPreviewContainer.addView(previewView)
+                    }
+                }
+                binding.activityLinkPreviewContainer.visibility =
+                    if (binding.activityLinkPreviewContainer.isNotEmpty()) View.VISIBLE
+                    else View.GONE
             }
         }
     }

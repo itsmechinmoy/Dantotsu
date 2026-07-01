@@ -90,10 +90,10 @@ class Stories @JvmOverloads constructor(
 
     private fun addLoadingViews(storiesList: List<Activity>) {
         var idCounter = 1
-        for (story in storiesList) {
+        storiesList.forEach { _ ->
             binding.progressBarContainer.removeView(findViewWithTag<ProgressBar>("story${idCounter}"))
             val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal)
-            progressBar.visibility = View.VISIBLE
+            progressBar.visibility = VISIBLE
             progressBar.id = idCounter
             progressBar.tag = "story${idCounter++}"
             progressBar.progressBackgroundTintList = ColorStateList.valueOf(primaryColor)
@@ -108,7 +108,7 @@ class Stories @JvmOverloads constructor(
         constraintSet.clone(binding.progressBarContainer)
 
         var counter = storiesList.size
-        for (story in storiesList) {
+        storiesList.forEach { _ ->
             val progressBar = findViewWithTag<ProgressBar>("story${counter}")
             if (progressBar != null) {
                 if (storiesList.size > 1) {
@@ -212,7 +212,7 @@ class Stories @JvmOverloads constructor(
             completeProgressBar(storyIndex - 1)
         }
         val progressBar = findViewWithTag<ProgressBar>("story${storyIndex}")
-        binding.androidStoriesLoadingView.visibility = View.VISIBLE
+        binding.androidStoriesLoadingView.visibility = VISIBLE
         timer.setOnTimerCompletedListener {
             Logger.log("onAnimationEnd: $storyIndex")
             if (storyIndex - 1 <= activityList.size) {
@@ -222,12 +222,12 @@ class Stories @JvmOverloads constructor(
                     showStory()
                 } else {
                     // on stories end
-                    binding.androidStoriesLoadingView.visibility = View.GONE
+                    binding.androidStoriesLoadingView.visibility = GONE
                     onStoriesCompleted()
                 }
             } else {
                 // on stories end
-                binding.androidStoriesLoadingView.visibility = View.GONE
+                binding.androidStoriesLoadingView.visibility = GONE
                 onStoriesCompleted()
             }
         }
@@ -328,10 +328,10 @@ class Stories @JvmOverloads constructor(
         binding.statusUserName.text = story.user?.name
         binding.statusUserTime.text = ActivityItemBuilder.getDateTime(story.createdAt)
         binding.statusUserContainer.setOnClickListener {
-            ContextCompat.startActivity(
-                context,
-                Intent(context, ProfileActivity::class.java).putExtra("userId", story.userId),
-                null
+            context.startActivity(
+                Intent(context, ProfileActivity::class.java).apply {
+                    putExtra("userId",story.userId)
+                }
             )
         }
 
@@ -348,7 +348,7 @@ class Stories @JvmOverloads constructor(
             binding.textActivityContainer.isVisible = !isList
             binding.infoText.isVisible = isList
             binding.coverImage.isVisible = isList
-            binding.infoText.visibility = if (isList) View.VISIBLE else View.INVISIBLE
+            binding.infoText.visibility = if (isList) VISIBLE else INVISIBLE
             binding.infoText.text = ""
             binding.contentImageViewKen.isVisible = isList
             binding.contentImageView.isVisible = isList
@@ -385,14 +385,13 @@ class Stories @JvmOverloads constructor(
                 )
                 binding.coverImage.loadImage(story.media?.coverImage?.extraLarge)
                 binding.coverImage.setOnClickListener {
-                    ContextCompat.startActivity(
-                        context,
+                    context.startActivity(
                         Intent(context, MediaDetailsActivity::class.java).putExtra(
                             "mediaId",
                             story.media?.id
                         ),
                         ActivityOptionsCompat.makeSceneTransitionAnimation(
-                            (it.context as FragmentActivity),
+                            it.context as FragmentActivity,
                             binding.coverImage,
                             ViewCompat.getTransitionName(binding.coverImage)!!
                         ).toBundle()
@@ -409,7 +408,7 @@ class Stories @JvmOverloads constructor(
                     val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(htmlText)
                     val markwon = buildMarkwon(context, false)
                     markwon.setMarkdown(binding.textActivity, cleanedHtml)
-                    addLinkPreviews(anilistLinks)
+                    addLinkPreviews(anilistLinks, originalText)
                 }
             }
 
@@ -422,7 +421,7 @@ class Stories @JvmOverloads constructor(
                     val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(htmlMessage)
                     val markwon = buildMarkwon(context, false)
                     markwon.setMarkdown(binding.textActivity, cleanedHtml)
-                    addLinkPreviews(anilistLinks)
+                    addLinkPreviews(anilistLinks, originalMessage)
                 }
             }
         }
@@ -491,7 +490,7 @@ class Stories @JvmOverloads constructor(
         }
     }
 
-    private fun addLinkPreviews(links: List<AnilistLinkParser.AnilistLink>) {
+    private fun addLinkPreviews(links: List<AnilistLinkParser.AnilistLink>, originalText: String) {
         binding.linkPreviewContainer.removeAllViews()
         if (links.isEmpty()) {
             binding.linkPreviewContainer.visibility = GONE
@@ -507,15 +506,24 @@ class Stories @JvmOverloads constructor(
                 }
                 val mediaMap = mediaList?.associateBy { it.id } ?: emptyMap()
                 withContext(Dispatchers.Main) {
+                    // Re-render the text view: replace AniList URLs with media titles
+                    if (mediaMap.isNotEmpty() && !(context as android.app.Activity).isDestroyed) {
+                        val titleMap = mediaMap.mapValues { (_, media) -> media.userPreferredName }
+                        val htmlWithTitles = AnilistLinkParser.replaceAnilistUrlsInHtml(
+                            AniMarkdown.getBasicAniHTML(originalText), titleMap
+                        )
+                        val markwon = buildMarkwon(context, false)
+                        markwon.setMarkdown(binding.textActivity, htmlWithTitles)
+                    }
+                    // Add preview cards
                     links.forEach { link ->
                         val previewView = AnilistLinkPreviewView(context)
                         val media = mediaMap[link.id]
                         if (media != null) {
                             previewView.setMediaData(media)
                         } else {
-                            previewView.visibility = View.GONE
+                            previewView.visibility = GONE
                         }
-                        
                         binding.linkPreviewContainer.addView(previewView)
                     }
                 }

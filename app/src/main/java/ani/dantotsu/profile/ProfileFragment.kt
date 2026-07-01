@@ -57,7 +57,7 @@ class ProfileFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         activity = requireActivity() as ProfileActivity
 
-        binding.root.setBaseline(activity.binding.profileNavBarContainer!!)
+        binding.root.setBaseline(activity.binding.profileNavBarContainer)
 
         user = arguments?.getSerializableCompat<Query.UserProfile>("user") as Query.UserProfile
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
@@ -145,7 +145,7 @@ class ProfileFragment : Fragment() {
         super.onResume()
         if (this::binding.isInitialized) {
             binding.root.requestLayout()
-            binding.root.setBaseline(activity.binding.profileNavBarContainer!!)
+            binding.root.setBaseline(activity.binding.profileNavBarContainer)
         }
     }
 
