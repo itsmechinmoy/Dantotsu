@@ -212,9 +212,7 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
                             progressVolumes = progressVolumes,
                             score = score,
                             status = status,
-                            private = media.isListPrivate,
-                            startedAt = startD,
-                            completedAt = endD
+                            private = media.isListPrivate
                         )
                     }
                     MAL.query.editList(

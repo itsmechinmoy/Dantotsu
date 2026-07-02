@@ -189,32 +189,44 @@ class AnilistMutations {
         completedAt: FuzzyDate? = null,
         customList: List<String>? = null
     ) {
+        val headerParams = mutableListOf(
+            "${"$"}mediaID: Int",
+            "${"$"}progress: Int",
+            "${"$"}progressVolumes: Int",
+            "${"$"}private: Boolean",
+            "${"$"}repeat: Int",
+            "${"$"}notes: String",
+            "${"$"}customLists: [String]",
+            "${"$"}scoreRaw: Int",
+            "${"$"}status: MediaListStatus"
+        )
+        val entryArgs = mutableListOf(
+            "mediaId: ${"$"}mediaID",
+            "progress: ${"$"}progress",
+            "progressVolumes: ${"$"}progressVolumes",
+            "repeat: ${"$"}repeat",
+            "notes: ${"$"}notes",
+            "private: ${"$"}private",
+            "scoreRaw: ${"$"}scoreRaw",
+            "status: ${"$"}status",
+            "customLists: ${"$"}customLists"
+        )
+
+        if (startedAt != null) {
+            headerParams.add("${"$"}start: FuzzyDateInput = ${startedAt.toVariableString()}")
+            entryArgs.add("startedAt: ${"$"}start")
+        }
+        if (completedAt != null) {
+            headerParams.add("${"$"}completed: FuzzyDateInput = ${completedAt.toVariableString()}")
+            entryArgs.add("completedAt: ${"$"}completed")
+        }
+
         val query = """
             mutation (
-                ${"$"}mediaID: Int,
-                ${"$"}progress: Int,
-                ${"$"}progressVolumes: Int,
-                ${"$"}private: Boolean,
-                ${"$"}repeat: Int,
-                ${"$"}notes: String,
-                ${"$"}customLists: [String],
-                ${"$"}scoreRaw: Int,
-                ${"$"}status: MediaListStatus,
-                ${"$"}start: FuzzyDateInput${if (startedAt != null) "=" + startedAt.toVariableString() else ""},
-                ${"$"}completed: FuzzyDateInput${if (completedAt != null) "=" + completedAt.toVariableString() else ""}
+                ${headerParams.joinToString(",\n                ")}
             ) {
                 SaveMediaListEntry(
-                    mediaId: ${"$"}mediaID,
-                    progress: ${"$"}progress,
-                    progressVolumes: ${"$"}progressVolumes,
-                    repeat: ${"$"}repeat,
-                    notes: ${"$"}notes,
-                    private: ${"$"}private,
-                    scoreRaw: ${"$"}scoreRaw,
-                    status: ${"$"}status,
-                    startedAt: ${"$"}start,
-                    completedAt: ${"$"}completed,
-                    customLists: ${"$"}customLists
+                    ${entryArgs.joinToString(",\n                    ")}
                 ) {
                     score(format: POINT_10_DECIMAL)
                     startedAt {
