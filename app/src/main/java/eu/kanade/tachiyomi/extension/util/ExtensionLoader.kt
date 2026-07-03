@@ -24,13 +24,16 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.util.lang.Hash
+import android.content.pm.ApplicationInfo
 import eu.kanade.tachiyomi.util.system.getApplicationIcon
+import eu.kanade.tachiyomi.util.system.ChildFirstPathClassLoader
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.util.Locale
+import java.io.File
 
 /**
  * Class that handles the loading of the extensions. Supports two kinds of extensions:
@@ -65,13 +68,165 @@ internal object ExtensionLoader {
     const val ANIME_LIB_VERSION_MAX = 16
 
     const val MANGA_LIB_VERSION_MIN = 1.4
-    const val MANGA_LIB_VERSION_MAX = 1.5
+    const val MANGA_LIB_VERSION_MAX = 1.6
 
     val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or
             PackageManager.GET_META_DATA or
             @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES or
             (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
                 PackageManager.GET_SIGNING_CERTIFICATES else 0)
+
+    private const val PRIVATE_EXTENSION_EXTENSION = "ext"
+
+    private fun getPrivateExtensionDir(context: Context) = File(context.filesDir, "exts")
+
+    private fun File.copyAndSetReadOnlyTo(target: File): File {
+        if (!this.exists()) {
+            throw NoSuchFileException(file = this, reason = "The source file doesn't exist.")
+        }
+        if (target.exists()) {
+            if (!target.delete()) {
+                throw FileAlreadyExistsException(
+                    file = this,
+                    other = target,
+                    reason = "Tried to overwrite the destination, but failed to delete it.",
+                )
+            }
+        }
+        target.parentFile?.mkdirs()
+        this.inputStream().use { input ->
+            target.outputStream().use { output ->
+                target.setReadOnly()
+                input.copyTo(output)
+            }
+        }
+        return target
+    }
+
+    fun installPrivateExtensionFile(context: Context, file: File, type: MediaType): Boolean {
+        val extension = context.packageManager.getPackageArchiveInfo(file.absolutePath, PACKAGE_FLAGS)
+            ?.takeIf { isPackageAnExtension(type, it) } ?: return false
+        val currentExtension = getExtensionPackageInfoFromPkgName(context, extension.packageName, type)
+
+        if (currentExtension != null) {
+            if (PackageInfoCompat.getLongVersionCode(extension) <
+                PackageInfoCompat.getLongVersionCode(currentExtension)
+            ) {
+                Logger.log("Installed extension version is higher. Downgrading is not allowed.")
+                return false
+            }
+
+            val extensionSignatures = getSignatures(extension)
+            if (extensionSignatures.isNullOrEmpty()) {
+                Logger.log("Extension to be installed is not signed.")
+                return false
+            }
+
+            if (!extensionSignatures.containsAll(getSignatures(currentExtension)!!)) {
+                Logger.log("Installed extension signature is not matched.")
+                return false
+            }
+        }
+
+        val target = File(getPrivateExtensionDir(context), "${extension.packageName}.$PRIVATE_EXTENSION_EXTENSION")
+        return try {
+            target.delete()
+            file.copyAndSetReadOnlyTo(target)
+            if (currentExtension != null) {
+                ExtensionInstallReceiver.notifyReplaced(context, extension.packageName)
+            } else {
+                ExtensionInstallReceiver.notifyAdded(context, extension.packageName)
+            }
+            true
+        } catch (e: Exception) {
+            Logger.log("Failed to install private extension: $e")
+            false
+        }
+    }
+
+    fun uninstallPrivateExtension(context: Context, pkgName: String) {
+        val file = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
+        if (file.exists()) {
+            file.delete()
+        }
+    }
+
+    private fun selectExtensionPackage(shared: ExtensionInfo?, private: ExtensionInfo?): ExtensionInfo? {
+        when {
+            private == null && shared != null -> return shared
+            shared == null && private != null -> return private
+            shared == null && private == null -> return null
+        }
+
+        return if (PackageInfoCompat.getLongVersionCode(shared!!.packageInfo) >=
+            PackageInfoCompat.getLongVersionCode(private!!.packageInfo)
+        ) {
+            shared
+        } else {
+            private
+        }
+    }
+
+    private fun getSignatures(pkgInfo: PackageInfo): List<String>? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = pkgInfo.signingInfo!!
+            if (signingInfo.hasMultipleSigners()) {
+                signingInfo.apkContentsSigners
+            } else {
+                signingInfo.signingCertificateHistory
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            pkgInfo.signatures
+        }
+            ?.map { Hash.sha256(it.toByteArray()) }
+            ?.toList()
+    }
+
+    private fun ApplicationInfo.fixBasePaths(apkPath: String) {
+        if (sourceDir == null) {
+            sourceDir = apkPath
+        }
+        if (publicSourceDir == null) {
+            publicSourceDir = apkPath
+        }
+    }
+
+    private fun getExtensionInfoFromPkgName(context: Context, pkgName: String, type: MediaType): ExtensionInfo? {
+        val privateExtensionFile = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
+        val privatePkg = if (privateExtensionFile.isFile) {
+            context.packageManager.getPackageArchiveInfo(privateExtensionFile.absolutePath, PACKAGE_FLAGS)
+                ?.takeIf { isPackageAnExtension(type, it) }
+                ?.let {
+                    it.applicationInfo!!.fixBasePaths(privateExtensionFile.absolutePath)
+                    ExtensionInfo(
+                        packageInfo = it,
+                        isShared = false,
+                    )
+                }
+        } else {
+            null
+        }
+
+        val sharedPkg = try {
+            context.packageManager.getPackageInfo(pkgName, PACKAGE_FLAGS)
+                .takeIf { isPackageAnExtension(type, it) }
+                ?.let {
+                    ExtensionInfo(
+                        packageInfo = it,
+                        isShared = true,
+                    )
+                }
+        } catch (error: PackageManager.NameNotFoundException) {
+            null
+        }
+
+        return selectExtensionPackage(sharedPkg, privatePkg)
+    }
+
+    fun getExtensionPackageInfoFromPkgName(context: Context, pkgName: String, type: MediaType): PackageInfo? {
+        return getExtensionInfoFromPkgName(context, pkgName, type)?.packageInfo
+    }
 
     /**
      * Return a list of all the installed extensions initialized concurrently.
@@ -81,21 +236,48 @@ internal object ExtensionLoader {
     fun loadAnimeExtensions(context: Context): List<AnimeLoadResult> {
         val pkgManager = context.packageManager
 
-
         val installedPkgs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             pkgManager.getInstalledPackages(PackageManager.PackageInfoFlags.of(PACKAGE_FLAGS.toLong()))
         } else {
             pkgManager.getInstalledPackages(PACKAGE_FLAGS)
         }
 
-        val extPkgs = installedPkgs.filter { isPackageAnExtension(MediaType.ANIME, it) }
+        val sharedExtPkgs = installedPkgs
+            .asSequence()
+            .filter { isPackageAnExtension(MediaType.ANIME, it) }
+            .map { ExtensionInfo(packageInfo = it, isShared = true) }
+
+        val privateExtPkgs = getPrivateExtensionDir(context)
+            .listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile && it.extension == PRIVATE_EXTENSION_EXTENSION }
+            ?.mapNotNull {
+                if (it.canWrite()) {
+                    it.setReadOnly()
+                }
+                val path = it.absolutePath
+                pkgManager.getPackageArchiveInfo(path, PACKAGE_FLAGS)
+                    ?.apply { applicationInfo!!.fixBasePaths(path) }
+            }
+            ?.filter { isPackageAnExtension(MediaType.ANIME, it) }
+            ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
+            ?: emptySequence()
+
+        val extPkgs = (sharedExtPkgs + privateExtPkgs)
+            .distinctBy { it.packageInfo.packageName }
+            .mapNotNull { sharedPkg ->
+                val privatePkg = privateExtPkgs
+                    .singleOrNull { it.packageInfo.packageName == sharedPkg.packageInfo.packageName }
+                selectExtensionPackage(sharedPkg, privatePkg)
+            }
+            .toList()
 
         if (extPkgs.isEmpty()) return emptyList()
 
         // Load each extension concurrently and wait for completion
         return runBlocking {
             val deferred = extPkgs.map {
-                async { loadAnimeExtension(context, it.packageName, it) }
+                async { loadAnimeExtension(context, it) }
             }
             deferred.map { it.await() }
         }
@@ -110,14 +292,42 @@ internal object ExtensionLoader {
             pkgManager.getInstalledPackages(PACKAGE_FLAGS)
         }
 
-        val extPkgs = installedPkgs.filter { isPackageAnExtension(MediaType.MANGA, it) }
+        val sharedExtPkgs = installedPkgs
+            .asSequence()
+            .filter { isPackageAnExtension(MediaType.MANGA, it) }
+            .map { ExtensionInfo(packageInfo = it, isShared = true) }
+
+        val privateExtPkgs = getPrivateExtensionDir(context)
+            .listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile && it.extension == PRIVATE_EXTENSION_EXTENSION }
+            ?.mapNotNull {
+                if (it.canWrite()) {
+                    it.setReadOnly()
+                }
+                val path = it.absolutePath
+                pkgManager.getPackageArchiveInfo(path, PACKAGE_FLAGS)
+                    ?.apply { applicationInfo!!.fixBasePaths(path) }
+            }
+            ?.filter { isPackageAnExtension(MediaType.MANGA, it) }
+            ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
+            ?: emptySequence()
+
+        val extPkgs = (sharedExtPkgs + privateExtPkgs)
+            .distinctBy { it.packageInfo.packageName }
+            .mapNotNull { sharedPkg ->
+                val privatePkg = privateExtPkgs
+                    .singleOrNull { it.packageInfo.packageName == sharedPkg.packageInfo.packageName }
+                selectExtensionPackage(sharedPkg, privatePkg)
+            }
+            .toList()
 
         if (extPkgs.isEmpty()) return emptyList()
 
         // Load each extension concurrently and wait for completion
         return runBlocking {
             val deferred = extPkgs.map {
-                async { loadMangaExtension(context, it.packageName, it) }
+                async { loadMangaExtension(context, it) }
             }
             deferred.map { it.await() }
         }
@@ -132,14 +342,42 @@ internal object ExtensionLoader {
             pkgManager.getInstalledPackages(PACKAGE_FLAGS)
         }
 
-        val extPkgs = installedPkgs.filter { isPackageAnExtension(MediaType.NOVEL, it) }
+        val sharedExtPkgs = installedPkgs
+            .asSequence()
+            .filter { isPackageAnExtension(MediaType.NOVEL, it) }
+            .map { ExtensionInfo(packageInfo = it, isShared = true) }
+
+        val privateExtPkgs = getPrivateExtensionDir(context)
+            .listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile && it.extension == PRIVATE_EXTENSION_EXTENSION }
+            ?.mapNotNull {
+                if (it.canWrite()) {
+                    it.setReadOnly()
+                }
+                val path = it.absolutePath
+                pkgManager.getPackageArchiveInfo(path, PACKAGE_FLAGS)
+                    ?.apply { applicationInfo!!.fixBasePaths(path) }
+            }
+            ?.filter { isPackageAnExtension(MediaType.NOVEL, it) }
+            ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
+            ?: emptySequence()
+
+        val extPkgs = (sharedExtPkgs + privateExtPkgs)
+            .distinctBy { it.packageInfo.packageName }
+            .mapNotNull { sharedPkg ->
+                val privatePkg = privateExtPkgs
+                    .singleOrNull { it.packageInfo.packageName == sharedPkg.packageInfo.packageName }
+                selectExtensionPackage(sharedPkg, privatePkg)
+            }
+            .toList()
 
         if (extPkgs.isEmpty()) return emptyList()
 
         // Load each extension concurrently and wait for completion
         return runBlocking {
             val deferred = extPkgs.map {
-                async { loadNovelExtension(context, it.packageName, it) }
+                async { loadNovelExtension(context, it) }
             }
             deferred.map { it.await() }
         }
@@ -150,62 +388,34 @@ internal object ExtensionLoader {
      * contains the required feature flag before trying to load it.
      */
     fun loadAnimeExtensionFromPkgName(context: Context, pkgName: String): AnimeLoadResult {
-        val pkgInfo = try {
-            context.packageManager.getPackageInfo(pkgName, PACKAGE_FLAGS)
-        } catch (error: PackageManager.NameNotFoundException) {
-            // Unlikely, but the package may have been uninstalled at this point
-            Logger.log(error)
-            return AnimeLoadResult.Error
-        }
-        if (!isPackageAnExtension(MediaType.ANIME, pkgInfo)) {
-            Logger.log("Tried to load a package that wasn't a extension ($pkgName)")
-            return AnimeLoadResult.Error
-        }
-        return loadAnimeExtension(context, pkgName, pkgInfo)
+        val extensionInfo = getExtensionInfoFromPkgName(context, pkgName, MediaType.ANIME)
+            ?: return AnimeLoadResult.Error
+        return loadAnimeExtension(context, extensionInfo)
     }
 
     fun loadMangaExtensionFromPkgName(context: Context, pkgName: String): MangaLoadResult {
-        val pkgInfo = try {
-            context.packageManager.getPackageInfo(pkgName, PACKAGE_FLAGS)
-        } catch (error: PackageManager.NameNotFoundException) {
-            // Unlikely, but the package may have been uninstalled at this point
-            Logger.log(error)
-            return MangaLoadResult.Error
-        }
-        if (!isPackageAnExtension(MediaType.MANGA, pkgInfo)) {
-            Logger.log("Tried to load a package that wasn't a extension ($pkgName)")
-            return MangaLoadResult.Error
-        }
-        return loadMangaExtension(context, pkgName, pkgInfo)
+        val extensionInfo = getExtensionInfoFromPkgName(context, pkgName, MediaType.MANGA)
+            ?: return MangaLoadResult.Error
+        return loadMangaExtension(context, extensionInfo)
     }
 
     fun loadNovelExtensionFromPkgName(context: Context, pkgName: String): NovelLoadResult {
-        val pkgInfo = try {
-            context.packageManager.getPackageInfo(pkgName, PACKAGE_FLAGS)
-        } catch (error: PackageManager.NameNotFoundException) {
-            // Unlikely, but the package may have been uninstalled at this point
-            Logger.log(error)
-            return NovelLoadResult.Error(error)
-        }
-        if (!isPackageAnExtension(MediaType.NOVEL, pkgInfo)) {
-            Logger.log("Tried to load a package that wasn't a extension ($pkgName)")
-            return NovelLoadResult.Error(Exception("Tried to load a package that wasn't a extension ($pkgName)"))
-        }
-        return loadNovelExtension(context, pkgName, pkgInfo)
+        val extensionInfo = getExtensionInfoFromPkgName(context, pkgName, MediaType.NOVEL)
+            ?: return NovelLoadResult.Error(Exception("Extension info not found"))
+        return loadNovelExtension(context, extensionInfo)
     }
 
     /**
      * Loads an extension given its package name.
      *
      * @param context The application context.
-     * @param pkgName The package name of the extension to load.
-     * @param pkgInfo The package info of the extension.
      */
     private fun loadAnimeExtension(
         context: Context,
-        pkgName: String,
-        pkgInfo: PackageInfo
+        extensionInfo: ExtensionInfo
     ): AnimeLoadResult {
+        val pkgInfo = extensionInfo.packageInfo
+        val pkgName = pkgInfo.packageName
         val pkgManager = context.packageManager
 
         val appInfo = try {
@@ -214,6 +424,11 @@ internal object ExtensionLoader {
             // Unlikely, but the package may have been uninstalled at this point
             Logger.log(error)
             return AnimeLoadResult.Error
+        }
+
+        if (!extensionInfo.isShared) {
+            val privateFile = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
+            appInfo.fixBasePaths(privateFile.absolutePath)
         }
 
         val extName = pkgManager.getApplicationLabel(appInfo).toString().substringAfter("Aniyomi: ")
@@ -245,8 +460,8 @@ internal object ExtensionLoader {
         val hasChangelog =
             appInfo.metaData.getInt("$ANIME_PACKAGE$XX_METADATA_HAS_CHANGELOG", 0) == 1
 
-        val classLoader = try{
-            PathClassLoader(appInfo.sourceDir, null, context.classLoader)
+        val classLoader = try {
+            ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
         } catch (e: Throwable) {
             Logger.log("Extension load error: $extName")
             Injekt.get<CrashlyticsInterface>().logException(e)
@@ -306,9 +521,10 @@ internal object ExtensionLoader {
 
     private fun loadMangaExtension(
         context: Context,
-        pkgName: String,
-        pkgInfo: PackageInfo
+        extensionInfo: ExtensionInfo
     ): MangaLoadResult {
+        val pkgInfo = extensionInfo.packageInfo
+        val pkgName = pkgInfo.packageName
         val pkgManager = context.packageManager
 
         val appInfo = try {
@@ -317,6 +533,11 @@ internal object ExtensionLoader {
             // Unlikely, but the package may have been uninstalled at this point
             Logger.log(error)
             return MangaLoadResult.Error
+        }
+
+        if (!extensionInfo.isShared) {
+            val privateFile = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
+            appInfo.fixBasePaths(privateFile.absolutePath)
         }
 
         val extName =
@@ -349,8 +570,8 @@ internal object ExtensionLoader {
         val hasChangelog =
             appInfo.metaData.getInt("$MANGA_PACKAGE$XX_METADATA_HAS_CHANGELOG", 0) == 1
 
-        val classLoader = try{
-            PathClassLoader(appInfo.sourceDir, null, context.classLoader)
+        val classLoader = try {
+            ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
         } catch (e: Throwable) {
             Logger.log("Extension load error: $extName")
             Injekt.get<CrashlyticsInterface>().logException(e)
@@ -410,9 +631,10 @@ internal object ExtensionLoader {
 
     private fun loadNovelExtension(
         context: Context,
-        pkgName: String,
-        pkgInfo: PackageInfo
+        extensionInfo: ExtensionInfo
     ): NovelLoadResult {
+        val pkgInfo = extensionInfo.packageInfo
+        val pkgName = pkgInfo.packageName
         val pkgManager = context.packageManager
 
         val appInfo = try {
@@ -421,6 +643,11 @@ internal object ExtensionLoader {
             // Unlikely, but the package may have been uninstalled at this point
             Logger.log(error)
             return NovelLoadResult.Error(error)
+        }
+
+        if (!extensionInfo.isShared) {
+            val privateFile = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
+            appInfo.fixBasePaths(privateFile.absolutePath)
         }
 
         val extName =
@@ -433,7 +660,7 @@ internal object ExtensionLoader {
             return NovelLoadResult.Error(Exception("Missing versionName for extension $extName"))
         }
 
-        val classLoader = PathClassLoader(appInfo.sourceDir, null, context.classLoader)
+        val classLoader = ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
         val novelInterfaceInstance = try {
             val className = appInfo.loadLabel(context.packageManager).toString()
             val extensionClassName =
@@ -478,4 +705,9 @@ internal object ExtensionLoader {
             }
         }
     }
+
+    private data class ExtensionInfo(
+        val packageInfo: PackageInfo,
+        val isShared: Boolean,
+    )
 }
