@@ -23,6 +23,7 @@ import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.extension.InstallStep
 import eu.kanade.tachiyomi.extension.installer.Installer
 import eu.kanade.tachiyomi.util.storage.getUriCompat
+import eu.kanade.tachiyomi.util.system.isPackageInstalled
 import rx.Observable
 import rx.android.schedulers.AndroidSchedulers
 import uy.kohesive.injekt.Injekt
@@ -139,13 +140,47 @@ class ExtensionInstaller(private val context: Context) {
             }
     }
 
+    private fun getDownloadFile(downloadId: Long): File? {
+        val query = DownloadManager.Query().setFilterById(downloadId)
+        return try {
+            downloadManager.query(query).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val localUri = cursor.getString(
+                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI),
+                    ).removePrefix(FILE_SCHEME)
+                    File(localUri)
+                } else {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * Starts an intent to install the extension at the given uri.
      *
      * @param uri The uri of the extension to install.
      */
     fun installApk(type: Type, downloadId: Long, uri: Uri) {
-        when (val installer = extensionInstaller.get()) {
+        val installer = extensionInstaller.get()
+        if (installer == BasePreferences.ExtensionInstaller.PRIVATE && type is MediaType) {
+            try {
+                val file = getDownloadFile(downloadId)
+                if (file != null && ExtensionLoader.installPrivateExtensionFile(context, file, type)) {
+                    updateInstallStep(downloadId, InstallStep.Installed)
+                } else {
+                    updateInstallStep(downloadId, InstallStep.Error)
+                }
+            } catch (e: Exception) {
+                Logger.log("Failed to install private extension: $e")
+                updateInstallStep(downloadId, InstallStep.Error)
+            }
+            return
+        }
+
+        when (installer) {
             BasePreferences.ExtensionInstaller.LEGACY -> {
                 val intent = Intent(context, ExtensionInstallActivity::class.java)
                     .setDataAndType(uri, APK_MIME)
@@ -192,13 +227,18 @@ class ExtensionInstaller(private val context: Context) {
      * @param pkgName The package name of the extension to uninstall
      */
     fun uninstallApk(pkgName: String) {
-        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-            Intent(Intent.ACTION_DELETE).setData("package:$pkgName".toUri())
-        else
-            @Suppress("DEPRECATION")
-            Intent(Intent.ACTION_UNINSTALL_PACKAGE, "package:$pkgName".toUri())
+        if (context.isPackageInstalled(pkgName)) {
+            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                Intent(Intent.ACTION_DELETE).setData("package:$pkgName".toUri())
+            else
+                @Suppress("DEPRECATION")
+                Intent(Intent.ACTION_UNINSTALL_PACKAGE, "package:$pkgName".toUri())
 
-        context.startActivity(intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } else {
+            ExtensionLoader.uninstallPrivateExtension(context, pkgName)
+            ExtensionInstallReceiver.notifyRemoved(context, pkgName)
+        }
     }
 
     /**
