@@ -82,6 +82,7 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+        aidl = true
     }
 
     compileOptions {
@@ -91,7 +92,7 @@ android {
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
     compilerOptions {
         freeCompilerArgs.addAll(
             "-XXLanguage:+ContextParameters",
@@ -115,6 +116,9 @@ dependencies {
 
     // Core libs
     implementation(libs.bundles.misc)
+
+    // Shizuku
+    implementation(libs.bundles.shizuku)
 
     // Glide
     implementation(libs.bundles.glide)
