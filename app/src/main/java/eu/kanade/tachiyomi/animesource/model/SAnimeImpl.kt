@@ -6,7 +6,9 @@ class SAnimeImpl : SAnime {
 
     override lateinit var url: String
 
-    override lateinit var title: String
+    // AM (CUSTOM_INFORMATION) -->
+    override var title: String = ""
+    // <-- AM (CUSTOM_INFORMATION)
 
     override var artist: String? = null
 
@@ -29,4 +31,19 @@ class SAnimeImpl : SAnime {
     override var fetch_type: FetchType = FetchType.Episodes
 
     override var season_number: Double = -1.0
+
+    // AM (CUSTOM_INFORMATION) -->
+    override val originalTitle: String
+        get() = title
+    override val originalAuthor: String?
+        get() = author
+    override val originalArtist: String?
+        get() = artist
+    override val originalDescription: String?
+        get() = description
+    override val originalGenre: String?
+        get() = genre
+    override val originalStatus: Int
+        get() = status
+    // <-- AM (CUSTOM_INFORMATION)
 }

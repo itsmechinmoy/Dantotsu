@@ -1,8 +1,11 @@
 package eu.kanade.tachiyomi.source
 
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.awaitSingle
 import rx.Observable
 
@@ -25,28 +28,57 @@ interface MangaSource {
         get() = ""
 
     /**
-     * Get the updated details for a manga.
-     *
-     * @since extensions-lib 1.5
-     * @param manga the manga to update.
-     * @return the updated manga.
+     * Whether the source has support for latest updates.
      */
-    @Suppress("DEPRECATION")
-    suspend fun getMangaDetails(manga: SManga): SManga {
-        return fetchMangaDetails(manga).awaitSingle()
-    }
+    val supportsLatest: Boolean
+        get() = false
 
     /**
-     * Get all the available chapters for a manga.
-     *
-     * @since extensions-lib 1.5
-     * @param manga the manga to update.
-     * @return the chapters for the manga.
+     * Returns the list of filters for the source.
      */
-    @Suppress("DEPRECATION")
-    suspend fun getChapterList(manga: SManga): List<SChapter> {
-        return fetchChapterList(manga).awaitSingle()
-    }
+    fun getFilterList(): FilterList = FilterList()
+
+    /**
+     * Get a page with a list of manga.
+     *
+     * @since tachiyomix 1.6
+     * @param page the page number to retrieve.
+     */
+    suspend fun getPopularManga(page: Int): MangasPage
+
+    /**
+     * Get a page with a list of latest manga updates.
+     *
+     * @since tachiyomix 1.6
+     * @param page the page number to retrieve.
+     */
+    suspend fun getLatestUpdates(page: Int): MangasPage
+
+    /**
+     * Get a page with a list of manga.
+     *
+     * @since tachiyomix 1.6
+     * @param page the page number to retrieve.
+     * @param query the search query.
+     * @param filters the list of filters to apply.
+     */
+    suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage
+
+    /**
+     * Fetches updated information for a manga.
+     *
+     * @since tachiyomix 1.6
+     * @param manga The manga to fetch updates for.
+     * @param chapters Existing chapters of the manga
+     * @param fetchDetails Whether to fetch updated manga details.
+     * @param fetchChapters Whether to fetch available chapters.
+     */
+    suspend fun getMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate
 
     /**
      * Get the list of pages a chapter has. Pages should be returned
@@ -56,21 +88,42 @@ interface MangaSource {
      * @param chapter the chapter.
      * @return the pages for the chapter.
      */
-    @Suppress("DEPRECATION")
-    suspend fun getPageList(chapter: SChapter): List<Page> {
-        return fetchPageList(chapter).awaitSingle()
+    suspend fun getPageList(chapter: SChapter): List<Page>
+
+    /**
+     * Get the updated details for a manga.
+     *
+     * @since extensions-lib 1.5
+     * @param manga the manga to update.
+     * @return the updated manga.
+     */
+    @Deprecated("Use the combined suspend API instead", ReplaceWith("getMangaUpdate"))
+    suspend fun getMangaDetails(manga: SManga): SManga {
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
+    /**
+     * Get all the available chapters for a manga.
+     *
+     * @since extensions-lib 1.5
+     * @param manga the manga to update.
+     * @return the chapters for the manga.
+     */
+    @Deprecated("Use the combined suspend API instead", ReplaceWith("getMangaUpdate"))
+    suspend fun getChapterList(manga: SManga): List<SChapter> {
+        return getMangaUpdate(manga, emptyList(), fetchDetails = false, fetchChapters = true).chapters
     }
 
     @Deprecated(
         "Use the non-RxJava API instead",
-        ReplaceWith("getMangaDetails"),
+        ReplaceWith("getMangaUpdate"),
     )
     fun fetchMangaDetails(manga: SManga): Observable<SManga> =
         throw IllegalStateException("Not used")
 
     @Deprecated(
         "Use the non-RxJava API instead",
-        ReplaceWith("getChapterList"),
+        ReplaceWith("getMangaUpdate"),
     )
     fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
         throw IllegalStateException("Not used")

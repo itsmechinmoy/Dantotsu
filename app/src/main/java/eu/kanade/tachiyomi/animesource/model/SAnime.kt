@@ -37,14 +37,25 @@ interface SAnime : Serializable {
         return genre?.split(", ")?.map { it.trim() }?.filterNot { it.isBlank() }?.distinct()
     }
 
+    // AM (CUSTOM_INFORMATION) -->
+    val originalTitle: String
+    val originalAuthor: String?
+    val originalArtist: String?
+    val originalDescription: String?
+    val originalGenre: String?
+    val originalStatus: Int
+    // <-- AM (CUSTOM_INFORMATION)
+
     fun copy() = create().also {
         it.url = url
-        it.title = title
-        it.artist = artist
-        it.author = author
-        it.description = description
-        it.genre = genre
-        it.status = status
+        // AM (CUSTOM_INFORMATION) -->
+        it.title = originalTitle
+        it.artist = originalArtist
+        it.author = originalAuthor
+        it.description = originalDescription
+        it.genre = originalGenre
+        it.status = originalStatus
+        // <-- AM (CUSTOM_INFORMATION)
         it.thumbnail_url = thumbnail_url
         it.background_url = background_url
         it.update_strategy = update_strategy
@@ -67,3 +78,31 @@ interface SAnime : Serializable {
         }
     }
 }
+
+// AM (CUSTOM_INFORMATION) -->
+fun SAnime.copy(
+    url: String = this.url,
+    title: String = this.originalTitle,
+    artist: String? = this.originalArtist,
+    author: String? = this.originalAuthor,
+    description: String? = this.originalDescription,
+    genre: String? = this.originalGenre,
+    status: Int = this.status,
+    thumbnail_url: String? = this.thumbnail_url,
+    fetch_type: FetchType = this.fetch_type,
+    season_number: Double = this.season_number,
+    initialized: Boolean = this.initialized,
+) = SAnime.create().also {
+    it.url = url
+    it.title = title
+    it.artist = artist
+    it.author = author
+    it.description = description
+    it.genre = genre
+    it.status = status
+    it.thumbnail_url = thumbnail_url
+    it.fetch_type = fetch_type
+    it.season_number = season_number
+    it.initialized = initialized
+}
+// <-- AM (CUSTOM_INFORMATION)
