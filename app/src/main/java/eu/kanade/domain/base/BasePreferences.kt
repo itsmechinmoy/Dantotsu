@@ -27,5 +27,6 @@ class BasePreferences(
         LEGACY("Legacy"),
         PACKAGEINSTALLER("PackageInstaller"),
         SHIZUKU("Shizuku"),
+        PRIVATE("Private"),
     }
 }
