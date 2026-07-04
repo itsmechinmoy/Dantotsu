@@ -217,19 +217,24 @@ class SettingsExtensionsActivity : AppCompatActivity() {
                         }
                     ),
                     Settings(
-                        type = 2,
-                        name = getString(R.string.force_legacy_installer),
-                        desc = getString(R.string.force_legacy_installer_desc),
+                        type = 1,
+                        name = "Extension Installer",
+                        desc = extensionInstaller.get().titleResId,
                         icon = R.drawable.ic_round_new_releases_24,
-                        isChecked = extensionInstaller.get() == BasePreferences.ExtensionInstaller.LEGACY,
-                        switch = { isChecked, _ ->
-                            if (isChecked) {
-                                extensionInstaller.set(BasePreferences.ExtensionInstaller.LEGACY)
-                            } else {
-                                extensionInstaller.set(BasePreferences.ExtensionInstaller.PACKAGEINSTALLER)
+                        onClick = {
+                            context.customAlertDialog().apply {
+                                setTitle("Extension Installer")
+                                val entries = extensionInstaller.entries
+                                val options = entries.map { it.titleResId }.toTypedArray()
+                                val currentIndex = entries.indexOf(extensionInstaller.get())
+                                singleChoiceItems(options, currentIndex) { which ->
+                                    val selected = entries[which]
+                                    extensionInstaller.set(selected)
+                                    restartApp()
+                                }
+                                show()
                             }
                         }
-
                     ),
                     Settings(
                         type = 2,
