@@ -1,5 +1,3 @@
-@file:Suppress("PropertyName")
-
 package eu.kanade.tachiyomi.source.model
 
 import kotlinx.serialization.json.JsonObject
@@ -26,5 +24,12 @@ class SMangaImpl : SManga {
 
     override var initialized: Boolean = false
 
-    override var memo: JsonObject = JsonObject(emptyMap())
+    @Transient
+    private var _memo: JsonObject? = JsonObject(emptyMap())
+
+    override var memo: JsonObject
+        get() = _memo ?: JsonObject(emptyMap())
+        set(value) {
+            _memo = value
+        }
 }
