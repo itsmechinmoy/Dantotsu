@@ -77,6 +77,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     lateinit var navBar: AnimatedBottomBar
     var anime = true
     private var adult = false
+    lateinit var media: Media
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,6 +104,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                 }
             }
         }
+        this.media = media
         if (media.name == "No media found") {
             snackString(media.name)
             onBackPressedDispatcher.onBackPressed()

@@ -43,15 +43,15 @@ object RPCManager {
     private var heartbeatJob: Job? = null
     private const val HEARTBEAT_INTERVAL_MS = 9 * 60 * 1000L
 
-    /** Auto-clear job \u2014 clears the RPC if the video is left paused for too long. */
+    /** Auto-clear job — clears the RPC if the video is left paused for too long. */
     private var autoClearJob: Job? = null
-    private const val AUTO_CLEAR_INTERVAL_MS = 1 * 60 * 1000L
+    private const val AUTO_CLEAR_INTERVAL_MS = 5 * 60 * 1000L
 
     /** Tracks whether the DiscordService has already been started to avoid redundant calls */
     private var serviceStarted = false
 
 
-    // ΓöÇΓöÇΓöÇ Public API ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // ─── Public API ──────────────────────────────────────────────────────────────────
 
     /**
      * Set / update Discord Rich Presence.
@@ -82,8 +82,7 @@ object RPCManager {
                 ensureHeadlessRpc(context)?.newActivity(activity)
                 Logger.log("RPCManager: Headless RPC update succeeded.")
             }.onFailure { e ->
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                Logger.log("RPCManager: HeadlessRPC failed \u2013 ${e.message}")
+                handleRpcFailure(context, e)
             }
 
             // Schedule heartbeat or auto-clear based on playback state
@@ -106,8 +105,7 @@ object RPCManager {
                         runCatching {
                             ensureHeadlessRpc(context)?.newActivity(activity)
                         }.onFailure { e ->
-                            if (e is kotlinx.coroutines.CancellationException) throw e
-                            Logger.log("RPCManager: HeadlessRPC heartbeat failed \u2013 ${e.message}")
+                            handleRpcFailure(context, e)
                         }
                     }
                 }
@@ -237,7 +235,20 @@ object RPCManager {
         return isAdultMedia && PrefManager.getVal(PrefName.DiscordRPCDisableAdultMedia, false)
     }
 
-    // ΓöÇΓöÇΓöÇ Private helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    private fun handleRpcFailure(context: Context, e: Throwable) {
+        if (e is kotlinx.coroutines.CancellationException) throw e
+        Logger.log("RPCManager: Headless RPC operation failed – ${e.message}")
+        if (e.message?.contains("401") == true) {
+            Logger.log("RPCManager: Detected 401 Unauthorized. Force logging out from Discord...")
+            scope.launch(Dispatchers.Main) {
+                runCatching {
+                    Discord.removeSavedToken(context)
+                }
+            }
+        }
+    }
+
+    // ─── Private helpers ──────────────────────────────────────────────────────────────────
 
     private fun ensureHeadlessRpc(context: Context): HeadlessRPC? {
         val token = Discord.token ?: return null
@@ -265,8 +276,12 @@ object RPCManager {
         val mode = if (isManga) PrefManager.getVal(PrefName.DiscordRPCModeManga, "dantotsu") else PrefManager.getVal(PrefName.DiscordRPCModeAnime, "dantotsu")
         val useIconPref = if (isManga) PrefManager.getVal<Boolean>(PrefName.DiscordRPCShowIconManga, true) else PrefManager.getVal<Boolean>(PrefName.DiscordRPCShowIconAnime, true)
 
+        val showSmallIcon = useIconPref && mode != "nothing" && 
+                            data.largeImage?.url != null && 
+                            data.largeImage.url != Discord.small_Image
+
         // Select Small Icon based on mode
-        val (smallIconUrl, smallIconText) = if (useIconPref && mode != "nothing") {
+        val (smallIconUrl, smallIconText) = if (showSmallIcon) {
             when (mode) {
                 "anilist" -> Discord.small_Image_AniList to "AniList"
                 "mal" -> Discord.small_Image_MAL to "MyAnimeList"
@@ -341,6 +356,4 @@ object RPCManager {
         return this != null && isNotEmpty() &&
                 (startsWith("http://") || startsWith("https://"))
     }
-
-
 }
