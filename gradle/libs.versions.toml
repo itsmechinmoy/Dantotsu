@@ -10,6 +10,7 @@ markwon = "4.6.2"
 groupie = "2.10.1"
 nextlib = "0.8.4"
 ass = "0.4.0"
+shizuku = "13.1.5"
 
 [libraries]
 
@@ -115,6 +116,9 @@ okhttp-brotli = "com.squareup.okhttp3:okhttp-brotli:5.0.0-alpha.14"
 okhttp-doh = "com.squareup.okhttp3:okhttp-dnsoverhttps:5.0.0-alpha.14"
 okio = "com.squareup.okio:okio:3.9.1"
 
+shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
+shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }
+
 [plugins]
 android = { id = "com.android.application", version.ref = "agp" }
 serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
@@ -172,6 +176,7 @@ groupie = ["groupie", "groupie-vb"]
 okhttp = ["okhttp", "okhttp-logging", "okhttp-brotli", "okhttp-doh"]
 
 rx = ["rxjava", "rxandroid", "rxrelay"]
+shizuku = ["shizuku-api", "shizuku-provider"]
 
 misc = [
     "gson",

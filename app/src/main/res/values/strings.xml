@@ -1185,4 +1185,6 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="data_saver_image_format_jpeg">Convert to JPEG</string>
     <string name="data_saver_image_format_info">When disabled, images are converted to WebP format. When enabled, images are converted to JPEG</string>
 
+    <string name="ext_installer_shizuku_stopped">Shizuku is not running or has stopped.</string>
+
 </resources>

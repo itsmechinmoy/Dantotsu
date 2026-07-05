@@ -143,7 +143,7 @@ abstract class Installer(private val service: Service) {
      *
      * @see ready
      */
-    private fun checkQueue() {
+    protected fun checkQueue() {
         if (!ready) {
             return
         }
