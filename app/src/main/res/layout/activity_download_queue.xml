@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:attr/windowBackground">
+
+    <LinearLayout
+        android:id="@+id/downloadQueueContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Toolbar / Header -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="32dp">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/downloadQueueBackCard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                app:cardBackgroundColor="@color/nav_bg_inv"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <ImageButton
+                    android:id="@+id/downloadQueueBack"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:background="@color/nav_bg_inv"
+                    android:padding="16dp"
+                    app:srcCompat="@drawable/ic_round_arrow_back_ios_new_24"
+                    app:tint="?attr/colorOnBackground"
+                    tools:ignore="ContentDescription,SpeakableTextPresentCheck" />
+            </androidx.cardview.widget.CardView>
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/downloadQueueClearCard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                app:cardBackgroundColor="@color/nav_bg_inv"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <ImageButton
+                    android:id="@+id/downloadQueueClear"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:background="@color/nav_bg_inv"
+                    android:padding="16dp"
+                    app:srcCompat="@drawable/ic_round_delete_24"
+                    app:tint="?attr/colorError"
+                    tools:ignore="ContentDescription,SpeakableTextPresentCheck" />
+            </androidx.cardview.widget.CardView>
+        </RelativeLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="32dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/download_queue"
+                android:textColor="?attr/colorOnBackground"
+                android:textSize="28sp" />
+
+            <TextView
+                android:id="@+id/downloadQueueStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:alpha="0.58"
+                android:fontFamily="@font/poppins_family"
+                android:text="@string/download_queue_desc"
+                android:textColor="?attr/colorOnBackground"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Auto Delete Toggle Card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/autoDeleteCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="?attr/colorSurfaceVariant">
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_toStartOf="@id/autoDeleteSwitch"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_bold"
+                        android:text="@string/auto_delete_downloads"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:alpha="0.7"
+                        android:fontFamily="@font/poppins_family"
+                        android:text="@string/auto_delete_downloads_desc"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/autoDeleteSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:layout_centerVertical="true" />
+            </RelativeLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Section Tabs (Anime, Manga, Novel) -->
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/downloadQueueTabLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginBottom="8dp"
+            app:tabMode="fixed"
+            app:tabGravity="fill"
+            app:tabIndicatorColor="?attr/colorPrimary"
+            app:tabSelectedTextColor="?attr/colorPrimary"
+            app:tabTextColor="?attr/colorOnSurfaceVariant"
+            style="@style/Widget.Material3.TabLayout" />
+
+        <!-- Empty State -->
+        <LinearLayout
+            android:id="@+id/downloadQueueEmptyState"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <ImageView
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:alpha="0.5"
+                app:srcCompat="@drawable/ic_download_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/download_not_found"
+                android:textAlignment="center"
+                android:textColor="?attr/colorOnBackground"
+                android:textSize="16sp"
+                android:alpha="0.7" />
+        </LinearLayout>
+
+        <!-- Active Queue & Downloaded Content List -->
+        <ani.dantotsu.FadingEdgeRecyclerView
+            android:id="@+id/downloadQueueRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="64dp"
+            android:requiresFadingEdge="vertical" />
+
+    </LinearLayout>
+</RelativeLayout>

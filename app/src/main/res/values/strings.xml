@@ -1207,4 +1207,15 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
 
     <string name="ext_installer_shizuku_stopped">Shizuku is not running or has stopped.</string>
 
+    <string name="download_queue">Downloads</string>
+    <string name="download_queue_desc">Manage your downloaded content and queue</string>
+    <string name="clear_queue">Clear Queue</string>
+    <string name="clear_queue_confirm">Are you sure you want to clear the download queue?</string>
+    <string name="no_active_downloads">No active downloads</string>
+    <string name="auto_delete_downloads">Auto Delete Watched/Read Stuff</string>
+    <string name="auto_delete_downloads_desc">Automatically clean up downloaded anime or manga once you’ve watched or read it</string>
+    <string name="download_insights_header">Downloaded Content</string>
+    <string name="download_queue_header">Queue</string>
+    <string name="clear_media_confirm">Are you sure you want to delete all downloaded content for %1$s?</string>
+
 </resources>

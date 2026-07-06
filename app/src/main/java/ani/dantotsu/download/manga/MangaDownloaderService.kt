@@ -109,6 +109,8 @@ class MangaDownloaderService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         MangaServiceDataSingleton.downloadQueue.clear()
+        MangaServiceDataSingleton.currentTasks.clear()
+        MangaServiceDataSingleton.progress.clear()
         downloadJobs.clear()
         MangaServiceDataSingleton.isServiceRunning = false
         unregisterReceiver(cancelReceiver)
@@ -134,6 +136,7 @@ class MangaDownloaderService : Service() {
             while (MangaServiceDataSingleton.downloadQueue.isNotEmpty()) {
                 val task = MangaServiceDataSingleton.downloadQueue.poll()
                 if (task != null) {
+                    MangaServiceDataSingleton.currentTasks.add(task)
                     val job = launch { download(task) }
                     mutex.withLock {
                         downloadJobs[task.chapter] = job
@@ -141,6 +144,8 @@ class MangaDownloaderService : Service() {
                     job.join()
                     mutex.withLock {
                         downloadJobs.remove(task.chapter)
+                        MangaServiceDataSingleton.currentTasks.remove(task)
+                        MangaServiceDataSingleton.progress.remove(task.chapter)
                     }
                     updateNotification()
                 }
@@ -258,9 +263,11 @@ class MangaDownloaderService : Service() {
                             farthest,
                             task.imageData.size
                         )
+                        val progressPercent = farthest * 100 / task.imageData.size
+                        MangaServiceDataSingleton.progress[task.chapter] = progressPercent
                         broadcastDownloadProgress(
                             task.uniqueName,
-                            farthest * 100 / task.imageData.size,
+                            progressPercent,
                             downloadedBytes,
                             estimatedTotalBytes
                         )
@@ -472,6 +479,8 @@ object MangaServiceDataSingleton {
     var imageData: List<ImageData> = listOf()
     var sourceMedia: Media? = null
     var downloadQueue: Queue<MangaDownloaderService.DownloadTask> = ConcurrentLinkedQueue()
+    val currentTasks = java.util.Collections.synchronizedList(mutableListOf<MangaDownloaderService.DownloadTask>())
+    val progress = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     @Volatile
     var isServiceRunning: Boolean = false

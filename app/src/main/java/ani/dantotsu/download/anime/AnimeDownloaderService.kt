@@ -72,7 +72,7 @@ class AnimeDownloaderService : Service() {
     private val downloadJobs = mutableMapOf<String, Job>()
     private val mutex = Mutex()
     private var isCurrentlyProcessing = false
-    private var currentTasks: MutableList<AnimeDownloadTask> = mutableListOf()
+    private val currentTasks get() = AnimeServiceDataSingleton.currentTasks
     private val ffExtension = Injekt.get<DownloadAddonManager>().extension?.extension
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -278,6 +278,7 @@ class AnimeDownloaderService : Service() {
                         val timeInMilliseconds = it
                         if (timeInMilliseconds > 0 && totalLength > 0) {
                             percent = ((it / 1000) / totalLength * 100).toInt()
+                            AnimeServiceDataSingleton.progress[task.getTaskName()] = percent.coerceAtMost(99)
                         }
                         Logger.log("Statistics: $it")
                     }
@@ -331,6 +332,7 @@ class AnimeDownloaderService : Service() {
                         100, percent.coerceAtMost(99),
                         false
                     )
+                    AnimeServiceDataSingleton.progress[task.getTaskName()] = percent.coerceAtMost(99)
                     val downloadedBytes = outputFile.length()
                     val estimatedTotalBytes =
                         SizeFormatter.estimateTotalBytesByPercent(downloadedBytes, percent)
@@ -424,6 +426,9 @@ class AnimeDownloaderService : Service() {
                     Injekt.get<CrashlyticsInterface>().logException(e)
                 }
                 broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
+            } finally {
+                currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
+                AnimeServiceDataSingleton.progress.remove(task.getTaskName())
             }
         }
     }
@@ -621,6 +626,8 @@ class AnimeDownloaderService : Service() {
 object AnimeServiceDataSingleton {
     var video: Video? = null
     var downloadQueue: Queue<AnimeDownloaderService.AnimeDownloadTask> = ConcurrentLinkedQueue()
+    val currentTasks = java.util.Collections.synchronizedList(mutableListOf<AnimeDownloaderService.AnimeDownloadTask>())
+    val progress = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     @Volatile
     var isServiceRunning: Boolean = false

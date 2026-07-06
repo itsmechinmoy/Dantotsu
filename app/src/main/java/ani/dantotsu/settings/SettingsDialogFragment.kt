@@ -149,6 +149,11 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
             dismiss()
         }
 
+        binding.settingsDownloadQueue.setSafeOnClickListener {
+            startActivity(Intent(activity, DownloadQueueActivity::class.java))
+            dismiss()
+        }
+
         binding.settingsSettings.setSafeOnClickListener {
             startActivity(Intent(activity, SettingsActivity::class.java))
             dismiss()

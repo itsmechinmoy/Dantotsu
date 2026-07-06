@@ -228,6 +228,25 @@
                 app:iconSize="24dp" />
 
             <Button
+                android:id="@+id/settingsDownloadQueue"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:fontFamily="@font/poppins_bold"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:paddingStart="32dp"
+                android:paddingEnd="32dp"
+                android:text="@string/download_queue"
+                android:textAlignment="viewStart"
+                android:textAllCaps="false"
+                android:textColor="?attr/colorOnBackground"
+                app:cornerRadius="0dp"
+                app:icon="@drawable/ic_download_24"
+                app:iconPadding="16dp"
+                app:iconSize="24dp" />
+
+            <Button
                 android:id="@+id/settingsSettings"
                 style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="match_parent"

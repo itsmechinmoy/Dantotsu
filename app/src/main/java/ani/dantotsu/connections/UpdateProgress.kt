@@ -13,10 +13,35 @@ import ani.dantotsu.toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import ani.dantotsu.download.DownloadsManager
+import ani.dantotsu.download.DownloadedType
+import ani.dantotsu.download.findValidName
+import ani.dantotsu.media.MediaType
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 fun updateProgress(media: Media, number: String) {
     val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
     val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+
+    val autoDelete = PrefManager.getCustomVal("auto_delete_downloads", false)
+    if (autoDelete) {
+        val type = if (media.anime != null) MediaType.ANIME else if (media.format == "NOVEL") MediaType.NOVEL else MediaType.MANGA
+        val downloadsManager = Injekt.get<DownloadsManager>()
+        val downloadedTypes = when (type) {
+            MediaType.ANIME -> downloadsManager.animeDownloadedTypes
+            MediaType.MANGA -> downloadsManager.mangaDownloadedTypes
+            MediaType.NOVEL -> downloadsManager.novelDownloadedTypes
+        }
+        val downloadedType = downloadedTypes.find {
+            it.titleName == media.mainName().findValidName() &&
+            it.chapterName == number.findValidName()
+        }
+        if (downloadedType != null) {
+            downloadsManager.removeDownload(downloadedType, toast = false) {}
+        }
+    }
+
     if (!incognito) {
         if (rescueMode) {
             // In rescue mode: cache the update for later AL sync and mirror to MAL

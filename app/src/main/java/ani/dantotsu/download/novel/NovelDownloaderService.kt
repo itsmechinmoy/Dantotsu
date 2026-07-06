@@ -91,6 +91,8 @@ class NovelDownloaderService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         NovelServiceDataSingleton.downloadQueue.clear()
+        NovelServiceDataSingleton.currentTasks.clear()
+        NovelServiceDataSingleton.progress.clear()
         downloadJobs.clear()
         NovelServiceDataSingleton.isServiceRunning = false
         unregisterReceiver(cancelReceiver)
@@ -116,10 +118,15 @@ class NovelDownloaderService : Service() {
             while (NovelServiceDataSingleton.downloadQueue.isNotEmpty()) {
                 val task = NovelServiceDataSingleton.downloadQueue.poll()
                 if (task != null) {
+                    NovelServiceDataSingleton.currentTasks.add(task)
                     val job = launch { download(task) }
                     mutex.withLock { downloadJobs[task.chapter] = job }
                     job.join()
-                    mutex.withLock { downloadJobs.remove(task.chapter) }
+                    mutex.withLock {
+                        downloadJobs.remove(task.chapter)
+                        NovelServiceDataSingleton.currentTasks.remove(task)
+                        NovelServiceDataSingleton.progress.remove(task.chapter)
+                    }
                     updateNotification()
                 }
                 if (NovelServiceDataSingleton.downloadQueue.isEmpty()) {
@@ -302,15 +309,19 @@ class NovelDownloaderService : Service() {
                                     sink.emit()
 
                                     if (downloaded - lastNotif >= 1024 * 1024) {
+                                        val progressPercent = (downloaded * 100 / total).toInt()
+                                        NovelServiceDataSingleton.progress[task.chapter] = progressPercent
                                         withContext(Dispatchers.Main) {
-                                            builder.setProgress(100, (downloaded * 100 / total).toInt(), false)
+                                            builder.setProgress(100, progressPercent, false)
                                             if (notifi) notificationManager.notify(NOTIFICATION_ID, builder.build())
                                         }
                                         lastNotif = downloaded
                                     }
                                     if (downloaded - lastBcast >= 1024 * 256) {
+                                        val progressPercent = (downloaded * 100 / total).toInt()
+                                        NovelServiceDataSingleton.progress[task.chapter] = progressPercent
                                         withContext(Dispatchers.Main) {
-                                            broadcastDownloadProgress(task.originalLink, (downloaded * 100 / total).toInt())
+                                            broadcastDownloadProgress(task.originalLink, progressPercent)
                                         }
                                         lastBcast = downloaded
                                     }
@@ -447,5 +458,7 @@ class NovelDownloaderService : Service() {
 
 object NovelServiceDataSingleton {
     var downloadQueue: Queue<NovelDownloaderService.DownloadTask> = ConcurrentLinkedQueue()
+    val currentTasks = java.util.Collections.synchronizedList(mutableListOf<NovelDownloaderService.DownloadTask>())
+    val progress = java.util.concurrent.ConcurrentHashMap<String, Int>()
     @Volatile var isServiceRunning: Boolean = false
 }
