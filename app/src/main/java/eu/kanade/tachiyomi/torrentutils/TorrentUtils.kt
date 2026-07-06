@@ -1,12 +1,11 @@
 package eu.kanade.tachiyomi.torrentutils
 
-import ani.dantotsu.addons.torrent.TorrentAddonManager
+import ani.dantotsu.torrent.TorrentServerManager
 import eu.kanade.tachiyomi.torrentutils.model.DeadTorrentException
 import eu.kanade.tachiyomi.torrentutils.model.TorrentFile
 import eu.kanade.tachiyomi.torrentutils.model.TorrentInfo
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.net.SocketTimeoutException
 
 object TorrentUtils {
     fun getTorrentInfo(
@@ -15,8 +14,8 @@ object TorrentUtils {
     ): TorrentInfo {
         @Suppress("SwallowedException")
         try {
-            val extension = Injekt.get<TorrentAddonManager>().extension!!.extension
-            val torrent = extension.addTorrent(url, title, "", "", false)
+            val manager = Injekt.get<TorrentServerManager>()
+            val torrent = manager.addTorrent(url, title, "", "", false)
             return TorrentInfo(
                 torrent.title,
                 torrent.file_stats?.map { file ->
@@ -26,7 +25,7 @@ object TorrentUtils {
                 torrent.torrent_size!!,
                 emptyList(),
             )
-        } catch (e: SocketTimeoutException) {
+        } catch (e: Exception) {
             throw DeadTorrentException()
         }
     }

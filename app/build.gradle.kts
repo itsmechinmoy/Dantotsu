@@ -9,9 +9,17 @@ if (gradle.startParameter.taskNames.any { it.contains("google", true) }) {
     apply(plugin = "com.google.firebase.crashlytics")
 }
 
-val gitCommitHash = providers.exec {
-    commandLine("git", "rev-parse", "--verify", "--short", "HEAD")
-}.standardOutput.asText.get().trim()
+val gitCommitHash = if (rootProject.file(".git").exists()) {
+    try {
+        providers.exec {
+            commandLine("git", "rev-parse", "--verify", "--short", "HEAD")
+        }.standardOutput.asText.get().trim()
+    } catch (e: Exception) {
+        "nogit"
+    }
+} else {
+    "nogit"
+}
 
 android {
     namespace = "ani.dantotsu"
@@ -30,6 +38,15 @@ android {
             .toInt()
 
         signingConfig = signingConfigs.getByName("debug")
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
+        }
     }
 
     flavorDimensions += "store"
@@ -149,4 +166,11 @@ dependencies {
     implementation(libs.libarchive)
     implementation(libs.xmlutil.core)
     implementation(libs.xmlutil.serialization)
+
+    // libtorrent
+    implementation(libs.libtorrent4j)
+    implementation(libs.libtorrent4j.android.arm)
+    implementation(libs.libtorrent4j.android.arm64)
+    implementation(libs.libtorrent4j.android.x86)
+    implementation(libs.libtorrent4j.android.x86.x64)
 }

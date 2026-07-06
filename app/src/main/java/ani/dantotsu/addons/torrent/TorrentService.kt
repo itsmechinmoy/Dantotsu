@@ -1,10 +1,3 @@
-/**
- * modified source from
- * https://github.com/rebelonion/Dantotsu/pull/305
- * and https://github.com/LuftVerbot/kuukiyomi
- * all credits to the original authors
- */
-
 package ani.dantotsu.addons.torrent
 
 import android.app.ActivityManager
@@ -17,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import ani.dantotsu.R
+import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.util.Logger
 import eu.kanade.tachiyomi.data.notification.Notifications.CHANNEL_TORRENT_SERVER
 import eu.kanade.tachiyomi.data.notification.Notifications.ID_TORRENT_SERVER
@@ -28,11 +22,10 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.coroutines.EmptyCoroutineContext
 
-
 class TorrentServerService : Service() {
     private val serviceScope = CoroutineScope(EmptyCoroutineContext)
     private val applicationContext = Injekt.get<Application>()
-    private lateinit var extension: TorrentAddonApi
+    private lateinit var manager: TorrentServerManager
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -41,8 +34,7 @@ class TorrentServerService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        extension =
-            Injekt.get<TorrentAddonManager>().extension?.extension ?: return START_NOT_STICKY
+        manager = Injekt.get<TorrentServerManager>()
         intent?.let {
             if (it.action != null) {
                 when (it.action) {
@@ -64,16 +56,15 @@ class TorrentServerService : Service() {
 
     private fun startServer() {
         serviceScope.launch {
-            val echo = extension.echo()
-            if (echo == "") {
-                extension.startServer(filesDir.absolutePath)
+            if (!manager.isRunning()) {
+                manager.start()
             }
         }
     }
 
     private fun stopServer() {
         serviceScope.launch {
-            extension.stopServer()
+            manager.stop()
             applicationContext.cancelNotification(ID_TORRENT_SERVER)
             stopSelf()
         }
@@ -131,9 +122,6 @@ class TorrentServerService : Service() {
         }
 
         fun start() {
-            if (Injekt.get<TorrentAddonManager>().extension?.extension == null) {
-                return
-            }
             try {
                 val intent =
                     Intent(Injekt.get<Application>(), TorrentServerService::class.java).apply {
@@ -144,7 +132,6 @@ class TorrentServerService : Service() {
                 e.printStackTrace()
             }
         }
-
 
         fun stop() {
             try {
@@ -163,18 +150,16 @@ class TorrentServerService : Service() {
             if (timeout < 0) {
                 count = -20
             }
-            var echo = Injekt.get<TorrentAddonManager>().extension?.extension?.echo()
-            while (echo == "") {
+            val manager = Injekt.get<TorrentServerManager>()
+            while (!manager.isRunning()) {
                 Thread.sleep(1000)
                 count++
                 if (count > timeout) {
                     return false
                 }
-                echo = Injekt.get<TorrentAddonManager>().extension?.extension?.echo()
             }
-            Logger.log("ServerService: Server started: $echo")
+            Logger.log("ServerService: Server started successfully.")
             return true
         }
-
     }
 }

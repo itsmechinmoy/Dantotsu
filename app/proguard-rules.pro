@@ -133,3 +133,8 @@
 
 -keep class com.github.aachartmodel.** { *; }
 -dontwarn com.github.aachartmodel.**
+
+#############################################
+# libtorrent4j
+#############################################
+-keep class org.libtorrent4j.swig.libtorrent_jni { *; }

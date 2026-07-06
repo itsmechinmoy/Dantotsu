@@ -13,7 +13,7 @@ data class Settings(
     val switch: ((isChecked: Boolean, view: ItemSettingsSwitchBinding) -> Unit)? = null,
     val attach: ((ItemSettingsBinding) -> Unit)? = null,
     val attachToSwitch: ((ItemSettingsSwitchBinding) -> Unit)? = null,
-    val isVisible: Boolean = true,
+    var isVisible: Boolean = true,
     val isActivity: Boolean = false,
     var isChecked: Boolean = false,
 )

@@ -499,7 +499,7 @@
     <string name="auto_skip">Auto Skipping OP &amp; ED</string>
     <string name="show_skip_time_stamp_button">Show Skip Time Stamp Button</string>
     <string name="always_load_time_stamps">Always Load Time Stamps</string>
-    <string name="auto_hide_time_stamps">Auto Hide Time Stamps</string>string
+    <string name="auto_hide_time_stamps">Auto Hide Time Stamps</string>
     <string name="timestamps">Segments</string>
     <string name="auto_skip_op_ed">Auto Skip OP / ED</string>
     <string name="requires_time_stamps_to_be_enabled">Requires Time Stamps to be Enabled</string>
@@ -1128,7 +1128,7 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="enable_forgot_password">Enable Forgot Password (hold clear button for 10 seconds)</string>
     <string name="hide_notification_dot">Hide Notification Dot</string>
     <string name="private_mode">Private</string>
-    <string name="omega_cursed">you have been Ǫ̴̺̙͎̤̫͓̮̰̿͝M̴͇̤͗́̾̈́̑̍̿̈͌͝Ȅ̴̡̨̛͉̣̙̩̲̣̤̟̪̣̎͗̎̆̒̉͆̆̕ͅͅǴ̸̯̬̗̠̙͛͐̀̈͋̀̈̽́̎̿͘͘͝ͅĀ̶̧̲̀ͅ ̴̢̟͕̜̓̾̓C̶̬̜̰̘̝̱̫͓͙̭̈́͐͋̓̏̈̍̓̀̌̾̚Ư̸̛̤̱̈́͆̽͊͛̐̓́̑͘̕̕͝R̸̨̨͈̬̱̺͕̪̪̘͕͎̂͛́̅̆̓̀͝ͅS̴̨̨̛̩̭̗̹̰̭̥͉̮̝̠̓̔͆̂͊͆̀̈́̅̕͘̚͝È̴̢̛̝͈̳͉͈͒͒̒̄̏̈̈́D̸̢̡̨̜̞̩̼̫̹̗̮͛̀̈̋̾̇̕̕͜ͅ</string>
+    <string name="omega_cursed">you have been Ǫ̴̺̙͎̤̫͓̮̰̿͝M̴͇̤͗́̾̈́̑̍̿̈͌͝Ȅ̴̡̨̛͉̣̙̩̲̣̤̟̪̣̎͗̎̆̒̉͆̆̕ͅͅǴ̸̯̬̗̠̙͛͐̀̈͋̀̈̽́̎̿͘͘͝ͅĀ̶̧̲̀ͅ ̴̢̟͕̜̓̾̓C̶̬̜̰̘̝̱̫͓͙̭̈́͐͋̓̏̈̍̓̀̌̾̚Ư̸̛̤̱̈́͆̽͊͛̐̓́̑͘̕̕͝R̸̨̨͈̬̱̺͕̪̪̘͕͎̂͛́̅̆̓̀͝ͅS̴̨̨̛̩̭̗̹̰̭̥͉̮̝̠̓̔͆̂͊͆̀̈́̅̕͘̚͝È̴̢̛̝͈̳͉͈͒͒̒̄̏̈̈́D̸̢̡̨̜̞̩̼̫̹̗̮͛̀̈̋̾̇̕̕͜ͅ</string>
     <string name="omega_freed">you have been freed</string>
     <string name="subtitle_langauge">Preferred Langauge</string>
     <string name="socks5">SOCKS5</string>
@@ -1184,6 +1184,26 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="data_saver_ignore_gif">Skip GIF images</string>
     <string name="data_saver_image_format_jpeg">Convert to JPEG</string>
     <string name="data_saver_image_format_info">When disabled, images are converted to WebP format. When enabled, images are converted to JPEG</string>
+
+    <!-- Torrent Settings -->
+    <string name="torrent_settings">Torrent Settings</string>
+    <string name="torrent_settings_desc">Configure built-in torrent engine settings</string>
+    <string name="torrent_encryption">Strict Encryption</string>
+    <string name="torrent_encryption_desc">Force encryption for all outgoing/incoming peer connections</string>
+    <string name="torrent_wifi_only">WiFi Only</string>
+    <string name="torrent_wifi_only_desc">Only stream and download torrents when connected to WiFi</string>
+    <string name="torrent_download_speed">Download Speed Limit</string>
+    <string name="torrent_download_speed_desc">Limit maximum download rate in KB/s (0 = unlimited)</string>
+    <string name="torrent_upload_speed">Upload Speed Limit</string>
+    <string name="torrent_upload_speed_desc">Limit maximum upload rate in KB/s (0 = unlimited)</string>
+    <string name="torrent_max_connections">Max Connections Limit</string>
+    <string name="torrent_max_connections_desc">Limit maximum number of active peer connections</string>
+    <string name="torrent_battery_saving">Battery Saving</string>
+    <string name="torrent_battery_saving_desc">Pause torrent service when battery is low or not charging</string>
+    <string name="torrent_port">Incoming Port</string>
+    <string name="torrent_port_desc">Set a custom port for incoming peer connections (0 = random/auto)</string>
+    <string name="torrent_disable_utp">Disable UDP (uTP)</string>
+    <string name="torrent_disable_utp_desc">Disable UDP socket connections to save CPU and reduce heating. Forces TCP-only connections.</string>
 
     <string name="ext_installer_shizuku_stopped">Shizuku is not running or has stopped.</string>
 

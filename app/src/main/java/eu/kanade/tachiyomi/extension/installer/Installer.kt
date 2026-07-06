@@ -9,7 +9,6 @@ import android.net.Uri
 import androidx.annotation.CallSuper
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import ani.dantotsu.addons.download.DownloadAddonManager
-import ani.dantotsu.addons.torrent.TorrentAddonManager
 import ani.dantotsu.media.AddonType
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.media.Type
@@ -29,7 +28,6 @@ abstract class Installer(private val service: Service) {
     private val animeExtensionManager: AnimeExtensionManager by injectLazy()
     private val mangaExtensionManager: MangaExtensionManager by injectLazy()
     private val novelExtensionManager: NovelExtensionManager by injectLazy()
-    private val torrentAddonManager: TorrentAddonManager by injectLazy()
     private val downloadAddonManager: DownloadAddonManager by injectLazy()
 
     private var waitingInstall = AtomicReference<Entry>(null)
@@ -77,8 +75,8 @@ abstract class Installer(private val service: Service) {
             }
         } else {
             when (entry.type) {
-                AddonType.TORRENT -> torrentAddonManager.setInstalling(entry.downloadId)
                 AddonType.DOWNLOAD -> downloadAddonManager.setInstalling(entry.downloadId)
+                else -> {}
             }
         }
     }
@@ -122,15 +120,11 @@ abstract class Installer(private val service: Service) {
                 }
             } else {
                 when (completedEntry.type) {
-                    AddonType.TORRENT -> torrentAddonManager.updateInstallStep(
-                        completedEntry.downloadId,
-                        resultStep
-                    )
-
                     AddonType.DOWNLOAD -> downloadAddonManager.updateInstallStep(
                         completedEntry.downloadId,
                         resultStep
                     )
+                    else -> {}
                 }
             }
             checkQueue()
@@ -185,15 +179,11 @@ abstract class Installer(private val service: Service) {
                 }
             } else {
                 when (it.type) {
-                    AddonType.TORRENT -> torrentAddonManager.updateInstallStep(
-                        it.downloadId,
-                        InstallStep.Error
-                    )
-
                     AddonType.DOWNLOAD -> downloadAddonManager.updateInstallStep(
                         it.downloadId,
                         InstallStep.Error
                     )
+                    else -> {}
                 }
             }
         }
@@ -237,15 +227,11 @@ abstract class Installer(private val service: Service) {
                 }
             } else {
                 when (toCancel.type) {
-                    AddonType.TORRENT -> torrentAddonManager.updateInstallStep(
-                        downloadId,
-                        InstallStep.Idle
-                    )
-
                     AddonType.DOWNLOAD -> downloadAddonManager.updateInstallStep(
                         downloadId,
                         InstallStep.Idle
                     )
+                    else -> {}
                 }
             }
         }

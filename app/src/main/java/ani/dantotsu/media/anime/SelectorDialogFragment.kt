@@ -31,7 +31,7 @@ import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.R
 import ani.dantotsu.addons.download.DownloadAddonManager
-import ani.dantotsu.addons.torrent.TorrentAddonManager
+import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.copyToClipboard
 import ani.dantotsu.currActivity
@@ -270,35 +270,37 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             val activity = currActivity() ?: requireActivity()
                             selectedVideo?.file?.url?.let { url ->
                                 if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
-                                    val torrentExtension = Injekt.get<TorrentAddonManager>()
-                                    if (!torrentExtension.isAvailable()) {
+                                    val torrentManager = Injekt.get<TorrentServerManager>()
+                                    if (!torrentManager.isAvailable()) {
                                         toast(R.string.torrent_addon_not_available)
                                         return false
                                     }
                                     runBlocking {
                                         try {
                                             withContext(Dispatchers.IO) {
-                                                val extension =
-                                                    torrentExtension.extension!!.extension
-                                                torrentExtension.torrentHash?.let {
-                                                    extension.removeTorrent(it)
+                                                torrentManager.activeTorrentHash?.let {
+                                                    torrentManager.removeTorrent(it)
                                                 }
                                                 val index = if (url.contains("index=")) {
                                                     url.substringAfter("index=")
                                                         .toIntOrNull() ?: 0
                                                 } else 0
                                                 Logger.log("Sending: ${url}, ${selectedVideo.quality}, $index")
-                                                val currentTorrent = extension.addTorrent(
+                                                val currentTorrent = torrentManager.addTorrent(
                                                     url,
                                                     selectedVideo.quality.toString(),
                                                     "",
                                                     "",
                                                     false
                                                 )
-                                                torrentExtension.torrentHash =
+                                                torrentManager.activeTorrentHash =
                                                     currentTorrent.hash
+
+                                                // Pre-buffer the first piece
+                                                torrentManager.prebuffer(currentTorrent.hash!!, index)
+
                                                 selectedVideo.file.url =
-                                                    extension.getLink(currentTorrent, index)
+                                                    torrentManager.getLink(currentTorrent, index)
                                                 Logger.log("Received: ${selectedVideo.file.url}")
                                             }
                                         } catch (e: Exception) {
@@ -507,24 +509,27 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             }?.videos?.getOrNull(ep.selectedVideo)
             video?.file?.url?.let { url ->
                 if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
-                    val torrentExtension = Injekt.get<TorrentAddonManager>()
-                    if (torrentExtension.isAvailable()) {
+                    val torrentManager = Injekt.get<TorrentServerManager>()
+                    if (torrentManager.isAvailable()) {
                         val activity = currActivity() ?: requireActivity()
                         launchIO {
                             try {
-                                val extension = torrentExtension.extension!!.extension
-                                torrentExtension.torrentHash?.let {
-                                    extension.removeTorrent(it)
+                                torrentManager.activeTorrentHash?.let {
+                                    torrentManager.removeTorrent(it)
                                 }
                                 val index = if (url.contains("index=")) {
                                     url.substringAfter("index=").toIntOrNull() ?: 0
                                 } else 0
                                 Logger.log("Sending: ${url}, ${video.quality}, $index")
-                                val currentTorrent = extension.addTorrent(
+                                val currentTorrent = torrentManager.addTorrent(
                                     url, video.quality.toString(), "", "", false
                                 )
-                                torrentExtension.torrentHash = currentTorrent.hash
-                                video.file.url = extension.getLink(currentTorrent, index)
+                                torrentManager.activeTorrentHash = currentTorrent.hash
+
+                                // Pre-buffer the first piece
+                                torrentManager.prebuffer(currentTorrent.hash!!, index)
+
+                                video.file.url = torrentManager.getLink(currentTorrent, index)
                                 Logger.log("Received: ${video.file.url}")
                                 if (launch == true) {
                                     Intent(activity, ExoplayerView::class.java).apply {
@@ -744,8 +749,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     }
                     selectedVideo?.file?.url?.let { url ->
                         if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
-                            val torrentExtension = Injekt.get<TorrentAddonManager>()
-                            if (!torrentExtension.isAvailable()) {
+                            val torrentManager = Injekt.get<TorrentServerManager>()
+                            if (!torrentManager.isAvailable()) {
                                 toast(R.string.torrent_addon_not_available)
                                 return@setSafeOnClickListener
                             }

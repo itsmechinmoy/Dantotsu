@@ -6,7 +6,6 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import ani.dantotsu.addons.download.DownloadAddonManager
-import ani.dantotsu.addons.torrent.TorrentAddonManager
 import ani.dantotsu.media.AddonType
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.parsers.novel.NovelExtensionManager
@@ -107,15 +106,11 @@ class ExtensionInstallActivity : AppCompatActivity() {
             }
         } else {
             when (addonType) {
-                AddonType.TORRENT -> {
-                    Injekt.get<TorrentAddonManager>().updateInstallStep(downloadId, newStep)
-                }
-
                 AddonType.DOWNLOAD -> {
                     Injekt.get<DownloadAddonManager>().updateInstallStep(downloadId, newStep)
                 }
 
-                null -> {}
+                else -> {}
             }
         }
     }

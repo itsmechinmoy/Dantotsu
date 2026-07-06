@@ -7,7 +7,7 @@ import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import ani.dantotsu.addons.download.DownloadAddonManager
-import ani.dantotsu.addons.torrent.TorrentAddonManager
+import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.aniyomi.anime.custom.AppModule
 import ani.dantotsu.aniyomi.anime.custom.PreferenceModule
 import ani.dantotsu.connections.comments.CommentsAPI
@@ -49,7 +49,7 @@ class App : Application() {
     private lateinit var animeExtensionManager: AnimeExtensionManager
     private lateinit var mangaExtensionManager: MangaExtensionManager
     private lateinit var novelExtensionManager: NovelExtensionManager
-    private lateinit var torrentAddonManager: TorrentAddonManager
+    private lateinit var torrentServerManager: TorrentServerManager
     private lateinit var downloadAddonManager: DownloadAddonManager
 
     init {
@@ -136,9 +136,11 @@ class App : Application() {
             NovelSources.init(novelExtensionManager.allInstalledExtensionsFlow)
         }
         GlobalScope.launch {
-            torrentAddonManager = Injekt.get()
+            torrentServerManager = Injekt.get()
             downloadAddonManager = Injekt.get()
-            torrentAddonManager.init()
+            if (torrentServerManager.isAvailable()) {
+                torrentServerManager.start()
+            }
             downloadAddonManager.init()
             if (PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1) {
                 CommentsAPI.fetchAuthToken(this@App)

@@ -270,4 +270,14 @@ enum class PrefName(val data: Pref) {
     Socks5ProxyPort(Pref(Location.Protected, String::class, "")),
     Socks5ProxyUsername(Pref(Location.Protected, String::class, "")),
     Socks5ProxyPassword(Pref(Location.Protected, String::class, "")),
+
+    // Torrent Settings
+    TorrentEncryption(Pref(Location.Player, Boolean::class, false)),
+    TorrentWifiOnly(Pref(Location.Player, Boolean::class, false)),
+    TorrentDownloadSpeedLimit(Pref(Location.Player, Int::class, 0)),
+    TorrentUploadSpeedLimit(Pref(Location.Player, Int::class, 0)),
+    TorrentMaxConnections(Pref(Location.Player, Int::class, 108)),
+    TorrentBatterySaving(Pref(Location.Player, Boolean::class, false)),
+    TorrentPort(Pref(Location.Player, Int::class, 0)),
+    TorrentDisableUtp(Pref(Location.Player, Boolean::class, false)),
 }
