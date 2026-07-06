@@ -16,5 +16,12 @@ class SChapterImpl : SChapter {
 
     override var scanlator: String? = null
 
-    override var memo: JsonObject = JsonObject(emptyMap())
+    @Transient
+    private var _memo: JsonObject? = JsonObject(emptyMap())
+
+    override var memo: JsonObject
+        get() = _memo ?: JsonObject(emptyMap())
+        set(value) {
+            _memo = value
+        }
 }
