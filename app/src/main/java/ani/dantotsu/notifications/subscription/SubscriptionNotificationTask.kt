@@ -52,7 +52,7 @@ class SubscriptionNotificationTask : Task {
                     do {
                         delay(1000)
                         timeout -= 1000
-                    } while (timeout > 0 && !AnimeSources.isInitialized && !MangaSources.isInitialized)
+                    } while (timeout > 0 && (!AnimeSources.isInitialized || !MangaSources.isInitialized))
                     Logger.log("SubscriptionNotificationTask: timeout: $timeout")
                     if (timeout <= 0) {
                         currentlyPerforming = false

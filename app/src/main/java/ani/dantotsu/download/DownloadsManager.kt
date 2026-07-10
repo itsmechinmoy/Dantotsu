@@ -338,11 +338,13 @@ class DownloadsManager(private val context: Context) {
             chapter: String? = null
         ): DocumentFile? {
             val baseDirectory = getBaseDirectory(context, type) ?: return null
-            return if (chapter != null) {
-                baseDirectory.findOrCreateFolder(title, false)
-                    ?.findOrCreateFolder(chapter, overwrite)
+            val safeTitle = title.findValidName()
+            val safeChapter = chapter?.findValidName()
+            return if (safeChapter != null && safeChapter.isNotEmpty()) {
+                baseDirectory.findOrCreateFolder(safeTitle, false)
+                    ?.findOrCreateFolder(safeChapter, overwrite)
             } else {
-                baseDirectory.findOrCreateFolder(title, overwrite)
+                baseDirectory.findOrCreateFolder(safeTitle, overwrite)
             }
         }
 

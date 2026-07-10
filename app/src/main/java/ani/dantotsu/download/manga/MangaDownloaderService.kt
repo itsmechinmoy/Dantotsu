@@ -159,6 +159,10 @@ class MangaDownloaderService : Service() {
     }
 
     fun cancelDownload(chapter: String) {
+        val tasks = MangaServiceDataSingleton.downloadQueue.filter { it.chapter == chapter }
+        tasks.forEach { task ->
+            broadcastDownloadFailed(task.uniqueName)
+        }
         CoroutineScope(Dispatchers.Default).launch {
             mutex.withLock {
                 downloadJobs[chapter]?.cancel()

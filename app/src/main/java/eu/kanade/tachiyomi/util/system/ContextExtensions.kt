@@ -172,7 +172,7 @@ fun Context.getUriSize(uri: Uri): Long? {
 
 val Context.hasMiuiPackageInstaller get() = isPackageInstalled("com.miui.packageinstaller")
 
-val Context.isShizukuInstalled get() = false
+val Context.isShizukuInstalled get() = isPackageInstalled("moe.shizuku.privileged.api") || rikka.sui.Sui.isSui()
 
 
 fun Context.getApplicationIcon(pkgName: String): Drawable? {

@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-sdk tools:overrideLibrary="go.server.gojni, rikka.shizuku.provider, rikka.shizuku.api, rikka.shizuku.shared, rikka.shizuku.aidl" />
+    <uses-sdk tools:overrideLibrary="go.server.gojni, rikka.shizuku.provider, rikka.shizuku.api, rikka.shizuku.shared, rikka.shizuku.aidl, com.antonkarpenko" />
 
     <uses-feature
         android:name="android.software.leanback"

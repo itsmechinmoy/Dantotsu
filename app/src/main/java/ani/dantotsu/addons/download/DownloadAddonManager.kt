@@ -30,42 +30,24 @@ class DownloadAddonManager(
     private var error: String? = null
 
     override suspend fun init() {
-        extension = null
         error = null
         hasUpdate = false
+        extension = DownloadAddon.Installed(
+            name = "Built-in Download Addon",
+            pkgName = context.packageName,
+            versionName = "1.0.0",
+            versionCode = 1,
+            extension = NativeVideoDownloader(context),
+            icon = androidx.core.content.ContextCompat.getDrawable(context, ani.dantotsu.R.mipmap.ic_launcher)
+        )
+        Logger.log("Download addon initialized successfully (built-in)")
         withContext(Dispatchers.Main) {
-            _isInitialized.value = false
-        }
-
-        AddonInstallReceiver()
-            .setListener(InstallationListener(), type)
-            .register(context)
-        try {
-            val result = AddonLoader.loadExtension(
-                context,
-                DOWNLOAD_PACKAGE,
-                DOWNLOAD_CLASS,
-                AddonType.DOWNLOAD
-            ) as? DownloadLoadResult
-            result?.let {
-                if (it is DownloadLoadResult.Success) {
-                    extension = it.extension
-                    hasUpdate = AddonDownloader.hasUpdate(REPO, it.extension.versionName)
-                }
-            }
-            Logger.log("Download addon initialized successfully")
-            withContext(Dispatchers.Main) {
-                _isInitialized.value = true
-            }
-        } catch (e: Exception) {
-            Logger.log("Error initializing Download addon")
-            Logger.log(e)
-            error = e.message
+            _isInitialized.value = true
         }
     }
 
     override fun isAvailable(andEnabled: Boolean): Boolean {
-        return extension?.extension != null
+        return true
     }
 
     override fun getVersion(): String? {

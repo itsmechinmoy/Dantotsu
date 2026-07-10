@@ -232,7 +232,14 @@ class DownloadQueueActivity : AppCompatActivity() {
         val queueItems = getActiveQueueTasks(type)
         if (queueItems.isNotEmpty()) {
             listItems.add(DownloadsListItem.Header(getString(R.string.download_queue_header)))
-            listItems.addAll(queueItems.map { DownloadsListItem.QueueItemWrapper(it) })
+            listItems.addAll(queueItems.map { item ->
+                val progress = when (item) {
+                    is QueueItem.Anime -> AnimeServiceDataSingleton.progress[item.uniqueId]
+                    is QueueItem.Manga -> MangaServiceDataSingleton.progress[item.uniqueId]
+                    is QueueItem.Novel -> NovelServiceDataSingleton.progress[item.uniqueId]
+                }
+                DownloadsListItem.QueueItemWrapper(item, progress)
+            })
         }
 
         // 2. Downloaded Media Items (CRUD & Insights)
@@ -436,7 +443,7 @@ sealed class QueueItem {
 
 sealed class DownloadsListItem {
     data class Header(val title: String) : DownloadsListItem()
-    data class QueueItemWrapper(val queueItem: QueueItem) : DownloadsListItem()
+    data class QueueItemWrapper(val queueItem: QueueItem, val progress: Int?) : DownloadsListItem()
     data class DownloadedMediaItem(
         val title: String,
         val type: MediaType,
@@ -513,11 +520,7 @@ class DownloadsAdapter(
                 holder.binding.itemDownloadTitle.text = queueItem.title
                 holder.binding.itemDownloadSubtitle.text = "${queueItem.subTitle} • ${queueItem.type}"
 
-                val progress = when (queueItem) {
-                    is QueueItem.Anime -> AnimeServiceDataSingleton.progress[queueItem.uniqueId]
-                    is QueueItem.Manga -> MangaServiceDataSingleton.progress[queueItem.uniqueId]
-                    is QueueItem.Novel -> NovelServiceDataSingleton.progress[queueItem.uniqueId]
-                }
+                val progress = wrapper.progress
 
                 // Load cover image
                 val coverPath = coverPathCache[queueItem.title]

@@ -418,13 +418,7 @@ internal object ExtensionLoader {
         val pkgName = pkgInfo.packageName
         val pkgManager = context.packageManager
 
-        val appInfo = try {
-            pkgManager.getApplicationInfo(pkgName, PackageManager.GET_META_DATA)
-        } catch (error: PackageManager.NameNotFoundException) {
-            // Unlikely, but the package may have been uninstalled at this point
-            Logger.log(error)
-            return AnimeLoadResult.Error
-        }
+        val appInfo = pkgInfo.applicationInfo ?: return AnimeLoadResult.Error
 
         if (!extensionInfo.isShared) {
             val privateFile = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
@@ -527,13 +521,7 @@ internal object ExtensionLoader {
         val pkgName = pkgInfo.packageName
         val pkgManager = context.packageManager
 
-        val appInfo = try {
-            pkgManager.getApplicationInfo(pkgName, PackageManager.GET_META_DATA)
-        } catch (error: PackageManager.NameNotFoundException) {
-            // Unlikely, but the package may have been uninstalled at this point
-            Logger.log(error)
-            return MangaLoadResult.Error
-        }
+        val appInfo = pkgInfo.applicationInfo ?: return MangaLoadResult.Error
 
         if (!extensionInfo.isShared) {
             val privateFile = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
@@ -637,13 +625,7 @@ internal object ExtensionLoader {
         val pkgName = pkgInfo.packageName
         val pkgManager = context.packageManager
 
-        val appInfo = try {
-            pkgManager.getApplicationInfo(pkgName, PackageManager.GET_META_DATA)
-        } catch (error: PackageManager.NameNotFoundException) {
-            // Unlikely, but the package may have been uninstalled at this point
-            Logger.log(error)
-            return NovelLoadResult.Error(error)
-        }
+        val appInfo = pkgInfo.applicationInfo ?: return NovelLoadResult.Error(Exception("ApplicationInfo is null"))
 
         if (!extensionInfo.isShared) {
             val privateFile = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")

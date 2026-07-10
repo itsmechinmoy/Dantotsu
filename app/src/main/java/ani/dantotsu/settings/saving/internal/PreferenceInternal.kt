@@ -2,7 +2,6 @@ package ani.dantotsu.settings.saving.internal
 
 import kotlin.reflect.KClass
 
-
 data class Pref(
     val prefLocation: Location,
     val type: KClass<*>,
@@ -18,4 +17,5 @@ enum class Location(val location: String, val exportable: Boolean) {
     Irrelevant("ani.dantotsu.irrelevant", false),
     AnimeDownloads("animeDownloads", false),  //different for legacy reasons
     Protected("ani.dantotsu.protected", true),
+    ExtensionSettings("ani.dantotsu.extensionSettings", true);
 }

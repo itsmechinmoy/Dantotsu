@@ -1,5 +1,4 @@
 package ani.dantotsu.addons.download
-
 import android.content.Context
 import android.net.Uri
 
@@ -43,6 +42,10 @@ interface DownloadAddonApiV2 {
     fun getStackTrace(sessionId: Long): String?
 
     fun hadError(sessionId: Long): Boolean
+
+    fun getDownloadedBytes(sessionId: Long): Long = -1L
+
+    fun getEstimatedTotalBytes(sessionId: Long): Long = -1L
 
     fun getFileExtension(): Pair<String, String> = Pair("mkv", "video/x-matroska")
 }

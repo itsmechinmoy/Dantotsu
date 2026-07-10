@@ -439,7 +439,7 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                             if (!(getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()) {
                                                 val intent =
-                                                    Intent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM")
+                                                    Intent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM", android.net.Uri.parse("package:${context.packageName}"))
                                                 startActivity(intent)
                                                 view.settingsButton.isChecked = true
                                             }

@@ -115,7 +115,17 @@ private fun setupSocks5Proxy() {
       builder.build()
      }
 
-    val downloadClient = client.newBuilder().callTimeout(20, TimeUnit.MINUTES).build()
+    val downloadClient = client.newBuilder()
+        .dispatcher(
+            okhttp3.Dispatcher().apply {
+                maxRequests = 512
+                maxRequestsPerHost = 64
+            },
+        )
+        .connectionPool(okhttp3.ConnectionPool(256, 5, TimeUnit.MINUTES))
+        .retryOnConnectionFailure(true)
+        .callTimeout(20, TimeUnit.MINUTES)
+        .build()
 
     /**
      * @deprecated Since extension-lib 1.5

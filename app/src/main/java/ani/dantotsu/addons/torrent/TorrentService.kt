@@ -70,6 +70,18 @@ class TorrentServerService : Service() {
         }
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Logger.log("TorrentServerService: App swiped away from recents. Stopping server.")
+        try {
+            manager.stop()
+            applicationContext.cancelNotification(ID_TORRENT_SERVER)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     private fun notification(context: Context) {
         val exitPendingIntent =
             PendingIntent.getService(

@@ -137,6 +137,10 @@ class NovelDownloaderService : Service() {
     }
 
     fun cancelDownload(chapter: String) {
+        val tasks = NovelServiceDataSingleton.downloadQueue.filter { it.chapter == chapter }
+        tasks.forEach { task ->
+            broadcastDownloadFailed(task.originalLink)
+        }
         CoroutineScope(Dispatchers.Default).launch {
             mutex.withLock {
                 downloadJobs[chapter]?.cancel()

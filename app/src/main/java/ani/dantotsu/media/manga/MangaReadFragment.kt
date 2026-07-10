@@ -662,6 +662,14 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         binding.mediaSourceRecycler.layoutManager?.onRestoreInstanceState(state)
 
         requireActivity().setNavigationTheme()
+
+        if (this::media.isInitialized && this::headerAdapter.isInitialized) {
+            val isCurrentlySubscribed = SubscriptionHelper.getSubscriptions().containsKey(media.id)
+            if (subscribed != isCurrentlySubscribed) {
+                subscribed = isCurrentlySubscribed
+                headerAdapter.subscribe?.setState(isCurrentlySubscribed)
+            }
+        }
     }
 
     override fun onPause() {

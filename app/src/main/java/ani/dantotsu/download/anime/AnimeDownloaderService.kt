@@ -61,6 +61,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Queue
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.time.Duration.Companion.milliseconds
+import androidx.core.content.edit
 
 
 class AnimeDownloaderService : Service() {
@@ -163,10 +165,18 @@ class AnimeDownloaderService : Service() {
 
     @UnstableApi
     fun cancelDownload(taskName: String) {
-        val sessionIds =
-            AnimeServiceDataSingleton.downloadQueue.filter { it.getTaskName() == taskName }
-                .map { it.sessionId }.toMutableList()
-        sessionIds.addAll(currentTasks.filter { it.getTaskName() == taskName }.map { it.sessionId })
+        val tasks = mutableListOf<AnimeDownloadTask>()
+        tasks.addAll(AnimeServiceDataSingleton.downloadQueue.filter { it.getTaskName() == taskName })
+        tasks.addAll(currentTasks.filter { it.getTaskName() == taskName })
+
+        tasks.forEach { task ->
+            task.sourceMedia?.id?.let { mediaId ->
+                AnimeDownloader.stopDownload(mediaId, task.episode)
+                broadcastDownloadFailed(task.episode, mediaId)
+            }
+        }
+
+        val sessionIds = tasks.map { it.sessionId }.filter { it != -1L }
         sessionIds.forEach {
             ffExtension!!.cancelDownload(it)
         }
@@ -276,8 +286,9 @@ class AnimeDownloaderService : Service() {
                     ) {
                         // CALLED WHEN SESSION GENERATES STATISTICS
                         val timeInMilliseconds = it
-                        if (timeInMilliseconds > 0 && totalLength > 0) {
-                            percent = ((it / 1000) / totalLength * 100).toInt()
+                        val duration = if (totalLength > 0) totalLength else 100.0
+                        if (timeInMilliseconds > 0) {
+                            percent = ((it / 1000) / duration * 100).toInt()
                             AnimeServiceDataSingleton.progress[task.getTaskName()] = percent.coerceAtMost(99)
                         }
                         Logger.log("Statistics: $it")
@@ -333,9 +344,10 @@ class AnimeDownloaderService : Service() {
                         false
                     )
                     AnimeServiceDataSingleton.progress[task.getTaskName()] = percent.coerceAtMost(99)
-                    val downloadedBytes = outputFile.length()
-                    val estimatedTotalBytes =
-                        SizeFormatter.estimateTotalBytesByPercent(downloadedBytes, percent)
+                    val addonDownloaded = ffExtension.getDownloadedBytes(ffTask)
+                    val addonEstimated = ffExtension.getEstimatedTotalBytes(ffTask)
+                    val downloadedBytes = if (addonDownloaded > 0L) addonDownloaded else outputFile.length()
+                    val estimatedTotalBytes = if (addonEstimated > 0L) addonEstimated else SizeFormatter.estimateTotalBytesByPercent(downloadedBytes, percent)
                     broadcastDownloadProgress(
                         task.episode,
                         percent.coerceAtMost(99),
@@ -348,7 +360,7 @@ class AnimeDownloaderService : Service() {
                             notificationManager.notify(NOTIFICATION_ID, builder.build())
                         }
                     }
-                    kotlinx.coroutines.delay(2000)
+                    kotlinx.coroutines.delay(2000.milliseconds)
                 }
                 if (ffExtension.getState(ffTask) == "COMPLETED") {
                     if (ffExtension.hadError(ffTask)) {
@@ -403,10 +415,12 @@ class AnimeDownloaderService : Service() {
                         }
                     }
                     snackString("${getTaskName(task.title, task.episode)} Download completed")
-                    PrefManager.getAnimeDownloadPreferences().edit().putString(
-                        task.getTaskName(),
-                        task.video.file.url
-                    ).apply()
+                    PrefManager.getAnimeDownloadPreferences().edit {
+                        putString(
+                            task.getTaskName(),
+                            task.video.file.url
+                        )
+                    }
                     val downloadType = DownloadedType(
                         task.title,
                         task.episode,
@@ -433,68 +447,72 @@ class AnimeDownloaderService : Service() {
         }
     }
 
-    private fun saveMediaInfo(task: AnimeDownloadTask, directory: DocumentFile) {
-        CoroutineScope(Dispatchers.IO).launch {
-            directory.findFile("media.json")?.forceDelete(this@AnimeDownloaderService)
-            val file = directory.createFile("application/json", "media.json")
-                ?: throw Exception("File not created")
-            val episodeDirectory =
-                getSubDirectory(
-                    this@AnimeDownloaderService,
-                    MediaType.ANIME,
-                    false,
-                    task.title,
-                    task.episode
-                )
-                    ?: throw Exception("Directory not found")
+    private fun CoroutineScope.saveMediaInfo(task: AnimeDownloadTask, directory: DocumentFile) {
+        launch(Dispatchers.IO) {
+            try {
+                directory.findFile("media.json")?.forceDelete(this@AnimeDownloaderService)
+                val file = directory.createFile("application/json", "media.json")
+                    ?: return@launch
+                val episodeDirectory =
+                    getSubDirectory(
+                        this@AnimeDownloaderService,
+                        MediaType.ANIME,
+                        false,
+                        task.title,
+                        task.episode
+                    )
+                        ?: return@launch
 
-            val gson = GsonBuilder()
-                .registerTypeAdapter(SChapter::class.java, InstanceCreator<SChapter> {
-                    SChapterImpl() // Provide an instance of SChapterImpl
-                })
-                .registerTypeAdapter(SAnime::class.java, InstanceCreator<SAnime> {
-                    SAnimeImpl() // Provide an instance of SAnimeImpl
-                })
-                .registerTypeAdapter(SEpisode::class.java, InstanceCreator<SEpisode> {
-                    SEpisodeImpl() // Provide an instance of SEpisodeImpl
-                })
-                .create()
-            val mediaJson = gson.toJson(task.sourceMedia)
-            val media = gson.fromJson(mediaJson, Media::class.java)
-            if (media != null) {
-                media.cover = media.cover?.let { downloadImage(it, directory, "cover.jpg") }
-                media.banner = media.banner?.let { downloadImage(it, directory, "banner.jpg") }
-                if (task.episodeImage != null) {
-                    media.anime?.episodes?.get(task.episode)?.let { episode ->
-                        episode.thumb = downloadImage(
-                            task.episodeImage,
-                            episodeDirectory,
-                            "episodeImage.jpg"
-                        )?.let {
-                            FileUrl(
-                                it
-                            )
+                val gson = GsonBuilder()
+                    .registerTypeAdapter(SChapter::class.java, InstanceCreator<SChapter> {
+                        SChapterImpl() // Provide an instance of SChapterImpl
+                    })
+                    .registerTypeAdapter(SAnime::class.java, InstanceCreator<SAnime> {
+                        SAnimeImpl() // Provide an instance of SAnimeImpl
+                    })
+                    .registerTypeAdapter(SEpisode::class.java, InstanceCreator<SEpisode> {
+                        SEpisodeImpl() // Provide an instance of SEpisodeImpl
+                    })
+                    .create()
+                val mediaJson = gson.toJson(task.sourceMedia)
+                val media = gson.fromJson(mediaJson, Media::class.java)
+                if (media != null) {
+                    media.cover = media.cover?.let { downloadImage(it, directory, "cover.jpg") }
+                    media.banner = media.banner?.let { downloadImage(it, directory, "banner.jpg") }
+                    if (task.episodeImage != null) {
+                        media.anime?.episodes?.get(task.episode)?.let { episode ->
+                            episode.thumb = downloadImage(
+                                task.episodeImage,
+                                episodeDirectory,
+                                "episodeImage.jpg"
+                            )?.let {
+                                FileUrl(
+                                    it
+                                )
+                            }
                         }
                     }
-                    downloadImage(task.episodeImage, episodeDirectory, "episodeImage.jpg")
-                }
 
-                val jsonString = gson.toJson(media)
-                withContext(Dispatchers.Main) {
-                    try {
-                        file.openOutputStream(this@AnimeDownloaderService, false).use { output ->
-                            if (output == null) throw Exception("Output stream is null")
-                            output.write(jsonString.toByteArray())
+                    val jsonString = gson.toJson(media)
+                    withContext(Dispatchers.Main) {
+                        try {
+                            file.openOutputStream(this@AnimeDownloaderService, false).use { output ->
+                                if (output == null) throw Exception("Output stream is null")
+                                output.write(jsonString.toByteArray())
+                            }
+                        } catch (e: android.system.ErrnoException) {
+                            e.printStackTrace()
+                            Toast.makeText(
+                                this@AnimeDownloaderService,
+                                "Error while saving: ${e.localizedMessage}",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
-                    } catch (e: android.system.ErrnoException) {
-                        e.printStackTrace()
-                        Toast.makeText(
-                            this@AnimeDownloaderService,
-                            "Error while saving: ${e.localizedMessage}",
-                            Toast.LENGTH_LONG
-                        ).show()
                     }
                 }
+            } catch (e: Exception) {
+                Logger.log("Failed to save media info: ${e.message}")
+                e.printStackTrace()
             }
         }
     }

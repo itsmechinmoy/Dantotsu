@@ -141,19 +141,17 @@ class ExtensionInstaller(private val context: Context) {
     }
 
     private fun getDownloadFile(downloadId: Long): File? {
-        val query = DownloadManager.Query().setFilterById(downloadId)
         return try {
-            downloadManager.query(query).use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val localUri = cursor.getString(
-                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI),
-                    ).removePrefix(FILE_SCHEME)
-                    File(localUri)
-                } else {
-                    null
+            val uri = downloadManager.getUriForDownloadedFile(downloadId) ?: return null
+            val tempFile = File(context.cacheDir, "temp_install_$downloadId.apk")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
                 }
             }
+            tempFile
         } catch (e: Exception) {
+            Logger.log("getDownloadFile failed: $e")
             null
         }
     }
@@ -164,20 +162,25 @@ class ExtensionInstaller(private val context: Context) {
      * @param uri The uri of the extension to install.
      */
     fun installApk(type: Type, downloadId: Long, uri: Uri) {
-        val installer = extensionInstaller.get()
-        if (installer == BasePreferences.ExtensionInstaller.PRIVATE && type is MediaType) {
-            try {
-                val file = getDownloadFile(downloadId)
-                if (file != null && ExtensionLoader.installPrivateExtensionFile(context, file, type)) {
-                    updateInstallStep(downloadId, InstallStep.Installed)
-                } else {
+        var installer = extensionInstaller.get()
+        if (installer == BasePreferences.ExtensionInstaller.PRIVATE) {
+            if (type is MediaType) {
+                try {
+                    val file = getDownloadFile(downloadId)
+                    if (file != null && ExtensionLoader.installPrivateExtensionFile(context, file, type)) {
+                        updateInstallStep(downloadId, InstallStep.Installed)
+                    } else {
+                        updateInstallStep(downloadId, InstallStep.Error)
+                    }
+                    file?.delete()
+                } catch (e: Exception) {
+                    Logger.log("Failed to install private extension: $e")
                     updateInstallStep(downloadId, InstallStep.Error)
                 }
-            } catch (e: Exception) {
-                Logger.log("Failed to install private extension: $e")
-                updateInstallStep(downloadId, InstallStep.Error)
+                return
+            } else {
+                installer = BasePreferences.ExtensionInstaller.PACKAGEINSTALLER
             }
-            return
         }
 
         when (installer) {

@@ -619,6 +619,15 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         private val context = image.context
         private var pressable = true
 
+        fun setState(state: Boolean) {
+            if (clicked != state) {
+                clicked = state
+                scope.launch {
+                    clicked()
+                }
+            }
+        }
+
         init {
             enabled(true)
             if (needsInitialClick) {

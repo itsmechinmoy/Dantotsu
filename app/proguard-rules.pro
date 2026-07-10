@@ -138,3 +138,9 @@
 # libtorrent4j
 #############################################
 -keep class org.libtorrent4j.swig.libtorrent_jni { *; }
+
+#############################################
+# FFmpegKit (com.antonkarpenko)
+#############################################
+-keep class com.antonkarpenko.ffmpegkit.** { *; }
+-dontwarn com.antonkarpenko.ffmpegkit.**

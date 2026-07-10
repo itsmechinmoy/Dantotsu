@@ -336,8 +336,10 @@ object PrefManager {
         animeDownloadsPreferences!!  //needs to be used externally
 
     fun exportAllPrefs(prefLocation: List<Location>): String {
+        val nonExtensionLocations = prefLocation.filter { it != Location.ExtensionSettings }
         return PreferencePackager.pack(
-            prefLocation.associateWith { getPrefLocation(it) }
+            nonExtensionLocations.associateWith { getPrefLocation(it) },
+            includeExtensionSettings = prefLocation.contains(Location.ExtensionSettings)
         )
     }
 
@@ -392,6 +394,7 @@ object PrefManager {
             Location.Irrelevant -> irrelevantPreferences
             Location.AnimeDownloads -> animeDownloadsPreferences
             Location.Protected -> protectedPreferences
+            Location.ExtensionSettings -> throw IllegalArgumentException("ExtensionSettings does not map to a single SharedPreferences")
         }!!
     }
 
