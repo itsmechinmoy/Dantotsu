@@ -56,6 +56,13 @@ class EpisodeAdapter(
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     val context = fragment.requireContext()
 
+    companion object {
+        /** Partial bind: update download status text only (no Glide / animation). */
+        private const val PAYLOAD_PROGRESS = "download_progress"
+        /** Partial bind: update download chrome (icon/state) without full card rebind. */
+        private const val PAYLOAD_DOWNLOAD_STATE = "download_state"
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return (when (viewType) {
             0 -> EpisodeListViewHolder(
@@ -88,6 +95,31 @@ class EpisodeAdapter(
 
     override fun getItemViewType(position: Int): Int {
         return type
+    }
+
+    override fun onBindViewHolder(
+        holder: RecyclerView.ViewHolder,
+        position: Int,
+        payloads: MutableList<Any>
+    ) {
+        if (payloads.isEmpty()) {
+            super.onBindViewHolder(holder, position, payloads)
+            return
+        }
+        if (position !in arr.indices) return
+        val ep = arr[position]
+        val listHolder = holder as? EpisodeListViewHolder ?: return
+
+        when {
+            payloads.contains(PAYLOAD_PROGRESS) -> {
+                listHolder.bindProgressText(ep.downloadProgress)
+            }
+            payloads.contains(PAYLOAD_DOWNLOAD_STATE) -> {
+                // Icon / downloaded / failed — still skip Glide + setAnimation
+                listHolder.bind(ep.number, ep.downloadProgress, ep.desc)
+            }
+            else -> super.onBindViewHolder(holder, position, payloads)
+        }
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
@@ -269,11 +301,10 @@ class EpisodeAdapter(
             AnimeDownloader.isDownloading(media.id, episodeNumber))
                 return
         AnimeDownloader.startDownload(media.id, episodeNumber)
-        // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
             arr[position].downloadProgress = ""
-            notifyItemChanged(position)
+            notifyItemChanged(position, PAYLOAD_DOWNLOAD_STATE)
         }
     }
 
@@ -281,32 +312,41 @@ class EpisodeAdapter(
     fun addToDownloadedEpisodes(episodeNumber: String, size: Double) {
         AnimeDownloader.stopDownload(media.id, episodeNumber)
         downloadedEpisodes.add(episodeNumber)
-        // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
             arr[position].downloadProgress = "Downloaded" + ": (${"%.1f".format(size)} MB)"
-            notifyItemChanged(position)
+            notifyItemChanged(position, PAYLOAD_DOWNLOAD_STATE)
         }
     }
 
     fun deleteDownload(episodeNumber: String) {
         downloadedEpisodes.remove(episodeNumber)
-        // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
             arr[position].downloadProgress = null
-            notifyItemChanged(position)
+            notifyItemChanged(position, PAYLOAD_DOWNLOAD_STATE)
         }
     }
 
+    /** User cancel: back to idle (not "Failed"). */
+    fun clearDownloadState(episodeNumber: String) {
+        AnimeDownloader.stopDownload(media.id, episodeNumber)
+        downloadedEpisodes.remove(episodeNumber)
+        val position = arr.indexOfFirst { it.number == episodeNumber }
+        if (position != -1) {
+            arr[position].downloadProgress = null
+            notifyItemChanged(position, PAYLOAD_DOWNLOAD_STATE)
+        }
+    }
+
+    /** Real download failure from the service. */
     fun purgeDownload(episodeNumber: String) {
         AnimeDownloader.stopDownload(media.id, episodeNumber)
         downloadedEpisodes.remove(episodeNumber)
-        // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.number == episodeNumber }
         if (position != -1) {
             arr[position].downloadProgress = "Failed"
-            notifyItemChanged(position)
+            notifyItemChanged(position, PAYLOAD_DOWNLOAD_STATE)
         }
     }
 
@@ -320,17 +360,15 @@ class EpisodeAdapter(
         downloadedBytes: Long,
         estimatedTotalBytes: Long
     ) {
-        // Find the position of the chapter and notify only that item
+        // Ignore stale progress after cancel (engine may still emit briefly)
+        if (!AnimeDownloader.isDownloading(media.id, episodeNumber)) return
         val position = arr.indexOfFirst { it.number == episodeNumber }
-        if (position != -1) {
-            arr[position].downloadProgress = buildDownloadProgressText(
-                progress,
-                downloadedBytes,
-                estimatedTotalBytes
-            )
-
-            notifyItemChanged(position)
-        }
+        if (position == -1) return
+        val text = buildDownloadProgressText(progress, downloadedBytes, estimatedTotalBytes)
+        // Skip no-op updates (same label) to avoid any rebind work
+        if (arr[position].downloadProgress == text) return
+        arr[position].downloadProgress = text
+        notifyItemChanged(position, PAYLOAD_PROGRESS)
     }
 
     private fun buildDownloadProgressText(
@@ -455,10 +493,27 @@ class EpisodeAdapter(
             }
         }
 
+        /** Stop spin animator so cancel doesn't leave the icon tilted. */
+        private fun stopDownloadAnimation() {
+            binding.itemDownload.animate().cancel()
+            binding.itemDownload.rotation = 0f
+        }
+
+        /** Progress-only update: status text, no icon/animation/Glide side effects. */
+        fun bindProgressText(progress: String?) {
+            if (progress.isNullOrEmpty()) {
+                binding.itemDownloadStatus.visibility = View.GONE
+                return
+            }
+            binding.itemEpisodeDesc.visibility = View.GONE
+            binding.itemDownloadStatus.visibility = View.VISIBLE
+            binding.itemDownloadStatus.text = progress
+        }
+
         fun bind(episodeNumber: String, progress: String?, desc: String?) {
             if (progress != null) {
                 binding.itemEpisodeDesc.visibility = View.GONE
-                if(progress == "")
+                if (progress == "")
                     binding.itemDownloadStatus.visibility = View.GONE
                 else
                     binding.itemDownloadStatus.visibility = View.VISIBLE
@@ -471,49 +526,51 @@ class EpisodeAdapter(
                 binding.itemDownload.visibility = View.GONE
             } else {
                 binding.itemDownload.visibility = View.VISIBLE
-                if(AnimeDownloader.isDownloading(media.id, episodeNumber)){                
+                if (AnimeDownloader.isDownloading(media.id, episodeNumber)) {
+                    stopDownloadAnimation()
                     binding.itemDownload.setImageResource(R.drawable.ic_sync)
-                    startOrContinueRotation(episodeNumber) {
-                        binding.itemDownload.rotation = 0f
-                    }
+                    startOrContinueRotation(episodeNumber)
                     binding.itemEpisodeDesc.visibility = View.GONE
                 } else if (downloadedEpisodes.contains(episodeNumber)) {
+                    stopDownloadAnimation()
                     binding.itemEpisodeDesc.visibility = View.GONE
                     binding.itemDownloadStatus.visibility = View.VISIBLE
-                   
+
                     binding.itemDownload.setImageResource(R.drawable.ic_circle_check)
                     binding.itemDownload.postDelayed({
                         binding.itemDownload.setImageResource(R.drawable.ic_round_delete_24)
-                        binding.itemDownload.rotation = 0f
+                        stopDownloadAnimation()
                     }, 1000)
                 } else {
+                    stopDownloadAnimation()
                     binding.itemDownloadStatus.visibility = View.GONE
                     binding.itemEpisodeDesc.visibility =
                         if (desc != null && desc.trim(' ') != "") View.VISIBLE else View.GONE
-                  
+
                     binding.itemDownload.setImageResource(R.drawable.ic_download_24)
-                    binding.itemDownload.rotation = 0f
                 }
             }
-
         }
 
-        private fun startOrContinueRotation(episodeNumber: String, resetRotation: () -> Unit) {
+        private fun startOrContinueRotation(episodeNumber: String) {
             if (!isRotationCoroutineRunningFor(episodeNumber)) {
                 val scope = fragment.lifecycle.coroutineScope
                 scope.launch {
-                    // Add chapter number to active coroutines set
                     activeCoroutines.add(episodeNumber)
-                    while(AnimeDownloader.isDownloading(media.id, episodeNumber)){
-                        binding.itemDownload.animate().rotationBy(360f).setDuration(1000)
-                            .setInterpolator(
-                                LinearInterpolator()
-                            ).start()
-                        delay(1000)
+                    try {
+                        while (AnimeDownloader.isDownloading(media.id, episodeNumber)) {
+                            binding.itemDownload.animate()
+                                .rotationBy(360f)
+                                .setDuration(1000)
+                                .setInterpolator(LinearInterpolator())
+                                .start()
+                            delay(1000)
+                        }
+                    } finally {
+                        activeCoroutines.remove(episodeNumber)
+                        // Cancel in-flight ViewPropertyAnimator so icon isn't left mid-spin
+                        stopDownloadAnimation()
                     }
-                    // Remove chapter number from active coroutines set
-                    activeCoroutines.remove(episodeNumber)
-                    resetRotation()
                 }
             }
         }

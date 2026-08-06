@@ -34,6 +34,7 @@ import ani.dantotsu.download.DownloadedType
 import ani.dantotsu.download.DownloadsManager
 import ani.dantotsu.download.DownloadsManager.Companion.compareName
 import ani.dantotsu.download.DownloadsManager.Companion.getSubDirectory
+import ani.dantotsu.download.anime.AnimeDownloader
 import ani.dantotsu.download.anime.AnimeDownloaderService
 import ani.dantotsu.download.findValidName
 import ani.dantotsu.dp
@@ -569,6 +570,10 @@ class AnimeWatchFragment : Fragment() {
     }
 
     fun onAnimeEpisodeStopDownloadClick(i: String) {
+        // Idle UI immediately (not "Failed"); ignore late progress broadcasts
+        AnimeDownloader.stopDownload(media.id, i)
+        episodeAdapter.clearDownloadState(i)
+
         val cancelIntent = Intent().apply {
             action = AnimeDownloaderService.ACTION_CANCEL_DOWNLOAD
             putExtra(
@@ -578,16 +583,14 @@ class AnimeWatchFragment : Fragment() {
         }
         requireContext().sendBroadcast(cancelIntent)
 
-        // Remove the download from the manager and update the UI
+        // Remove partial files from the manager
         downloadManager.removeDownload(
             DownloadedType(
                 media.mainName(),
                 i,
                 MediaType.ANIME
             )
-        ) {
-            episodeAdapter.purgeDownload(i)
-        }
+        ) {}
     }
 
     @OptIn(UnstableApi::class)

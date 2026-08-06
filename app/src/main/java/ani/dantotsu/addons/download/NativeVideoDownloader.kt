@@ -40,6 +40,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val nextSessionId = AtomicLong(1000)
     private val activeSessions = ConcurrentHashMap<Long, DownloadSession>()
+    private val cancelledSessions = ConcurrentHashMap.newKeySet<Long>()
     private val uriMap = ConcurrentHashMap<String, Uri>()
 
     // aria2 process variables
@@ -100,8 +101,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         class Aria2Session(
             override val sessionId: Long,
             override val downloadPath: String,
-            val context: Context,
-            val job: Job
+            val context: Context
         ) : DownloadSession() {
             @Volatile
             var currentStatus: String = "RUNNING"
@@ -109,6 +109,8 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             var failReason: String? = null
             @Volatile
             var hasError: Boolean = false
+            @Volatile
+            var job: Job? = null
 
             @Volatile
             var downloadedBytes: Long = 0L
@@ -117,8 +119,9 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
             override fun cancel() {
                 currentStatus = "FAILED"
+                hasError = true
                 failReason = "Cancelled by user"
-                job.cancel()
+                job?.cancel()
             }
 
             override fun getStatus(): String = currentStatus
@@ -129,8 +132,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         class HlsSession(
             override val sessionId: Long,
             override val downloadPath: String,
-            val context: Context,
-            val job: Job
+            val context: Context
         ) : DownloadSession() {
             @Volatile
             var currentStatus: String = "RUNNING"
@@ -138,15 +140,20 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             var failReason: String? = null
             @Volatile
             var hasError: Boolean = false
+            @Volatile
+            var job: Job? = null
 
             val downloadedBytes = AtomicLong(0L)
             @Volatile
             var totalBytes: Long = 0L
+            @Volatile
+            var durationSeconds: Double = 0.0
 
             override fun cancel() {
                 currentStatus = "FAILED"
+                hasError = true
                 failReason = "Cancelled by user"
-                job.cancel()
+                job?.cancel()
             }
 
             override fun getStatus(): String = currentStatus
@@ -157,8 +164,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         class ComplexHlsSession(
             override val sessionId: Long,
             override val downloadPath: String,
-            val context: Context,
-            val job: Job
+            val context: Context
         ) : DownloadSession() {
             @Volatile
             var currentStatus: String = "RUNNING"
@@ -166,15 +172,20 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             var failReason: String? = null
             @Volatile
             var hasError: Boolean = false
+            @Volatile
+            var job: Job? = null
 
             val downloadedBytes = AtomicLong(0L)
             @Volatile
             var totalBytes: Long = 0L
+            @Volatile
+            var durationSeconds: Double = 0.0
 
             override fun cancel() {
                 currentStatus = "FAILED"
+                hasError = true
                 failReason = "Cancelled by user"
-                job.cancel()
+                job?.cancel()
             }
 
             override fun getStatus(): String = currentStatus
@@ -184,7 +195,25 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
     }
 
     override fun cancelDownload(sessionId: Long) {
-        activeSessions[sessionId]?.cancel()
+        cancelledSessions.add(sessionId)
+        val session = activeSessions[sessionId]
+        session?.cancel()
+        // FFmpegKit sessions need explicit cancel (blocking execute may still be running)
+        if (session is DownloadSession.FFMpegSession || session == null) {
+            runCatching { FFmpegKit.cancel(sessionId) }
+        }
+    }
+
+    private fun isSessionCancelled(sessionId: Long): Boolean {
+        if (cancelledSessions.contains(sessionId)) return true
+        val session = activeSessions[sessionId] ?: return false
+        return session.getStatus() == "FAILED" ||
+            (session !is DownloadSession.FFMpegSession && session.hadError())
+    }
+
+    private fun emitProgress(sessionId: Long, statCallback: (Double) -> Unit, value: Double) {
+        if (isSessionCancelled(sessionId)) return
+        statCallback(value)
     }
 
     override fun getDownloadedBytes(sessionId: Long): Long {
@@ -256,60 +285,60 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         val isDash = videoUrl.contains(".mpd", ignoreCase = true) || videoUrl.contains("mpd", ignoreCase = true)
 
         if (isHls && subtitleUrls.isEmpty() && audioUrls.isEmpty()) {
-            // HLS stream with no extra subtitle/audio tracks -> download using parallel HLS engine
+            // HLS → parallel segments → remux once straight to destination MKV
             val tempFile = File(context.cacheDir, "hls_dl_${sessionId}.ts")
-            val targetUri = uriMap[downloadPath]
-            
-            val job = scope.launch {
+            val session = DownloadSession.HlsSession(sessionId, downloadPath, context)
+            activeSessions[sessionId] = session
+
+            session.job = scope.launch {
                 try {
-                    activeSessions[sessionId]?.let { (it as? DownloadSession.HlsSession)?.currentStatus = "RUNNING" }
-                    
-                    // Fetch total length if possible to drive statistics callback
-                    var totalLength = 0.0
-                    executeFFProbe(videoUrl, headers) { durationStr ->
-                        durationStr.toDoubleOrNull()?.let { totalLength = it }
+                    session.currentStatus = "RUNNING"
+                    val hlsResult = runParallelHlsDownload(
+                        videoUrl, headers, tempFile, sessionId
+                    ) { progressPercent, durationSec ->
+                        session.durationSeconds = durationSec
+                        // Service maps stat/1000 → percent
+                        emitProgress(sessionId, statCallback, progressPercent.toDouble() * 1000.0)
                     }
+                    if (session.hasError || !isActive) {
+                        session.currentStatus = "FAILED"
+                        return@launch
+                    }
+                    session.durationSeconds = hlsResult.durationSeconds
+                    session.totalBytes = hlsResult.totalBytes
+                    session.downloadedBytes.set(hlsResult.totalBytes)
 
-                    runParallelHlsDownload(videoUrl, headers, tempFile, sessionId) { progressPercent ->
-                        val duration = if (totalLength > 0.0) totalLength else 100.0
-                        statCallback(progressPercent.toDouble() * duration * 10.0)
-                    }
+                    // Single write: FFmpeg muxes directly to SAF/path (no intermediate mkv + copy)
+                    remuxMpegTsToMkv(tempFile, downloadPath, emptyList(), emptyList())
+                    assertHasPlayableVideo(downloadPath)
 
-                    // Copy completed temp file to SAF path
-                    if (targetUri != null) {
-                        copyFileToUri(tempFile, targetUri)
-                    } else {
-                        tempFile.copyTo(File(downloadPath), overwrite = true)
+                    if (!session.hasError) {
+                        session.currentStatus = "COMPLETED"
                     }
-                    
-                    val session = activeSessions[sessionId] as? DownloadSession.HlsSession
-                    session?.currentStatus = "COMPLETED"
+                } catch (e: CancellationException) {
+                    session.currentStatus = "FAILED"
+                    session.hasError = true
+                    session.failReason = "Cancelled by user"
                 } catch (e: Exception) {
-                    val session = activeSessions[sessionId] as? DownloadSession.HlsSession
-                    session?.currentStatus = "FAILED"
-                    session?.hasError = true
-                    session?.failReason = e.message
+                    session.currentStatus = "FAILED"
+                    session.hasError = true
+                    session.failReason = e.message
                     Logger.log("Built-in: Parallel HLS download failed: ${e.message}")
                     e.printStackTrace()
                 } finally {
                     if (tempFile.exists()) tempFile.delete()
                 }
             }
-
-            activeSessions[sessionId] = DownloadSession.HlsSession(
-                sessionId = sessionId,
-                downloadPath = downloadPath,
-                context = context,
-                job = job
-            )
             return sessionId
 
         } else if (!isHls && !isDash && subtitleUrls.isEmpty() && audioUrls.isEmpty()) {
             // Progressive HTTP/HTTPS URL -> Download using multi-connection aria2 subprocess (with OkHttp fallback)
             val tempFile = File(context.cacheDir, "aria_dl_${sessionId}.bin")
             val targetUri = uriMap[downloadPath]
+            val session = DownloadSession.Aria2Session(sessionId, downloadPath, context)
+            activeSessions[sessionId] = session
 
-            val job = scope.launch {
+            session.job = scope.launch {
                 try {
                     var useAria2 = true
                     try {
@@ -319,15 +348,6 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                         useAria2 = false
                     }
 
-                    var totalLength = 0.0
-                    try {
-                        executeFFProbe(videoUrl, headers) { durationStr ->
-                            durationStr.toDoubleOrNull()?.let { totalLength = it }
-                        }
-                    } catch (probeException: Exception) {
-                        Logger.log("Built-in: FFProbe failed to get duration: ${probeException.message}")
-                    }
-
                     if (useAria2) {
                         val gid = callAria2AddUri(videoUrl, headers, tempFile)
                             ?: throw IOException("Failed to add URI to aria2")
@@ -335,11 +355,11 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                         val session = activeSessions[sessionId] as? DownloadSession.Aria2Session
                         session?.currentStatus = "RUNNING"
 
-                        // Poll status
+                        // Poll status (500ms — progress is pushed via statCallback)
                         while (isActive) {
                             val statusMap = callAria2TellStatus(gid)
                             if (statusMap == null) {
-                                delay(1000.milliseconds)
+                                delay(500.milliseconds)
                                 continue
                             }
                             val status = statusMap["status"] as? String ?: "active"
@@ -363,10 +383,9 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
                             if (totalBytes > 0L) {
                                 val percent = (completedBytes * 100 / totalBytes).toInt()
-                                val duration = if (totalLength > 0.0) totalLength else 100.0
-                                statCallback(percent.toDouble() * duration * 10.0)
+                                emitProgress(sessionId, statCallback, percent.toDouble() * 1000.0)
                             }
-                            delay(1000.milliseconds)
+                            delay(500.milliseconds)
                         }
                     } else {
                         // Fallback to OkHttp progressive downloader
@@ -403,13 +422,24 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
                                         if (contentLength > 0L) {
                                             val percent = (totalBytesRead * 100 / contentLength).toInt()
-                                            val duration = if (totalLength > 0.0) totalLength else 100.0
-                                            statCallback(percent.toDouble() * duration * 10.0)
+                                            emitProgress(
+                                                sessionId,
+                                                statCallback,
+                                                percent.toDouble() * 1000.0
+                                            )
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+
+                    if (isSessionCancelled(sessionId) || !isActive) {
+                        (activeSessions[sessionId] as? DownloadSession.Aria2Session)?.apply {
+                            currentStatus = "FAILED"
+                            hasError = true
+                        }
+                        return@launch
                     }
 
                     // Copy completed temp file to SAF path
@@ -421,6 +451,11 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
                     val activeSession = activeSessions[sessionId] as? DownloadSession.Aria2Session
                     activeSession?.currentStatus = "COMPLETED"
+                } catch (e: CancellationException) {
+                    val activeSession = activeSessions[sessionId] as? DownloadSession.Aria2Session
+                    activeSession?.currentStatus = "FAILED"
+                    activeSession?.hasError = true
+                    activeSession?.failReason = "Cancelled by user"
                 } catch (e: Exception) {
                     val activeSession = activeSessions[sessionId] as? DownloadSession.Aria2Session
                     activeSession?.currentStatus = "FAILED"
@@ -432,138 +467,92 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                     if (tempFile.exists()) tempFile.delete()
                 }
             }
-
-            activeSessions[sessionId] = DownloadSession.Aria2Session(
-                sessionId = sessionId,
-                downloadPath = downloadPath,
-                context = context,
-                job = job
-            )
             return sessionId
 
         } else if (isHls) {
-            // Complex HLS stream with subtitle/audio tracks -> download HLS video/audio/subtitles locally first, then mux using FFmpeg
+            // Complex HLS: parallel video + subs + audio, then single mux to destination
             val tempVideoFile = File(context.cacheDir, "hls_dl_${sessionId}_video.ts")
-            val targetUri = uriMap[downloadPath]
+            val session = DownloadSession.ComplexHlsSession(sessionId, downloadPath, context)
+            activeSessions[sessionId] = session
 
-            val job = scope.launch {
+            session.job = scope.launch {
                 val localTempFiles = mutableListOf<File>()
                 localTempFiles.add(tempVideoFile)
                 try {
-                    activeSessions[sessionId]?.let { (it as? DownloadSession.ComplexHlsSession)?.currentStatus = "RUNNING" }
-
-                    // 1. Fetch total length if possible to drive statistics callback
-                    var totalLength = 0.0
-                    try {
-                        executeFFProbe(videoUrl, headers) { durationStr ->
-                            durationStr.toDoubleOrNull()?.let { totalLength = it }
-                        }
-                    } catch (e: Exception) {
-                        Logger.log("Failed to execute FFProbe for duration: ${e.message}")
-                    }
-
-                    // 2. Download video HLS stream
-                    val complexSession = activeSessions[sessionId] as? DownloadSession.ComplexHlsSession
-                    runParallelHlsDownload(videoUrl, headers, tempVideoFile, sessionId) { progressPercent ->
-                        val duration = if (totalLength > 0.0) totalLength else 100.0
-                        statCallback(progressPercent.toDouble() * duration * 10.0)
-                        
-                        // Also update downloaded/total bytes
-                        if (complexSession != null) {
-                            complexSession.downloadedBytes.set(tempVideoFile.length())
-                            val count = progressPercent.toDouble()
-                            if (count > 0) {
-                                complexSession.totalBytes = (tempVideoFile.length() * 100 / count).toLong()
-                            }
-                        }
-                    }
-
+                    session.currentStatus = "RUNNING"
                     val client = Injekt.get<NetworkHelper>().downloadClient
                     val okHeaders = headers.toHeaders()
 
-                    // 3. Download subtitles
-                    val localSubtitles = mutableListOf<Pair<String, String>>()
-                    for ((index, sub) in subtitleUrls.withIndex()) {
-                        val subTempFile = File(context.cacheDir, "hls_dl_${sessionId}_sub_${index}.vtt")
-                        localTempFiles.add(subTempFile)
-                        val req = Request.Builder().url(sub.first).headers(okHeaders).build()
-                        client.newCall(req).execute().use { res ->
-                            if (!res.isSuccessful) throw IOException("Failed to download subtitle: ${sub.first}, code: ${res.code}")
-                            val body = res.body
-                            subTempFile.outputStream().use { out ->
-                                body.byteStream().copyTo(out)
+                    coroutineScope {
+                        val videoDeferred = async {
+                            runParallelHlsDownload(
+                                videoUrl, headers, tempVideoFile, sessionId
+                            ) { progressPercent, durationSec ->
+                                session.durationSeconds = durationSec
+                                // Keep segment-based byte totals from updateHlsSessionBytes
+                                emitProgress(
+                                    sessionId,
+                                    statCallback,
+                                    progressPercent.toDouble() * 1000.0
+                                )
                             }
-                            localSubtitles.add(subTempFile.absolutePath to sub.second)
                         }
+
+                        val subDeferreds = subtitleUrls.mapIndexed { index, sub ->
+                            async {
+                                val subTempFile =
+                                    File(context.cacheDir, "hls_dl_${sessionId}_sub_${index}.vtt")
+                                synchronized(localTempFiles) { localTempFiles.add(subTempFile) }
+                                val req = Request.Builder().url(sub.first).headers(okHeaders).build()
+                                client.newCall(req).execute().use { res ->
+                                    if (!res.isSuccessful) {
+                                        throw IOException(
+                                            "Failed to download subtitle: ${sub.first}, code: ${res.code}"
+                                        )
+                                    }
+                                    subTempFile.outputStream().use { out ->
+                                        res.body.byteStream().copyTo(out)
+                                    }
+                                }
+                                subTempFile.absolutePath to sub.second
+                            }
+                        }
+
+                        val audioDeferreds = audioUrls.mapIndexed { index, audio ->
+                            async {
+                                val audioTempFile =
+                                    File(context.cacheDir, "hls_dl_${sessionId}_audio_${index}.ts")
+                                synchronized(localTempFiles) { localTempFiles.add(audioTempFile) }
+                                runParallelHlsDownload(
+                                    audio.first, headers, audioTempFile, sessionId
+                                ) { _, _ -> }
+                                audioTempFile.absolutePath to audio.second
+                            }
+                        }
+
+                        val hlsResult = videoDeferred.await()
+                        if (session.hasError || !isActive) {
+                            throw CancellationException("Cancelled by user")
+                        }
+                        session.durationSeconds = hlsResult.durationSeconds
+                        val localSubtitles = subDeferreds.awaitAll()
+                        val localAudio = audioDeferreds.awaitAll()
+
+                        remuxMpegTsToMkv(tempVideoFile, downloadPath, localSubtitles, localAudio)
+                        assertHasPlayableVideo(downloadPath)
                     }
 
-                    // 4. Download audio tracks
-                    val localAudio = mutableListOf<Pair<String, String>>()
-                    for ((index, audio) in audioUrls.withIndex()) {
-                        val audioTempFile = File(context.cacheDir, "hls_dl_${sessionId}_audio_${index}.ts")
-                        localTempFiles.add(audioTempFile)
-                        runParallelHlsDownload(audio.first, headers, audioTempFile, sessionId) {}
-                        localAudio.add(audioTempFile.absolutePath to audio.second)
+                    if (!session.hasError) {
+                        session.currentStatus = "COMPLETED"
                     }
-
-                    // 5. Mux using FFmpeg locally
-                    val finalTempFile = File(context.cacheDir, "hls_dl_${sessionId}_muxed.mkv")
-                    localTempFiles.add(finalTempFile)
-
-                    val command = StringBuilder()
-                    command.append("-i \"${tempVideoFile.absolutePath}\" ")
-                    for (sub in localSubtitles) {
-                        command.append("-i \"${sub.first}\" ")
-                    }
-                    for (audio in localAudio) {
-                        command.append("-i \"${audio.first}\" ")
-                    }
-
-                    // Map video and audio from main input 0, ignoring other tracks (like timed_id3)
-                    command.append("-map 0:v? -map 0:a? ")
-
-                    // Map subtitle tracks from input files (from index 1 to localSubtitles.size)
-                    for (i in localSubtitles.indices) {
-                        val inputIndex = 1 + i
-                        command.append("-map $inputIndex:s? ")
-                    }
-
-                    // Map audio tracks from extra audio files
-                    for (i in localAudio.indices) {
-                        val inputIndex = 1 + localSubtitles.size + i
-                        command.append("-map $inputIndex:a? ")
-                    }
-                    command.append("-c copy ")
-                    if (localSubtitles.isNotEmpty()) {
-                        command.append("-c:s srt ")
-                    }
-                    for ((index, sub) in localSubtitles.withIndex()) {
-                        command.append("-metadata:s:s:$index language=\"${sub.second}\" ")
-                    }
-                    for ((index, audio) in localAudio.withIndex()) {
-                        command.append("-metadata:s:a:${index + 1} language=\"${audio.second}\" ")
-                    }
-                    command.append("\"${finalTempFile.absolutePath}\"")
-
-                    val exec = FFmpegKit.execute(command.toString())
-                    if (exec.returnCode?.isValueError == true) {
-                        throw IOException("FFmpeg muxing failed: ${exec.allLogsAsString}")
-                    }
-
-                    // 6. Copy final muxed file to output destination
-                    if (targetUri != null) {
-                        copyFileToUri(finalTempFile, targetUri)
-                    } else {
-                        finalTempFile.copyTo(File(downloadPath), overwrite = true)
-                    }
-
-                    val session = activeSessions[sessionId] as? DownloadSession.ComplexHlsSession
-                    session?.currentStatus = "COMPLETED"
+                } catch (e: CancellationException) {
+                    session.currentStatus = "FAILED"
+                    session.hasError = true
+                    session.failReason = "Cancelled by user"
                 } catch (e: Exception) {
-                    val session = activeSessions[sessionId] as? DownloadSession.ComplexHlsSession
-                    session?.currentStatus = "FAILED"
-                    session?.hasError = true
-                    session?.failReason = e.message
+                    session.currentStatus = "FAILED"
+                    session.hasError = true
+                    session.failReason = e.message
                     Logger.log("Built-in: Complex HLS download failed: ${e.message}")
                     e.printStackTrace()
                 } finally {
@@ -572,13 +561,6 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                     }
                 }
             }
-
-            activeSessions[sessionId] = DownloadSession.ComplexHlsSession(
-                sessionId = sessionId,
-                downloadPath = downloadPath,
-                context = context,
-                job = job
-            )
             return sessionId
 
         } else {
@@ -613,16 +595,26 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             }
             command.append("\"$downloadPath\" ")
 
+            val ffmpegSessionId = AtomicLong(-1L)
             val exec = FFmpegKit.executeAsync(command.toString(),
                 { session ->
                     Logger.log("Built-in FFmpeg session exited: state=${session.state} rc=${session.returnCode}")
                 }, {
                     // console logs
                 }) {
-                statCallback(it.time)
+                val sid = ffmpegSessionId.get()
+                if (sid != -1L) {
+                    emitProgress(sid, statCallback, it.time.toDouble())
+                }
             }
             val rawId = exec.sessionId
+            ffmpegSessionId.set(rawId)
             activeSessions[rawId] = DownloadSession.FFMpegSession(rawId, downloadPath)
+            // If already cancelled under our provisional id, cancel FFmpeg too
+            if (cancelledSessions.contains(sessionId)) {
+                cancelledSessions.add(rawId)
+                FFmpegKit.cancel(rawId)
+            }
             return rawId
         }
     }
@@ -684,76 +676,45 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
     }
 
     // ==========================================
-    // PARALLEL HLS SEGMENT DOWNLOADER (AniZen style)
+    // PARALLEL HLS SEGMENT DOWNLOADER
     // ==========================================
+
+    private data class HlsDownloadResult(
+        val durationSeconds: Double,
+        val totalBytes: Long
+    )
+
     @RequiresApi(Build.VERSION_CODES.N)
     private suspend fun runParallelHlsDownload(
         playlistUrl: String,
         headers: Map<String, String>,
         tempFile: File,
         sessionId: Long,
-        progressCallback: (Int) -> Unit
-    ) = withContext(Dispatchers.IO) {
+        progressCallback: (progressPercent: Int, durationSeconds: Double) -> Unit
+    ): HlsDownloadResult = withContext(Dispatchers.IO) {
         val client = Injekt.get<NetworkHelper>().downloadClient
         val okHeaders = headers.toHeaders()
-        
-        var currentUrl = playlistUrl
-        var lines: List<String>
 
-        // Resolve Master Playlist to picked variant
-        while (true) {
-            val req = Request.Builder().url(currentUrl).headers(okHeaders).build()
+        val mediaPlaylist = resolveHlsMediaPlaylist(playlistUrl, okHeaders, client)
+        val baseUrl = mediaPlaylist.url.substringBeforeLast("/") + "/"
+        val parsed = parseHlsMediaPlaylist(mediaPlaylist.lines, baseUrl)
+
+        if (parsed.segments.isEmpty()) throw IOException("HLS segments list is empty")
+
+        val secretKey = parsed.encryptionKeyUrl?.let { keyUrl ->
+            val req = Request.Builder().url(keyUrl).headers(okHeaders).build()
             client.newCall(req).execute().use { res ->
-                if (!res.isSuccessful) throw IOException("Failed HLS resolution: ${res.code}")
-                lines = res.body.string().lines()
-            }
-            val isMaster = lines.any { it.startsWith("#EXT-X-STREAM-INF") }
-            if (isMaster) {
-                val baseUrl = currentUrl.substringBeforeLast("/") + "/"
-                val subUrl = lines.firstOrNull { it.isNotBlank() && !it.startsWith("#") }
-                    ?: throw IOException("Variant HLS playlist empty")
-                currentUrl = if (subUrl.startsWith("http")) subUrl else baseUrl + subUrl
-                continue
-            }
-            break
-        }
-
-        val baseUrl = currentUrl.substringBeforeLast("/") + "/"
-        val segments = mutableListOf<String>()
-        var encryptionKeyUrl: String? = null
-        var mediaSequence = 0
-
-        for (line in lines) {
-            if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) {
-                mediaSequence = line.substringAfter(":").trim().toIntOrNull() ?: 0
-            } else if (line.startsWith("#EXT-X-KEY:METHOD=AES-128")) {
-                val match = Regex("URI=\"([^\"]+)\"").find(line)
-                encryptionKeyUrl = match?.groupValues?.get(1)
-                if (encryptionKeyUrl != null && !encryptionKeyUrl.startsWith("http")) {
-                    encryptionKeyUrl = baseUrl + encryptionKeyUrl
-                }
-            } else if (!line.startsWith("#") && line.isNotBlank()) {
-                segments.add(if (line.startsWith("http")) line else baseUrl + line)
+                SecretKeySpec(res.body.bytes(), "AES")
             }
         }
 
-        if (segments.isEmpty()) throw IOException("HLS segments list is empty")
-
-        var secretKey: SecretKeySpec? = null
-        if (encryptionKeyUrl != null) {
-            val req = Request.Builder().url(encryptionKeyUrl).headers(okHeaders).build()
-            client.newCall(req).execute().use { res ->
-                val keyBytes = res.body.bytes()
-                secretKey = SecretKeySpec(keyBytes, "AES")
-            }
-        }
-
-        val segmentQueue = segments.mapIndexed { index, url -> index to url }.toMutableList()
+        val segmentQueue = parsed.segments.mapIndexed { index, url -> index to url }.toMutableList()
         val downloadedCount = java.util.concurrent.atomic.LongAdder()
-        
+        val downloadedBytes = AtomicLong(0L)
+
         val host = playlistUrl.toUri().host ?: ""
         val threadCount = calculateDynamicConcurrency(host)
-        val segmentFolder = File(context.cacheDir, "hls_parts_${System.currentTimeMillis()}")
+        val segmentFolder = File(context.cacheDir, "hls_parts_${sessionId}_${System.nanoTime()}")
         segmentFolder.mkdirs()
 
         try {
@@ -765,47 +726,37 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                                 if (segmentQueue.isNotEmpty()) segmentQueue.removeAt(0) else null
                             } ?: break
                             val partFile = File(segmentFolder, "seg_${seg.first}.part")
-                            
+
                             var success = false
                             var attempts = 0
                             while (!success) {
                                 attempts++
                                 try {
-                                    val req = Request.Builder().url(seg.second).headers(okHeaders).build()
-                                    client.newCall(req).execute().use { res ->
-                                        if (!res.isSuccessful) throw IOException("Res code: ${res.code}")
-                                        val body = res.body
-                                        
-                                        body.byteStream().use { input ->
-                                            FileOutputStream(partFile).use { fileOut ->
-                                                if (secretKey != null) {
-                                                    val seqNum = mediaSequence + seg.first
-                                                    val ivBytes = ByteBuffer.allocate(16).putLong(8, seqNum.toLong()).array()
-                                                    val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-                                                    cipher.init(Cipher.DECRYPT_MODE,
-                                                        secretKey, IvParameterSpec(ivBytes))
-                                                    javax.crypto.CipherOutputStream(fileOut, cipher).use { cipherOut ->
-                                                        input.copyTo(cipherOut)
-                                                    }
-                                                } else {
-                                                    input.copyTo(fileOut)
-                                                }
-                                            }
-                                        }
-                                        val dataSize = partFile.length()
-                                        downloadedCount.increment()
-                                        val hlsSession = activeSessions[sessionId] as? DownloadSession.HlsSession
-                                        if (hlsSession != null) {
-                                            hlsSession.downloadedBytes.addAndGet(dataSize)
-                                            val count = downloadedCount.sum().toDouble()
-                                            if (count > 0) {
-                                                hlsSession.totalBytes = (hlsSession.downloadedBytes.get() * segments.size / count).toLong()
-                                            }
-                                        }
-                                        val percent = (downloadedCount.sum().toDouble() * 100 / segments.size).toInt()
-                                        progressCallback(percent)
-                                        success = true
-                                    }
+                                    downloadHlsSegment(
+                                        client = client,
+                                        okHeaders = okHeaders,
+                                        segmentUrl = seg.second,
+                                        partFile = partFile,
+                                        secretKey = secretKey,
+                                        encryptionIv = parsed.encryptionIv,
+                                        mediaSequence = parsed.mediaSequence,
+                                        segmentIndex = seg.first
+                                    )
+                                    val dataSize = partFile.length()
+                                    downloadedCount.increment()
+                                    downloadedBytes.addAndGet(dataSize)
+                                    updateHlsSessionBytes(
+                                        sessionId,
+                                        downloadedBytes.get(),
+                                        downloadedCount.sum(),
+                                        parsed.segments.size
+                                    )
+                                    val percent =
+                                        (downloadedCount.sum().toDouble() * 100 / parsed.segments.size)
+                                            .toInt()
+                                            .coerceIn(0, 100)
+                                    progressCallback(percent, parsed.durationSeconds)
+                                    success = true
                                 } catch (e: Exception) {
                                     if (attempts >= 5) throw e
                                     delay(500.milliseconds)
@@ -816,21 +767,173 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                 }
             }
 
-            // Merge segment files
             FileOutputStream(tempFile).use { outStream ->
-                val outChannel = outStream.channel
-                for (i in segments.indices) {
+                for (i in parsed.segments.indices) {
                     val partFile = File(segmentFolder, "seg_${i}.part")
                     if (partFile.exists()) {
-                        java.io.FileInputStream(partFile).use { inStream ->
-                            val inChannel = inStream.channel
-                            inChannel.transferTo(0, inChannel.size(), outChannel)
-                        }
+                        appendSanitizedTsSegment(partFile, outStream)
                     }
                 }
             }
+            if (tempFile.length() == 0L) {
+                throw IOException("HLS download produced empty file")
+            }
+
+            HlsDownloadResult(
+                durationSeconds = parsed.durationSeconds,
+                totalBytes = tempFile.length()
+            )
         } finally {
             segmentFolder.deleteRecursively()
+        }
+    }
+
+    private data class ResolvedPlaylist(val url: String, val lines: List<String>)
+
+    private data class ParsedHlsPlaylist(
+        val segments: List<String>,
+        val durationSeconds: Double,
+        val mediaSequence: Int,
+        val encryptionKeyUrl: String?,
+        val encryptionIv: ByteArray?
+    )
+
+    private fun resolveHlsMediaPlaylist(
+        playlistUrl: String,
+        okHeaders: okhttp3.Headers,
+        client: okhttp3.OkHttpClient
+    ): ResolvedPlaylist {
+        var currentUrl = playlistUrl
+        while (true) {
+            val req = Request.Builder().url(currentUrl).headers(okHeaders).build()
+            val lines = client.newCall(req).execute().use { res ->
+                if (!res.isSuccessful) throw IOException("Failed HLS resolution: ${res.code}")
+                res.body.string().lines()
+            }
+            val isMaster = lines.any { it.startsWith("#EXT-X-STREAM-INF") }
+            if (!isMaster) return ResolvedPlaylist(currentUrl, lines)
+
+            val baseUrl = currentUrl.substringBeforeLast("/") + "/"
+            var bestUrl: String? = null
+            var bestBandwidth = -1L
+            var i = 0
+            while (i < lines.size) {
+                val line = lines[i]
+                if (line.startsWith("#EXT-X-STREAM-INF")) {
+                    val bw = Regex("BANDWIDTH=(\\d+)").find(line)
+                        ?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+                    val next = lines.getOrNull(i + 1)?.trim()
+                    if (!next.isNullOrBlank() && !next.startsWith("#") && bw >= bestBandwidth) {
+                        bestBandwidth = bw
+                        bestUrl = next
+                    }
+                }
+                i++
+            }
+            val subUrl = bestUrl
+                ?: lines.firstOrNull { it.isNotBlank() && !it.startsWith("#") }
+                ?: throw IOException("Variant HLS playlist empty")
+            currentUrl = if (subUrl.startsWith("http")) subUrl else baseUrl + subUrl
+        }
+    }
+
+    private fun parseHlsMediaPlaylist(lines: List<String>, baseUrl: String): ParsedHlsPlaylist {
+        val segments = mutableListOf<String>()
+        var encryptionKeyUrl: String? = null
+        var encryptionIv: ByteArray? = null
+        var mediaSequence = 0
+        var durationSeconds = 0.0
+        var pendingExtInf = 0.0
+
+        for (line in lines) {
+            when {
+                line.startsWith("#EXT-X-MEDIA-SEQUENCE:") -> {
+                    mediaSequence = line.substringAfter(":").trim().toIntOrNull() ?: 0
+                }
+                line.startsWith("#EXTINF:") -> {
+                    val value = line.substringAfter(":").substringBefore(",").trim()
+                    pendingExtInf = value.toDoubleOrNull() ?: 0.0
+                }
+                line.startsWith("#EXT-X-KEY:METHOD=AES-128") -> {
+                    val match = Regex("URI=\"([^\"]+)\"").find(line)
+                    encryptionKeyUrl = match?.groupValues?.get(1)
+                    if (encryptionKeyUrl != null && !encryptionKeyUrl.startsWith("http")) {
+                        encryptionKeyUrl = baseUrl + encryptionKeyUrl
+                    }
+                    encryptionIv = Regex("IV=0x([0-9a-fA-F]+)").find(line)
+                        ?.groupValues?.get(1)
+                        ?.let { parseHexIv(it) }
+                }
+                !line.startsWith("#") && line.isNotBlank() -> {
+                    segments.add(if (line.startsWith("http")) line else baseUrl + line)
+                    durationSeconds += pendingExtInf
+                    pendingExtInf = 0.0
+                }
+            }
+        }
+        return ParsedHlsPlaylist(
+            segments = segments,
+            durationSeconds = durationSeconds,
+            mediaSequence = mediaSequence,
+            encryptionKeyUrl = encryptionKeyUrl,
+            encryptionIv = encryptionIv
+        )
+    }
+
+    private fun parseHexIv(hex: String): ByteArray {
+        val raw = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        return if (raw.size >= 16) raw.copyOf(16)
+        else ByteArray(16).also { raw.copyInto(it, 16 - raw.size) }
+    }
+
+    private fun downloadHlsSegment(
+        client: okhttp3.OkHttpClient,
+        okHeaders: okhttp3.Headers,
+        segmentUrl: String,
+        partFile: File,
+        secretKey: SecretKeySpec?,
+        encryptionIv: ByteArray?,
+        mediaSequence: Int,
+        segmentIndex: Int
+    ) {
+        val req = Request.Builder().url(segmentUrl).headers(okHeaders).build()
+        client.newCall(req).execute().use { res ->
+            if (!res.isSuccessful) throw IOException("Res code: ${res.code}")
+            res.body.byteStream().use { input ->
+                FileOutputStream(partFile).use { fileOut ->
+                    if (secretKey != null) {
+                        val seqNum = mediaSequence + segmentIndex
+                        val ivBytes = encryptionIv
+                            ?: ByteBuffer.allocate(16).putLong(8, seqNum.toLong()).array()
+                        streamDecryptHlsSegment(input, fileOut, secretKey, ivBytes)
+                    } else {
+                        input.copyTo(fileOut)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateHlsSessionBytes(
+        sessionId: Long,
+        downloaded: Long,
+        completedSegments: Long,
+        totalSegments: Int
+    ) {
+        when (val session = activeSessions[sessionId]) {
+            is DownloadSession.HlsSession -> {
+                session.downloadedBytes.set(downloaded)
+                if (completedSegments > 0) {
+                    session.totalBytes = downloaded * totalSegments / completedSegments
+                }
+            }
+            is DownloadSession.ComplexHlsSession -> {
+                session.downloadedBytes.set(downloaded)
+                if (completedSegments > 0) {
+                    session.totalBytes = downloaded * totalSegments / completedSegments
+                }
+            }
+            else -> Unit
         }
     }
 
@@ -953,6 +1056,252 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
     // ==========================================
     // SAF UTILS & GENERAL HELPERS
     // ==========================================
+
+    private val pngSignature = byteArrayOf(
+        0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+    )
+
+    /**
+     * Stream-decrypt HLS AES-128 segments without loading the whole segment into RAM.
+     * PKCS5Padding matches common CDN packaging; falls back to NoPadding via full buffer
+     * only if streaming PKCS5 fails (rare).
+     */
+    private fun streamDecryptHlsSegment(
+        input: java.io.InputStream,
+        output: java.io.OutputStream,
+        key: SecretKeySpec,
+        iv: ByteArray
+    ) {
+        try {
+            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            cipher.init(Cipher.DECRYPT_MODE, key, IvParameterSpec(iv))
+            javax.crypto.CipherInputStream(input, cipher).use { cipherIn ->
+                cipherIn.copyTo(output)
+            }
+        } catch (pkcsError: Exception) {
+            // Input already consumed on failure — caller retries segment download
+            throw IOException("HLS AES decrypt failed: ${pkcsError.message}", pkcsError)
+        }
+    }
+
+    /**
+     * Append a segment to the concat TS. Fast-path streams clean MPEG-TS segments;
+     * slow-path strips embedded PNG blobs that make FFmpeg misdetect png_pipe.
+     */
+    private fun appendSanitizedTsSegment(partFile: File, out: FileOutputStream) {
+        val size = partFile.length()
+        if (size <= 0L) return
+
+        java.io.FileInputStream(partFile).use { input ->
+            val peekLen = minOf(4096L, size).toInt()
+            val head = ByteArray(peekLen)
+            val read = input.read(head)
+            if (read <= 0) return
+
+            val needsSanitize = indexOfPng(head, 0, read) >= 0
+            if (!needsSanitize && head[0] == 0x47.toByte()) {
+                // Clean TS-like segment: write peeked bytes then stream the rest
+                out.write(head, 0, read)
+                input.copyTo(out)
+                return
+            }
+
+            // Slow path: load remainder and strip PNGs (segments are small, ~0.5–2MB)
+            val rest = input.readBytes()
+            val full = if (rest.isEmpty()) {
+                head.copyOf(read)
+            } else {
+                ByteArray(read + rest.size).also {
+                    System.arraycopy(head, 0, it, 0, read)
+                    System.arraycopy(rest, 0, it, read, rest.size)
+                }
+            }
+            writeSanitizedBytes(full, out)
+        }
+    }
+
+    private fun writeSanitizedBytes(data: ByteArray, out: java.io.OutputStream) {
+        var i = 0
+        while (i < data.size) {
+            if (isPngAt(data, i)) {
+                val end = skipPngAt(data, i)
+                if (end <= i) {
+                    out.write(data[i].toInt())
+                    i++
+                } else {
+                    Logger.log("Built-in: Stripped embedded PNG (${end - i} bytes) from HLS segment")
+                    i = end
+                }
+            } else {
+                val next = indexOfPng(data, i + 1, data.size)
+                val end = if (next < 0) data.size else next
+                out.write(data, i, end - i)
+                i = end
+            }
+        }
+    }
+
+    private fun isPngAt(data: ByteArray, offset: Int): Boolean {
+        if (offset + pngSignature.size > data.size) return false
+        for (j in pngSignature.indices) {
+            if (data[offset + j] != pngSignature[j]) return false
+        }
+        return true
+    }
+
+    private fun indexOfPng(data: ByteArray, from: Int, length: Int = data.size): Int {
+        var i = from
+        val last = length - pngSignature.size
+        while (i <= last) {
+            if (isPngAt(data, i)) return i
+            i++
+        }
+        return -1
+    }
+
+    /** Returns index just past IEND chunk, or offset+8 if parsing fails. */
+    private fun skipPngAt(data: ByteArray, offset: Int): Int {
+        var pos = offset + 8
+        while (pos + 8 <= data.size) {
+            val length = ((data[pos].toInt() and 0xff) shl 24) or
+                ((data[pos + 1].toInt() and 0xff) shl 16) or
+                ((data[pos + 2].toInt() and 0xff) shl 8) or
+                (data[pos + 3].toInt() and 0xff)
+            if (length < 0 || length > 50_000_000) return offset + 8
+            val typeStart = pos + 4
+            val chunkEnd = pos + 8 + length + 4
+            if (chunkEnd > data.size) return offset + 8
+            val isIend = data[typeStart] == 'I'.code.toByte() &&
+                data[typeStart + 1] == 'E'.code.toByte() &&
+                data[typeStart + 2] == 'N'.code.toByte() &&
+                data[typeStart + 3] == 'D'.code.toByte()
+            pos = chunkEnd
+            if (isIend) return pos
+        }
+        return offset + 8
+    }
+
+    private fun isLikelyMpegTs(file: File): Boolean {
+        file.inputStream().use { input ->
+            val buf = ByteArray(188 * 10)
+            val n = input.read(buf)
+            if (n < 188) return false
+            val limit = n - 188
+            for (start in 0 until minOf(188, n)) {
+                if (buf[start] != 0x47.toByte()) continue
+                var hits = 0
+                var pos = start
+                while (pos <= limit) {
+                    if (buf[pos] != 0x47.toByte()) break
+                    hits++
+                    pos += 188
+                }
+                if (hits >= 3) return true
+            }
+            return false
+        }
+    }
+
+    /**
+     * Remux local MPEG-TS (+ optional sub/audio files) into MKV at [outputPath].
+     * [outputPath] may be a filesystem path or an FFmpeg SAF write parameter.
+     * Forces mpegts demuxer when appropriate so FFmpeg never misdetects png_pipe.
+     */
+    private fun remuxMpegTsToMkv(
+        videoTs: File,
+        outputPath: String,
+        subtitles: List<Pair<String, String>>,
+        audios: List<Pair<String, String>>
+    ) {
+        if (!videoTs.exists() || videoTs.length() == 0L) {
+            throw IOException("Video TS missing or empty: ${videoTs.absolutePath}")
+        }
+
+        val forceMpegTs = isLikelyMpegTs(videoTs)
+        val command = StringBuilder()
+        if (forceMpegTs) {
+            command.append("-f mpegts -i \"${videoTs.absolutePath}\" ")
+        } else {
+            command.append("-i \"${videoTs.absolutePath}\" ")
+        }
+        for (sub in subtitles) {
+            command.append("-i \"${sub.first}\" ")
+        }
+        for (audio in audios) {
+            val audioPath = audio.first
+            val forceAudioTs = audioPath.endsWith(".ts", ignoreCase = true) &&
+                runCatching { isLikelyMpegTs(File(audioPath)) }.getOrDefault(false)
+            if (forceAudioTs) {
+                command.append("-f mpegts -i \"$audioPath\" ")
+            } else {
+                command.append("-i \"$audioPath\" ")
+            }
+        }
+
+        command.append("-map 0:v:0 -map 0:a? ")
+
+        for (i in subtitles.indices) {
+            val inputIndex = 1 + i
+            command.append("-map $inputIndex:s:0? ")
+        }
+        for (i in audios.indices) {
+            val inputIndex = 1 + subtitles.size + i
+            command.append("-map $inputIndex:a:0? ")
+        }
+
+        command.append("-c copy ")
+        if (subtitles.isNotEmpty()) {
+            command.append("-c:s srt ")
+        }
+        for ((index, sub) in subtitles.withIndex()) {
+            command.append("-metadata:s:s:$index language=\"${sub.second}\" ")
+        }
+        for ((index, audio) in audios.withIndex()) {
+            command.append("-metadata:s:a:${index + 1} language=\"${audio.second}\" ")
+        }
+        command.append("-y -ignore_unknown \"$outputPath\"")
+
+        Logger.log("Built-in: Mux command (forceMpegTs=$forceMpegTs): $command")
+        val exec = FFmpegKit.execute(command.toString())
+        if (exec.returnCode?.isValueError == true) {
+            throw IOException("FFmpeg muxing failed: ${exec.allLogsAsString}")
+        }
+
+        // Filesystem path: verify size. SAF paths are validated via ffprobe next.
+        val asFile = File(outputPath)
+        if (asFile.exists() && asFile.length() < 1024L) {
+            throw IOException("FFmpeg mux produced empty/too-small output (${asFile.length()} bytes)")
+        }
+    }
+
+    private fun assertHasPlayableVideo(path: String) {
+        val probePath = uriMap[path]?.let { uri ->
+            runCatching { FFmpegKitConfig.getSafParameter(context, uri, "r") }.getOrNull()
+        } ?: path
+
+        val probe = FFprobeKit.execute(
+            "-v error -select_streams v:0 -show_entries stream=codec_name,width,height " +
+                "-of csv=p=0 \"$probePath\""
+        )
+        val output = (probe.output ?: probe.allLogsAsString ?: "").trim()
+        val line = output.lines().map { it.trim() }.firstOrNull { it.isNotBlank() } ?: ""
+        val parts = line.split(',')
+        val codec = parts.getOrNull(0)?.lowercase().orEmpty()
+        val width = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val height = parts.getOrNull(2)?.toIntOrNull() ?: 0
+
+        val invalidCodecs = setOf(
+            "", "png", "mjpeg", "bmp", "gif", "webp", "ppm", "image2", "piped"
+        )
+        if (codec in invalidCodecs) {
+            throw IOException("Download missing playable video (codec='$codec', probe='$line')")
+        }
+        if (width in 1..2 && height in 1..2) {
+            throw IOException("Download video track is placeholder (${width}x${height}, codec=$codec)")
+        }
+        Logger.log("Built-in: Validated output video codec=$codec ${width}x${height}")
+    }
+
     private fun copyFileToUri(source: File, targetUri: Uri) {
         context.contentResolver.openOutputStream(targetUri, "w")?.use { output ->
             source.inputStream().use { input ->
