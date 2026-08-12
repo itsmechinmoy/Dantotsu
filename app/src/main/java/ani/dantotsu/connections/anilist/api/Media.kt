@@ -462,7 +462,7 @@ data class MediaEdge(
 
 @Serializable
 enum class MediaRelation {
-    ADAPTATION, PREQUEL, SEQUEL, PARENT, SIDE_STORY, CHARACTER, SUMMARY, ALTERNATIVE, SPIN_OFF, OTHER, SOURCE, COMPILATION, CONTAINS;
+    ADAPTATION, PREQUEL, SEQUEL, PARENT, SIDE_STORY, CHARACTER, SUMMARY, ALTERNATIVE, SPIN_OFF, OTHER, SOURCE, COMPILATION, CONTAINS, SAME_UNIVERSE;
 
     override fun toString(): String {
         currContext()?.let {
@@ -475,6 +475,7 @@ enum class MediaRelation {
                 "OTHER" -> it.getString(R.string.type_other)
                 "SOURCE" -> it.getString(R.string.type_source)
                 "CONTAINS" -> it.getString(R.string.type_contains)
+                "SAME_UNIVERSE" -> "Same Universe"
                 else -> super.toString().replace("_", " ")
             }
         }

@@ -9,9 +9,12 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.util.Logger
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.network.NetworkHelper
 import me.xdrop.fuzzywuzzy.FuzzySearch
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.Serializable
 import java.net.URLDecoder
 import java.net.URLEncoder

@@ -79,6 +79,7 @@ class SettingsExtensionsActivity : AppCompatActivity() {
                 repoInventory.isVisible = repoInventory.childCount > 0
             }
 
+            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.adapter = SettingsAdapter(
                 arrayListOf(
                     Settings(
@@ -257,7 +258,8 @@ class SettingsExtensionsActivity : AppCompatActivity() {
                         }
 
                     )
-                )
+                ),
+                highlightKey = highlightKey
             )
             settingsRecyclerView.apply {
                 layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)

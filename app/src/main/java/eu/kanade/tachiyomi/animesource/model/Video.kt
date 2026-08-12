@@ -167,3 +167,23 @@ data class SerializableVideo(
                 }
     }
 }
+
+/**
+ * The class containing info for displaying thumbnails.
+ */
+open class ThumbnailInfo(
+    val tileInfo: List<TileInfo>,
+    val imageTileUrls: List<String>,
+)
+
+/**
+ * The class containing info for an image tile to be used as a thumbnail
+ */
+data class TileInfo(
+    val imageIndex: Int,
+    val timeMs: Long,
+    val x: Int,
+    val y: Int,
+    val width: Int,
+    val height: Int,
+)

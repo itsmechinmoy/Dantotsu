@@ -29,4 +29,8 @@ object TorrentUtils {
             throw DeadTorrentException()
         }
     }
+
+    fun isMagnetLink(url: String): Boolean {
+        return url.startsWith("magnet:", ignoreCase = true)
+    }
 }

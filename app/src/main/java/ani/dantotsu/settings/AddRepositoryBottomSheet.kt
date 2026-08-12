@@ -144,8 +144,9 @@ class AddRepositoryBottomSheet : BottomSheetDialogFragment() {
                     return "URL must end with a .json file"
                 }
             } else {
-                if (!input.removeSuffix("/").endsWith("index.min.json")) {
-                    return "URL must end with index.min.json"
+                val clean = input.removeSuffix("/")
+                if (!clean.endsWith("index.min.json") && !clean.endsWith("repo.json") && !clean.endsWith("index.json") && !clean.endsWith("index.pb")) {
+                    return "URL must end with repo.json or index.json or index.min.json or index.pb"
                 }
             }
             return null
@@ -180,7 +181,7 @@ class AddRepositoryBottomSheet : BottomSheetDialogFragment() {
         val repo = parts[1]
         val branch = if (parts.size == 3) parts[2] else "repo"
 
-        return "https://raw.githubusercontent.com/$username/$repo/$branch/index.min.json"
+        return "https://raw.githubusercontent.com/$username/$repo/$branch/repo.json"
     }
 
     private fun onRepositoryRemoved(url: String, mediaType: MediaType) {

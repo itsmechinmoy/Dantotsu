@@ -42,7 +42,11 @@ class AnimeSourcePreferencesFragment : PreferenceFragmentCompat() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        onCloseAction?.invoke()
+        try {
+            onCloseAction?.invoke()
+        } catch (e: Exception) {
+            // Ignore if parent detached during destroy
+        }
     }
 
     private fun populateAnimePreferenceScreen(): PreferenceScreen {

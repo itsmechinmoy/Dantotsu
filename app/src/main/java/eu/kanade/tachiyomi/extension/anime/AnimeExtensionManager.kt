@@ -80,7 +80,6 @@ class AnimeExtensionManager(
     private var availableAnimeExtensionsSourcesData: Map<Long, AnimeSourceData> = emptyMap()
 
     private fun setupAvailableAnimeExtensionsSourcesDataMap(animeextensions: List<AnimeExtension.Available>) {
-        if (animeextensions.isEmpty()) return
         availableAnimeExtensionsSourcesData = animeextensions
             .flatMap { ext -> ext.sources.map { it.toAnimeSourceData() } }
             .associateBy { it.id }

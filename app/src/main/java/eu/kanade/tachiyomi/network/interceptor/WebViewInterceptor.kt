@@ -19,6 +19,8 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+import eu.kanade.tachiyomi.util.system.setUserAgent
+
 abstract class WebViewInterceptor(
     private val context: Context,
     private val defaultUserAgentProvider: () -> String,
@@ -85,7 +87,8 @@ abstract class WebViewInterceptor(
         return WebView(context).apply {
             setDefaultSettings()
             // Avoid sending empty User-Agent, Chromium WebView will reset to default if empty
-            settings.userAgentString = request.header("User-Agent") ?: defaultUserAgentProvider()
+            val ua = request.header("User-Agent") ?: defaultUserAgentProvider()
+            setUserAgent(ua)
         }
     }
 }

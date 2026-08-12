@@ -66,25 +66,34 @@ object IdMappers {
         if (mainId != null) return mainId
 
         // Fallback to ani.zip
-        return getAniZipId(anilistId)
+        return getAniZipId(anilistId = anilistId)
+    }
+
+    suspend fun getImdbIdFromMal(malId: Int): String? {
+        return getAniZipId(malId = malId)
     }
 
     suspend fun getMalId(anilistId: Int): Int? {
         return getIds(anilistId)?.malId
     }
 
-    private suspend fun getAniZipId(anilistId: Int): String? {
+    private suspend fun getAniZipId(anilistId: Int? = null, malId: Int? = null): String? {
+        val url = when {
+            anilistId != null && anilistId != 0 -> "https://api.ani.zip/mappings?anilist_id=$anilistId"
+            malId != null && malId != 0 -> "https://api.ani.zip/mappings?mal_id=$malId"
+            else -> return null
+        }
         return withContext(Dispatchers.IO) {
             try {
-                val response = client.get("https://api.ani.zip/mappings?anilist_id=$anilistId")
+                val response = client.get(url)
                 val payload = response.text
                 if (payload.isBlank()) {
-                    Logger.log("AniZip : empty mapping response for anilist_id=$anilistId")
+                    Logger.log("AniZip : empty mapping response for $url")
                     return@withContext null
                 }
                 val jsonElement = Mapper.json.parseToJsonElement(payload)
                 if (jsonElement !is JsonObject) {
-                    Logger.log("AniZip : unexpected mapping payload type for anilist_id=$anilistId")
+                    Logger.log("AniZip : unexpected mapping payload type for $url")
                     return@withContext null
                 }
                 val data = Mapper.json.decodeFromJsonElement<AniZipResponse>(jsonElement)

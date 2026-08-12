@@ -39,7 +39,7 @@ class SettingsAnimeActivity : AppCompatActivity() {
                 bottomMargin = navBarHeight
             }
             animeSettingsBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
-
+            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.adapter = SettingsAdapter(
                 arrayListOf(
                     Settings(
@@ -102,7 +102,8 @@ class SettingsAnimeActivity : AppCompatActivity() {
                             restartApp()
                         }
                     ),
-                )
+                ),
+                highlightKey = highlightKey
             )
             settingsRecyclerView.apply {
                 layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)

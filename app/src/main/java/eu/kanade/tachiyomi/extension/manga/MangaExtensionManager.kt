@@ -78,7 +78,6 @@ class MangaExtensionManager(
     private var availableExtensionsSourcesData: Map<Long, MangaSourceData> = emptyMap()
 
     private fun setupAvailableExtensionsSourcesDataMap(extensions: List<MangaExtension.Available>) {
-        if (extensions.isEmpty()) return
         availableExtensionsSourcesData = extensions
             .flatMap { ext -> ext.sources.map { it.toSourceData() } }
             .associateBy { it.id }

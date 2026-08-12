@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.NO_HOSTER_LIST
 import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.copyFrom
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -24,11 +25,14 @@ import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.interceptor.CloudflareBypassException
+import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.anime.getPreferenceKey
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.copyFrom
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.lang.awaitSingle
 import kotlinx.coroutines.Dispatchers
@@ -63,10 +67,12 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     override val isNSFW = extension.isNsfw
     override val icon = extension.icon
 
+    private var userSelectDub: Boolean? = null
+
     override var selectDub: Boolean
-        get() = getDub()
+        get() = userSelectDub ?: getDub()
         set(value) {
-            setDub(value)
+            userSelectDub = value
         }
 
     private fun getDub(): Boolean {
@@ -94,29 +100,9 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     }
 
     private fun setDub(setDub: Boolean) {
-        if (sourceLanguage >= extension.sources.size) {
-            sourceLanguage = extension.sources.size - 1
-        }
-        val configurableSource = extension.sources[sourceLanguage] as? ConfigurableAnimeSource
-            ?: return
-        val type = when (setDub) {
-            true -> MediaNameAdapter.SubDubType.DUB
-            false -> MediaNameAdapter.SubDubType.SUB
-        }
-        currContext()?.let { context ->
-            val sharedPreferences =
-                context.getSharedPreferences(
-                    configurableSource.getPreferenceKey(),
-                    Context.MODE_PRIVATE
-                )
-            sharedPreferences.all.filterValues { MediaNameAdapter.getSubDub(it.toString()) != MediaNameAdapter.SubDubType.NULL }
-                .forEach { value ->
-                    val setValue = MediaNameAdapter.setSubDub(value.value.toString(), type)
-                    if (setValue != null) {
-                        sharedPreferences.edit().putString(value.key, setValue).apply()
-                    }
-                }
-        }
+        // Do not mutate extension SharedPreferences automatically.
+        // Extension preferences (e.g. preferred quality, server, sub/dub) configured by the user
+        // in extension settings are preserved intact for sortVideos() to process.
     }
 
     override fun isDubAvailableSeparately(sourceLang: Int?): Boolean {
@@ -145,15 +131,46 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         extra: Map<String, String>?,
         sAnime: SAnime
     ): List<Episode> {
-        val source = try {
-            extension.sources[sourceLanguage]
-        } catch (e: Exception) {
-            sourceLanguage = 0
-            extension.sources[sourceLanguage]
-        } as? AnimeHttpSource ?: (extension.sources[sourceLanguage] as? AnimeCatalogueSource
-            ?: return emptyList())
+        val source = (extension.sources.getOrNull(sourceLanguage)
+            ?: extension.sources.firstOrNull()) as? AnimeSource
+            ?: return emptyList()
         try {
-            val res = source.getEpisodeList(sAnime)
+            val networkAnime = runCatching {
+                source.getAnimeDetails(sAnime)
+            }.getOrNull()
+            if (networkAnime != null) {
+                sAnime.copyFrom(networkAnime)
+            }
+            val seasons = runCatching {
+                source.getSeasonListCompat(sAnime)
+            }.getOrNull()
+
+            val res = if (!seasons.isNullOrEmpty()) {
+                val allEpisodes = mutableListOf<SEpisode>()
+                for (season in seasons) {
+                    val seasonAnime = runCatching {
+                        if (source is AnimeHttpSource) source.getAnimeDetails(season) else season
+                    }.getOrDefault(season)
+                    val seasonEpisodes = runCatching {
+                        source.getEpisodeListCompat(seasonAnime)
+                    }.getOrDefault(emptyList())
+                    seasonEpisodes.forEach { ep ->
+                        if (ep.scanlator.isNullOrBlank()) {
+                            ep.scanlator = seasonAnime.title.ifBlank { null } ?: season.title
+                        }
+                    }
+                    allEpisodes.addAll(seasonEpisodes)
+                }
+                if (allEpisodes.isEmpty()) {
+                    source.getEpisodeListCompat(sAnime)
+                } else {
+                    allEpisodes
+                }
+            } else {
+                source.getEpisodeListCompat(sAnime)
+            }
+
+            if (res.isEmpty()) return emptyList()
 
             val sortedEpisodes = if (res[0].episode_number == -1f) {
                 // Find the number in the string and sort by that number
@@ -221,15 +238,11 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         extra: Map<String, String>?,
         sEpisode: SEpisode
     ): List<VideoServer> {
-        val source = try {
-            extension.sources[sourceLanguage]
-        } catch (e: Exception) {
-            sourceLanguage = 0
-            extension.sources[sourceLanguage]
-        } as? AnimeHttpSource ?: return emptyList()
+        val source = (extension.sources.getOrNull(sourceLanguage)
+            ?: extension.sources.firstOrNull()) as? AnimeSource ?: return emptyList()
 
         return try {
-            val videos = getVideoList(source,sEpisode)
+            val videos = getVideoList(source, sEpisode)
 
             videos.map { videoToVideoServer(it) }
         } catch (e: Exception) {
@@ -238,29 +251,25 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         }
     }
     suspend fun getVideoList(
-        source: AnimeHttpSource,
+        source: AnimeSource,
         episode: SEpisode
     ): List<Video> {
+        val directVideos = runCatching {
+            source.getVideoList(episode)
+        }.getOrElse { emptyList() }
 
-        val hasHosters = checkHasHosters(source)
+        val hosters = runCatching {
+            source.getHosterList(episode)
+        }.getOrElse { emptyList() }
 
-        val directVideos = if (!hasHosters) {
-            runCatching {
-                source.getVideoList(episode)
-            }.getOrElse { emptyList() }
-        } else {
-            emptyList()
-        }
+        val sortedHosters = runCatching {
+            if (source is AnimeHttpSource) source.run { hosters.sortHosters() } else hosters
+        }.getOrElse { hosters }
 
-        val hosterVideos = if (hasHosters) {
-            val hosters = runCatching {
-                source.getHosterList(episode)
-            }.getOrElse { emptyList() }
-
+        val hosterVideos = if (sortedHosters.isNotEmpty()) {
             coroutineScope {
-                hosters.map { hoster ->
+                sortedHosters.map { hoster ->
                     async(Dispatchers.IO) {
-
                         val videos = when {
                             !hoster.videoList.isNullOrEmpty() -> hoster.videoList
                             else -> runCatching {
@@ -270,7 +279,6 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
 
                         videos.map { video ->
                             val resolved = resolveVideo(source, video)
-
                             val title = if (
                                 hoster.hosterName.isBlank() ||
                                 hoster.hosterName == NO_HOSTER_LIST
@@ -300,61 +308,38 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             }.awaitAll()
         }
 
-        return source.run {
-            (resolvedDirect + hosterVideos)
-                .distinctBy { it.videoUrl }
-                .filter { it.videoUrl.isNotEmpty() && it.videoUrl != "null" }
-                .sortVideos()
-        }
-    }
+        val allVideos = (resolvedDirect + hosterVideos)
+            .distinctBy { if (it.videoUrl.isNotBlank() && it.videoUrl != "null") it.videoUrl else it.videoTitle }
+            .filter { it.videoUrl.isNotBlank() && it.videoUrl != "null" }
 
-    private fun checkHasHosters(source: AnimeHttpSource): Boolean {
-        var current: Class<in AnimeHttpSource> = source.javaClass
-
-        while (true) {
-            if (current == ParsedAnimeHttpSource::class.java ||
-                current == AnimeHttpSource::class.java ||
-                current == AnimeSource::class.java
-            ) {
-                return false
-            }
-
-            if (current.declaredMethods.any {
-                    it.name in listOf(
-                        "getHosterList",
-                        "hosterListRequest",
-                        "hosterListParse"
-                    )
-                }
-            ) {
-                return true
-            }
-
-            current = current.superclass ?: return false
-        }
+        return runCatching {
+            if (source is AnimeHttpSource) source.run { allVideos.sortVideos() } else allVideos
+        }.getOrElse { allVideos }
     }
 
     private suspend fun resolveVideo(
-        source: AnimeHttpSource,
+        source: AnimeSource,
         video: Video
     ): Video {
         if (video.initialized && video.videoUrl.isNotEmpty() && video.videoUrl != "null") {
             return video
         }
 
+        if (video.videoUrl == "null" || video.videoUrl.isEmpty()) {
+            val newUrl = runCatching {
+                if (source is AnimeHttpSource) source.getVideoUrl(video) else null
+            }.getOrNull()
+
+            if (!newUrl.isNullOrEmpty() && newUrl != "null") {
+                return video.copy(videoUrl = newUrl, initialized = true)
+            }
+        }
+
         val resolved = runCatching {
-            source.resolveVideo(video)
+            if (source is AnimeHttpSource) source.resolveVideo(video) else null
         }.getOrNull()
 
         if (resolved != null) return resolved
-
-        if (video.videoUrl == "null" || video.videoUrl.isEmpty()) {
-            val newUrl = runCatching {
-                source.getVideoUrl(video)
-            }.getOrNull()
-
-            return video.copy(videoUrl = newUrl ?: video.videoUrl)
-        }
 
         return video
     }
@@ -364,15 +349,15 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     }
 
     override suspend fun search(query: String): List<ShowResponse> {
-        val source = try {
-            extension.sources[sourceLanguage]
-        } catch (e: Exception) {
-            sourceLanguage = 0
-            extension.sources[sourceLanguage]
-        } as? AnimeHttpSource ?: (extension.sources[sourceLanguage] as? AnimeCatalogueSource
-            ?: return emptyList())
+        val source = (extension.sources.getOrNull(sourceLanguage)
+            ?: extension.sources.firstOrNull()) as? AnimeCatalogueSource
+            ?: return emptyList()
         return try {
-            val res = source.getSearchAnime(1, query, source.getFilterList())
+            val res = try {
+                source.getSearchAnime(1, query, source.getFilterList())
+            } catch (e: Throwable) {
+                source.fetchSearchAnime(1, query, source.getFilterList()).awaitSingle()
+            }
             Logger.log("query: $query")
             convertAnimesPageToShowResponse(res)
         } catch (e: CloudflareBypassException) {
@@ -461,15 +446,26 @@ class DynamicMangaParser(extension: MangaExtension.Installed) : MangaParser() {
         extra: Map<String, String>?,
         sManga: SManga
     ): List<MangaChapter> {
-        val source = try {
-            extension.sources[sourceLanguage]
-        } catch (e: Exception) {
-            sourceLanguage = 0
-            extension.sources[sourceLanguage]
-        } as? HttpSource ?: return emptyList()
+        val source = (extension.sources.getOrNull(sourceLanguage)
+            ?: extension.sources.firstOrNull()) as? MangaSource ?: return emptyList()
 
         return try {
-            val res = source.getChapterList(sManga)
+            val (networkManga, res) = try {
+                val update = runCatching { source.getMangaUpdate(sManga, emptyList(), fetchDetails = true, fetchChapters = true) }.getOrNull()
+                if (update != null && (update.chapters.isNotEmpty() || update.manga.title.isNotBlank())) {
+                    Pair(update.manga, update.chapters)
+                } else {
+                    val details = runCatching { source.getMangaDetails(sManga) }.getOrNull()
+                    val chapters = runCatching { source.getChapterList(sManga) }.getOrDefault(emptyList())
+                    Pair(details, chapters)
+                }
+            } catch (e: Exception) {
+                Pair(null, emptyList<eu.kanade.tachiyomi.source.model.SChapter>())
+            }
+
+            if (networkManga != null) {
+                sManga.copyFrom(networkManga)
+            }
             val reversedRes = res.reversed()
             val chapterList = reversedRes.map { sChapterToMangaChapter(it) }
             chapterList
@@ -481,12 +477,8 @@ class DynamicMangaParser(extension: MangaExtension.Installed) : MangaParser() {
 
 
     override suspend fun loadImages(chapterLink: String, sChapter: SChapter): List<MangaImage> {
-        val source = try {
-            extension.sources[sourceLanguage]
-        } catch (e: Exception) {
-            sourceLanguage = 0
-            extension.sources[sourceLanguage]
-        } as? HttpSource ?: return emptyList()
+        val source = (extension.sources.getOrNull(sourceLanguage)
+            ?: extension.sources.firstOrNull()) as? HttpSource ?: return emptyList()
         val imageDataList: MutableList<ImageData> = mutableListOf()
         val ret = coroutineScope {
             try {
@@ -497,10 +489,20 @@ class DynamicMangaParser(extension: MangaExtension.Installed) : MangaParser() {
 
                 val deferreds = reIndexedPages.map { page ->
                     async(Dispatchers.IO) {
-                        mangaCache.put(page.imageUrl ?: "", ImageData(page, source))
-                        imageDataList += ImageData(page, source)
-                        Logger.log("put page: ${page.imageUrl}")
-                        pageToMangaImage(page)
+                        val imageUrl = if (page.imageUrl.isNullOrBlank()) {
+                            runCatching { source.getImageUrl(page) }.getOrNull() ?: page.imageUrl
+                        } else {
+                            page.imageUrl
+                        }
+                        val resolvedPage = if (imageUrl != page.imageUrl) {
+                            Page(page.index, page.url, imageUrl, page.uri)
+                        } else {
+                            page
+                        }
+                        mangaCache.put(resolvedPage.imageUrl ?: "", ImageData(resolvedPage, source))
+                        imageDataList += ImageData(resolvedPage, source)
+                        Logger.log("put page: ${resolvedPage.imageUrl}")
+                        pageToMangaImage(resolvedPage)
                     }
                 }
 
@@ -516,12 +518,8 @@ class DynamicMangaParser(extension: MangaExtension.Installed) : MangaParser() {
     }
 
     suspend fun imageList(sChapter: SChapter): List<ImageData> {
-        val source = try {
-            extension.sources[sourceLanguage]
-        } catch (e: Exception) {
-            sourceLanguage = 0
-            extension.sources[sourceLanguage]
-        } as? HttpSource ?: return emptyList()
+        val source = (extension.sources.getOrNull(sourceLanguage)
+            ?: extension.sources.firstOrNull()) as? HttpSource ?: return emptyList()
 
         return coroutineScope {
             try {
@@ -534,7 +532,17 @@ class DynamicMangaParser(extension: MangaExtension.Installed) : MangaParser() {
                 val deferreds = reIndexedPages.map { page ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
-                            ImageData(page, source)
+                            val imageUrl = if (page.imageUrl.isNullOrBlank()) {
+                                runCatching { source.getImageUrl(page) }.getOrNull() ?: page.imageUrl
+                            } else {
+                                page.imageUrl
+                            }
+                            val resolvedPage = if (imageUrl != page.imageUrl) {
+                                Page(page.index, page.url, imageUrl, page.uri)
+                            } else {
+                                page
+                            }
+                            ImageData(resolvedPage, source)
                         }
                     }
                 }
@@ -549,15 +557,19 @@ class DynamicMangaParser(extension: MangaExtension.Installed) : MangaParser() {
     }
 
     override suspend fun search(query: String): List<ShowResponse> {
-        val source = try {
-            extension.sources[sourceLanguage]
-        } catch (e: Exception) {
-            sourceLanguage = 0
-            extension.sources[sourceLanguage]
-        } as? HttpSource ?: return emptyList()
+        val source = (extension.sources.getOrNull(sourceLanguage)
+            ?: extension.sources.firstOrNull()) as? MangaSource ?: return emptyList()
 
         return try {
-            val res = source.fetchSearchManga(1, query, source.getFilterList()).awaitSingle()
+            val res = try {
+                source.getSearchManga(1, query, source.getFilterList())
+            } catch (e: Throwable) {
+                if (source is CatalogueSource) {
+                    source.fetchSearchManga(1, query, source.getFilterList()).awaitSingle()
+                } else {
+                    throw e
+                }
+            }
             Logger.log("res observable: $res")
             convertMangasPageToShowResponse(res)
         } catch (e: CloudflareBypassException) {
@@ -811,6 +823,30 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
         val base = value.substringBefore('#').substringBefore('?').substringBefore('&')
         return extensions.any { ext ->
             base.endsWith(ext)
+        }
+    }
+}
+
+private suspend fun AnimeSource.getEpisodeListCompat(anime: SAnime): List<SEpisode> {
+    return try {
+        getAnimeEpisodeUpdate(anime, emptyList(), fetchDetails = false, fetchEpisodes = true).episodes
+    } catch (_: Throwable) {
+        try {
+            getEpisodeList(anime)
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+}
+
+private suspend fun AnimeSource.getSeasonListCompat(anime: SAnime): List<SAnime> {
+    return try {
+        getAnimeSeasonUpdate(anime, emptyList(), fetchDetails = false, fetchSeasons = true).seasons
+    } catch (_: Throwable) {
+        try {
+            getSeasonList(anime)
+        } catch (_: Throwable) {
+            emptyList()
         }
     }
 }

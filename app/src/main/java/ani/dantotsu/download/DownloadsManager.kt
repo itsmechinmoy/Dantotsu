@@ -394,8 +394,13 @@ class DownloadsManager(private val context: Context) {
             }
         }
 
-        private fun DocumentFile.findFolder(name: String): DocumentFile? =
-            listFiles().find { it.name == name && it.isDirectory }
+        private fun DocumentFile.findFolder(name: String): DocumentFile? {
+            val direct = findFile(name)
+            if (direct != null && direct.isDirectory) return direct
+            val list = listFiles()
+            return list.find { it.isDirectory && (it.name.equals(name, ignoreCase = true) || it.name?.trim().equals(name.trim(), ignoreCase = true)) }
+                ?: list.find { it.isDirectory && it.name != null && name.compareName(it.name!!) }
+        }
 
         private const val RATIO_THRESHOLD = 95
         fun Media.compareName(name: String): Boolean {
@@ -409,6 +414,18 @@ class DownloadsManager(private val context: Context) {
             val compareName = name.findValidName().lowercase()
             val ratio = FuzzySearch.ratio(mainName, compareName)
             return ratio > RATIO_THRESHOLD
+        }
+
+        fun buildResumableRequest(url: String, headers: okhttp3.Headers = okhttp3.Headers.Builder().build(), existingSize: Long = 0L): okhttp3.Request {
+            return okhttp3.Request.Builder()
+                .url(url)
+                .headers(headers)
+                .apply {
+                    if (existingSize > 0) {
+                        header("Range", "bytes=$existingSize-")
+                    }
+                }
+                .build()
         }
     }
 }

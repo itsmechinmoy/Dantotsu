@@ -158,6 +158,16 @@ class OfflineAnimeFragment : Fragment(), OfflineAnimeSearchListener {
         gridView =
             if (style == 0) view.findViewById(R.id.gridView) else view.findViewById(R.id.gridView1)
         total = view.findViewById(R.id.total)
+
+        val swipeRefresh = view.findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.localRefresh)
+        swipeRefresh.setOnChildScrollUpCallback { _, _ ->
+            gridView.canScrollVertically(-1)
+        }
+        swipeRefresh.setOnRefreshListener {
+            getDownloads()
+            swipeRefresh.isRefreshing = false
+        }
+
         grid()
         return view
     }

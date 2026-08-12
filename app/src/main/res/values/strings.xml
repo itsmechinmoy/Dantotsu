@@ -60,6 +60,7 @@
     <string name="episodes_watched_n">Episodes\nWatched</string>
     <string name="continue_reading">Continue Reading</string>
     <string name="continue_watching">Continue Watching</string>
+    <string name="continue_widget_description">Watch and read history</string>
     <string name="missing_sequels">Missed Sequels</string>
     <string name="no_missing_sequels">No missed sequels found.</string>
     <string name="recommended">Recommended</string>
@@ -136,6 +137,8 @@
     <string name="ep_duration">Average Duration</string>
     <string name="min">" min"</string>
     <string name="season">Season</string>
+    <string name="all_seasons">All Seasons</string>
+    <string name="all_scanlators">All Scanlators</string>
     <string name="start_date">Start Date</string>
     <string name="end_date">End Date</string>
     <string name="source">Source</string>
@@ -450,7 +453,7 @@
     <string name="crop_borders">Crop Borders</string>
     <string name="note">NOTE</string>
 
-    <string name="manage_extension_repos">Manage Extension Repos</string>
+    <string name="manage_extension_repos">Manage Extension Stores</string>
     <string name="installing_extension">Installing extension</string>
     <string name="installation_failed">Installation failed: %1$s</string>
     <string name="installation_complete">Installation complete</string>
@@ -948,11 +951,11 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="stat_text_color">Stats Text Color</string>
     <string name="placeholder">Placeholder</string>
 
-    <string name="anime_add_repository">Add Anime Repo</string>
-    <string name="manga_add_repository">Add Manga Repo</string>
-    <string name="novel_add_repository">Add Novel Repo</string>
-    <string name="edit_repositories">Edit repositories</string>
-    <string name="rem_repository">Remove repository?</string>
+    <string name="anime_add_repository">Add Anime Store</string>
+    <string name="manga_add_repository">Add Manga Store</string>
+    <string name="novel_add_repository">Add Novel Store</string>
+    <string name="edit_repositories">Edit stores</string>
+    <string name="rem_repository">Remove store?</string>
 
     <string name="trending_movies">Trending Movies</string>
     <string name="include_list">Include list</string>
@@ -984,7 +987,7 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="common_desc">UI and other mischievous stuff</string>
     <string name="anime_desc">Choose how you watch</string>
     <string name="manga_desc">Choose how you read</string>
-    <string name="extensions_desc">Manage your reliable repositories</string>
+    <string name="extensions_desc">Manage your reliable stores</string>
     <string name="addons_desc">Get more features out of your app</string>
     <string name="alsettings_desc">Change your AniList settings</string>
     <string name="airing_notifications">Airing Anime notifications</string>
@@ -1016,9 +1019,9 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="search_source_list_desc">Auto-select the next server if the previous server doesn\'t have the media</string>
     <string name="recentlyListOnly_desc">Show only your list items in the recent tab</string>
     <string name="adult_only_content_desc">Show only adult content in the explore page</string>
-    <string name="anime_add_repository_desc">Add Anime Extensions from various sources</string>
-    <string name="manga_add_repository_desc">Add Manga Extensions from various sources</string>
-    <string name="novel_add_repository_desc">Add Novel Extensions from various sources</string>
+    <string name="anime_add_repository_desc">Add Anime Extensions from various stores</string>
+    <string name="manga_add_repository_desc">Add Manga Extensions from various stores</string>
+    <string name="novel_add_repository_desc">Add Novel Extensions from various stores</string>
     <string name="user_agent_desc">Change your default user agent</string>
     <string name="force_legacy_installer_desc">Use the legacy installer to install extensions (For older android phones)</string>
     <string name="skip_loading_extension_icons_desc">Don\'t load icons of extensions on the extension page</string>
@@ -1145,10 +1148,10 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="textview_sub">Textview Subtitles (Experimental)</string>
     <string name="textview_sub_stroke">Subtitle Stroke</string>
     <string name="textview_sub_bottom_margin">Bottom Margin</string>
-    <string name="add_repository">Add Repository</string>
-    <string name="add_repository_desc">A repository link should look like this: https://raw.githubusercontent.com/username/repo/branch/index.min.json\nOr: username/repo/branch</string>
-    <string name="current_repositories">Current Repositories</string>
-    <string name="add_repository_warning">Warning: Extensions from the repository can run arbitrary code on your device. Only use repositories you trust. \n\nBy adding a repository, you agree to: \n\n1. Not use the app for viewing or distributing copyrighted content. \n2. Not use the app for any illegal activities. \n3. Not use the app for any activities that violate the terms of service of the content providers. \n\nThe app or it\'s maintainer are not affiliated in any way with extension providers. The developers are not responsible for any damages caused by the app. \n\nBy adding a repository, you agree to these terms.</string>
+    <string name="add_repository">Add Extension Store</string>
+    <string name="add_repository_desc">An extension store link should look like this: https://raw.githubusercontent.com/username/repo/branch/index.min.json\nOr: username/repo/branch</string>
+    <string name="current_repositories">Current Stores</string>
+    <string name="add_repository_warning">Warning: Extensions from the store can run arbitrary code on your device. Only use stores you trust. \n\nBy adding a store, you agree to: \n\n1. Not use the app for viewing or distributing copyrighted content. \n2. Not use the app for any illegal activities. \n3. Not use the app for any activities that violate the terms of service of the content providers. \n\nThe app or it\'s maintainer are not affiliated in any way with extension providers. The developers are not responsible for any damages caused by the app. \n\nBy adding a store, you agree to these terms.</string>
     <string name="privacy_policy">Privacy Policy</string>
     <string name="privacy_policy_desc">Read our privacy policy</string>
     <string name="failed_to_load">Failed to load</string>
@@ -1217,5 +1220,10 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="download_insights_header">Downloaded Content</string>
     <string name="download_queue_header">Queue</string>
     <string name="clear_media_confirm">Are you sure you want to delete all downloaded content for %1$s?</string>
+
+    <string name="search_settings">Search settings</string>
+    <string name="search_settings_hint">Search settings by name, description, or category…</string>
+    <string name="no_settings_found">No matching settings found</string>
+    <string name="search_settings_no_results_desc">Try searching for different keywords or checking for spelling</string>
 
 </resources>

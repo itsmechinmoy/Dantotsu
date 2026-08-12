@@ -76,6 +76,7 @@ class SettingsNotificationActivity : AppCompatActivity() {
                 if (it > 0) "${if (hours > 0) "$hours hrs " else ""}${if (mins > 0) "$mins mins" else ""}"
                 else getString(R.string.do_not_update)
             }
+            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.adapter = SettingsAdapter(
                 arrayListOf(
                     Settings(
@@ -459,7 +460,8 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             }
                         },
                     ),
-                )
+                ),
+                highlightKey = highlightKey
             )
             settingsRecyclerView.apply {
                 layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)

@@ -65,4 +65,15 @@ data class FuzzyDate(
         month != other.month -> (month ?: 0) - (other.month ?: 0)
         else -> (day ?: 0) - (other.day ?: 0)
     }
+
+    companion object {
+        fun fromIsoString(isoDate: String?): FuzzyDate? {
+            if (isoDate.isNullOrEmpty()) return null
+            val parts = isoDate.split("-")
+            val year = parts.getOrNull(0)?.toIntOrNull() ?: return null
+            val month = parts.getOrNull(1)?.toIntOrNull()
+            val day = parts.getOrNull(2)?.toIntOrNull()
+            return FuzzyDate(year, month, day)
+        }
+    }
 }

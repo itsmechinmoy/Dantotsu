@@ -93,56 +93,96 @@ class MediaAdaptor(
                 setAnimation(activity, b.root)
                 val media = mediaList?.getOrNull(position)
                 if (media != null) {
-                    b.itemCompactImage.loadImage(media.cover)
-                    b.itemCompactOngoing.isVisible =
-                        media.status == currActivity()!!.getString(R.string.status_releasing)
-                    b.itemCompactTitle.text = media.userPreferredName
-                    b.itemCompactScore.text =
-                        ((if (media.userScore == 0) (media.meanScore
-                            ?: 0) else media.userScore) / 10.0).toString()
-                    b.itemCompactScoreBG.background = ContextCompat.getDrawable(
-                        b.root.context,
-                        (if (media.userScore != 0) R.drawable.item_user_score else R.drawable.item_score)
-                    )
-                    b.itemCompactUserProgress.text = (media.userProgress ?: "~").toString()
-                    if (media.relation != null) {
-                        b.itemCompactRelation.text = "${media.relation}  "
-                        b.itemCompactType.visibility = View.VISIBLE
+                    val density = activity.resources.displayMetrics.density
+                    if (media.id < 0) {
+                        b.itemCompactTitle.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                            width = (108 * density).toInt()
+                            height = (12 * density).toInt()
+                            bottomMargin = (4 * density).toInt()
+                            topMargin = (4 * density).toInt()
+                        }
+                        b.itemCompactTitle.background = ContextCompat.getDrawable(b.root.context, R.drawable.skeleton_text_placeholder)
+                        b.itemCompactTitle.text = ""
 
-                        if (media.relation!!.contains("\n")) {
-                            b.itemCompactRelation.apply {
-                                isSingleLine = false
-                                maxLines = 2
-                                ellipsize = TextUtils.TruncateAt.START
+                        b.itemCompactProgressContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                            width = (54 * density).toInt()
+                            height = (8 * density).toInt()
+                            topMargin = (2 * density).toInt()
+                        }
+                        b.itemCompactProgressContainer.background = ContextCompat.getDrawable(b.root.context, R.drawable.skeleton_stats_placeholder)
+                        b.itemCompactUserProgress.text = ""
+                        b.itemCompactTotal.text = ""
+                        b.itemCompactScoreBG.isVisible = false
+                        b.itemCompactOngoing.isVisible = false
+                        b.itemCompactType.isVisible = false
+                        b.itemCompactImage.setImageResource(R.drawable.skeleton_cover_placeholder)
+                    } else {
+                        b.itemCompactTitle.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                            width = (108 * density).toInt()
+                            height = ViewGroup.LayoutParams.WRAP_CONTENT
+                            bottomMargin = 0
+                            topMargin = 0
+                        }
+                        b.itemCompactTitle.background = null
 
-                                includeFontPadding = false
-                                setLineSpacing(0f, 0.9f)
+                        b.itemCompactProgressContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                            width = ViewGroup.LayoutParams.MATCH_PARENT
+                            height = ViewGroup.LayoutParams.WRAP_CONTENT
+                            topMargin = 0
+                        }
+                        b.itemCompactProgressContainer.background = null
+                        b.itemCompactScoreBG.isVisible = true
+                        b.itemCompactImage.loadImage(media.cover)
+                        b.itemCompactOngoing.isVisible =
+                            media.status == currActivity()!!.getString(R.string.status_releasing)
+                        b.itemCompactTitle.text = media.userPreferredName
+                        b.itemCompactScore.text =
+                            ((if (media.userScore == 0) (media.meanScore
+                                ?: 0) else media.userScore) / 10.0).toString()
+                        b.itemCompactScoreBG.background = ContextCompat.getDrawable(
+                            b.root.context,
+                            (if (media.userScore != 0) R.drawable.item_user_score else R.drawable.item_score)
+                        )
+                        b.itemCompactUserProgress.text = (media.userProgress ?: "~").toString()
+                        if (media.relation != null) {
+                            b.itemCompactRelation.text = "${media.relation}  "
+                            b.itemCompactType.visibility = View.VISIBLE
+
+                            if (media.relation!!.contains("\n")) {
+                                b.itemCompactRelation.apply {
+                                    isSingleLine = false
+                                    maxLines = 2
+                                    ellipsize = TextUtils.TruncateAt.START
+
+                                    includeFontPadding = false
+                                    setLineSpacing(0f, 0.9f)
+                                }
+                            } else {
+                                b.itemCompactRelation.isSingleLine = true
+                                b.itemCompactRelation.maxLines = 1
                             }
                         } else {
-                            b.itemCompactRelation.isSingleLine = true
-                            b.itemCompactRelation.maxLines = 1
+                            b.itemCompactType.visibility = View.GONE
                         }
-                    } else {
-                        b.itemCompactType.visibility = View.GONE
-                    }
-                    
-                    if (media.anime != null) {
-                        if (media.relation != null) b.itemCompactTypeImage.setImageDrawable(
-                            AppCompatResources.getDrawable(
-                                activity,
-                                R.drawable.ic_round_movie_filter_24
+                        
+                        if (media.anime != null) {
+                            if (media.relation != null) b.itemCompactTypeImage.setImageDrawable(
+                                AppCompatResources.getDrawable(
+                                    activity,
+                                    R.drawable.ic_round_movie_filter_24
+                                )
                             )
-                        )
-                        b.itemCompactTotal.text =
-                            " | ${if (media.anime.nextAiringEpisode != null) (media.anime.nextAiringEpisode.toString() + " | " + (media.anime.totalEpisodes ?: "~").toString()) else (media.anime.totalEpisodes ?: "~").toString()}"
-                    } else if (media.manga != null) {
-                        if (media.relation != null) b.itemCompactTypeImage.setImageDrawable(
-                            AppCompatResources.getDrawable(
-                                activity,
-                                R.drawable.ic_round_import_contacts_24
+                            b.itemCompactTotal.text =
+                                " | ${if (media.anime.nextAiringEpisode != null) (media.anime.nextAiringEpisode.toString() + " | " + (media.anime.totalEpisodes ?: "~").toString()) else (media.anime.totalEpisodes ?: "~").toString()}"
+                        } else if (media.manga != null) {
+                            if (media.relation != null) b.itemCompactTypeImage.setImageDrawable(
+                                AppCompatResources.getDrawable(
+                                    activity,
+                                    R.drawable.ic_round_import_contacts_24
+                                )
                             )
-                        )
-                        b.itemCompactTotal.text = " | ${media.manga.totalChapters ?: "~"}"
+                            b.itemCompactTotal.text = " | ${media.manga.totalChapters ?: "~"}"
+                        }
                     }
                     b.itemCompactProgressContainer.visibility = if (fav) View.GONE else View.VISIBLE
                 }
@@ -333,8 +373,12 @@ class MediaAdaptor(
         init {
             if (matchParent) itemView.updateLayoutParams { width = -1 }
             itemView.setSafeOnClickListener {
+                val pos = bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@setSafeOnClickListener
+                val media = mediaList?.getOrNull(pos)
+                if (media == null || media.id < 0) return@setSafeOnClickListener
                 clicked(
-                    bindingAdapterPosition,
+                    pos,
                     binding.itemCompactImage,
                     resizeBitmap(getBitmapFromImageView(binding.itemCompactImage), 100)
                 )
@@ -347,8 +391,12 @@ class MediaAdaptor(
         RecyclerView.ViewHolder(binding.root) {
         init {
             itemView.setSafeOnClickListener {
+                val pos = bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@setSafeOnClickListener
+                val media = mediaList?.getOrNull(pos)
+                if (media == null || media.id < 0) return@setSafeOnClickListener
                 clicked(
-                    bindingAdapterPosition,
+                    pos,
                     binding.itemCompactImage,
                     resizeBitmap(getBitmapFromImageView(binding.itemCompactImage), 100)
                 )
@@ -362,8 +410,12 @@ class MediaAdaptor(
         RecyclerView.ViewHolder(binding.root) {
         init {
             binding.itemCompactImage.setSafeOnClickListener {
+                val pos = bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@setSafeOnClickListener
+                val media = mediaList?.getOrNull(pos)
+                if (media == null || media.id < 0) return@setSafeOnClickListener
                 clicked(
-                    bindingAdapterPosition,
+                    pos,
                     binding.itemCompactImage,
                     resizeBitmap(getBitmapFromImageView(binding.itemCompactImage), 100)
                 )
@@ -378,15 +430,23 @@ class MediaAdaptor(
         RecyclerView.ViewHolder(binding.root) {
         init {
             binding.itemCompactImage.setSafeOnClickListener {
+                val pos = bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@setSafeOnClickListener
+                val media = mediaList?.getOrNull(pos)
+                if (media == null || media.id < 0) return@setSafeOnClickListener
                 clicked(
-                    bindingAdapterPosition,
+                    pos,
                     binding.itemCompactImage,
                     resizeBitmap(getBitmapFromImageView(binding.itemCompactImage), 100)
                 )
             }
             binding.itemCompactTitleContainer.setSafeOnClickListener {
+                val pos = bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@setSafeOnClickListener
+                val media = mediaList?.getOrNull(pos)
+                if (media == null || media.id < 0) return@setSafeOnClickListener
                 clicked(
-                    bindingAdapterPosition,
+                    pos,
                     binding.itemCompactImage,
                     resizeBitmap(getBitmapFromImageView(binding.itemCompactImage), 100)
                 )
@@ -398,7 +458,8 @@ class MediaAdaptor(
 
     fun clicked(position: Int, itemCompactImage: ImageView?, bitmap: Bitmap? = null) {
         if ((mediaList?.size ?: 0) > position && position != -1) {
-            val media = mediaList?.get(position)
+            val media = mediaList?.get(position) ?: return
+            if (media.id < 0) return
             if (bitmap != null) MediaSingleton.bitmap = bitmap
             ContextCompat.startActivity(
                 activity,
@@ -424,6 +485,7 @@ class MediaAdaptor(
         if (isOtherUser) return false
         if ((mediaList?.size ?: 0) > position && position != -1) {
             val media = mediaList?.get(position) ?: return false
+            if (media.id < 0) return false
             if (activity.supportFragmentManager.findFragmentByTag("list") == null) {
                 MediaListDialogSmallFragment.newInstance(media)
                     .show(activity.supportFragmentManager, "list")
@@ -441,12 +503,19 @@ class MediaAdaptor(
             return drawable.bitmap
         }
 
-        // Create a bitmap with the same dimensions as the drawable
-        val bitmap = Bitmap.createBitmap(
-            drawable.intrinsicWidth,
-            drawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
+        val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else imageView.width
+        val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else imageView.height
+        if (width <= 0 || height <= 0) return null
+
+        val bitmap = try {
+            Bitmap.createBitmap(
+                width,
+                height,
+                Bitmap.Config.ARGB_8888
+            )
+        } catch (_: Exception) {
+            return null
+        }
 
         // Draw the drawable onto the bitmap
         val canvas = Canvas(bitmap)

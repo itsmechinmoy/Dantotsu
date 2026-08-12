@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/searchResultLayout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="16dp"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingVertical="8dp">
+
+    <ImageView
+        android:id="@+id/searchResultIcon"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_gravity="center"
+        android:layout_marginEnd="18dp"
+        app:srcCompat="@drawable/ic_round_settings_24"
+        app:tint="?attr/colorPrimary"
+        tools:ignore="ContentDescription" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/searchResultTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_bold"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="16sp"
+            tools:text="OLED Theme Variant" />
+
+        <TextView
+            android:id="@+id/searchResultDesc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:alpha="0.66"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="12sp"
+            tools:text="Pure black theme for OLED displays" />
+
+        <TextView
+            android:id="@+id/searchResultBreadcrumbs"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:alpha="0.5"
+            android:fontFamily="@font/poppins"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="11sp"
+            tools:text="Theme > OLED Theme Variant" />
+
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/searchResultArrow"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="8dp"
+        android:alpha="0.6"
+        android:rotation="180"
+        app:srcCompat="@drawable/ic_round_arrow_back_ios_new_24"
+        app:tint="?attr/colorPrimary"
+        tools:ignore="ContentDescription" />
+
+</LinearLayout>

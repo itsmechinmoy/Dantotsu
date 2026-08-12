@@ -63,6 +63,10 @@ class MangaReadAdapter(
     val hiddenScanlators = mutableListOf<String>()
     var scanlatorSelectionListener: ScanlatorSelectionListener? = null
     var options = listOf<String>()
+        set(value) {
+            field = value
+            updateScanlatorDropdown()
+        }
 
     private fun clearCustomValsForMedia(mediaId: String, suffix: String) {
         val customVals = PrefManager.getAllCustomValsForMedia("$mediaId$suffix")
@@ -122,6 +126,7 @@ class MangaReadAdapter(
         var source =
             media.selected!!.sourceIndex.let { if (it >= mangaReadSources.names.size) 0 else it }
         setLanguageList(media.selected!!.langIndex, source)
+        updateScanlatorDropdown()
         if (mangaReadSources.names.isNotEmpty() && source in 0 until mangaReadSources.names.size) {
             binding.mediaSource.setText(mangaReadSources.names[source])
             mangaReadSources[source].apply {
@@ -310,82 +315,6 @@ class MangaReadAdapter(
                     }
                 }
                 resetProgressDef.text = getString(currContext()!!, R.string.clear_stored_chapter)
-
-                // Scanlator
-                mangaScanlatorContainer.isVisible = options.count() > 1
-                scanlatorNo.text = "${options.count()}"
-                mangaScanlatorTop.setOnClickListener {
-                    CustomDialogLayoutBinding.inflate(fragment.layoutInflater)
-                    val dialogView = CustomDialogLayoutBinding.inflate(fragment.layoutInflater)
-                    val checkboxContainer = dialogView.checkboxContainer
-                    val tickAllButton = dialogView.toggleButton
-
-                    fun getToggleImageResource(container: ViewGroup): Int {
-                        var allChecked = true
-                        var allUnchecked = true
-
-                        for (i in 0 until container.childCount) {
-                            val checkBox = container.getChildAt(i) as CheckBox
-                            if (!checkBox.isChecked) {
-                                allChecked = false
-                            } else {
-                                allUnchecked = false
-                            }
-                        }
-                        return when {
-                            allChecked -> R.drawable.untick_all_boxes
-                            allUnchecked -> R.drawable.tick_all_boxes
-                            else -> R.drawable.invert_all_boxes
-                        }
-                    }
-
-                    options.forEach { option ->
-                        val checkBox = CheckBox(currContext()).apply {
-                            text = option
-                            setOnCheckedChangeListener { _, _ ->
-                                tickAllButton.setImageResource(
-                                    getToggleImageResource(
-                                        checkboxContainer
-                                    )
-                                )
-                            }
-                        }
-
-                        if (media.selected!!.scanlators != null) {
-                            checkBox.isChecked =
-                                media.selected!!.scanlators?.contains(option) != true
-                        } else {
-                            checkBox.isChecked = true
-                        }
-                        checkboxContainer.addView(checkBox)
-                    }
-
-                    fragment.requireContext().customAlertDialog().apply {
-                        setCustomView(dialogView.root)
-                        setPosButton("OK") {
-                            hiddenScanlators.clear()
-                            for (i in 0 until checkboxContainer.childCount) {
-                                val checkBox = checkboxContainer.getChildAt(i) as CheckBox
-                                if (!checkBox.isChecked) {
-                                    hiddenScanlators.add(checkBox.text.toString())
-                                }
-                            }
-                            fragment.onScanlatorChange(hiddenScanlators)
-                            scanlatorSelectionListener?.onScanlatorsSelected()
-                        }
-                        setNegButton("Cancel")
-                    }.show()
-
-                    tickAllButton.setImageResource(getToggleImageResource(checkboxContainer))
-
-                    tickAllButton.setOnClickListener {
-                        for (i in 0 until checkboxContainer.childCount) {
-                            val checkBox = checkboxContainer.getChildAt(i) as CheckBox
-                            checkBox.isChecked = !checkBox.isChecked
-                        }
-                        tickAllButton.setImageResource(getToggleImageResource(checkboxContainer))
-                    }
-                }
 
                 fragment.requireContext().customAlertDialog().apply {
                     setTitle("Options")
@@ -576,6 +505,47 @@ class MangaReadAdapter(
                 binding?.mediaSourceLanguage?.setAdapter(adapter)
 
             }
+        }
+    }
+
+    fun updateScanlatorDropdown() {
+        val binding = _binding ?: return
+        if (options.size > 1) {
+            binding.mediaSourceScanlatorContainer.visibility = View.VISIBLE
+            binding.mediaSourceScanlatorContainer.hint = currActivity()?.getString(R.string.scanlator)
+
+            val allText = currActivity()?.getString(R.string.all_scanlators) ?: "All Scanlators"
+            val dropdownItems = listOf(allText) + options
+
+            val selectedText = if (hiddenScanlators.isEmpty() || hiddenScanlators.size >= options.size) {
+                allText
+            } else {
+                val shown = options.firstOrNull { it !in hiddenScanlators }
+                shown ?: allText
+            }
+
+            binding.mediaSourceScanlator.setText(selectedText, false)
+            val adapter = ArrayAdapter(
+                fragment.requireContext(),
+                R.layout.item_dropdown,
+                dropdownItems
+            )
+            binding.mediaSourceScanlator.setAdapter(adapter)
+            binding.mediaSourceScanlator.setOnItemClickListener { _, _, i, _ ->
+                if (i == 0) {
+                    hiddenScanlators.clear()
+                } else {
+                    val selectedOption = options.getOrNull(i - 1)
+                    hiddenScanlators.clear()
+                    if (selectedOption != null) {
+                        hiddenScanlators.addAll(options.filter { it != selectedOption })
+                    }
+                }
+                fragment.onScanlatorChange(hiddenScanlators)
+                scanlatorSelectionListener?.onScanlatorsSelected()
+            }
+        } else {
+            binding.mediaSourceScanlatorContainer.visibility = View.GONE
         }
     }
 

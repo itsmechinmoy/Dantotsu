@@ -244,7 +244,6 @@ class NovelReadAdapter(
                     }
                 }
             }
-            mangaScanlatorContainer.visibility = View.GONE
             mediaWebviewContainer.visibility = View.GONE
 
 

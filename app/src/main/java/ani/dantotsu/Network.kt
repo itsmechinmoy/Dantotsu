@@ -17,6 +17,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.InternalSerializationApi
@@ -100,12 +101,16 @@ object Mapper : ResponseParser {
 suspend fun <A, B> Collection<A>.asyncMap(
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
     f: suspend (A) -> B
-): List<B> = coroutineScope {
+): List<B> = supervisorScope {
     map { item ->
         async(dispatcher) {
-            f(item)
+            try {
+                f(item)
+            } catch (e: Throwable) {
+                null
+            }
         }
-    }.awaitAll()
+    }.mapNotNull { it.await() }
 }
 
 /**
@@ -119,10 +124,14 @@ suspend fun <A, B> Collection<A>.asyncMap(
 suspend fun <A, B> Collection<A>.asyncMapNotNull(
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
     f: suspend (A) -> B?
-): List<B> = coroutineScope {
+): List<B> = supervisorScope {
     map { item ->
         async(dispatcher) {
-            f(item)
+            try {
+                f(item)
+            } catch (e: Throwable) {
+                null
+            }
         }
     }.mapNotNull { it.await() }
 }

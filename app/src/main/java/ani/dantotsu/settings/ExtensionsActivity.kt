@@ -9,6 +9,8 @@ import android.view.ViewGroup
 import android.widget.AutoCompleteTextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
@@ -54,6 +56,18 @@ class ExtensionsActivity : AppCompatActivity() {
 
         binding.searchView.updateLayoutParams<ViewGroup.MarginLayoutParams> {
             bottomMargin = statusBarHeight + navBarHeight
+        }
+
+        supportFragmentManager.addOnBackStackChangedListener {
+            val hasPrefFragment = supportFragmentManager.findFragmentById(R.id.fragmentExtensionsContainer) != null
+            findViewById<ViewPager2>(R.id.viewPager).isVisible = !hasPrefFragment
+            findViewById<TabLayout>(R.id.tabLayout).isVisible = !hasPrefFragment
+            findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.searchView).isVisible = !hasPrefFragment
+            binding.languageselect.isVisible = !hasPrefFragment
+            findViewById<android.widget.FrameLayout>(R.id.fragmentExtensionsContainer).isGone = !hasPrefFragment
+            if (!hasPrefFragment) {
+                findViewById<android.widget.TextView>(R.id.extensions).text = getString(R.string.extensions)
+            }
         }
 
         binding.testButton.setOnClickListener {

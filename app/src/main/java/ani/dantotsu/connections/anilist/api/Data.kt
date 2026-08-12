@@ -151,7 +151,7 @@ class Query {
             @SerialName("recommendationPlannedQueryAnime") val recommendationPlannedQueryAnime: ani.dantotsu.connections.anilist.api.MediaListCollection?,
             @SerialName("recommendationPlannedQueryManga") val recommendationPlannedQueryManga: ani.dantotsu.connections.anilist.api.MediaListCollection?,
             @SerialName("missingSequelsCompletedQuery") val missingSequelsCompletedQuery: ani.dantotsu.connections.anilist.api.MediaListCollection?,
-            @SerialName("missingSequelsAllListQuery") val missingSequelsAllListQuery: ani.dantotsu.connections.anilist.api.MediaListCollection?,
+            @SerialName("missingSequelsAllListQuery") val missingSequelsAllListQuery: ani.dantotsu.connections.anilist.api.MediaListCollection? = null,
             @SerialName("Page1") val page1: ActivityPage?,
             @SerialName("Page2") val page2: ActivityPage?
         )
@@ -180,6 +180,8 @@ class Query {
             @SerialName("trendingMovies") val trendingMovies: ani.dantotsu.connections.anilist.api.Page?,
             @SerialName("topRated") val topRated: ani.dantotsu.connections.anilist.api.Page?,
             @SerialName("mostFav") val mostFav: ani.dantotsu.connections.anilist.api.Page?,
+            @SerialName("trending") val trending: ani.dantotsu.connections.anilist.api.Page? = null,
+            @SerialName("popular") val popular: ani.dantotsu.connections.anilist.api.Page? = null,
         )
     }
 
@@ -195,6 +197,8 @@ class Query {
             @SerialName("trendingNovel") val trendingNovel: ani.dantotsu.connections.anilist.api.Page?,
             @SerialName("topRated") val topRated: ani.dantotsu.connections.anilist.api.Page?,
             @SerialName("mostFav") val mostFav: ani.dantotsu.connections.anilist.api.Page?,
+            @SerialName("trending") val trending: ani.dantotsu.connections.anilist.api.Page? = null,
+            @SerialName("popular") val popular: ani.dantotsu.connections.anilist.api.Page? = null,
         )
     }
 

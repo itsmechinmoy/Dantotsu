@@ -35,6 +35,11 @@ import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SChapterImpl
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -115,23 +120,35 @@ class NovelDownloaderService : Service() {
 
     private fun processQueue() {
         CoroutineScope(Dispatchers.Default).launch {
+            val maxParallel = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
+            val concurrency = if (maxParallel > 0) maxParallel else 1
+            val semaphore = Semaphore(concurrency)
+            val activeJobs = mutableListOf<Job>()
+
             while (NovelServiceDataSingleton.downloadQueue.isNotEmpty()) {
-                val task = NovelServiceDataSingleton.downloadQueue.poll()
-                if (task != null) {
-                    NovelServiceDataSingleton.currentTasks.add(task)
-                    val job = launch { download(task) }
-                    mutex.withLock { downloadJobs[task.chapter] = job }
-                    job.join()
-                    mutex.withLock {
-                        downloadJobs.remove(task.chapter)
-                        NovelServiceDataSingleton.currentTasks.remove(task)
-                        NovelServiceDataSingleton.progress.remove(task.chapter)
+                val task = NovelServiceDataSingleton.downloadQueue.poll() ?: continue
+                val taskKey = "${task.title}_${task.chapter}"
+                val job = launch {
+                    semaphore.withPermit {
+                        NovelServiceDataSingleton.currentTasks.add(task)
+                        try {
+                            download(task)
+                        } finally {
+                            mutex.withLock {
+                                downloadJobs.remove(taskKey)
+                                NovelServiceDataSingleton.currentTasks.remove(task)
+                                NovelServiceDataSingleton.progress.remove(taskKey)
+                            }
+                            updateNotification()
+                        }
                     }
-                    updateNotification()
                 }
-                if (NovelServiceDataSingleton.downloadQueue.isEmpty()) {
-                    withContext(Dispatchers.Main) { stopSelf() }
-                }
+                mutex.withLock { downloadJobs[taskKey] = job }
+                activeJobs.add(job)
+            }
+            activeJobs.joinAll()
+            if (NovelServiceDataSingleton.downloadQueue.isEmpty()) {
+                withContext(Dispatchers.Main) { stopSelf() }
             }
         }
     }
@@ -314,7 +331,7 @@ class NovelDownloaderService : Service() {
 
                                     if (downloaded - lastNotif >= 1024 * 1024) {
                                         val progressPercent = (downloaded * 100 / total).toInt()
-                                        NovelServiceDataSingleton.progress[task.chapter] = progressPercent
+                                        NovelServiceDataSingleton.progress["${task.title}_${task.chapter}"] = progressPercent
                                         withContext(Dispatchers.Main) {
                                             builder.setProgress(100, progressPercent, false)
                                             if (notifi) notificationManager.notify(NOTIFICATION_ID, builder.build())
@@ -323,7 +340,7 @@ class NovelDownloaderService : Service() {
                                     }
                                     if (downloaded - lastBcast >= 1024 * 256) {
                                         val progressPercent = (downloaded * 100 / total).toInt()
-                                        NovelServiceDataSingleton.progress[task.chapter] = progressPercent
+                                        NovelServiceDataSingleton.progress["${task.title}_${task.chapter}"] = progressPercent
                                         withContext(Dispatchers.Main) {
                                             broadcastDownloadProgress(task.originalLink, progressPercent)
                                         }

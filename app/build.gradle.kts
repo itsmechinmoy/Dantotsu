@@ -141,6 +141,7 @@ dependencies {
 
     // AndroidX
     implementation(libs.bundles.androidx)
+    implementation("androidx.webkit:webkit:1.12.0")
 
     // Kotlin
     implementation(libs.kotlin.reflect)

@@ -14,6 +14,7 @@ import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.currContext
 import ani.dantotsu.media.anime.Episode
 import ani.dantotsu.media.anime.SelectorDialogFragment
+import ani.dantotsu.media.anime.getEpisode
 import ani.dantotsu.media.manga.MangaChapter
 import ani.dantotsu.media.mangaupdates.MangaAnimeUtil
 import ani.dantotsu.others.AniSkip
@@ -203,15 +204,17 @@ class MediaDetailsViewModel : ViewModel() {
             }
         }
 
-        if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    if (m.idIMDB == null) {
-                        m.idIMDB = ani.dantotsu.others.IdMappers.getImdbId(m.id)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (m.idIMDB == null) {
+                    m.idIMDB = if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+                        m.idMAL?.let { ani.dantotsu.others.IdMappers.getImdbIdFromMal(it) }
+                    } else {
+                        ani.dantotsu.others.IdMappers.getImdbId(m.id)
                     }
-                } catch (e: Exception) {
-                    ani.dantotsu.util.Logger.log(e)
                 }
+            } catch (e: Exception) {
+                ani.dantotsu.util.Logger.log(e)
             }
         }
     }
@@ -618,15 +621,17 @@ class MediaDetailsViewModel : ViewModel() {
     fun setMedia(m: Media) {
         media.postValue(m)
 
-        if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    if (m.idIMDB == null) {
-                        m.idIMDB = ani.dantotsu.others.IdMappers.getImdbId(m.id)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (m.idIMDB == null) {
+                    m.idIMDB = if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+                        m.idMAL?.let { ani.dantotsu.others.IdMappers.getImdbIdFromMal(it) }
+                    } else {
+                        ani.dantotsu.others.IdMappers.getImdbId(m.id)
                     }
-                } catch (e: Exception) {
-                    ani.dantotsu.util.Logger.log(e)
                 }
+            } catch (e: Exception) {
+                ani.dantotsu.util.Logger.log(e)
             }
         }
     }
@@ -649,9 +654,18 @@ class MediaDetailsViewModel : ViewModel() {
         MutableLiveData<Map<String, Episode>>(null)
 
     fun getAnifyEpisodes(): LiveData<Map<String, Episode>> = anifyEpisodes
+    suspend fun loadAnifyEpisodes(s: Media) {
+        tryWithSuspend {
+            if (anifyEpisodes.value == null) {
+                val anilistId = s.id.takeIf { it != 0 }
+                val malId = s.idMAL
+                anifyEpisodes.postValue(Anify.fetchAndParseMetadata(anilistId = anilistId, malId = malId))
+            }
+        }
+    }
     suspend fun loadAnifyEpisodes(s: Int) {
         tryWithSuspend {
-            if (anifyEpisodes.value == null) anifyEpisodes.postValue(Anify.fetchAndParseMetadata(s))
+            if (anifyEpisodes.value == null) anifyEpisodes.postValue(Anify.fetchAndParseMetadata(anilistId = s, malId = null))
         }
     }
 
@@ -844,7 +858,7 @@ class MediaDetailsViewModel : ViewModel() {
                     episodes.add(i)
                 }
                 for (ep in episodes){
-                    if (media.anime?.episodes?.get(ep) == null) {
+                    if (media.anime?.episodes?.getEpisode(ep) == null) {
                         snackString(currContext()?.getString(R.string.episode_not_found, ep))
                         return@post
                     }

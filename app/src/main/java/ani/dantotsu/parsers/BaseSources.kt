@@ -38,7 +38,8 @@ abstract class WatchSources : BaseSources() {
         tryWithSuspend(true) {
             if (sAnime != null) {
                 parser.loadEpisodes(showLink, extra, sAnime).forEach {
-                    map[it.number] = Episode(
+                    val key = if (it.sEpisode?.scanlator.isNullOrBlank()) it.number else "${it.number}-${it.sEpisode?.scanlator}"
+                    map[key] = Episode(
                         it.number,
                         it.link,
                         it.title,
@@ -51,7 +52,8 @@ abstract class WatchSources : BaseSources() {
                 }
             } else if (parser is OfflineAnimeParser) {
                 parser.loadEpisodes(showLink, extra, SAnime.create()).forEach {
-                    map[it.number] = Episode(
+                    val key = if (it.sEpisode?.scanlator.isNullOrBlank()) it.number else "${it.number}-${it.sEpisode?.scanlator}"
+                    map[key] = Episode(
                         it.number,
                         it.link,
                         it.title,
@@ -159,6 +161,3 @@ abstract class BaseSources {
         get(i)?.saveShowResponse(mediaId, response, true)
     }
 }
-
-
-

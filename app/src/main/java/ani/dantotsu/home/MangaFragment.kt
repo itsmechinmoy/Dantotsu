@@ -288,19 +288,9 @@ class MangaFragment : Fragment() {
                         }
                     }
                     model.loaded = true
-                    val loadTrending = async(Dispatchers.IO) { model.loadTrending() }
-                    val loadAll = async(Dispatchers.IO) { model.loadAll() }
-                    val loadPopular = async(Dispatchers.IO) {
-                        model.loadPopular(
-                            "MANGA",
-                            sort = Anilist.sortBy[1],
-                            onList = PrefManager.getVal(PrefName.PopularMangaList)
-                        )
+                    withContext(Dispatchers.IO) {
+                        model.loadAll(PrefManager.getVal(PrefName.PopularMangaList))
                     }
-
-                    loadTrending.await()
-                    loadAll.await()
-                    loadPopular.await()
 
                     live.postValue(false)
                     _binding?.mangaRefresh?.isRefreshing = false

@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/castScreenRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#141416"
+    android:clickable="true"
+    android:focusable="true"
+    android:fitsSystemWindows="true">
+
+    <!-- Top Left Back Button -->
+    <ImageButton
+        android:id="@+id/exo_cast_back"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Back"
+        android:src="@drawable/ic_round_arrow_back_ios_new_24"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:tint="@android:color/white" />
+
+    <!-- Left Column: Poster & Media Info (40% width) -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/castLeftColumn"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/castRightColumn"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/exo_cast_back"
+        app:layout_constraintWidth_percent="0.38">
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/castCoverCard"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginBottom="12dp"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="8dp"
+            app:cardBackgroundColor="#222226"
+            app:strokeColor="#20FFFFFF"
+            app:strokeWidth="1dp"
+            app:layout_constraintBottom_toTopOf="@id/exo_cast_title"
+            app:layout_constraintDimensionRatio="2:3"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <ImageView
+                android:id="@+id/exo_cast_cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_dantotsu_round" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            android:id="@+id/exo_cast_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="2dp"
+            android:ellipsize="end"
+            android:fontFamily="@font/poppins_bold"
+            android:maxLines="1"
+            android:text="Anime Title"
+            android:textAlignment="center"
+            android:textColor="@android:color/white"
+            android:textSize="15sp"
+            app:layout_constraintBottom_toTopOf="@id/exo_cast_subtitle" />
+
+        <TextView
+            android:id="@+id/exo_cast_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="@font/poppins"
+            android:maxLines="1"
+            android:text="Episode 1"
+            android:textAlignment="center"
+            android:textColor="#B3FFFFFF"
+            android:textSize="13sp"
+            app:layout_constraintBottom_toBottomOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Right Column: Top Bar + Controls Dashboard (62% width) -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/castRightColumn"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/castLeftColumn"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- Top Bar in Right Column -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/castTopBar"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <LinearLayout
+                android:id="@+id/castDeviceContainer"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/exo_cast_disconnect"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="8dp"
+                    android:src="@drawable/ic_round_cast_24"
+                    app:tint="?attr/colorPrimary" />
+
+                <TextView
+                    android:id="@+id/exo_cast_device_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="@font/poppins_semi_bold"
+                    android:maxLines="1"
+                    android:text="Cast Device"
+                    android:textColor="@android:color/white"
+                    android:textSize="15sp" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/exo_cast_disconnect"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Stop Casting"
+                android:src="@drawable/ic_round_close_24"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:tint="@android:color/white" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <!-- Skip Intro Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/exo_cast_skip_intro"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginTop="2dp"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:text="Skip Intro"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="12sp"
+            android:visibility="gone"
+            app:cornerRadius="18dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/castTopBar"
+            app:strokeColor="?attr/colorPrimary" />
+
+        <!-- Transport Controls Row -->
+        <LinearLayout
+            android:id="@+id/castPlaybackRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal"
+            app:layout_constraintBottom_toTopOf="@id/castSeekerRow"
+            app:layout_constraintTop_toBottomOf="@id/castTopBar">
+
+            <ImageButton
+                android:id="@+id/exo_cast_prev"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Previous Episode"
+                android:src="@drawable/ic_round_skip_previous_24"
+                app:tint="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/exo_cast_rewind"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Rewind 10 seconds"
+                android:src="@drawable/ic_round_fast_rewind_24"
+                app:tint="@android:color/white" />
+
+            <FrameLayout
+                android:layout_width="58dp"
+                android:layout_height="58dp"
+                android:layout_marginHorizontal="20dp">
+
+                <ImageButton
+                    android:id="@+id/exo_cast_play_pause"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Play/Pause"
+                    android:src="@drawable/ic_round_play_arrow_24"
+                    app:tint="@android:color/white" />
+
+                <ProgressBar
+                    android:id="@+id/exo_cast_buffering"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:layout_gravity="center"
+                    android:indeterminateTint="?attr/colorPrimary"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <ImageButton
+                android:id="@+id/exo_cast_forward"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Forward 10 seconds"
+                android:src="@drawable/ic_round_fast_forward_24"
+                app:tint="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/exo_cast_next"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Next Episode"
+                android:src="@drawable/ic_round_skip_next_24"
+                app:tint="@android:color/white" />
+        </LinearLayout>
+
+        <!-- Seeker Row -->
+        <LinearLayout
+            android:id="@+id/castSeekerRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            app:layout_constraintBottom_toTopOf="@id/castActionsRow">
+
+            <TextView
+                android:id="@+id/exo_cast_time_current"
+                android:layout_width="54dp"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:gravity="center"
+                android:text="00:00"
+                android:textColor="@android:color/white"
+                android:textSize="13sp" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/exo_cast_seeker"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:value="0"
+                android:valueFrom="0"
+                android:valueTo="100"
+                app:thumbColor="?attr/colorPrimary"
+                app:thumbRadius="7dp"
+                app:trackColorActive="?attr/colorPrimary"
+                app:trackColorInactive="#40FFFFFF"
+                app:trackHeight="4dp" />
+
+            <TextView
+                android:id="@+id/exo_cast_time_duration"
+                android:layout_width="54dp"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:gravity="center"
+                android:text="00:00"
+                android:textColor="#B3FFFFFF"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Quick Action Bar -->
+        <LinearLayout
+            android:id="@+id/castActionsRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            app:layout_constraintBottom_toTopOf="@id/castVolumeRow">
+
+            <ImageButton
+                android:id="@+id/exo_cast_playlist"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Playlist"
+                android:src="@drawable/ic_round_video_library_24"
+                app:tint="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/exo_cast_speed"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Playback Speed"
+                android:src="@drawable/ic_round_slow_motion_video_24"
+                app:tint="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/exo_cast_subs"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Subtitles"
+                android:src="@drawable/ic_round_subtitles_24"
+                app:tint="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/exo_cast_audio"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Audio Track"
+                android:src="@drawable/ic_round_audiotrack_24"
+                app:tint="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/exo_cast_quality"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Quality / Source"
+                android:src="@drawable/ic_round_high_quality_24"
+                app:tint="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/exo_cast_custom_skip"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Skip Intro Setting"
+                android:src="@drawable/ic_round_accessible_forward_24"
+                app:tint="@android:color/white" />
+        </LinearLayout>
+
+        <!-- Remote Volume Bar -->
+        <LinearLayout
+            android:id="@+id/castVolumeRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            app:layout_constraintBottom_toBottomOf="parent">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_round_volume_up_24"
+                app:tint="@android:color/white" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/exo_cast_volume"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:value="100"
+                android:valueFrom="0"
+                android:valueTo="100"
+                app:thumbColor="?attr/colorPrimary"
+                app:thumbRadius="6dp"
+                app:trackColorActive="?attr/colorPrimary"
+                app:trackColorInactive="#30FFFFFF"
+                app:trackHeight="3dp" />
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -237,6 +237,9 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
         })
 
         val swipeRefresh = view.findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.localRefresh)
+        swipeRefresh.setOnChildScrollUpCallback { _, _ ->
+            gridView.canScrollVertically(-1)
+        }
         swipeRefresh.setOnRefreshListener {
             animeDownloadsCache = null
             mangaDownloadsCache = null
@@ -405,15 +408,14 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
         scanJob = Job()
         CoroutineScope(Dispatchers.IO + scanJob).launch {
             try {
-                val animesPage = localAnimeSource.getPopularAnime(1)
-                val newDownloads = animesPage.animes.map { sAnime ->
+                val animesPage = try { localAnimeSource.getPopularAnime(1) } catch (e: Exception) { null }
+                val localItems = animesPage?.animes?.map { sAnime ->
                     val details = localAnimeSource.getAnimeDetails(sAnime)
                     val episodes = localAnimeSource.getEpisodeList(sAnime)
 
                     val title = details.title
                     val totalEps = episodes.size.toString()
 
-                    // al cover cache
                     val cachedCover = ani.dantotsu.settings.saving.PrefManager
                         .getCustomVal<String>("local_cover_${title}", "")
                         .takeIf { s -> s.isNotEmpty() && s != "null" }
@@ -421,7 +423,6 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                         .getCustomVal<String>("local_banner_${title}", "")
                         .takeIf { s -> s.isNotEmpty() && s != "null" }
 
-                    // AniList URL else fallback 
                     val coverUri = if (cachedCover != null) {
                         Uri.parse(cachedCover)
                     } else {
@@ -457,9 +458,38 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                         },
                         author = details.author ?: details.artist
                     )
-                }
-                downloads = newDownloads
-                animeDownloadsCache = newDownloads
+                } ?: emptyList()
+
+                val appDownloadsManager = ani.dantotsu.download.DownloadsManager(requireContext())
+                val appDownloadedAnime = appDownloadsManager.animeDownloadedTypes
+                    .groupBy { it.titleName }
+                    .map { (title, eps) ->
+                        val firstEp = eps.firstOrNull()
+                        val totalEps = eps.size.toString()
+                        val cachedCover = ani.dantotsu.settings.saving.PrefManager
+                            .getCustomVal<String>("local_cover_${title}", "")
+                            .takeIf { s -> s.isNotEmpty() && s != "null" }
+                        val coverUri = if (cachedCover != null) Uri.parse(cachedCover) else null
+
+                        OfflineAnimeModel(
+                            title = title,
+                            folderName = title,
+                            score = "0",
+                            totalEpisode = totalEps,
+                            totalEpisodeList = totalEps,
+                            watchedEpisode = "~",
+                            type = "downloaded",
+                            episodes = " Episodes",
+                            isOngoing = false,
+                            isUserScored = false,
+                            image = coverUri,
+                            banner = null
+                        )
+                    }
+
+                val merged = (appDownloadedAnime + localItems).distinctBy { it.title.trim().lowercase() }
+                downloads = merged
+                animeDownloadsCache = merged
                 withContext(Dispatchers.Main) {
                     adapter.setItems(downloads)
                     updateEmptyState()
@@ -492,15 +522,14 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
         scanJob = Job()
         CoroutineScope(Dispatchers.IO + scanJob).launch {
             try {
-                val mangasPage = localMangaSource.getPopularManga(1)
-                val newDownloads = mangasPage.mangas.map { sManga ->
+                val mangasPage = try { localMangaSource.getPopularManga(1) } catch (e: Exception) { null }
+                val localItems = mangasPage?.mangas?.map { sManga ->
                     val details = localMangaSource.getMangaDetails(sManga)
                     val chapters = localMangaSource.getChapterList(sManga)
 
                     val title = details.title
                     val totalChaps = chapters.size.toString()
 
-                    // al covers cache
                     val cachedCover = ani.dantotsu.settings.saving.PrefManager
                         .getCustomVal<String>("local_cover_${title}", "")
                         .takeIf { s -> s.isNotEmpty() && s != "null" }
@@ -543,9 +572,37 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                         },
                         author = details.author ?: details.artist
                     )
-                }
-                downloads = newDownloads
-                mangaDownloadsCache = newDownloads
+                } ?: emptyList()
+
+                val appDownloadsManager = ani.dantotsu.download.DownloadsManager(requireContext())
+                val appDownloadedManga = appDownloadsManager.mangaDownloadedTypes
+                    .groupBy { it.titleName }
+                    .map { (title, chaps) ->
+                        val totalChaps = chaps.size.toString()
+                        val cachedCover = ani.dantotsu.settings.saving.PrefManager
+                            .getCustomVal<String>("local_cover_${title}", "")
+                            .takeIf { s -> s.isNotEmpty() && s != "null" }
+                        val coverUri = if (cachedCover != null) Uri.parse(cachedCover) else null
+
+                        OfflineAnimeModel(
+                            title = title,
+                            folderName = title,
+                            score = "0",
+                            totalEpisode = totalChaps,
+                            totalEpisodeList = totalChaps,
+                            watchedEpisode = "~",
+                            type = "downloaded",
+                            episodes = " Chapters",
+                            isOngoing = false,
+                            isUserScored = false,
+                            image = coverUri,
+                            banner = null
+                        )
+                    }
+
+                val merged = (appDownloadedManga + localItems).distinctBy { it.title.trim().lowercase() }
+                downloads = merged
+                mangaDownloadsCache = merged
                 withContext(Dispatchers.Main) {
                     adapter.setItems(downloads)
                     updateEmptyState()

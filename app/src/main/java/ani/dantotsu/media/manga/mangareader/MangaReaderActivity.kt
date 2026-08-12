@@ -516,6 +516,14 @@ class MangaReaderActivity : AppCompatActivity() {
             binding.mangaReaderPageNumber.text =
                 if (defaultSettings.hidePageNumbers) "" else "${currentChapterPage}/$maxChapterPage"
 
+            ani.dantotsu.widgets.continue_widget.ContinueWidget.updateReadingState(
+                this,
+                media.userPreferredName,
+                media.cover,
+                "Chapter ${chapter.number} (${currentChapterPage}/$maxChapterPage)",
+                isExiting = false
+            )
+
         }
 
         val currentPage = if (directionPagedBT) {

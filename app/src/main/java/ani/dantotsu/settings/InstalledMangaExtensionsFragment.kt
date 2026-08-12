@@ -56,40 +56,40 @@ class InstalledMangaExtensionsFragment : Fragment(), SearchQueryHandler {
         { pkg ->
             val name = pkg.name
             val changeUIVisibility: (Boolean) -> Unit = { show ->
-                val activity = requireActivity() as ExtensionsActivity
-                activity.findViewById<ViewPager2>(R.id.viewPager).isVisible = show
-                activity.findViewById<TabLayout>(R.id.tabLayout).isVisible = show
-                activity.findViewById<TextInputLayout>(R.id.searchView).isVisible = show
-                activity.findViewById<ImageView>(R.id.languageselect).isVisible = show
-                activity.findViewById<TextView>(R.id.extensions).text =
-                    if (show) getString(R.string.extensions) else name
-                activity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer).isGone = show
+                val activity = activity as? ExtensionsActivity
+                if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
+                    activity.findViewById<ViewPager2>(R.id.viewPager).isVisible = show
+                    activity.findViewById<TabLayout>(R.id.tabLayout).isVisible = show
+                    activity.findViewById<TextInputLayout>(R.id.searchView).isVisible = show
+                    activity.findViewById<ImageView>(R.id.languageselect).isVisible = show
+                    activity.findViewById<TextView>(R.id.extensions).text =
+                        if (show) activity.getString(R.string.extensions) else name
+                    activity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer).isGone = show
+                }
             }
             var itemSelected = false
             val allSettings = pkg.sources.filterIsInstance<ConfigurableSource>()
             if (allSettings.isNotEmpty()) {
-                var selectedSetting = allSettings[0]
+                val openPrefFragment: (ConfigurableSource) -> Unit = { source ->
+                    changeUIVisibility(false)
+                    val fragment = MangaSourcePreferencesFragment().getInstance(source.id) {
+                        changeUIVisibility(true)
+                    }
+                    parentFragmentManager.beginTransaction()
+                        .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
+                        .replace(R.id.fragmentExtensionsContainer, fragment)
+                        .addToBackStack(null)
+                        .commit()
+                }
+
                 if (allSettings.size > 1) {
-                    val names = allSettings.map { getLanguageName(it.lang) }
-                        .toTypedArray()
+                    val names = allSettings.map { getLanguageName(it.lang) }.toTypedArray()
                     var selectedIndex = 0
                     requireContext().customAlertDialog().apply {
                         setTitle("Select a Source")
                         singleChoiceItems(names, selectedIndex) { which ->
                             itemSelected = true
-                            selectedIndex = which
-                            selectedSetting = allSettings[selectedIndex]
-
-                            // Move the fragment transaction here
-                            val fragment =
-                                MangaSourcePreferencesFragment().getInstance(selectedSetting.id) {
-                                    changeUIVisibility(true)
-                                }
-                            parentFragmentManager.beginTransaction()
-                                .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
-                                .replace(R.id.fragmentExtensionsContainer, fragment)
-                                .addToBackStack(null)
-                                .commit()
+                            openPrefFragment(allSettings[which])
                         }
                         onDismiss {
                             if (!itemSelected) {
@@ -99,20 +99,8 @@ class InstalledMangaExtensionsFragment : Fragment(), SearchQueryHandler {
                         show()
                     }
                 } else {
-                    // If there's only one setting, proceed with the fragment transaction
-                    val fragment =
-                        MangaSourcePreferencesFragment().getInstance(selectedSetting.id) {
-                            changeUIVisibility(true)
-                        }
-                    parentFragmentManager.beginTransaction()
-                        .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
-                        .replace(R.id.fragmentExtensionsContainer, fragment)
-                        .addToBackStack(null)
-                        .commit()
+                    openPrefFragment(allSettings[0])
                 }
-
-                // Hide ViewPager2 and TabLayout
-                changeUIVisibility(false)
             } else {
                 Toast.makeText(requireContext(), "Source is not configurable", Toast.LENGTH_SHORT)
                     .show()

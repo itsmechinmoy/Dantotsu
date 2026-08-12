@@ -11,7 +11,7 @@ import kotlinx.coroutines.supervisorScope
 import rx.Observable
 import tachiyomi.core.util.lang.awaitSingle
 
-interface CatalogueSource : MangaSource {
+interface CatalogueSource : Source {
 
     /**
      * An ISO 639-1 compliant language code (two letters in lower case).
@@ -24,17 +24,29 @@ interface CatalogueSource : MangaSource {
     override val supportsLatest: Boolean
 
     @Suppress("DEPRECATION")
-    override suspend fun getPopularManga(page: Int): MangasPage = fetchPopularManga(page).awaitSingle()
+    override suspend fun getPopularManga(page: Int): MangasPage = try {
+        fetchPopularManga(page).awaitSingle()
+    } catch (e: Throwable) {
+        throw UnsupportedOperationException()
+    }
 
     @Suppress("DEPRECATION")
-    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchLatestUpdates(page).awaitSingle()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = try {
+        fetchLatestUpdates(page).awaitSingle()
+    } catch (e: Throwable) {
+        throw UnsupportedOperationException()
+    }
 
     @Suppress("DEPRECATION")
     override suspend fun getSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): MangasPage = fetchSearchManga(page, query, filters).awaitSingle()
+    ): MangasPage = try {
+        fetchSearchManga(page, query, filters).awaitSingle()
+    } catch (e: Throwable) {
+        throw UnsupportedOperationException()
+    }
 
     @Suppress("DEPRECATION")
     override suspend fun getMangaUpdate(
@@ -43,18 +55,34 @@ interface CatalogueSource : MangaSource {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = supervisorScope {
-        val asyncManga = if (fetchDetails) async { fetchMangaDetails(manga).awaitSingle() } else null
-        val asyncChapters = if (fetchChapters) async { fetchChapterList(manga).awaitSingle() } else null
+        val asyncManga = if (fetchDetails) async {
+            try {
+                fetchMangaDetails(manga).awaitSingle()
+            } catch (e: Throwable) {
+                getMangaDetails(manga)
+            }
+        } else null
+        val asyncChapters = if (fetchChapters) async {
+            try {
+                fetchChapterList(manga).awaitSingle()
+            } catch (e: Throwable) {
+                getChapterList(manga)
+            }
+        } else null
         SMangaUpdate(asyncManga?.await() ?: manga, asyncChapters?.await() ?: chapters)
     }
 
     @Suppress("DEPRECATION")
-    override suspend fun getPageList(chapter: SChapter): List<Page> = fetchPageList(chapter).awaitSingle()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = try {
+        fetchPageList(chapter).awaitSingle()
+    } catch (e: Throwable) {
+        throw UnsupportedOperationException()
+    }
 
     /**
      * Returns the list of filters for the source.
      */
-    override fun getFilterList(): FilterList
+    override fun getFilterList(): FilterList = FilterList()
 
     @Deprecated(
         "Use the non-RxJava API instead",

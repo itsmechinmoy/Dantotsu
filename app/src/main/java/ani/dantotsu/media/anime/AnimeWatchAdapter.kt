@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import android.widget.CheckBox
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.NumberPicker
@@ -20,6 +21,7 @@ import ani.dantotsu.FileUrl
 import ani.dantotsu.R
 import ani.dantotsu.currActivity
 import ani.dantotsu.currContext
+import ani.dantotsu.databinding.CustomDialogLayoutBinding
 import ani.dantotsu.databinding.DialogLayoutBinding
 import ani.dantotsu.databinding.ItemChipBinding
 import ani.dantotsu.databinding.ItemMediaSourceBinding
@@ -60,6 +62,18 @@ class AnimeWatchAdapter(
     private var autoSelect = true
     var subscribe: MediaDetailsActivity.PopImageButton? = null
     private var _binding: ItemMediaSourceBinding? = null
+
+    var options: List<String> = listOf()
+        set(value) {
+            field = value
+            updateScanlatorDropdown()
+        }
+    var hiddenScanlators: MutableList<String> = mutableListOf()
+    var scanlatorSelectionListener: ScanlatorSelectionListener? = null
+
+    interface ScanlatorSelectionListener {
+        fun onScanlatorsSelected()
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val bind =
@@ -120,6 +134,7 @@ class AnimeWatchAdapter(
         var source =
             media.selected!!.sourceIndex.let { if (it >= watchSources.names.size) 0 else it }
         setLanguageList(media.selected!!.langIndex, source)
+        updateScanlatorDropdown()
         if (watchSources.names.isNotEmpty() && source in 0 until watchSources.names.size) {
             binding.mediaSource.setText(watchSources.names[source])
             watchSources[source].apply {
@@ -345,8 +360,6 @@ class AnimeWatchAdapter(
 
                 resetProgressDef.text = getString(currContext()!!, R.string.clear_stored_episode)
 
-                // Hidden
-                mangaScanlatorContainer.visibility = View.GONE
                 //animeDownloadContainer.visibility = View.GONE
                 fragment.requireContext().customAlertDialog().apply {
                     setTitle("Options")
@@ -598,6 +611,54 @@ class AnimeWatchAdapter(
                 binding?.mediaSourceLanguage?.setAdapter(adapter)
 
             }
+        }
+    }
+
+    fun updateScanlatorDropdown() {
+        val binding = _binding ?: return
+        if (options.size > 1) {
+            binding.mediaSourceScanlatorContainer.visibility = View.VISIBLE
+            binding.mediaSourceScanlatorContainer.hint = currActivity()?.getString(R.string.season)
+
+            val allText = currActivity()?.getString(R.string.all_seasons) ?: "All Seasons"
+            val dropdownItems = listOf(allText) + options
+
+            if (media.selected?.scanlators == null && hiddenScanlators.isEmpty()) {
+                val defaultSeason = options.firstOrNull()
+                if (defaultSeason != null) {
+                    hiddenScanlators.addAll(options.filter { it != defaultSeason })
+                }
+            }
+
+            val selectedText = if (hiddenScanlators.isEmpty() || hiddenScanlators.size >= options.size) {
+                allText
+            } else {
+                val shown = options.firstOrNull { it !in hiddenScanlators }
+                shown ?: allText
+            }
+
+            binding.mediaSourceScanlator.setText(selectedText, false)
+            val adapter = ArrayAdapter(
+                fragment.requireContext(),
+                R.layout.item_dropdown,
+                dropdownItems
+            )
+            binding.mediaSourceScanlator.setAdapter(adapter)
+            binding.mediaSourceScanlator.setOnItemClickListener { _, _, i, _ ->
+                if (i == 0) {
+                    hiddenScanlators.clear()
+                } else {
+                    val selectedOption = options.getOrNull(i - 1)
+                    hiddenScanlators.clear()
+                    if (selectedOption != null) {
+                        hiddenScanlators.addAll(options.filter { it != selectedOption })
+                    }
+                }
+                fragment.onScanlatorChange(hiddenScanlators)
+                scanlatorSelectionListener?.onScanlatorsSelected()
+            }
+        } else {
+            binding.mediaSourceScanlatorContainer.visibility = View.GONE
         }
     }
 

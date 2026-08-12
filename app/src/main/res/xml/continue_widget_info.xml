@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/continue_widget_description"
+    android:initialKeyguardLayout="@layout/widget_continue"
+    android:initialLayout="@layout/widget_continue"
+    android:minWidth="160dp"
+    android:minHeight="80dp"
+    android:previewImage="@drawable/continue_widget_preview"
+    android:previewLayout="@layout/widget_continue"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

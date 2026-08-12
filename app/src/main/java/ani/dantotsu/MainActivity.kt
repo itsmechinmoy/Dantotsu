@@ -91,6 +91,11 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
     @OptIn(UnstableApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (!isTaskRoot && intent.hasCategory(Intent.CATEGORY_LAUNCHER) && intent.action == Intent.ACTION_MAIN) {
+            finish()
+            return
+        }
+
         ThemeManager(this).applyTheme()
 
         super.onCreate(savedInstanceState)
@@ -254,7 +259,7 @@ class MainActivity : AppCompatActivity() {
                 binding.root.addView(splash.root)
                 (splash.splashImage.drawable as Animatable).start()
 
-                delay(1200)
+                delay(200)
 
                 ObjectAnimator.ofFloat(
                     splash.root,

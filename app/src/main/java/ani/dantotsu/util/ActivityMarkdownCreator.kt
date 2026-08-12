@@ -53,7 +53,8 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         HEADING("# ", 2, R.id.formatTitle),
         CENTERED("~~~~~~", 3, R.id.formatCenter),
         QUOTE("> ", 2, R.id.formatQuote),
-        CODE("``", 1, R.id.formatCode)
+        CODE("``", 1, R.id.formatCode),
+        UNDERLINE("<u></u>", 4, 0)
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -176,8 +177,10 @@ class ActivityMarkdownCreator : AppCompatActivity() {
 
     private fun setupMarkdownButtons() {
         MarkdownFormat.entries.forEach { format ->
-            findViewById<ImageView>(format.imageViewId)?.setOnClickListener {
-                applyMarkdownFormat(format)
+            if (format.imageViewId != 0) {
+                findViewById<ImageView>(format.imageViewId)?.setOnClickListener {
+                    applyMarkdownFormat(format)
+                }
             }
         }
     }

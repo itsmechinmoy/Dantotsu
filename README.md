@@ -2,7 +2,7 @@
   <img src="https://files.catbox.moe/s3mwfr.png" alt="Dantotsu Banner" width="830">
 
   <p align="center">
-    <img src="https://img.shields.io/badge/platforms-android-06599d?labelColor=7000b7&color=1b1c2a&style=for-the-badge"/>
+    <img src="https://img.shields.io/badge/platforms-Android%208.0%2B-06599d?labelColor=7000b7&color=1b1c2a&style=for-the-badge"/>
     <a href="https://git.rebelonion.dev/rebelonion/Dantotsu/releases"><img src="https://img.shields.io/badge/dynamic/json?url=https://git.rebelonion.dev/api/v1/repos/rebelonion/Dantotsu/releases/latest&query=assets[0].download_count&label=Downloads&style=for-the-badge&color=1b1c2a&labelColor=7000b7" alt="Downloads"></a>
   </p>
 

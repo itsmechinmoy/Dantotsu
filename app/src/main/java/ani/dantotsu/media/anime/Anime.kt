@@ -29,3 +29,8 @@ data class Anime(
     var fillerEpisodes: Map<String, Episode>? = null,
     var anifyEpisodes: Map<String, Episode>? = null,
 ) : Serializable
+
+fun Map<String, Episode>.getEpisode(key: String?): Episode? {
+    if (key == null) return null
+    return this[key] ?: values.firstOrNull { it.number == key }
+}

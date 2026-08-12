@@ -2,6 +2,7 @@ package ani.dantotsu.aniyomi.anime.custom
 
 
 import android.app.Application
+import android.content.Context
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
@@ -21,6 +22,7 @@ import eu.kanade.tachiyomi.source.anime.AndroidAnimeSourceManager
 import eu.kanade.tachiyomi.source.manga.AndroidMangaSourceManager
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.protobuf.ProtoBuf
 import tachiyomi.core.preference.PreferenceStore
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.service.MangaSourceManager
@@ -35,11 +37,14 @@ class AppModule(val app: Application) : InjektModule {
     @OptIn(UnstableApi::class)
     override fun InjektRegistrar.registerInjectables() {
         addSingleton(app)
+        addSingleton<Application>(app)
+        addSingleton<Context>(app)
 
         addSingletonFactory { DownloadsManager(app) }
 
         addSingletonFactory { NetworkHelper(app) }
-        addSingletonFactory { NetworkHelper(app).client }
+        addSingletonFactory { get<NetworkHelper>().client }
+        addSingletonFactory { eu.kanade.tachiyomi.network.JavaScriptEngine(app) }
 
         addSingletonFactory { AnimeExtensionManager(app) }
         addSingletonFactory { MangaExtensionManager(app) }
@@ -56,6 +61,7 @@ class AppModule(val app: Application) : InjektModule {
                 explicitNulls = false
             }
         }
+        addSingletonFactory<ProtoBuf> { ProtoBuf }
 
         addSingletonFactory { StandaloneDatabaseProvider(app) }
 

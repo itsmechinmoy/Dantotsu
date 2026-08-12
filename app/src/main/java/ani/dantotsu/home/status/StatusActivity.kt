@@ -14,6 +14,7 @@ import ani.dantotsu.initActivity
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.profile.User
 import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.util.Logger
@@ -116,6 +117,12 @@ class StatusActivity : AppCompatActivity(), StoriesCallback {
         } else {
             finish()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        val current = PrefManager.getVal<Boolean>(PrefName.RefreshStatus)
+        PrefManager.setVal(PrefName.RefreshStatus, !current)
     }
 
     companion object {

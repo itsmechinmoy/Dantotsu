@@ -10,7 +10,7 @@ import org.libtorrent4j.*
 import java.io.File
 
 class TorrentServerManager(private val context: Context) {
-    private val sessionManager = SessionManager()
+    private val sessionManager by lazy { SessionManager() }
     private var httpServer: TorrentHttpServer? = null
     var activeTorrentHash: String? = null
     var serverPort: Int = 8090
@@ -151,6 +151,7 @@ class TorrentServerManager(private val context: Context) {
     }
 
     fun isAvailable(andEnabled: Boolean = true): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 28) return false
         return if (andEnabled) {
             PrefManager.getVal(PrefName.TorrentEnabled)
         } else {

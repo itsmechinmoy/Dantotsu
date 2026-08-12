@@ -44,6 +44,7 @@ class SettingsAboutActivity : AppCompatActivity() {
             }
             aboutSettingsBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
+            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.adapter = SettingsAdapter(
                 arrayListOf(
                     Settings(
@@ -179,7 +180,8 @@ class SettingsAboutActivity : AppCompatActivity() {
                         }
                     ),
 
-                    )
+                ),
+                highlightKey = highlightKey
             )
             binding.settingsRecyclerView.layoutManager =
                 LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)

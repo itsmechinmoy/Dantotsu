@@ -193,8 +193,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     }
                 }
                 suspend fun loadEpisodeSingleServer(episodeName: String, selectedServerName: String): Boolean{
-                    media?.anime?.selectedEpisode = episodeName
-                    val ep = media?.anime?.episodes?.get(media?.anime?.selectedEpisode)!!
+                    val ep = media?.anime?.episodes?.getEpisode(episodeName) ?: media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode)!!
                     episode = ep
 
                     var success = false
@@ -361,7 +360,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 }
                 if (isDownloadMenu == false) {
                     media?.anime?.selectedEpisode = episodes?.get(0)
-                    val ep = media?.anime?.episodes?.get(media?.anime?.selectedEpisode)
+                    val ep = media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode)
                     episode = ep
                     if (ep != null) {
                         if (selected != null && media?.format != "LOCAL") {
@@ -425,7 +424,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 else {
                     binding.selectorMakeDefault.visibility = View.GONE
                     media?.anime?.selectedEpisode = episodes?.get(0)
-                    val ep = media?.anime?.episodes?.get(media?.anime?.selectedEpisode)
+                    val ep = media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode)
                     episode = ep
 
                     if (ep != null) {

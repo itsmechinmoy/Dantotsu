@@ -65,10 +65,10 @@ internal object ExtensionLoader {
     private const val XX_METADATA_HAS_README = ".hasReadme"
     private const val XX_METADATA_HAS_CHANGELOG = ".hasChangelog"
     const val ANIME_LIB_VERSION_MIN = 12
-    const val ANIME_LIB_VERSION_MAX = 16
+    const val ANIME_LIB_VERSION_MAX = 17
 
     const val MANGA_LIB_VERSION_MIN = 1.4
-    const val MANGA_LIB_VERSION_MAX = 1.6
+    const val MANGA_LIB_VERSION_MAX = 1.7
 
     val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or
             PackageManager.GET_META_DATA or
@@ -122,8 +122,9 @@ internal object ExtensionLoader {
                 return false
             }
 
-            if (!extensionSignatures.containsAll(getSignatures(currentExtension)!!)) {
-                Logger.log("Installed extension signature is not matched.")
+            val currentSignatures = getSignatures(currentExtension)
+            if (currentSignatures.isNullOrEmpty() || !extensionSignatures.containsAll(currentSignatures)) {
+                Logger.log("Installed extension signature does not match.")
                 return false
             }
         }
@@ -152,14 +153,11 @@ internal object ExtensionLoader {
     }
 
     private fun selectExtensionPackage(shared: ExtensionInfo?, private: ExtensionInfo?): ExtensionInfo? {
-        when {
-            private == null && shared != null -> return shared
-            shared == null && private != null -> return private
-            shared == null && private == null -> return null
-        }
+        if (shared == null) return private
+        if (private == null) return shared
 
-        return if (PackageInfoCompat.getLongVersionCode(shared!!.packageInfo) >=
-            PackageInfoCompat.getLongVersionCode(private!!.packageInfo)
+        return if (PackageInfoCompat.getLongVersionCode(shared.packageInfo) >=
+            PackageInfoCompat.getLongVersionCode(private.packageInfo)
         ) {
             shared
         } else {
@@ -169,7 +167,7 @@ internal object ExtensionLoader {
 
     private fun getSignatures(pkgInfo: PackageInfo): List<String>? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val signingInfo = pkgInfo.signingInfo!!
+            val signingInfo = pkgInfo.signingInfo ?: return null
             if (signingInfo.hasMultipleSigners()) {
                 signingInfo.apkContentsSigners
             } else {
@@ -435,8 +433,15 @@ internal object ExtensionLoader {
         }
 
         // Validate lib version
-        val libVersion = versionName.substringBeforeLast('.').toDoubleOrNull()
-        if (libVersion == null || libVersion < ANIME_LIB_VERSION_MIN || libVersion > ANIME_LIB_VERSION_MAX) {
+        val libVersion = appInfo.metaData?.getFloat("tachiyomix.extensionLib")
+            ?.takeUnless { it == 0.0f }
+            ?.toDouble()
+            ?: run {
+                val parts = versionName.split('.')
+                if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDoubleOrNull() else versionName.toDoubleOrNull()
+            }
+        val majorLibVersion = libVersion?.toInt()
+        if (libVersion == null || majorLibVersion == null || majorLibVersion < ANIME_LIB_VERSION_MIN || majorLibVersion > ANIME_LIB_VERSION_MAX) {
             Logger.log(
                 "Lib version is $libVersion, while only versions " +
                         "$ANIME_LIB_VERSION_MIN to $ANIME_LIB_VERSION_MAX are allowed"
@@ -444,15 +449,15 @@ internal object ExtensionLoader {
             return AnimeLoadResult.Error
         }
 
-        val isNsfw = appInfo.metaData.getInt("$ANIME_PACKAGE$XX_METADATA_NSFW") == 1
+        val isNsfw = appInfo.metaData?.getInt("$ANIME_PACKAGE$XX_METADATA_NSFW") == 1
         if (!loadNsfwSource && isNsfw) {
             Logger.log("NSFW extension $pkgName not allowed")
             return AnimeLoadResult.Error
         }
 
-        val hasReadme = appInfo.metaData.getInt("$ANIME_PACKAGE$XX_METADATA_HAS_README", 0) == 1
+        val hasReadme = appInfo.metaData?.getInt("$ANIME_PACKAGE$XX_METADATA_HAS_README", 0) == 1
         val hasChangelog =
-            appInfo.metaData.getInt("$ANIME_PACKAGE$XX_METADATA_HAS_CHANGELOG", 0) == 1
+            appInfo.metaData?.getInt("$ANIME_PACKAGE$XX_METADATA_HAS_CHANGELOG", 0) == 1
 
         val classLoader = try {
             ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
@@ -462,8 +467,13 @@ internal object ExtensionLoader {
             return AnimeLoadResult.Error
         }
 
-        val sources = appInfo.metaData.getString("$ANIME_PACKAGE$XX_METADATA_SOURCE_CLASS")!!
-            .split(";")
+        val sourcesString = appInfo.metaData?.getString("$ANIME_PACKAGE$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.getString("aniyomi.animeextension$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.getString("tachiyomi.animeextension$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.get("$ANIME_PACKAGE$XX_METADATA_SOURCE_CLASS")?.toString()
+            ?: return AnimeLoadResult.Error
+
+        val sources = sourcesString.split(";")
             .map {
                 val sourceClass = it.trim()
                 if (sourceClass.startsWith(".")) {
@@ -506,7 +516,7 @@ internal object ExtensionLoader {
             hasReadme = hasReadme,
             hasChangelog = hasChangelog,
             sources = sources,
-            pkgFactory = appInfo.metaData.getString("$ANIME_PACKAGE$XX_METADATA_SOURCE_FACTORY"),
+            pkgFactory = appInfo.metaData?.getString("$ANIME_PACKAGE$XX_METADATA_SOURCE_FACTORY"),
             isUnofficial = true,
             icon = context.getApplicationIcon(pkgName),
         )
@@ -539,8 +549,14 @@ internal object ExtensionLoader {
         }
 
         // Validate lib version
-        val libVersion = versionName.substringBeforeLast('.').toDoubleOrNull()
-        if (libVersion == null || libVersion < MANGA_LIB_VERSION_MIN || libVersion > MANGA_LIB_VERSION_MAX) {
+        val libVersion = appInfo.metaData?.getFloat("tachiyomix.extensionLib")
+            ?.takeUnless { it == 0.0f }
+            ?.toDouble()
+            ?: run {
+                val parts = versionName.split('.')
+                if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDoubleOrNull() else versionName.toDoubleOrNull()
+            }
+        if (libVersion == null || libVersion < MANGA_LIB_VERSION_MIN || libVersion > (MANGA_LIB_VERSION_MAX + 0.09)) {
             Logger.log(
                 "Lib version is $libVersion, while only versions " +
                         "$MANGA_LIB_VERSION_MIN to $MANGA_LIB_VERSION_MAX are allowed"
@@ -548,15 +564,15 @@ internal object ExtensionLoader {
             return MangaLoadResult.Error
         }
 
-        val isNsfw = appInfo.metaData.getInt("$MANGA_PACKAGE$XX_METADATA_NSFW") == 1
+        val isNsfw = appInfo.metaData?.getInt("$MANGA_PACKAGE$XX_METADATA_NSFW", 0) == 1
         if (!loadNsfwSource && isNsfw) {
             Logger.log("NSFW extension $pkgName not allowed")
             return MangaLoadResult.Error
         }
 
-        val hasReadme = appInfo.metaData.getInt("$MANGA_PACKAGE$XX_METADATA_HAS_README", 0) == 1
+        val hasReadme = appInfo.metaData?.getInt("$MANGA_PACKAGE$XX_METADATA_HAS_README", 0) == 1
         val hasChangelog =
-            appInfo.metaData.getInt("$MANGA_PACKAGE$XX_METADATA_HAS_CHANGELOG", 0) == 1
+            appInfo.metaData?.getInt("$MANGA_PACKAGE$XX_METADATA_HAS_CHANGELOG", 0) == 1
 
         val classLoader = try {
             ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
@@ -566,7 +582,13 @@ internal object ExtensionLoader {
             return MangaLoadResult.Error
         }
 
-        val sources = appInfo.metaData.getString("$MANGA_PACKAGE$XX_METADATA_SOURCE_CLASS")!!
+        val sourcesClassString = appInfo.metaData?.getString("$MANGA_PACKAGE$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.getString("tachiyomi.extension.class")
+            ?: appInfo.metaData?.getString("tachiyomix.extension.class")
+            ?: appInfo.metaData?.get("$MANGA_PACKAGE$XX_METADATA_SOURCE_CLASS")?.toString()
+            ?: return MangaLoadResult.Error
+
+        val sources = sourcesClassString
             .split(";")
             .map {
                 val sourceClass = it.trim()
@@ -610,7 +632,7 @@ internal object ExtensionLoader {
             hasReadme = hasReadme,
             hasChangelog = hasChangelog,
             sources = sources,
-            pkgFactory = appInfo.metaData.getString("$MANGA_PACKAGE$XX_METADATA_SOURCE_FACTORY"),
+            pkgFactory = appInfo.metaData?.getString("$MANGA_PACKAGE$XX_METADATA_SOURCE_FACTORY"),
             isUnofficial = true,
             icon = context.getApplicationIcon(pkgName),
         )
@@ -674,15 +696,14 @@ internal object ExtensionLoader {
      * @param pkgInfo The package info of the application.
      */
     private fun isPackageAnExtension(type: MediaType, pkgInfo: PackageInfo): Boolean {
-
         return if (type == MediaType.NOVEL) {
             pkgInfo.packageName.startsWith("some.random")
         } else {
             pkgInfo.reqFeatures.orEmpty().any {
-                it.name == when (type) {
-                    MediaType.ANIME -> ANIME_PACKAGE
-                    MediaType.MANGA -> MANGA_PACKAGE
-                    else -> ""
+                when (type) {
+                    MediaType.ANIME -> it.name == ANIME_PACKAGE || it.name == "aniyomi.animeextension" || it.name == "tachiyomi.animeextension" || it.name == "tachiyomix.animeextension"
+                    MediaType.MANGA -> it.name == MANGA_PACKAGE || it.name == "tachiyomix.extension" || it.name == "mihon.extension" || it.name == "aniyomi.extension"
+                    else -> false
                 }
             }
         }

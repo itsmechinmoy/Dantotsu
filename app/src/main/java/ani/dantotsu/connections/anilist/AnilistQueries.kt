@@ -18,6 +18,7 @@ import ani.dantotsu.connections.anilist.api.ReplyResponse
 import ani.dantotsu.currContext
 import ani.dantotsu.isOnline
 import ani.dantotsu.logError
+import ani.dantotsu.home.status.sortUserStatusList
 import ani.dantotsu.media.Author
 import ani.dantotsu.media.Character
 import ani.dantotsu.media.Media
@@ -57,6 +58,29 @@ class AnilistQueries {
         val users: ArrayList<User>,
         val cachedAt: Long
     ) : Serializable
+
+    private data class HomePageCache(
+        val data: Map<String, ArrayList<Media>>,
+        val cachedAt: Long
+    ) : Serializable
+
+    fun loadHomePageCache(): Map<String, ArrayList<Media>>? {
+        val cached = PrefManager.getNullableCustomVal(
+            "home_page_cache",
+            null,
+            HomePageCache::class.java
+        ) ?: return null
+        val cacheExpired = System.currentTimeMillis() - cached.cachedAt > 3 * 60 * 60 * 1000L
+        if (cacheExpired) return null
+        return cached.data
+    }
+
+    fun saveHomePageCache(data: Map<String, ArrayList<Media>>) {
+        PrefManager.setCustomVal(
+            "home_page_cache",
+            HomePageCache(data, System.currentTimeMillis())
+        )
+    }
 
     suspend fun getUserData(): Boolean {
         val response: Query.Viewer?
@@ -328,8 +352,7 @@ class AnilistQueries {
 
                             fetchedMedia.studios?.nodes?.apply {
                                 if (isNotEmpty()) {
-                                    val animStudio = firstOrNull { it.isAnimationStudio == true }
-                                    val studioNode = animStudio ?: get(0)
+                                    val studioNode = get(0)
                                     media.anime.mainStudio = Studio(
                                         studioNode.id.toString(),
                                         studioNode.name ?: "N/A",
@@ -499,7 +522,7 @@ class AnilistQueries {
         val toShow: List<Boolean> =
             PrefManager.getVal(PrefName.HomeLayout)
         if (toShow.getOrNull(7) != true) return null
-        loadUserStatusCache()?.let { return it }
+        loadUserStatusCache()?.let { return sortUserStatusList(it) }
         val query = """{Page1:${status(1)}Page2:${status(2)}}"""
         val response = executeQuery<Query.HomePageMedia>(query)
         val list = mutableListOf<User>()
@@ -552,7 +575,7 @@ class AnilistQueries {
             list.addAll(0, anilistActivities)
             val result = list.toCollection(ArrayList())
             saveUserStatusCache(result)
-            return result
+            return sortUserStatusList(result)
         } else return null
     }
 
@@ -569,75 +592,22 @@ class AnilistQueries {
     }
 
     private fun missingSequelsAllListSourceQuery(): String {
-        return """
-            MediaListCollection( userId: ${Anilist.userid}, type: ANIME ) { lists { entries { media { id } } } } """.trimIndent()
+        return """ MediaListCollection( userId: ${Anilist.userid}, type: ANIME ) { lists { entries { media { id } } } } """.trimIndent()
     }
+
     private val batchSize = 50
     private fun missingSequelsLookupQuery(ids: List<Int>): String {
         val idsString = ids.joinToString(",")
         return """ { Page(page: 1, perPage: $batchSize) { media( id_in: [$idsString], type: ANIME, status_in: [RELEASING, FINISHED], onList: false ) { id mediaListEntry { progress progressVolumes private score(format: POINT_100) status } idMal type isAdult popularity status(version: 2) chapters volumes episodes nextAiringEpisode { episode } meanScore isFavourite format bannerImage coverImage { large } title { english romaji userPreferred } startDate { year } } } } """.trimIndent()
     }
 
-    private fun extractMissingSequelIds(completedEntries: List<MediaList>?): Set<Int> {
-        val sequelIds = mutableSetOf<Int>()
-
-        completedEntries?.forEach { entry ->
-            entry.media?.relations?.edges?.forEach { edge ->
-                if (edge.relationType?.name == "SEQUEL") {
-                    edge.node?.id?.let { sequelIds.add(it) }
-                }
-            }
-        }
-
-        return sequelIds
-    }
-
-    private fun extractAnimeIds(entries: List<MediaList>?): Set<Int> {
-        return entries
-            ?.mapNotNull { it.media?.id }
-            ?.toSet()
-            ?: emptySet()
-    }
-
     private suspend fun fetchMissingSequelMedia(ids: Set<Int>): ArrayList<Media> {
         if (ids.isEmpty()) return arrayListOf()
-
-        val batches = ids.toList().chunked(batchSize)
-        val batchResults: List<List<Media>> = coroutineScope {
-            batches.map { batch ->
-                async {
-                    executeQuery<Query.Page>(missingSequelsLookupQuery(batch))
-                        ?.data
-                        ?.page
-                        ?.media
-                        ?.mapNotNull { media ->
-                            if (media.mediaListEntry == null) Media(media) else null
-                        }
-                        ?: emptyList()
-                }
-            }
-                .awaitAll()
-        }
-        return ArrayList(batchResults.flatten())
-    }
-
-    private fun loadMissingSequelCache(ids: Set<Int>): ArrayList<Media>? {
-        val cached = PrefManager.getNullableCustomVal(
-            "missing_sequels_cache",
-            null,
-            MissingSequelsCache::class.java
-        ) ?: return null
-
-        val cacheExpired = System.currentTimeMillis() - cached.cachedAt > 6 * 60 * 60 * 1000L
-        if (cacheExpired || cached.sourceIds != ids) return null
-        return ArrayList(cached.media)
-    }
-
-    private fun saveMissingSequelCache(ids: Set<Int>, media: ArrayList<Media>) {
-        PrefManager.setCustomVal(
-            "missing_sequels_cache",
-            MissingSequelsCache(ids, media, System.currentTimeMillis())
-        )
+        val response = executeQuery<Query.Page>(missingSequelsLookupQuery(ids.toList()))
+        val mediaList = response?.data?.page?.media?.mapNotNull { media ->
+            if (media.mediaListEntry == null) Media(media) else null
+        } ?: emptyList()
+        return ArrayList(mediaList)
     }
 
     private fun loadUserStatusCache(): ArrayList<User>? {
@@ -656,13 +626,6 @@ class AnilistQueries {
             "user_status_cache",
             UserStatusCache(users, System.currentTimeMillis())
         )
-    }
-
-    private suspend fun getMissingSequelMedia(ids: Set<Int>): ArrayList<Media> {
-        loadMissingSequelCache(ids)?.let { return it }
-        val fresh = fetchMissingSequelMedia(ids)
-        saveMissingSequelCache(ids, fresh)
-        return fresh
     }
 
     private fun continueMediaQuery(type: String, status: String): String {
@@ -726,6 +689,10 @@ class AnilistQueries {
             val query = "{${queries.joinToString(",")}}"
             executeQuery<Query.HomePageMedia>(query, show = true)
         }
+        if (queries.isNotEmpty() && response == null) {
+            return emptyMap()
+        }
+
         val returnMap = mutableMapOf<String, ArrayList<Media>>()
 
         fun processMedia(
@@ -844,10 +811,19 @@ class AnilistQueries {
                 response?.data?.missingSequelsCompletedQuery?.lists?.flatMap { it.entries ?: emptyList() }
             val allAnimeEntries =
                 response?.data?.missingSequelsAllListQuery?.lists?.flatMap { it.entries ?: emptyList() }
-            val sequelIds = extractMissingSequelIds(completedEntries)
-            val allAnimeIds = extractAnimeIds(allAnimeEntries)
+
+            val sequelIds = mutableSetOf<Int>()
+            completedEntries?.forEach { entry ->
+                entry.media?.relations?.edges?.forEach { edge ->
+                    if (edge.relationType?.name == "SEQUEL") {
+                        edge.node?.id?.let { sequelIds.add(it) }
+                    }
+                }
+            }
+            val allAnimeIds = allAnimeEntries?.mapNotNull { it.media?.id }?.toSet() ?: emptySet()
             val filteredSequelIds = sequelIds - allAnimeIds
-            val sequels = getMissingSequelMedia(filteredSequelIds)
+
+            val sequels = if (filteredSequelIds.isNotEmpty()) fetchMissingSequelMedia(filteredSequelIds) else arrayListOf()
             val visibleSequels = arrayListOf<Media>()
             sequels.forEach { sequel ->
                 if (sequel.id !in removeList && (!hidePrivate || !sequel.isListPrivate)) {
@@ -904,6 +880,7 @@ class AnilistQueries {
             }
             return MAL.avatar
         }
+
         val image = BannerImage(
             PrefManager.getCustomVal("banner_${type}_url", ""),
             PrefManager.getCustomVal("banner_${type}_time", 0L)
@@ -1431,10 +1408,13 @@ class AnilistQueries {
         }
     }
 
-    private fun queryAnimeList(): String {
+    private fun queryAnimeList(onList: Boolean = true): String {
+        val (season, year) = Anilist.currentSeasons[1]
+        val includeList = if (!onList) "onList:false" else ""
+        val isAdult = if (getPreference(PrefName.AdultOnly)) "isAdult:true" else ""
         return buildString {
             append(
-                """{recentUpdates:${recentAnimeUpdates(1)} recentUpdates2:${recentAnimeUpdates(2)} trendingMovies:${
+                """{recentUpdates:${recentAnimeUpdates(1)} trendingMovies:${
                     buildQueryString(
                         "POPULARITY_DESC",
                         "ANIME",
@@ -1445,12 +1425,14 @@ class AnilistQueries {
                         "SCORE_DESC",
                         "ANIME"
                     )
-                } mostFav:${buildQueryString("FAVOURITES_DESC", "ANIME")}}"""
+                } mostFav:${buildQueryString("FAVOURITES_DESC", "ANIME")} trending: Page(page:1, perPage:12) { $standardPageInformation media(sort:TRENDING_DESC, type:ANIME, season:$season, seasonYear:$year, $isAdult) { id idMal status episodes nextAiringEpisode{episode} isAdult type meanScore isFavourite format bannerImage countryOfOrigin coverImage{large} title{english romaji userPreferred} mediaListEntry{progress private score(format:POINT_100) status} } } popular: Page(page:1, perPage:50) { $standardPageInformation media(sort:POPULARITY_DESC, type:ANIME, $includeList $isAdult) { id idMal status chapters episodes nextAiringEpisode{episode} isAdult type meanScore isFavourite format bannerImage countryOfOrigin coverImage{large} title{english romaji userPreferred} mediaListEntry{progress private score(format:POINT_100) status} } }}"""
             )
         }
     }
 
-    private fun queryMangaList(): String {
+    private fun queryMangaList(onList: Boolean = true): String {
+        val includeList = if (!onList) "onList:false" else ""
+        val isAdult = if (getPreference(PrefName.AdultOnly)) "isAdult:true" else ""
         return buildString {
             append(
                 """{trendingManga:${
@@ -1477,12 +1459,12 @@ class AnilistQueries {
                         "SCORE_DESC",
                         "MANGA"
                     )
-                } mostFav:${buildQueryString("FAVOURITES_DESC", "MANGA")}}"""
+                } mostFav:${buildQueryString("FAVOURITES_DESC", "MANGA")} trending: Page(page:1, perPage:10) { $standardPageInformation media(sort:TRENDING_DESC, type:MANGA, $isAdult) { id idMal status chapters episodes nextAiringEpisode{episode} isAdult type meanScore isFavourite format bannerImage countryOfOrigin coverImage{large} title{english romaji userPreferred} mediaListEntry{progress private score(format:POINT_100) status} } } popular: Page(page:1, perPage:50) { $standardPageInformation media(sort:POPULARITY_DESC, type:MANGA, $includeList $isAdult) { id idMal status chapters episodes nextAiringEpisode{episode} isAdult type meanScore isFavourite format bannerImage countryOfOrigin coverImage{large} title{english romaji userPreferred} mediaListEntry{progress private score(format:POINT_100) status} } }}"""
             )
         }
     }
 
-    suspend fun loadAnimeList(): Map<String, ArrayList<Media>> = coroutineScope {
+    suspend fun loadAnimeList(onList: Boolean = true): Map<String, ArrayList<Media>> = coroutineScope {
         val list = mutableMapOf<String, ArrayList<Media>>()
 
         fun filterRecentUpdates(page: Page?): ArrayList<Media> {
@@ -1505,22 +1487,24 @@ class AnilistQueries {
             }?.toCollection(ArrayList()) ?: arrayListOf()
         }
 
-        val animeList = async { executeQuery<Query.AnimeList>(queryAnimeList(), force = true) }
+        val animeList = async { executeQuery<Query.AnimeList>(queryAnimeList(onList), force = true) }
 
         animeList.await()?.data?.apply {
             list["recentUpdates"] = filterRecentUpdates(recentUpdates)
             list["trendingMovies"] = mediaList(trendingMovies)
             list["topRated"] = mediaList(topRated)
             list["mostFav"] = mediaList(mostFav)
+            list["trending"] = mediaList(trending)
+            list["popular"] = mediaList(popular)
         }
 
         list
     }
 
-    suspend fun loadMangaList(): Map<String, ArrayList<Media>> = coroutineScope {
+    suspend fun loadMangaList(onList: Boolean = true): Map<String, ArrayList<Media>> = coroutineScope {
         val list = mutableMapOf<String, ArrayList<Media>>()
 
-        val mangaList = async { executeQuery<Query.MangaList>(queryMangaList(), force = true) }
+        val mangaList = async { executeQuery<Query.MangaList>(queryMangaList(onList), force = true) }
 
         mangaList.await()?.data?.apply {
             list["trendingManga"] = mediaList(trendingManga)
@@ -1528,6 +1512,8 @@ class AnilistQueries {
             list["trendingNovel"] = mediaList(trendingNovel)
             list["topRated"] = mediaList(topRated)
             list["mostFav"] = mediaList(mostFav)
+            list["trending"] = mediaList(trending)
+            list["popular"] = mediaList(popular)
         }
 
         list

@@ -115,84 +115,86 @@ class SettingsThemeActivity : AppCompatActivity(), SimpleDialog.OnDialogResultLi
                 }
             }
 
-            settingsRecyclerView.adapter = SettingsAdapter(
-                arrayListOf(
-                    Settings(
-                        type = 2,
-                        name = getString(R.string.oled_theme_variant),
-                        desc = getString(R.string.oled_theme_variant_desc),
-                        icon = R.drawable.ic_round_brightness_4_24,
-                        isChecked = PrefManager.getVal(PrefName.UseOLED),
-                        switch = { isChecked, _ ->
-                            PrefManager.setVal(PrefName.UseOLED, isChecked)
-                            reload()
-                        }
-                    ),
-                    Settings(
-                        type = 2,
-                        name = getString(R.string.use_material_you),
-                        desc = getString(R.string.use_material_you_desc),
-                        icon = R.drawable.ic_round_new_releases_24,
-                        isChecked = PrefManager.getVal(PrefName.UseMaterialYou),
-                        switch = { isChecked, _ ->
-                            PrefManager.setVal(PrefName.UseMaterialYou, isChecked)
-                            if (isChecked) PrefManager.setVal(PrefName.UseCustomTheme, false)
-                            reload()
-                        },
-                        isVisible = Build.VERSION.SDK_INT > Build.VERSION_CODES.R
-                    ),
-                    Settings(
-                        type = 2,
-                        name = getString(R.string.use_unique_theme_for_each_item),
-                        desc = getString(R.string.use_unique_theme_for_each_item_desc),
-                        icon = R.drawable.ic_palette,
-                        isChecked = PrefManager.getVal(PrefName.UseSourceTheme),
-                        switch = { isChecked, _ ->
-                            PrefManager.setVal(PrefName.UseSourceTheme, isChecked)
-                        },
-                        isVisible = Build.VERSION.SDK_INT > Build.VERSION_CODES.R
-                    ),
-                    Settings(
-                        type = 2,
-                        name = getString(R.string.use_custom_theme),
-                        desc = getString(R.string.use_custom_theme_desc),
-                        icon = R.drawable.ic_palette,
-                        isChecked = PrefManager.getVal(PrefName.UseCustomTheme),
-                        switch = { isChecked, _ ->
-                            PrefManager.setVal(PrefName.UseCustomTheme, isChecked)
-                            if (isChecked) PrefManager.setVal(PrefName.UseMaterialYou, false)
-                            reload()
-                        },
-                        isVisible = Build.VERSION.SDK_INT > Build.VERSION_CODES.R
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.color_picker),
-                        desc = getString(R.string.color_picker_desc),
-                        icon = R.drawable.ic_palette,
-                        onClick = {
-                            val originalColor: Int = PrefManager.getVal(PrefName.CustomThemeInt)
-
-                            class CustomColorDialog : SimpleColorDialog() {
-                                override fun onPositiveButtonClick() {
-                                    reload()
-                                    super.onPositiveButtonClick()
-                                }
-                            }
-
-                            val tag = "colorPicker"
-                            CustomColorDialog().title(R.string.custom_theme)
-                                .colorPreset(originalColor)
-                                .colors(context, SimpleColorDialog.MATERIAL_COLOR_PALLET)
-                                .allowCustom(true).showOutline(0x46000000).gridNumColumn(5)
-                                .choiceMode(SimpleColorDialog.SINGLE_CHOICE).neg()
-                                .show(context, tag)
-                        },
-                        isVisible = Build.VERSION.SDK_INT > Build.VERSION_CODES.R
-                    )
-                )
-            )
+            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.apply {
+                adapter = SettingsAdapter(
+                    arrayListOf(
+                        Settings(
+                            type = 2,
+                            name = getString(R.string.oled_theme_variant),
+                            desc = getString(R.string.oled_theme_variant_desc),
+                            icon = R.drawable.ic_round_brightness_4_24,
+                            isChecked = PrefManager.getVal(PrefName.UseOLED),
+                            switch = { isChecked, _ ->
+                                PrefManager.setVal(PrefName.UseOLED, isChecked)
+                                reload()
+                            }
+                        ),
+                        Settings(
+                            type = 2,
+                            name = getString(R.string.use_material_you),
+                            desc = getString(R.string.use_material_you_desc),
+                            icon = R.drawable.ic_round_new_releases_24,
+                            isChecked = PrefManager.getVal(PrefName.UseMaterialYou),
+                            switch = { isChecked, _ ->
+                                PrefManager.setVal(PrefName.UseMaterialYou, isChecked)
+                                if (isChecked) PrefManager.setVal(PrefName.UseCustomTheme, false)
+                                reload()
+                            },
+                            isVisible = Build.VERSION.SDK_INT > Build.VERSION_CODES.R
+                        ),
+                        Settings(
+                            type = 2,
+                            name = getString(R.string.use_unique_theme_for_each_item),
+                            desc = getString(R.string.use_unique_theme_for_each_item_desc),
+                            icon = R.drawable.ic_palette,
+                            isChecked = PrefManager.getVal(PrefName.UseSourceTheme),
+                            switch = { isChecked, _ ->
+                                PrefManager.setVal(PrefName.UseSourceTheme, isChecked)
+                            },
+                            isVisible = Build.VERSION.SDK_INT > Build.VERSION_CODES.R
+                        ),
+                        Settings(
+                            type = 2,
+                            name = getString(R.string.use_custom_theme),
+                            desc = getString(R.string.use_custom_theme_desc),
+                            icon = R.drawable.ic_palette,
+                            isChecked = PrefManager.getVal(PrefName.UseCustomTheme),
+                            switch = { isChecked, _ ->
+                                PrefManager.setVal(PrefName.UseCustomTheme, isChecked)
+                                if (isChecked) PrefManager.setVal(PrefName.UseMaterialYou, false)
+                                reload()
+                            },
+                            isVisible = Build.VERSION.SDK_INT > Build.VERSION_CODES.R
+                        ),
+                        Settings(
+                            type = 1,
+                            name = getString(R.string.color_picker),
+                            desc = getString(R.string.color_picker_desc),
+                            icon = R.drawable.ic_palette,
+                            onClick = {
+                                val originalColor: Int = PrefManager.getVal(PrefName.CustomThemeInt)
+
+                                class CustomColorDialog : SimpleColorDialog() {
+                                    override fun onPositiveButtonClick() {
+                                        reload()
+                                        super.onPositiveButtonClick()
+                                    }
+                                }
+
+                                val tag = "colorPicker"
+                                CustomColorDialog().title(R.string.custom_theme)
+                                    .colorPreset(originalColor)
+                                    .colors(context, SimpleColorDialog.MATERIAL_COLOR_PALLET)
+                                    .allowCustom(true).showOutline(0x46000000).gridNumColumn(5)
+                                    .choiceMode(SimpleColorDialog.SINGLE_CHOICE).neg()
+                                    .show(context, tag)
+                            },
+                            isVisible = Build.VERSION.SDK_INT > Build.VERSION_CODES.R
+                        )
+                    ),
+                    highlightKey = highlightKey
+                )
                 layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
                 setHasFixedSize(true)
             }

@@ -106,3 +106,23 @@ fun SAnime.copy(
     it.initialized = initialized
 }
 // <-- AM (CUSTOM_INFORMATION)
+
+fun SAnime.copyFrom(other: SAnime) {
+    if (other.author != null) author = other.author
+    if (other.artist != null) artist = other.artist
+    if (other.description != null) description = other.description
+    if (other.genre != null) genre = other.genre
+    if (other.thumbnail_url != null) thumbnail_url = other.thumbnail_url
+    if (other.background_url != null) background_url = other.background_url
+    status = other.status
+    update_strategy = other.update_strategy
+    fetch_type = other.fetch_type
+    season_number = other.season_number
+    initialized = other.initialized
+}
+
+@Suppress("UNUSED")
+class SAnimeEpisodeUpdate(val anime: SAnime, val episodes: List<SEpisode>)
+
+@Suppress("UNUSED")
+class SAnimeSeasonUpdate(val anime: SAnime, val seasons: List<SAnime>)

@@ -8,6 +8,10 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import ani.dantotsu.util.Logger
 
+import androidx.webkit.UserAgentMetadata
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
+
 object WebViewUtil {
     const val SPOOF_PACKAGE_NAME = "org.chromium.chrome"
 
@@ -24,6 +28,44 @@ object WebViewUtil {
         }
 
         return context.packageManager.hasSystemFeature(PackageManager.FEATURE_WEBVIEW)
+    }
+}
+
+private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)(\.\d+\.\d+\.\d+)?""")
+
+fun WebView.setUserAgent(userAgent: String) {
+    settings.userAgentString = userAgent
+
+    if (!WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) return
+
+    val versionMatch = CHROME_VERSION_REGEX.find(userAgent) ?: return
+    val majorVersion = versionMatch.groupValues[1]
+    val fullVersion = majorVersion + versionMatch.groupValues[2].ifEmpty { ".0.0.0" }
+
+    try {
+        val metadata = WebSettingsCompat.getUserAgentMetadata(settings) ?: return
+        val brandVersionList = metadata.brandVersionList.map { brandVersion ->
+            val brand = when (brandVersion.brand) {
+                "Android WebView", "WebView" -> "Google Chrome"
+                else -> brandVersion.brand
+            }
+
+            UserAgentMetadata.BrandVersion.Builder()
+                .setBrand(brand)
+                .setMajorVersion(majorVersion)
+                .setFullVersion(fullVersion)
+                .build()
+        }
+
+        WebSettingsCompat.setUserAgentMetadata(
+            settings,
+            UserAgentMetadata.Builder(metadata)
+                .setBrandVersionList(brandVersionList)
+                .setFullVersion(fullVersion)
+                .build(),
+        )
+    } catch (e: Exception) {
+        Logger.log(e)
     }
 }
 

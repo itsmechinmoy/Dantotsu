@@ -62,6 +62,7 @@ class SettingsMangaActivity : AppCompatActivity() {
                 uiChp(1, it)
             }
 
+            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.adapter = SettingsAdapter(
                 arrayListOf(
                     Settings(
@@ -122,7 +123,8 @@ class SettingsMangaActivity : AppCompatActivity() {
                             restartApp()
                         }
                     ),
-                )
+                ),
+                highlightKey = highlightKey
             )
             settingsRecyclerView.apply {
                 layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)

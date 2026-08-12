@@ -234,6 +234,7 @@ class SettingsAccountActivity : AppCompatActivity() {
             }
             reload()
         }
+        val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
         binding.settingsRecyclerView.adapter = SettingsAdapter(
             arrayListOf(
                 Settings(
@@ -272,7 +273,8 @@ class SettingsAccountActivity : AppCompatActivity() {
                     },
                     isVisible = Anilist.token != null
                 ),
-            )
+            ),
+            highlightKey = highlightKey
         )
         binding.settingsRecyclerView.layoutManager =
             LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)

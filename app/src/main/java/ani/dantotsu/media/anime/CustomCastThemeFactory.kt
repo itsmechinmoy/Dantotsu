@@ -41,3 +41,23 @@ class CustomMediaRouteControllerDialogFragment : MediaRouteControllerDialogFragm
     ): MediaRouteControllerDialog =
         MediaRouteControllerDialog(context, R.style.MyPopup)
 }
+
+class CustomCastButton @JvmOverloads constructor(
+    context: Context,
+    attrs: android.util.AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : androidx.mediarouter.app.MediaRouteButton(context, attrs, defStyleAttr) {
+    private var callback: (() -> Unit)? = null
+
+    fun setCastCallback(cb: () -> Unit) {
+        this.callback = cb
+    }
+
+    override fun performClick(): Boolean {
+        callback?.let {
+            it.invoke()
+            return true
+        }
+        return super.performClick()
+    }
+}

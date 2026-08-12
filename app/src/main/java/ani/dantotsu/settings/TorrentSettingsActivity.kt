@@ -148,6 +148,7 @@ class TorrentSettingsActivity : AppCompatActivity() {
                 }
             )
 
+            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.adapter = SettingsAdapter(
                 arrayListOf(
                     encryptionItem,
@@ -158,7 +159,8 @@ class TorrentSettingsActivity : AppCompatActivity() {
                     batterySavingItem,
                     portItem,
                     disableUtpItem
-                )
+                ),
+                highlightKey = highlightKey
             )
 
             settingsRecyclerView.layoutManager =

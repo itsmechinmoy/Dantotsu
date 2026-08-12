@@ -18,11 +18,15 @@ import kotlinx.serialization.Serializable
  */
 object Anify {
 
-    suspend fun fetchAndParseMetadata(anilistId: Int): Map<String, Episode> {
+    suspend fun fetchAndParseMetadata(anilistId: Int? = null, malId: Int? = null): Map<String, Episode> {
+        val url = when {
+            anilistId != null && anilistId != 0 -> "https://api.ani.zip/mappings?anilist_id=$anilistId"
+            malId != null && malId != 0 -> "https://api.ani.zip/mappings?mal_id=$malId"
+            else -> return emptyMap()
+        }
         return try {
-            Logger.log("AniZip : fetching episodes for anilist_id=$anilistId")
-            val response = client.get("https://api.ani.zip/mappings?anilist_id=$anilistId")
-                .parsed<AniZipResponse>()
+            Logger.log("AniZip : fetching episodes from $url")
+            val response = client.get(url).parsed<AniZipResponse>()
 
             val episodes = response.episodes ?: return emptyMap()
 
@@ -41,6 +45,7 @@ object Anify {
                         thumb = FileUrl[ep.image],
                         extra = buildMap {
                             ep.airDate?.let { put("airDate", it) }
+                            ep.airdate?.let { put("airDate", it) }
                             ep.rating?.let { put("rating", it) }
                             ep.seasonNumber?.let { put("season", it.toString()) }
                             ep.episodeNumber?.let { put("episode", it.toString()) }
@@ -48,10 +53,13 @@ object Anify {
                     )
                 }
         } catch (e: Exception) {
-            Logger.log("AniZip : error fetching episodes: ${e.message}")
+            Logger.log("AniZip : error fetching episodes from $url: ${e.message}")
             emptyMap()
         }
     }
+
+    suspend fun fetchAndParseMetadata(anilistId: Int): Map<String, Episode> =
+        fetchAndParseMetadata(anilistId = anilistId, malId = null)
 
     // ── Data models ────────────────────────────────────────────────────────────
 

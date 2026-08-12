@@ -152,7 +152,20 @@ class ShizukuInstaller(private val service: Service) : Installer(service) {
 
         initShizuku()
     }
+
+    companion object {
+        const val SHIZUKU_PERMISSION_REQUEST_CODE = 10001
+        const val SHIZUKU_PERMISSION = "moe.shizuku.manager.permission.API_V23"
+
+        fun isShizukuInstalled(context: Context): Boolean {
+            return try {
+                context.packageManager.getPermissionInfo(SHIZUKU_PERMISSION, 0)
+                true
+            } catch (e: PackageManager.NameNotFoundException) {
+                false
+            }
+        }
+    }
 }
 
-private const val SHIZUKU_PERMISSION_REQUEST_CODE = 14045
 const val ACTION_INSTALL_RESULT = "${BuildConfig.APPLICATION_ID}.ACTION_INSTALL_RESULT"

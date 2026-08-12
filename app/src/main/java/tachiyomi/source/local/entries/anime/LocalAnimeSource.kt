@@ -228,7 +228,34 @@ class LocalAnimeSource(
         episodes
     }
 
-    override suspend fun getSeasonList(anime: SAnime): List<SAnime> = getSeasonList(anime)
+    override suspend fun getSeasonList(anime: SAnime): List<SAnime> = withIOContext {
+        val animeDir = getAnimeDir(anime.url, context) ?: return@withIOContext emptyList()
+        val seasonDirs = animeDir.listFiles()
+            .filter { it.isDirectory && !it.name.orEmpty().startsWith('.') }
+            .distinctBy { it.name }
+
+        if (seasonDirs.isEmpty()) {
+            return@withIOContext emptyList()
+        }
+
+        seasonDirs.map { seasonDir ->
+            val seasonName = seasonDir.name.orEmpty()
+            val url = "${anime.url}/$seasonName"
+            SAnime.create().apply {
+                title = seasonName
+                this.url = url
+                val coverFile = findCoverFile(seasonDir)
+                if (coverFile != null) {
+                    thumbnail_url = coverFile.uri.toString()
+                } else {
+                    val firstVideo = seasonDir.listFiles().firstOrNull { !it.name.orEmpty().startsWith('.') && isSupportedVideo(it) }
+                    if (firstVideo != null) {
+                        thumbnail_url = firstVideo.uri.toString()
+                    }
+                }
+            }
+        }
+    }
 
 
     // Filters
@@ -293,8 +320,21 @@ class LocalAnimeSource(
             val baseDir = getBaseDirectory(context) ?: return null
             val localDir = baseDir.findFile("local") ?: baseDir
             val localAnimeDir = localDir.findFile("anime") ?: localDir
-            return localAnimeDir.findFile(animeUrl)?.takeIf { it.isDirectory }
-                ?: baseDir.findFile(animeUrl)?.takeIf { it.isDirectory }
+
+            val parts = animeUrl.split('/', '\\').filter { it.isNotBlank() }
+            var current: DocumentFile? = localAnimeDir
+            for (part in parts) {
+                current = current?.findFile(part)?.takeIf { it.isDirectory }
+                if (current == null) break
+            }
+            if (current != null) return current
+
+            current = baseDir
+            for (part in parts) {
+                current = current?.findFile(part)?.takeIf { it.isDirectory }
+                if (current == null) break
+            }
+            return current
         }
     }
 }

@@ -95,7 +95,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
 
         model.getMedia().observe(viewLifecycleOwner) { media ->
             // Logger.log("SubtitleDialogFragment: Media observed")
-            episode = media?.anime?.episodes?.get(media.anime.selectedEpisode) ?: return@observe
+            episode = media?.anime?.episodes?.getEpisode(media.anime.selectedEpisode) ?: return@observe
             val currentExtractor =
                 episode.extractors?.find { it.server.name == episode.selectedExtractor }
                     ?: return@observe

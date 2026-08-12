@@ -300,18 +300,9 @@ class AnimeFragment : Fragment() {
                         }
                     }
                     model.loaded = true
-                    val loadTrending = async(Dispatchers.IO) { model.loadTrending(1) }
-                    val loadAll = async(Dispatchers.IO) { model.loadAll() }
-                    val loadPopular = async(Dispatchers.IO) {
-                        model.loadPopular(
-                            "ANIME",
-                            sort = Anilist.sortBy[1],
-                            onList = PrefManager.getVal(PrefName.PopularAnimeList)
-                        )
+                    withContext(Dispatchers.IO) {
+                        model.loadAll(PrefManager.getVal(PrefName.PopularAnimeList))
                     }
-                    loadTrending.await()
-                    loadAll.await()
-                    loadPopular.await()
                     live.postValue(false)
                     _binding?.animeRefresh?.isRefreshing = false
                     running = false

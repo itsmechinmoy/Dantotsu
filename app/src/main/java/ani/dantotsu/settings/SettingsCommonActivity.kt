@@ -141,6 +141,7 @@ class SettingsCommonActivity : AppCompatActivity() {
                 restartApp()
             }
 
+            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.adapter =
                 SettingsAdapter(
                     arrayListOf(
@@ -173,6 +174,23 @@ class SettingsCommonActivity : AppCompatActivity() {
                                         PrefManager.getVal(PrefName.DownloadManager),
                                     ) { count ->
                                         PrefManager.setVal(PrefName.DownloadManager, count)
+                                    }
+                                    show()
+                                }
+                            },
+                        ),
+                        Settings(
+                            type = 1,
+                            name = "Max Parallel Downloads",
+                            desc = "Concurrent download tasks (0 = Sequential, 1-10 = Concurrent). Note: High concurrency may trigger source rate limits.",
+                            icon = R.drawable.ic_download_24,
+                            onClick = {
+                                val options = arrayOf("0 (Off / Sequential)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
+                                val current = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
+                                customAlertDialog().apply {
+                                    setTitle("Max Parallel Downloads")
+                                    singleChoiceItems(options, current) { which ->
+                                        PrefManager.setVal(PrefName.MaxParallelDownloads, which)
                                     }
                                     show()
                                 }
@@ -398,6 +416,7 @@ class SettingsCommonActivity : AppCompatActivity() {
                             isVisible = Anilist.adult,
                         ),
                     ),
+                    highlightKey = highlightKey
                 )
             settingsRecyclerView.apply {
                 layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)

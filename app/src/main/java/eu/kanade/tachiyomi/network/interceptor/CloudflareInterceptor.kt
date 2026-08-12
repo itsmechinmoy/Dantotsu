@@ -27,7 +27,16 @@ class CloudflareInterceptor(
 
     override fun shouldIntercept(response: Response): Boolean {
         if (response.request.url.host.contains("anilist.co")) return false
-        return response.code in ERROR_CODES && response.header("Server") in SERVER_CHECK
+        return if (response.code in ERROR_CODES && response.header("Server") in SERVER_CHECK) {
+            val bodyString = runCatching { response.peekBody(Long.MAX_VALUE).string() }.getOrNull() ?: return false
+            val document = org.jsoup.Jsoup.parse(bodyString, response.request.url.toString())
+            document.getElementById("challenge-error-title") != null ||
+                document.getElementById("challenge-error-text") != null ||
+                document.getElementById("challenge-running") != null ||
+                document.getElementById("turnstile-wrapper") != null
+        } else {
+            false
+        }
     }
 
     override fun intercept(

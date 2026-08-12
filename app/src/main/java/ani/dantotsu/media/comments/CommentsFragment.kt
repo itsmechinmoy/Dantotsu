@@ -28,6 +28,7 @@ import ani.dantotsu.databinding.DialogEdittextBinding
 import ani.dantotsu.databinding.FragmentCommentsBinding
 import ani.dantotsu.loadImage
 import ani.dantotsu.media.MediaNameAdapter
+import ani.dantotsu.media.anime.getEpisode
 import ani.dantotsu.media.MediaDetailsActivity
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.setBaseline
@@ -508,7 +509,7 @@ class CommentsFragment : Fragment() {
         val currentMedia = model.getMedia().value ?: return
 
         if (isAnime) {
-            val ep = currentMedia.anime?.episodes?.get(tag)
+            val ep = currentMedia.anime?.episodes?.getEpisode(tag)
             if (ep != null) {
                 model.onEpisodeClick(currentMedia, tag, childFragmentManager, true)
             } else {

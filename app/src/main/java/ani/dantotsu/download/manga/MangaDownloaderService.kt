@@ -36,6 +36,11 @@ import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
 import ani.dantotsu.util.NumberConverter.Companion.ofLength
 import ani.dantotsu.util.SizeFormatter
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import com.anggrayudi.storage.file.deleteRecursively
 import com.anggrayudi.storage.file.forceDelete
 import com.anggrayudi.storage.file.openOutputStream
@@ -133,26 +138,38 @@ class MangaDownloaderService : Service() {
 
     private fun processQueue() {
         CoroutineScope(Dispatchers.Default).launch {
+            val maxParallel = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
+            val concurrency = if (maxParallel > 0) maxParallel else 1
+            val semaphore = Semaphore(concurrency)
+            val activeJobs = mutableListOf<Job>()
+
             while (MangaServiceDataSingleton.downloadQueue.isNotEmpty()) {
-                val task = MangaServiceDataSingleton.downloadQueue.poll()
-                if (task != null) {
-                    MangaServiceDataSingleton.currentTasks.add(task)
-                    val job = launch { download(task) }
-                    mutex.withLock {
-                        downloadJobs[task.chapter] = job
+                val task = MangaServiceDataSingleton.downloadQueue.poll() ?: continue
+                val taskKey = "${task.title}_${task.chapter}"
+                val job = launch {
+                    semaphore.withPermit {
+                        MangaServiceDataSingleton.currentTasks.add(task)
+                        try {
+                            download(task)
+                        } finally {
+                            mutex.withLock {
+                                downloadJobs.remove(taskKey)
+                                MangaServiceDataSingleton.currentTasks.remove(task)
+                                MangaServiceDataSingleton.progress.remove(taskKey)
+                            }
+                            updateNotification()
+                        }
                     }
-                    job.join()
-                    mutex.withLock {
-                        downloadJobs.remove(task.chapter)
-                        MangaServiceDataSingleton.currentTasks.remove(task)
-                        MangaServiceDataSingleton.progress.remove(task.chapter)
-                    }
-                    updateNotification()
                 }
-                if (MangaServiceDataSingleton.downloadQueue.isEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        stopSelf()
-                    }
+                mutex.withLock {
+                    downloadJobs[taskKey] = job
+                }
+                activeJobs.add(job)
+            }
+            activeJobs.joinAll()
+            if (MangaServiceDataSingleton.downloadQueue.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    stopSelf()
                 }
             }
         }
@@ -268,7 +285,7 @@ class MangaDownloaderService : Service() {
                             task.imageData.size
                         )
                         val progressPercent = farthest * 100 / task.imageData.size
-                        MangaServiceDataSingleton.progress[task.chapter] = progressPercent
+                        MangaServiceDataSingleton.progress["${task.title}_${task.chapter}"] = progressPercent
                         broadcastDownloadProgress(
                             task.uniqueName,
                             progressPercent,
