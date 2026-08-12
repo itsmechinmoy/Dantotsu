@@ -281,7 +281,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         hideSystemBars()
 
         // Bind Views
-        exoPlay = playerView.findViewById(androidx.media3.ui.R.id.exo_play_pause)
+        exoPlay = playerView.findViewById(androidx.media3.ui.R.id.exo_play)
         exoSource = playerView.findViewById(R.id.exo_source)
         exoSettings = playerView.findViewById(R.id.exo_settings)
         exoSubtitle = playerView.findViewById(R.id.exo_sub)

@@ -23,7 +23,7 @@ val gitCommitHash = if (rootProject.file(".git").exists()) {
 
 android {
     namespace = "ani.dantotsu"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "ani.dantotsu"
@@ -141,7 +141,7 @@ dependencies {
 
     // AndroidX
     implementation(libs.bundles.androidx)
-    implementation("androidx.webkit:webkit:1.12.0")
+    implementation(libs.androidx.webkit)
 
     // Kotlin
     implementation(libs.kotlin.reflect)
