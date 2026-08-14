@@ -52,11 +52,11 @@ class NovelExtensionsFragment : Fragment(),
 
         binding.allNovelExtensionsRecyclerView.isNestedScrollingEnabled = false
         binding.allNovelExtensionsRecyclerView.adapter = adapter
-        binding.allNovelExtensionsRecyclerView.layoutManager = LinearLayoutManager(context)
+        binding.allNovelExtensionsRecyclerView.layoutManager = SafeLinearLayoutManager(context)
         (binding.allNovelExtensionsRecyclerView.layoutManager as LinearLayoutManager).isItemPrefetchEnabled =
             true
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             viewModel.pagerFlow.collectLatest { pagingData ->
                 adapter.submitData(pagingData)
             }

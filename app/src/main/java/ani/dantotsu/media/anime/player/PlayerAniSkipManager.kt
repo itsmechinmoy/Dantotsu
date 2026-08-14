@@ -60,12 +60,12 @@ class PlayerAniSkipManager(
 
     private fun setupTimeStampsObserver() {
         model.timeStamps.observe(activity) { stamps ->
-            isTimeStampsLoaded = true
-            if (stamps != null) {
+            if (!stamps.isNullOrEmpty()) {
+                isTimeStampsLoaded = true
                 val adGroups = stamps.flatMap {
                     listOf(
-                        it.interval.startTime.toLong() * 1000,
-                        it.interval.endTime.toLong() * 1000
+                        (it.interval.startTime * 1000).toLong(),
+                        (it.interval.endTime * 1000).toLong()
                     )
                 }.toLongArray()
                 val playedAdGroups = stamps.flatMap {
@@ -74,7 +74,9 @@ class PlayerAniSkipManager(
                 playerView.setExtraAdGroupMarkers(adGroups, playedAdGroups)
                 exoSkipOpEd.visibility = View.VISIBLE
             } else {
+                isTimeStampsLoaded = false
                 exoSkipOpEd.visibility = View.GONE
+                playerView.setExtraAdGroupMarkers(longArrayOf(), booleanArrayOf())
             }
         }
     }
@@ -129,9 +131,9 @@ class PlayerAniSkipManager(
         val player = getPlayer() ?: return
         if (player.playbackState == Player.STATE_IDLE) return
 
-        val playerCurrentTime = player.currentPosition / 1000
+        val playerCurrentTime = player.currentPosition / 1000.0
         currentTimeStamp = model.timeStamps.value?.find { timestamp ->
-            timestamp.interval.startTime < playerCurrentTime &&
+            timestamp.interval.startTime <= playerCurrentTime &&
                     playerCurrentTime < (timestamp.interval.endTime - 1)
         }
 

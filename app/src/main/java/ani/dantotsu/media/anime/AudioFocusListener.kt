@@ -22,7 +22,6 @@ class AudioFocusListener(
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
             player.apply {
-                setAudioAttributes(audioAttributes, true)
                 if (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING) {
                     play()
                 }
@@ -70,10 +69,7 @@ class AudioFocusListener(
 
     override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: @PlaybackSuppressionReason Int) {
         if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
-            player.apply {
-                setAudioAttributes(audioAttributes, false)
-                player.playWhenReady = false
-            }
+            player.playWhenReady = false
             requestFocus()
         }
     }

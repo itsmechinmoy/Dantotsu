@@ -675,22 +675,19 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
             format = getVideoType(path)
 
             if (format == null && query != null) {
-                val queryPairs: List<Pair<String, String>> = query.split("&").map {
+                val queryPairs: List<Pair<String, String>> = query.split("&").mapNotNull {
                     val idx = it.indexOf("=")
-                    val key = URLDecoder.decode(it.substring(0, idx), "UTF-8")
-                    val value = URLDecoder.decode(it.substring(idx + 1), "UTF-8")
-                    Pair(key, value)
+                    if (idx != -1) {
+                        val key = runCatching { URLDecoder.decode(it.substring(0, idx), "UTF-8") }.getOrNull() ?: ""
+                        val value = runCatching { URLDecoder.decode(it.substring(idx + 1), "UTF-8") }.getOrNull() ?: ""
+                        Pair(key, value)
+                    } else null
                 }
 
-                // Assume the file is named under the "file" query parameter
-                val fileName = queryPairs.find { it.first == "file" }?.second ?: ""
-
-                format = getVideoType(fileName)
-                // this solves a problem no one has, so I'm commenting it out for now
-                //if (format == null) {
-                //    val networkHelper = Injekt.get<NetworkHelper>()
-                //    format = headRequest(videoUrl, networkHelper)
-                //}
+                val targetParam = queryPairs.find { it.first == "url" || it.first == "file" }?.second ?: ""
+                if (targetParam.isNotBlank()) {
+                    format = getVideoType(targetParam)
+                }
             }
 
             // If the format is still undetermined, log an error
@@ -721,10 +718,18 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
             fileName.endsWith(".mp4", ignoreCase = true) || fileName.endsWith(
                 ".mkv",
                 ignoreCase = true
+            ) || fileName.endsWith(
+                ".webm",
+                ignoreCase = true
             ) -> VideoType.CONTAINER
 
-            fileName.endsWith(".m3u8", ignoreCase = true) -> VideoType.M3U8
-            fileName.endsWith(".mpd", ignoreCase = true) -> VideoType.DASH
+            fileName.endsWith(".m3u8", ignoreCase = true) ||
+                    fileName.contains(".m3u8", ignoreCase = true) ||
+                    fileName.contains("/m3u8", ignoreCase = true) ||
+                    fileName.equals("m3u8", ignoreCase = true) -> VideoType.M3U8
+            fileName.endsWith(".mpd", ignoreCase = true) ||
+                    fileName.contains(".mpd", ignoreCase = true) ||
+                    fileName.contains("/mpd", ignoreCase = true) -> VideoType.DASH
             else -> null
         }
 

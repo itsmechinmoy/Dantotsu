@@ -124,6 +124,7 @@ okhttp = "com.squareup.okhttp3:okhttp:5.4.0"
 okhttp-logging = "com.squareup.okhttp3:logging-interceptor:5.4.0"
 okhttp-brotli = "com.squareup.okhttp3:okhttp-brotli:5.4.0"
 okhttp-doh = "com.squareup.okhttp3:okhttp-dnsoverhttps:5.4.0"
+okhttp-zstd = "com.squareup.okhttp3:okhttp-zstd:5.4.0"
 okio = "com.squareup.okio:okio:3.18.1"
 
 # libtorrent4j
@@ -190,7 +191,7 @@ markwon = [
 
 groupie = ["groupie", "groupie-vb"]
 
-okhttp = ["okhttp", "okhttp-logging", "okhttp-brotli", "okhttp-doh"]
+okhttp = ["okhttp", "okhttp-logging", "okhttp-brotli", "okhttp-doh", "okhttp-zstd"]
 
 rx = ["rxjava", "rxandroid", "rxrelay"]
 shizuku = ["shizuku-api", "shizuku-provider"]

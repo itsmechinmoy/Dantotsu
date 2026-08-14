@@ -359,8 +359,10 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     fail(R.string.empty_episodes_list)
                 }
                 if (isDownloadMenu == false) {
-                    media?.anime?.selectedEpisode = episodes?.get(0)
-                    val ep = media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode)
+                    val rawKey = episodes?.get(0)
+                    val ep = media?.anime?.episodes?.getEpisode(rawKey)
+                    val actualKey = media?.anime?.episodes?.getEpisodeKey(rawKey) ?: rawKey
+                    media?.anime?.selectedEpisode = actualKey
                     episode = ep
                     if (ep != null) {
                         if (selected != null && media?.format != "LOCAL") {
@@ -393,10 +395,9 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     }
 
                                 if (size != null && size >= media!!.selected!!.video) {
-                                    media!!.anime!!.episodes?.get(media!!.anime!!.selectedEpisode!!)?.selectedExtractor =
-                                        selected
-                                    media!!.anime!!.episodes?.get(media!!.anime!!.selectedEpisode!!)?.selectedVideo =
-                                        media!!.selected!!.video
+                                    val currentKey = media!!.anime!!.selectedEpisode ?: actualKey
+                                    media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedExtractor = selected
+                                    media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedVideo = media!!.selected!!.video
                                     startExoplayer(media!!)
                                 } else failToList()
                             }
@@ -423,8 +424,10 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 }
                 else {
                     binding.selectorMakeDefault.visibility = View.GONE
-                    media?.anime?.selectedEpisode = episodes?.get(0)
-                    val ep = media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode)
+                    val rawKey = episodes?.get(0)
+                    val ep = media?.anime?.episodes?.getEpisode(rawKey)
+                    val actualKey = media?.anime?.episodes?.getEpisodeKey(rawKey) ?: rawKey
+                    media?.anime?.selectedEpisode = actualKey
                     episode = ep
 
                     if (ep != null) {
@@ -533,10 +536,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                         startActivity(this)
                                     }
                                 } else {
-                                    model.setEpisode(
-                                        media.anime!!.episodes!![media.anime.selectedEpisode!!]!!,
-                                        "startExo no launch"
-                                    )
+                                    val epKey = media.anime?.selectedEpisode
+                                    val targetEp = media.anime?.episodes?.getEpisode(epKey) ?: ep
+                                    if (targetEp != null) {
+                                        model.setEpisode(targetEp, "startExo no launch")
+                                    }
                                 }
                                 dismissAllowingStateLoss()
                             } catch (e: Exception) {
@@ -582,10 +586,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             ExoplayerView.initialized = true
             startActivity(intent)
         } else {
-            model.setEpisode(
-                media.anime!!.episodes!![media.anime.selectedEpisode!!]!!,
-                "startExo no launch"
-            )
+            val epKey = media.anime?.selectedEpisode
+            val targetEp = media.anime?.episodes?.getEpisode(epKey) ?: episode
+            if (targetEp != null) {
+                model.setEpisode(targetEp, "startExo no launch")
+            }
         }
     }
 

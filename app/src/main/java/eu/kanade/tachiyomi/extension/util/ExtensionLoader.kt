@@ -65,16 +65,31 @@ internal object ExtensionLoader {
     private const val XX_METADATA_HAS_README = ".hasReadme"
     private const val XX_METADATA_HAS_CHANGELOG = ".hasChangelog"
     const val ANIME_LIB_VERSION_MIN = 12
-    const val ANIME_LIB_VERSION_MAX = 17
+    const val ANIME_LIB_VERSION_MAX = 20
 
-    const val MANGA_LIB_VERSION_MIN = 1.4
-    const val MANGA_LIB_VERSION_MAX = 1.7
+    const val MANGA_LIB_VERSION_MIN = 1.2
+    const val MANGA_LIB_VERSION_MAX = 2.0
 
     val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or
             PackageManager.GET_META_DATA or
             @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES or
             (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
                 PackageManager.GET_SIGNING_CERTIFICATES else 0)
+
+    fun getPackageArchiveInfoSafe(pkgManager: PackageManager, apkPath: String): PackageInfo? {
+        return try {
+            pkgManager.getPackageArchiveInfo(apkPath, PACKAGE_FLAGS)
+        } catch (e: Exception) {
+            null
+        } ?: try {
+            pkgManager.getPackageArchiveInfo(
+                apkPath,
+                PackageManager.GET_META_DATA or PackageManager.GET_CONFIGURATIONS or PackageManager.GET_RECEIVERS or PackageManager.GET_ACTIVITIES
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private const val PRIVATE_EXTENSION_EXTENSION = "ext"
 
@@ -104,7 +119,7 @@ internal object ExtensionLoader {
     }
 
     fun installPrivateExtensionFile(context: Context, file: File, type: MediaType): Boolean {
-        val extension = context.packageManager.getPackageArchiveInfo(file.absolutePath, PACKAGE_FLAGS)
+        val extension = getPackageArchiveInfoSafe(context.packageManager, file.absolutePath)
             ?.takeIf { isPackageAnExtension(type, it) } ?: return false
         val currentExtension = getExtensionPackageInfoFromPkgName(context, extension.packageName, type)
 
@@ -193,10 +208,10 @@ internal object ExtensionLoader {
     private fun getExtensionInfoFromPkgName(context: Context, pkgName: String, type: MediaType): ExtensionInfo? {
         val privateExtensionFile = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
         val privatePkg = if (privateExtensionFile.isFile) {
-            context.packageManager.getPackageArchiveInfo(privateExtensionFile.absolutePath, PACKAGE_FLAGS)
+            getPackageArchiveInfoSafe(context.packageManager, privateExtensionFile.absolutePath)
                 ?.takeIf { isPackageAnExtension(type, it) }
                 ?.let {
-                    it.applicationInfo!!.fixBasePaths(privateExtensionFile.absolutePath)
+                    it.applicationInfo?.fixBasePaths(privateExtensionFile.absolutePath)
                     ExtensionInfo(
                         packageInfo = it,
                         isShared = false,
@@ -304,8 +319,8 @@ internal object ExtensionLoader {
                     it.setReadOnly()
                 }
                 val path = it.absolutePath
-                pkgManager.getPackageArchiveInfo(path, PACKAGE_FLAGS)
-                    ?.apply { applicationInfo!!.fixBasePaths(path) }
+                getPackageArchiveInfoSafe(pkgManager, path)
+                    ?.apply { applicationInfo?.fixBasePaths(path) }
             }
             ?.filter { isPackageAnExtension(MediaType.MANGA, it) }
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
@@ -354,8 +369,8 @@ internal object ExtensionLoader {
                     it.setReadOnly()
                 }
                 val path = it.absolutePath
-                pkgManager.getPackageArchiveInfo(path, PACKAGE_FLAGS)
-                    ?.apply { applicationInfo!!.fixBasePaths(path) }
+                getPackageArchiveInfoSafe(pkgManager, path)
+                    ?.apply { applicationInfo?.fixBasePaths(path) }
             }
             ?.filter { isPackageAnExtension(MediaType.NOVEL, it) }
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
@@ -433,13 +448,17 @@ internal object ExtensionLoader {
         }
 
         // Validate lib version
-        val libVersion = appInfo.metaData?.getFloat("tachiyomix.extensionLib")
-            ?.takeUnless { it == 0.0f }
-            ?.toDouble()
-            ?: run {
-                val parts = versionName.split('.')
-                if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDoubleOrNull() else versionName.toDoubleOrNull()
-            }
+        val rawLib = appInfo.metaData?.get("tachiyomix.extensionLib")
+            ?: appInfo.metaData?.get("tachiyomi.animeextensionLib")
+            ?: appInfo.metaData?.get("aniyomi.animeextensionLib")
+        val libVersion = when (rawLib) {
+            is Number -> rawLib.toDouble().takeUnless { it == 0.0 }
+            is String -> rawLib.toDoubleOrNull()
+            else -> null
+        } ?: run {
+            val parts = versionName.split('.')
+            if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDoubleOrNull() else versionName.toDoubleOrNull()
+        }
         val majorLibVersion = libVersion?.toInt()
         if (libVersion == null || majorLibVersion == null || majorLibVersion < ANIME_LIB_VERSION_MIN || majorLibVersion > ANIME_LIB_VERSION_MAX) {
             Logger.log(
@@ -549,13 +568,17 @@ internal object ExtensionLoader {
         }
 
         // Validate lib version
-        val libVersion = appInfo.metaData?.getFloat("tachiyomix.extensionLib")
-            ?.takeUnless { it == 0.0f }
-            ?.toDouble()
-            ?: run {
-                val parts = versionName.split('.')
-                if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDoubleOrNull() else versionName.toDoubleOrNull()
-            }
+        val rawLib = appInfo.metaData?.get("tachiyomix.extensionLib")
+            ?: appInfo.metaData?.get("tachiyomi.extensionLib")
+            ?: appInfo.metaData?.get("mihon.extensionLib")
+        val libVersion = when (rawLib) {
+            is Number -> rawLib.toDouble().takeUnless { it == 0.0 }
+            is String -> rawLib.toDoubleOrNull()
+            else -> null
+        } ?: run {
+            val parts = versionName.split('.')
+            if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDoubleOrNull() else versionName.toDoubleOrNull()
+        }
         if (libVersion == null || libVersion < MANGA_LIB_VERSION_MIN || libVersion > (MANGA_LIB_VERSION_MAX + 0.09)) {
             Logger.log(
                 "Lib version is $libVersion, while only versions " +
@@ -696,16 +719,29 @@ internal object ExtensionLoader {
      * @param pkgInfo The package info of the application.
      */
     private fun isPackageAnExtension(type: MediaType, pkgInfo: PackageInfo): Boolean {
-        return if (type == MediaType.NOVEL) {
-            pkgInfo.packageName.startsWith("some.random")
-        } else {
-            pkgInfo.reqFeatures.orEmpty().any {
-                when (type) {
-                    MediaType.ANIME -> it.name == ANIME_PACKAGE || it.name == "aniyomi.animeextension" || it.name == "tachiyomi.animeextension" || it.name == "tachiyomix.animeextension"
-                    MediaType.MANGA -> it.name == MANGA_PACKAGE || it.name == "tachiyomix.extension" || it.name == "mihon.extension" || it.name == "aniyomi.extension"
-                    else -> false
-                }
+        if (type == MediaType.NOVEL) {
+            return pkgInfo.packageName.startsWith("some.random")
+        }
+        val meta = pkgInfo.applicationInfo?.metaData
+        val hasFeature = pkgInfo.reqFeatures.orEmpty().any {
+            when (type) {
+                MediaType.ANIME -> it.name == ANIME_PACKAGE || it.name == "aniyomi.animeextension" || it.name == "tachiyomi.animeextension" || it.name == "tachiyomix.animeextension"
+                MediaType.MANGA -> it.name == MANGA_PACKAGE || it.name == "tachiyomi.extension" || it.name == "tachiyomix.extension" || it.name == "mihon.extension" || it.name == "aniyomi.extension"
+                else -> false
             }
+        }
+        if (hasFeature) return true
+
+        return when (type) {
+            MediaType.ANIME -> pkgInfo.packageName.startsWith("eu.kanade.tachiyomi.animeextension") ||
+                    meta?.containsKey("tachiyomi.animeextension.class") == true ||
+                    meta?.containsKey("tachiyomix.animeextension.class") == true
+            MediaType.MANGA -> pkgInfo.packageName.startsWith("eu.kanade.tachiyomi.extension") ||
+                    pkgInfo.packageName.startsWith("mihon.extension") ||
+                    meta?.containsKey("tachiyomi.extension.class") == true ||
+                    meta?.containsKey("tachiyomix.extension.class") == true ||
+                    meta?.containsKey("tachiyomi.extension") == true
+            else -> false
         }
     }
 

@@ -110,11 +110,7 @@ internal class ExtensionGithubApi {
     ): List<ExtensionJsonObject> {
         var targetUrl = repoUrl.trim()
         if (!targetUrl.endsWith(".json") && !targetUrl.endsWith(".pb")) {
-            targetUrl = if (mediaType == MediaType.ANIME) {
-                "${cleanRepoUrl(repoUrl)}/index.min.json"
-            } else {
-                "${cleanRepoUrl(repoUrl)}/index.pb"
-            }
+            targetUrl = "${cleanRepoUrl(repoUrl)}/index.pb"
         }
 
         try {
@@ -133,7 +129,12 @@ internal class ExtensionGithubApi {
                     }
                 } else if (targetUrl.endsWith("repo.json")) {
                     val fallback = "${cleanRepoUrl(targetUrl)}/index.min.json"
-                    networkService.client.newCall(GET(fallback)).awaitSuccess()
+                    try {
+                        networkService.client.newCall(GET(fallback)).awaitSuccess()
+                    } catch (_: Throwable) {
+                        val pbFallback = "${cleanRepoUrl(targetUrl)}/index.pb"
+                        networkService.client.newCall(GET(pbFallback)).awaitSuccess()
+                    }
                 } else if (targetUrl.endsWith("index.min.json")) {
                     val fallback = "${cleanRepoUrl(targetUrl)}/index.pb"
                     networkService.client.newCall(GET(fallback)).awaitSuccess()

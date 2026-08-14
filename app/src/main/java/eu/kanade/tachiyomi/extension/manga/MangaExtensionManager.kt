@@ -331,7 +331,9 @@ class MangaExtensionManager(
             availableExtension ?: _availableExtensionsFlow.value.find { it.pkgName == pkgName }
         if (availableExt == null) return false
 
-        return (availableExt.versionCode > versionCode || availableExt.libVersion > libVersion)
+        if (availableExt.versionName.isNotBlank() && availableExt.versionName == versionName) return false
+
+        return (availableExt.versionCode > versionCode || availableExt.libVersion > (libVersion + 0.001))
     }
 
     private fun updatePendingUpdatesCount() {

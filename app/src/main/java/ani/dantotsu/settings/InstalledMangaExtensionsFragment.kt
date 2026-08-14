@@ -175,7 +175,7 @@ class InstalledMangaExtensionsFragment : Fragment(), SearchQueryHandler {
         _binding = FragmentExtensionsBinding.inflate(inflater, container, false)
 
         extensionsRecyclerView = binding.allExtensionsRecyclerView
-        extensionsRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        extensionsRecyclerView.layoutManager = SafeLinearLayoutManager(requireContext())
         extensionsRecyclerView.adapter = extensionsAdapter
 
         val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(
@@ -279,7 +279,13 @@ class InstalledMangaExtensionsFragment : Fragment(), SearchQueryHandler {
             val nsfw = if (extension.isNsfw) "(18+)" else ""
             val lang = getLanguageName(extension.lang)
             holder.extensionNameTextView.text = extension.name
-            val versionText = "$lang ${extension.versionName} $nsfw"
+            val libStr = if (extension.libVersion == extension.libVersion.toLong().toDouble()) "${extension.libVersion.toLong()}" else "${extension.libVersion}"
+            val displayVersion = if (extension.versionName.startsWith(libStr) || extension.versionName.startsWith("1.")) {
+                extension.versionName
+            } else {
+                "$libStr.${extension.versionName}"
+            }
+            val versionText = "$lang $displayVersion $nsfw".trim()
             holder.extensionVersionTextView.text = versionText
             if (!skipIcons) {
                 holder.extensionIconImageView.setImageDrawable(extension.icon)

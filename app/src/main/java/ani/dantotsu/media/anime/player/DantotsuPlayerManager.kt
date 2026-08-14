@@ -5,6 +5,7 @@ import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -23,13 +24,14 @@ import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import ani.dantotsu.defaultHeaders
-import ani.dantotsu.media.anime.AnimePlayerService
 import ani.dantotsu.media.anime.AudioFocusListener
 import ani.dantotsu.media.anime.VideoCache
 import ani.dantotsu.parsers.Video
@@ -82,65 +84,72 @@ class DantotsuPlayerManager(
         video: Video,
         subConfigs: List<MediaItem.SubtitleConfiguration>,
         mimeType: String?,
-        downloadedMediaItem: MediaItem? = null
+        downloadedMediaItem: MediaItem?,
+        mediaMetadata: MediaMetadata? = null
     ): Pair<MediaSource, MediaItem> {
         val headers = mutableMapOf<String, String>()
-        defaultHeaders.forEach { headers[it.key] = it.value }
-        video.file.headers?.forEach { headers[it.key] = it.value }
-
-        val httpSource: HttpDataSource.Factory = if (video.file.url.startsWith("http")) {
-            val hf = DefaultHttpDataSource.Factory()
-                .setDefaultRequestProperties(headers)
-                .setUserAgent(defaultHeaders["User-Agent"])
-            if (video.file.headers?.containsKey("User-Agent") == true) {
-                hf.setUserAgent(video.file.headers?.get("User-Agent"))
-            }
-            hf
-        } else {
-            val hf = OkHttpDataSource.Factory(client)
-                .setDefaultRequestProperties(headers)
-                .setUserAgent(defaultHeaders["User-Agent"])
-            if (video.file.headers?.containsKey("User-Agent") == true) {
-                hf.setUserAgent(video.file.headers?.get("User-Agent"))
-            }
-            hf
+        headers.putAll(defaultHeaders)
+        video.file.headers?.let {
+            headers.putAll(it)
         }
 
-        val upstream = DefaultDataSource.Factory(activity, httpSource)
+        val httpClient = client.newBuilder().apply {
+            connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+        }.build()
+        val httpDataSourceFactory = OkHttpDataSource.Factory(httpClient).apply {
+            setDefaultRequestProperties(headers)
+            if (headers.containsKey("User-Agent")) {
+                setUserAgent(headers["User-Agent"])
+            }
+        }
+
+        val upstream = DefaultDataSource.Factory(activity, httpDataSourceFactory)
         val cacheFactory: DataSource.Factory = CacheDataSource.Factory()
             .setCache(VideoCache.getInstance(activity))
             .setUpstreamDataSourceFactory(upstream)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
         val extractorsFactory = subtitleManager.createExtractorsFactory()
+        val assParserFactory = subtitleManager.createSubtitleParserFactory()
+        val assMediaSourceFactory = DefaultMediaSourceFactory(cacheFactory, extractorsFactory)
+            .setSubtitleParserFactory(assParserFactory)
 
-        val mediaItem = downloadedMediaItem ?: MediaItem.Builder()
+        val mediaItem = downloadedMediaItem?.buildUpon()?.apply {
+            if (mediaMetadata != null) setMediaMetadata(mediaMetadata)
+        }?.build() ?: MediaItem.Builder()
             .setUri(video.file.url.toUri())
             .apply {
                 if (mimeType != null) setMimeType(mimeType)
                 if (subConfigs.isNotEmpty()) setSubtitleConfigurations(subConfigs)
+                if (mediaMetadata != null) setMediaMetadata(mediaMetadata)
             }
             .build()
         this.currentMediaItem = mediaItem
 
-        val source = when (video.format) {
-            VideoType.M3U8 -> HlsMediaSource.Factory(cacheFactory)
-                .setAllowChunklessPreparation(true)
+        val isContentUri = video.file.url.startsWith("content://")
+        val primarySource = if (isContentUri) {
+            val localDataSourceFactory = DefaultDataSource.Factory(activity)
+            DefaultMediaSourceFactory(localDataSourceFactory, extractorsFactory)
+                .setSubtitleParserFactory(assParserFactory)
                 .createMediaSource(mediaItem)
-            VideoType.DASH -> DashMediaSource.Factory(cacheFactory).createMediaSource(mediaItem)
-            else -> ProgressiveMediaSource.Factory(cacheFactory, extractorsFactory)
-                .createMediaSource(mediaItem)
+        } else {
+            assMediaSourceFactory.createMediaSource(mediaItem)
         }
 
-        this.mediaSource = source
-        return Pair(source, mediaItem)
+        this.mediaSource = primarySource
+        return Pair(primarySource, mediaItem)
     }
 
     fun buildExoplayer(
         playbackPosition: Long,
         playbackParameters: PlaybackParameters,
-        listener: Player.Listener
+        listener: Player.Listener,
+        forceDefaultRenderers: Boolean = false
     ): ExoPlayer {
+        releaseExoPlayer()
+
         val loadControl = DefaultLoadControl.Builder()
             .setBackBuffer(BACK_BUFFER_DURATION_MS, false)
             .setBufferDurationsMs(
@@ -153,9 +162,9 @@ class DantotsuPlayerManager(
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        val useExtensionDecoder = PrefManager.getVal<Boolean>(PrefName.UseAdditionalCodec)
+        val useExtensionDecoder = PrefManager.getVal<Boolean>(PrefName.UseAdditionalCodec) && !forceDefaultRenderers
         val decoder = if (useExtensionDecoder) {
-            DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+            DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
         } else {
             DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
         }
@@ -167,7 +176,13 @@ class DantotsuPlayerManager(
         subtitleManager.initAssHandler()
         val handler = subtitleManager.assHandler!!
         Logger.log("Libass: Calling nextRenderersFactory.withAssSupport()")
-        val renderersFactory = nextRenderersFactory.withAssSupport(handler)
+        val renderersFactory = if (forceDefaultRenderers) {
+            DefaultRenderersFactory(activity)
+                .setEnableDecoderFallback(true)
+                .withAssSupport(handler)
+        } else {
+            nextRenderersFactory.withAssSupport(handler)
+        }
 
         val assMediaSourceFactory = DefaultMediaSourceFactory(activity)
             .setSubtitleParserFactory(subtitleManager.createSubtitleParserFactory())
@@ -177,9 +192,12 @@ class DantotsuPlayerManager(
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
 
+        val newTrackSelector = DefaultTrackSelector(activity)
+        this.trackSelector = newTrackSelector
+
         val player = ExoPlayer.Builder(activity, renderersFactory)
             .setMediaSourceFactory(assMediaSourceFactory)
-            .setTrackSelector(trackSelector ?: DefaultTrackSelector(activity).also { trackSelector = it })
+            .setTrackSelector(newTrackSelector)
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
@@ -192,19 +210,6 @@ class DantotsuPlayerManager(
         audioFocusListener = AudioFocusListener(activity, player)
         player.addListener(audioFocusListener!!)
 
-        player.trackSelectionParameters = player.trackSelectionParameters
-            .buildUpon()
-            .setAudioOffloadPreferences(
-                TrackSelectionParameters.AudioOffloadPreferences.Builder()
-                    .setAudioOffloadMode(
-                        TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
-                    )
-                    .setIsGaplessSupportRequired(true)
-                    .setIsSpeedChangeSupportRequired(true)
-                    .build()
-            )
-            .build()
-
         Logger.log("Libass: Calling handler.init(exoPlayer)")
         handler.init(player)
 
@@ -212,14 +217,15 @@ class DantotsuPlayerManager(
         player.playbackParameters = playbackParameters
         mediaSource?.let { player.setMediaSource(it) }
         player.prepare()
-        player.seekTo(playbackPosition)
+        if (playbackPosition > 0L) {
+            player.seekTo(playbackPosition)
+        }
 
         try {
             val rightNow = Calendar.getInstance()
             mediaSession = MediaSession.Builder(activity, player)
                 .setId(rightNow.timeInMillis.toString())
                 .build()
-            mediaSession?.let { AnimePlayerService.start(activity, it) }
         } catch (e: Exception) {
             toast(e.toString())
         }
@@ -230,16 +236,25 @@ class DantotsuPlayerManager(
         return player
     }
 
-    fun release() {
+    fun releaseExoPlayer() {
         audioFocusListener?.abandonRequest()
         audioFocusListener = null
         isInitialized = false
-        exoPlayer?.release()
+        playerView.player = null
+        exoPlayer?.let { p ->
+            p.stop()
+            p.clearMediaItems()
+            p.release()
+        }
         exoPlayer = null
-        VideoCache.release()
-        AnimePlayerService.stop(activity)
+        trackSelector = null
         mediaSession?.release()
         mediaSession = null
+    }
+
+    fun release() {
+        releaseExoPlayer()
+        VideoCache.release()
         subtitleManager.release()
     }
 }

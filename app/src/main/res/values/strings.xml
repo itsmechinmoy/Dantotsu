@@ -1226,4 +1226,29 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="no_settings_found">No matching settings found</string>
     <string name="search_settings_no_results_desc">Try searching for different keywords or checking for spelling</string>
 
+    <!-- Subtitle Sheet UI -->
+    <string name="tab_subtitles">Subtitles</string>
+    <string name="tab_online">Online</string>
+    <string name="tab_local">Local</string>
+    <string name="subtitles_off">Subtitles Off</string>
+    <string name="subtitles_off_desc">Disable subtitle display</string>
+    <string name="add_local_subtitle">Import Subtitle</string>
+    <string name="add_local_subtitle_desc">Add .srt, .vtt, .ass file from device</string>
+    <string name="search_online_subtitles">Search Online</string>
+    <string name="search_online_hint">Search anime or episode…</string>
+    <string name="no_server_subtitles">No server subtitles</string>
+    <string name="no_server_subtitles_desc">This server has no subtitles (hardsub / dub). Use the Online or Local tab to add subtitles.</string>
+    <string name="no_online_subtitles">No online subtitles found</string>
+    <string name="no_online_subtitles_desc">Try searching with a different keyword or provider</string>
+    <string name="no_local_subtitles">No local subtitles</string>
+    <string name="no_local_subtitles_desc">Tap \'Import Subtitle\' above to load a subtitle file from your storage</string>
+    <string name="current_server_subs">Current Server</string>
+    <string name="other_server_subs">Other Servers for Ep</string>
+    <string name="embedded_stream_subs">Embedded Video Tracks</string>
+    <string name="searching_subtitles">Searching subtitles…</string>
+    <string name="active_sub_prefix">Active: %1$s</string>
+    <string name="status_sub_off">Subtitles: Off</string>
+    <string name="all_providers">All Providers</string>
+    <string name="delete_subtitle">Delete</string>
+
 </resources>

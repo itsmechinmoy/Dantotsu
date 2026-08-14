@@ -85,6 +85,9 @@
 -keep class okio.** { *; }
 -dontwarn okio.**
 
+-keep class com.squareup.zstd.** { *; }
+-dontwarn com.squareup.zstd.**
+
 
 #############################################
 # Android / Jetpack

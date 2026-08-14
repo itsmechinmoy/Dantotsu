@@ -203,7 +203,13 @@ class MangaExtensionAdapter(private val clickListener: OnMangaInstallClickListen
             val nsfw = if (extension.isNsfw) "(18+)" else ""
             val lang = LanguageMapper.getLanguageName(extension.lang)
             binding.extensionNameTextView.text = extension.name
-            val versionText = "$lang ${extension.versionName} $nsfw"
+            val libStr = if (extension.libVersion == extension.libVersion.toLong().toDouble()) "${extension.libVersion.toLong()}" else "${extension.libVersion}"
+            val displayVersion = if (extension.versionName.startsWith(libStr) || extension.versionName.startsWith("1.")) {
+                extension.versionName
+            } else {
+                "$libStr.${extension.versionName}"
+            }
+            val versionText = "$lang $displayVersion $nsfw".trim()
             binding.extensionVersionTextView.text = versionText
         }
 

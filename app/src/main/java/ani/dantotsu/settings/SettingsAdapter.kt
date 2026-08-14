@@ -127,6 +127,21 @@ class SettingsAdapter(
         }
     }
 
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        if (!highlightKey.isNullOrBlank()) {
+            recyclerView.post {
+                val index = settings.indexOfFirst {
+                    it.name.equals(highlightKey, ignoreCase = true)
+                }
+                if (index >= 0) {
+                    (recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(index, 0)
+                }
+            }
+        }
+    }
+
     override fun getItemCount(): Int = settings.size
 
     override fun getItemViewType(position: Int): Int {

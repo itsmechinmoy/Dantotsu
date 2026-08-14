@@ -131,7 +131,7 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
         _binding = FragmentNovelExtensionsBinding.inflate(inflater, container, false)
 
         extensionsRecyclerView = binding.allNovelExtensionsRecyclerView
-        extensionsRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        extensionsRecyclerView.layoutManager = SafeLinearLayoutManager(requireContext())
         extensionsRecyclerView.adapter = extensionsAdapter
 
         val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(

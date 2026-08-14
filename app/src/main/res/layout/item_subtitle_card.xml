@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/subtitleCardRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="12dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="12dp"
+    android:layout_marginBottom="4dp"
+    android:clickable="true"
+    android:focusable="true"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeColor="?attr/colorSurfaceVariant"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="10dp">
+
+        <!-- Leading Icon Container -->
+        <FrameLayout
+            android:id="@+id/iconContainer"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_icon_container">
+
+            <ImageView
+                android:id="@+id/subtitleIcon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_round_subtitles_24"
+                app:tint="?attr/colorPrimary" />
+        </FrameLayout>
+
+        <!-- Title & Subtitle Details -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/subtitleTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:fontFamily="@font/poppins_semi_bold"
+                    android:maxLines="1"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="14sp"
+                    tools:text="English" />
+
+                <!-- Badges Container -->
+                <LinearLayout
+                    android:id="@+id/badgesLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/formatBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/badge_bg_rounded"
+                        android:fontFamily="@font/poppins_bold"
+                        android:paddingStart="6dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="6dp"
+                        android:paddingBottom="1dp"
+                        android:textAllCaps="true"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="10sp"
+                        android:visibility="gone"
+                        tools:text="ASS"
+                        tools:visibility="visible" />
+
+                    <TextView
+                        android:id="@+id/hiBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/badge_bg_rounded"
+                        android:fontFamily="@font/poppins_bold"
+                        android:paddingStart="5dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="5dp"
+                        android:paddingBottom="1dp"
+                        android:text="HI"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="10sp"
+                        android:visibility="gone"
+                        tools:visibility="visible" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/subtitleDetails"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins"
+                android:maxLines="1"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="12sp"
+                tools:text="MegaCloud • Current Stream" />
+        </LinearLayout>
+
+        <!-- Selection Checkmark -->
+        <ImageView
+            android:id="@+id/selectedCheckmark"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginStart="4dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_check"
+            android:visibility="gone"
+            app:tint="?attr/colorPrimary"
+            tools:visibility="visible" />
+
+        <!-- Delete Action (for local files) -->
+        <ImageButton
+            android:id="@+id/deleteButton"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/delete_subtitle"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_round_delete_24"
+            android:visibility="gone"
+            app:tint="?attr/colorError"
+            tools:visibility="gone" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

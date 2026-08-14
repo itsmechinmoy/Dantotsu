@@ -136,14 +136,18 @@ abstract class HttpSource : CatalogueSource {
      *
      * @param page the page number to retrieve.
      */
-    protected abstract fun popularMangaRequest(page: Int): Request
+    protected open fun popularMangaRequest(page: Int): Request = throw Exception("Stub!")
 
     /**
      * Parses the response from the site and returns a [MangasPage] object.
      *
      * @param response the response from the site.
      */
-    protected abstract fun popularMangaParse(response: Response): MangasPage
+    protected open fun popularMangaParse(response: Response): MangasPage = throw Exception("Stub!")
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        return fetchPopularManga(page).awaitSingle()
+    }
 
     /**
      * Returns an observable containing a page with a list of manga. Normally it's not needed to
@@ -180,14 +184,18 @@ abstract class HttpSource : CatalogueSource {
      * @param query the search query.
      * @param filters the list of filters to apply.
      */
-    protected abstract fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request
+    protected open fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("Stub!")
 
     /**
      * Parses the response from the site and returns a [MangasPage] object.
      *
      * @param response the response from the site.
      */
-    protected abstract fun searchMangaParse(response: Response): MangasPage
+    protected open fun searchMangaParse(response: Response): MangasPage = throw Exception("Stub!")
+
+    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
+        return fetchSearchManga(page, query, filters).awaitSingle()
+    }
 
     /**
      * Returns an observable containing a page with a list of latest manga updates.
@@ -208,14 +216,18 @@ abstract class HttpSource : CatalogueSource {
      *
      * @param page the page number to retrieve.
      */
-    protected abstract fun latestUpdatesRequest(page: Int): Request
+    protected open fun latestUpdatesRequest(page: Int): Request = throw Exception("Stub!")
 
     /**
      * Parses the response from the site and returns a [MangasPage] object.
      *
      * @param response the response from the site.
      */
-    protected abstract fun latestUpdatesParse(response: Response): MangasPage
+    protected open fun latestUpdatesParse(response: Response): MangasPage = throw Exception("Stub!")
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        return fetchLatestUpdates(page).awaitSingle()
+    }
 
     /**
      * Get the updated details for a manga.
@@ -253,7 +265,7 @@ abstract class HttpSource : CatalogueSource {
      *
      * @param response the response from the site.
      */
-    protected abstract fun mangaDetailsParse(response: Response): SManga
+    protected open fun mangaDetailsParse(response: Response): SManga = throw Exception("Stub!")
 
     /**
      * Get all the available chapters for a manga.
@@ -291,14 +303,14 @@ abstract class HttpSource : CatalogueSource {
      *
      * @param response the response from the site.
      */
-    protected abstract fun chapterListParse(response: Response): List<SChapter>
+    protected open fun chapterListParse(response: Response): List<SChapter> = throw Exception("Stub!")
 
     /**
      * Parses the response from the site and returns a SChapter Object.
      *
      * @param response the response from the site.
      */
-    protected abstract fun chapterPageParse(response: Response): SChapter
+    protected open fun chapterPageParse(response: Response): SChapter = throw Exception("Stub!")
 
     /**
      * Get the list of pages a chapter has. Pages should be returned
@@ -336,7 +348,7 @@ abstract class HttpSource : CatalogueSource {
      *
      * @param response the response from the site.
      */
-    protected abstract fun pageListParse(response: Response): List<Page>
+    protected open fun pageListParse(response: Response): List<Page> = throw Exception("Stub!")
 
     /**
      * Returns an observable with the page containing the source url of the image. If there's any
@@ -372,7 +384,7 @@ abstract class HttpSource : CatalogueSource {
      *
      * @param response the response from the site.
      */
-    protected abstract fun imageUrlParse(response: Response): String
+    protected open fun imageUrlParse(response: Response): String = throw Exception("Stub!")
 
     /**
      * Returns the response of the source image.

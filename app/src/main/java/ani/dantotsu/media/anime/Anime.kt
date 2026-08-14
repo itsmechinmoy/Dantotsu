@@ -34,3 +34,9 @@ fun Map<String, Episode>.getEpisode(key: String?): Episode? {
     if (key == null) return null
     return this[key] ?: values.firstOrNull { it.number == key }
 }
+
+fun Map<String, Episode>.getEpisodeKey(keyOrNumber: String?): String? {
+    if (keyOrNumber == null) return null
+    if (this.containsKey(keyOrNumber)) return keyOrNumber
+    return entries.firstOrNull { it.value.number == keyOrNumber }?.key
+}

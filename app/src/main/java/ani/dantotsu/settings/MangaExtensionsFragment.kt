@@ -48,17 +48,13 @@ class MangaExtensionsFragment : Fragment(),
 
         binding.allExtensionsRecyclerView.isNestedScrollingEnabled = false
         binding.allExtensionsRecyclerView.adapter = adapter
-        binding.allExtensionsRecyclerView.layoutManager = LinearLayoutManager(context)
+        binding.allExtensionsRecyclerView.layoutManager = SafeLinearLayoutManager(context)
         (binding.allExtensionsRecyclerView.layoutManager as LinearLayoutManager).isItemPrefetchEnabled =
             true
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             viewModel.pagerFlow.collectLatest { pagingData ->
-                binding.allExtensionsRecyclerView.post {
-                    lifecycleScope.launch {
-                        adapter.submitData(pagingData)
-                    }
-                }
+                adapter.submitData(pagingData)
             }
         }
 

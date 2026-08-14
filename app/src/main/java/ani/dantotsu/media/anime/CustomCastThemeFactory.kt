@@ -2,6 +2,7 @@ package ani.dantotsu.media.anime
 
 import android.content.Context
 import android.os.Bundle
+import android.view.View
 import androidx.mediarouter.app.MediaRouteActionProvider
 import androidx.mediarouter.app.MediaRouteChooserDialog
 import androidx.mediarouter.app.MediaRouteChooserDialogFragment
@@ -48,9 +49,28 @@ class CustomCastButton @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : androidx.mediarouter.app.MediaRouteButton(context, attrs, defStyleAttr) {
     private var callback: (() -> Unit)? = null
+    private var forceAlwaysVisible: Boolean = false
+
+    override fun setAlwaysVisible(alwaysVisible: Boolean) {
+        this.forceAlwaysVisible = alwaysVisible
+        try {
+            super.setAlwaysVisible(alwaysVisible)
+        } catch (_: Throwable) {}
+        if (alwaysVisible) {
+            visibility = View.VISIBLE
+        }
+    }
 
     fun setCastCallback(cb: () -> Unit) {
         this.callback = cb
+    }
+
+    override fun setVisibility(visibility: Int) {
+        if (forceAlwaysVisible && visibility != View.VISIBLE) {
+            super.setVisibility(View.VISIBLE)
+            return
+        }
+        super.setVisibility(visibility)
     }
 
     override fun performClick(): Boolean {

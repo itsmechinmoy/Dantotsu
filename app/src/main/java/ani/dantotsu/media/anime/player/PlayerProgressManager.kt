@@ -33,11 +33,12 @@ class PlayerProgressManager(
     private var preloading = false
     private var lastSubscriptionPromptEpisode: String? = null
     private var isTrackingProgress = false
+    private var isProgressSavedForCurrentEpisode = false
 
     private val progressRunnable = object : Runnable {
         override fun run() {
             checkAndPreloadProgress()
-            if (isTrackingProgress && !preloading) {
+            if (isTrackingProgress) {
                 handler.postDelayed(this, 2500)
             }
         }
@@ -53,6 +54,7 @@ class PlayerProgressManager(
     fun startTracking() {
         isTrackingProgress = true
         preloading = false
+        isProgressSavedForCurrentEpisode = false
         handler.removeCallbacks(progressRunnable)
         handler.post(progressRunnable)
     }
@@ -79,47 +81,57 @@ class PlayerProgressManager(
         val m = media ?: return
         if (!isPlayerInitialized() || player.duration <= 0) return
 
-        val watchRatio = player.currentPosition.toFloat() / player.duration
-        if (watchRatio > PrefManager.getVal<Float>(PrefName.WatchPercentage)) {
-            preloading = true
-            nextEpisode(false) { i ->
-                val nextKey = episodeArr.getOrNull(currentEpisodeIndex + i) ?: return@nextEpisode
-                val ep = episodes[nextKey] ?: return@nextEpisode
-                val selected = m.selected ?: return@nextEpisode
-                activity.lifecycleScope.launch(Dispatchers.IO) {
-                    if (selected.server != null) {
-                        model.loadEpisodeSingleVideo(ep, selected, false)
-                    } else {
-                        model.loadEpisodeVideos(ep, selected.sourceIndex, false)
+        val duration = if (episodeLength > 0f) episodeLength else player.duration.toFloat()
+        if (duration <= 0f) return
+
+        val watchRatio = player.currentPosition.toFloat() / duration
+        val watchPercentage = PrefManager.getVal<Float>(PrefName.WatchPercentage)
+
+        if (watchRatio > watchPercentage) {
+            if (!isProgressSavedForCurrentEpisode) {
+                isProgressSavedForCurrentEpisode = true
+                updateAniProgress()
+            }
+            if (!preloading) {
+                preloading = true
+                nextEpisode(false) { i ->
+                    val nextKey = episodeArr.getOrNull(currentEpisodeIndex + i) ?: return@nextEpisode
+                    val ep = episodes[nextKey] ?: return@nextEpisode
+                    val selected = m.selected ?: return@nextEpisode
+                    activity.lifecycleScope.launch(Dispatchers.IO) {
+                        if (selected.server != null) {
+                            model.loadEpisodeSingleVideo(ep, selected, false)
+                        } else {
+                            model.loadEpisodeVideos(ep, selected.sourceIndex, false)
+                        }
                     }
                 }
             }
         }
     }
 
-    fun updateAniProgress() {
+    fun updateAniProgress(forceComplete: Boolean = false) {
         val player = getPlayer() ?: return
         val m = media ?: return
         val incognito = PrefManager.getVal<Boolean>(PrefName.Incognito)
-        if (episodeLength <= 0f) {
-            maybeHandleSubscriptionAfterEpisodeCompletion(false, incognito)
-            return
-        }
+        val duration = if (episodeLength > 0f) episodeLength else player.duration.toFloat()
 
-        val episodeEnd = player.currentPosition / episodeLength >
-                PrefManager.getVal<Float>(PrefName.WatchPercentage)
+        val episodeEnd = forceComplete ||
+                player.playbackState == Player.STATE_ENDED ||
+                (duration > 0f && player.currentPosition.toFloat() / duration > PrefManager.getVal<Float>(PrefName.WatchPercentage))
         val episode0 = currentEpisodeIndex == 0 && PrefManager.getVal<Boolean>(PrefName.ChapterZeroPlayer)
 
         if (!incognito && (episodeEnd || episode0) && Anilist.userid != null) {
             if (PrefManager.getCustomVal("${m.id}_save_progress", true) &&
                 (if (m.isAdult) PrefManager.getVal(PrefName.UpdateForHPlayer) else true)
             ) {
+                val epNum = m.anime?.selectedEpisode
+                    ?: episodeArr.getOrNull(currentEpisodeIndex)
+                    ?: "1"
                 if (episode0 && !episodeEnd) {
                     updateProgress(m, "0")
                 } else {
-                    m.anime?.selectedEpisode?.let { epNum ->
-                        updateProgress(m, epNum)
-                    }
+                    updateProgress(m, epNum)
                 }
             }
         }
@@ -129,7 +141,7 @@ class PlayerProgressManager(
     private fun maybeHandleSubscriptionAfterEpisodeCompletion(episodeEnd: Boolean, incognito: Boolean) {
         if (!episodeEnd || incognito) return
         val m = media ?: return
-        val currentEpisode = m.anime?.selectedEpisode ?: return
+        val currentEpisode = m.anime?.selectedEpisode ?: episodeArr.getOrNull(currentEpisodeIndex) ?: return
         if (lastSubscriptionPromptEpisode == currentEpisode) return
         lastSubscriptionPromptEpisode = currentEpisode
 

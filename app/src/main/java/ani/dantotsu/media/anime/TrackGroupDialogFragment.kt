@@ -14,7 +14,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.R
-import ani.dantotsu.databinding.BottomSheetSubtitlesBinding
+import ani.dantotsu.databinding.BottomSheetTrackGroupsBinding
 import ani.dantotsu.databinding.ItemSubtitleTextBinding
 import java.util.Locale
 
@@ -25,7 +25,7 @@ class TrackGroupDialogFragment(
     private var type: @TrackType Int,
     private var overrideTrackNames: List<Pair<String, String>>? = null
 ) : BottomSheetDialogFragment() {
-    private var _binding: BottomSheetSubtitlesBinding? = null
+    private var _binding: BottomSheetTrackGroupsBinding? = null
     private val binding get() = _binding!!
 
     override fun onCreateView(
@@ -33,7 +33,7 @@ class TrackGroupDialogFragment(
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = BottomSheetSubtitlesBinding.inflate(inflater, container, false)
+        _binding = BottomSheetTrackGroupsBinding.inflate(inflater, container, false)
         return binding.root
     }
 
