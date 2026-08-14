@@ -50,24 +50,33 @@ object StremioSubtitles {
 
             // 2. Try OpenSubtitles (Stremio) if enabled
             if (providers.contains("Stremio")) {
-                Logger.log("StremioSubtitles: Fetching OpenSubtitles...")
+                Logger.log("StremioSubtitles: Fetching OpenSubtitles for S${season}:E${episode}...")
                 try {
                     val imdbId = media.idIMDB
                     if (imdbId != null) {
                         val isMovie = media.format == "MOVIE"
-                        val url = if (isMovie) {
-                            "$BASE_URL/movie/$imdbId.json"
+                        val urlsToTry = mutableListOf<String>()
+                        if (isMovie) {
+                            urlsToTry.add("$BASE_URL/movie/$imdbId.json")
                         } else {
-                            "$BASE_URL/series/$imdbId:$season:$episode.json"
+                            urlsToTry.add("$BASE_URL/series/$imdbId:$season:$episode.json")
+                            if (season != 1) {
+                                urlsToTry.add("$BASE_URL/series/$imdbId:1:$episode.json")
+                            }
                         }
 
-                        val request = Request.Builder().url(url).build()
-                        val response = okHttpClient.newCall(request).execute()
-
-                        if (response.isSuccessful && response.body != null) {
-                            val text = response.body!!.string()
-                            val data = Mapper.json.decodeFromString<StremioResponse>(text)
-                            allSubs.addAll(data.subtitles)
+                        for (url in urlsToTry) {
+                            try {
+                                val request = Request.Builder().url(url).build()
+                                val response = okHttpClient.newCall(request).execute()
+                                if (response.isSuccessful && response.body != null) {
+                                    val text = response.body!!.string()
+                                    val data = Mapper.json.decodeFromString<StremioResponse>(text)
+                                    val existingUrls = allSubs.map { it.url }.toSet()
+                                    val newSubs = data.subtitles.filter { it.url !in existingUrls }
+                                    allSubs.addAll(newSubs)
+                                }
+                            } catch (_: Exception) {}
                         }
                     }
                 } catch (e: Exception) {

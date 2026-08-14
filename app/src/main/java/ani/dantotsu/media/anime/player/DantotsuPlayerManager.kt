@@ -129,17 +129,41 @@ class DantotsuPlayerManager(
         this.currentMediaItem = mediaItem
 
         val isContentUri = video.file.url.startsWith("content://")
-        val primarySource = if (isContentUri) {
+        val activeFactory = if (isContentUri) {
             val localDataSourceFactory = DefaultDataSource.Factory(activity)
             DefaultMediaSourceFactory(localDataSourceFactory, extractorsFactory)
                 .setSubtitleParserFactory(assParserFactory)
-                .createMediaSource(mediaItem)
         } else {
-            assMediaSourceFactory.createMediaSource(mediaItem)
+            assMediaSourceFactory
         }
+        this.activeMediaSourceFactory = activeFactory
+        val primarySource = activeFactory.createMediaSource(mediaItem)
 
         this.mediaSource = primarySource
         return Pair(primarySource, mediaItem)
+    }
+
+    var activeMediaSourceFactory: MediaSource.Factory? = null
+
+    fun applyUpdatedSubtitles(newSubConfigs: List<MediaItem.SubtitleConfiguration>, position: Long) {
+        val player = exoPlayer ?: return
+        val currentItem = currentMediaItem ?: return
+
+        val newMediaItem = currentItem.buildUpon()
+            .setSubtitleConfigurations(newSubConfigs)
+            .build()
+        this.currentMediaItem = newMediaItem
+
+        val factory = activeMediaSourceFactory
+        if (factory != null) {
+            val newSource = factory.createMediaSource(newMediaItem)
+            this.mediaSource = newSource
+            player.setMediaSource(newSource, position)
+        } else {
+            player.setMediaItem(newMediaItem, position)
+        }
+        player.prepare()
+        player.play()
     }
 
     fun buildExoplayer(
@@ -184,7 +208,7 @@ class DantotsuPlayerManager(
             nextRenderersFactory.withAssSupport(handler)
         }
 
-        val assMediaSourceFactory = DefaultMediaSourceFactory(activity)
+        val mediaSourceFactory = activeMediaSourceFactory ?: DefaultMediaSourceFactory(activity)
             .setSubtitleParserFactory(subtitleManager.createSubtitleParserFactory())
 
         val audioAttributes = AudioAttributes.Builder()
@@ -196,7 +220,7 @@ class DantotsuPlayerManager(
         this.trackSelector = newTrackSelector
 
         val player = ExoPlayer.Builder(activity, renderersFactory)
-            .setMediaSourceFactory(assMediaSourceFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(newTrackSelector)
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)

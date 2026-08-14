@@ -430,7 +430,16 @@ class AnimeWatchAdapter(
                     )
                 }
 
-                val chipText = "${names[limit * (position)]} - ${names[last - 1]}"
+                val startRaw = names[limit * position]
+                val endRaw = names[last - 1]
+                val startDisplay = MediaNameAdapter.findEpisodeNumber(startRaw)?.let {
+                    if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                } ?: startRaw
+                val endDisplay = MediaNameAdapter.findEpisodeNumber(endRaw)?.let {
+                    if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                } ?: endRaw
+
+                val chipText = "$startDisplay - $endDisplay"
                 chip.text = chipText
                 chip.setTextColor(
                     ContextCompat.getColorStateList(
@@ -468,17 +477,43 @@ class AnimeWatchAdapter(
     fun handleEpisodes() {
         val binding = _binding
         if (binding != null) {
-            if (media.anime?.episodes != null) {
+            if (media.anime?.episodes != null && media.anime.episodes!!.isNotEmpty()) {
                 val episodes = media.anime.episodes!!.keys.toTypedArray()
 
                 val anilistEp = (media.userProgress ?: 0).plus(1)
                 val appEp = PrefManager.getCustomVal<String?>(
                     "${media.id}_current_ep", ""
-                )?.toIntOrNull() ?: 1
+                )?.let { MediaNameAdapter.findEpisodeNumber(it)?.toInt() ?: it.toIntOrNull() } ?: 1
 
-                var continueEp = (if (anilistEp > appEp) anilistEp else appEp).toString()
-                if (episodes.contains(continueEp)) {
-                    binding.sourceContinue.visibility = View.VISIBLE
+                val maxAvailableEp = episodes.maxOfOrNull { key ->
+                    MediaNameAdapter.findEpisodeNumber(key) ?: media.anime?.episodes?.get(key)?.number?.let { MediaNameAdapter.findEpisodeNumber(it) } ?: 0f
+                } ?: episodes.size.toFloat()
+
+                // If user progress already completed all available episodes, hide continue button
+                if (media.userProgress != null && media.userProgress!!.toFloat() >= maxAvailableEp && (media.userProgress ?: 0) >= appEp) {
+                    binding.sourceContinue.visibility = View.GONE
+                    binding.sourceProgressBar.visibility = View.GONE
+                    return
+                }
+
+                val targetEpNum = (if (anilistEp > appEp) anilistEp else appEp).toFloat()
+
+                // Find matching episode key in media.anime.episodes
+                var matchingKey: String? = episodes.find { key ->
+                    val epObj = media.anime.episodes?.get(key)
+                    MediaNameAdapter.findEpisodeNumber(key) == targetEpNum ||
+                    (epObj?.number != null && MediaNameAdapter.findEpisodeNumber(epObj.number) == targetEpNum)
+                }
+
+                if (matchingKey == null) {
+                    val targetIdx = targetEpNum.toInt() - 1
+                    if (targetIdx in episodes.indices) {
+                        matchingKey = episodes[targetIdx]
+                    }
+                }
+
+                var continueEp = matchingKey
+                if (continueEp != null && episodes.contains(continueEp)) {
                     handleProgress(
                         binding.itemMediaProgressCont,
                         binding.itemMediaProgress,
@@ -486,10 +521,8 @@ class AnimeWatchAdapter(
                         media.id,
                         continueEp
                     )
-                    if ((binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight > PrefManager.getVal<Float>(
-                            PrefName.WatchPercentage
-                        )
-                    ) {
+                    val progressWeight = (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight
+                    if (progressWeight > PrefManager.getVal<Float>(PrefName.WatchPercentage)) {
                         val e = episodes.indexOf(continueEp)
                         if (e != -1 && e + 1 < episodes.size) {
                             continueEp = episodes[e + 1]
@@ -500,35 +533,44 @@ class AnimeWatchAdapter(
                                 media.id,
                                 continueEp
                             )
+                        } else {
+                            // User watched the last available episode
+                            continueEp = null
                         }
                     }
-                    val ep = media.anime.episodes!![continueEp]!!
 
-                    val cleanedTitle = ep.title?.let { MediaNameAdapter.removeEpisodeNumber(it) }
+                    if (continueEp != null && episodes.contains(continueEp)) {
+                        binding.sourceContinue.visibility = View.VISIBLE
+                        val ep = media.anime.episodes!![continueEp]!!
 
-                    binding.itemMediaImage.loadImage(
-                        ep.thumb ?: FileUrl[media.banner ?: media.cover], 0
-                    )
-                    if (ep.filler) binding.itemEpisodeFillerView.visibility = View.VISIBLE
+                        val cleanedTitle = ep.title?.let { MediaNameAdapter.removeEpisodeNumber(it) }
 
-                    binding.mediaSourceContinueText.text =
-                        currActivity()!!.getString(
-                            R.string.continue_episode, ep.number, if (ep.filler)
-                                currActivity()!!.getString(R.string.filler_tag)
-                            else
-                                "", cleanedTitle
+                        binding.itemMediaImage.loadImage(
+                            ep.thumb ?: FileUrl[media.banner ?: media.cover], 0
                         )
-                    binding.sourceContinue.setOnClickListener {
-                        fragment.onEpisodeClick(continueEp)
-                    }
-                    if (fragment.continueEp) {
-                        if (
-                            (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams)
-                                .weight < PrefManager.getVal<Float>(PrefName.WatchPercentage)
-                        ) {
-                            binding.sourceContinue.performClick()
-                            fragment.continueEp = false
+                        if (ep.filler) binding.itemEpisodeFillerView.visibility = View.VISIBLE
+
+                        binding.mediaSourceContinueText.text =
+                            currActivity()!!.getString(
+                                R.string.continue_episode, ep.number, if (ep.filler)
+                                    currActivity()!!.getString(R.string.filler_tag)
+                                else
+                                    "", cleanedTitle
+                            )
+                        binding.sourceContinue.setOnClickListener {
+                            fragment.onEpisodeClick(continueEp)
                         }
+                        if (fragment.continueEp) {
+                            if (
+                                (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams)
+                                    .weight < PrefManager.getVal<Float>(PrefName.WatchPercentage)
+                            ) {
+                                binding.sourceContinue.performClick()
+                                fragment.continueEp = false
+                            }
+                        }
+                    } else {
+                        binding.sourceContinue.visibility = View.GONE
                     }
                 } else {
                     binding.sourceContinue.visibility = View.GONE

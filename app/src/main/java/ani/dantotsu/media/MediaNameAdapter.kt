@@ -74,27 +74,46 @@ object MediaNameAdapter {
         }
     }
 
-    fun findEpisodeNumber(text: String): Float? {
-        val episodePattern: Pattern = Pattern.compile(REGEX_EPISODE, Pattern.CASE_INSENSITIVE)
-        val episodeMatcher: Matcher = episodePattern.matcher(text)
+    private val TAG_REGEX = Regex("""^\[[^\]]+\]|\[[^\]]+\]\s*${'$'}|^\([^\)]+\)|\([^\)]+\)\s*${'$'}""")
+    private val UNWANTED_TAGS = Regex("""(?i)\b(?:sub|subbed|dub|dubbed|raw|softsub|hardsub|multi|dual|audio|v\d+|ver\d+|version\d+|season\s*\d+|s\d+|\d+p|hi10|hevc|x264|x265|aac)\b""")
+    private val BASIC_EP_REGEX = Regex("""(?i)(?<=\be\.|\be|episode|\bep)[\s:.\-]*([0-9]+(?:\.[0-9]+)?)""")
+    private val NUMBER_REGEX = Regex("""\b([0-9]+(?:\.[0-9]+)?)\b""")
 
-        return if (episodeMatcher.find()) {
-            if (episodeMatcher.group(2) != null) {
-                episodeMatcher.group(2)?.toFloat()
-            } else {
-                val failedEpisodeNumberPattern: Pattern =
-                    Pattern.compile(REGEX_PART_NUMBER, Pattern.CASE_INSENSITIVE)
-                val failedEpisodeNumberMatcher: Matcher =
-                    failedEpisodeNumberPattern.matcher(text)
-                if (failedEpisodeNumberMatcher.find()) {
-                    failedEpisodeNumberMatcher.group(1)?.toFloat()
-                } else {
-                    null
-                }
-            }
-        } else {
-            text.toFloatOrNull()
+    fun findEpisodeNumber(text: String): Float? {
+        if (text.isBlank()) return null
+
+        text.trim().toFloatOrNull()?.let { return it }
+
+        val basicMatch = BASIC_EP_REGEX.find(text)
+        if (basicMatch != null) {
+            val numStr = basicMatch.groupValues[1]
+            numStr.toFloatOrNull()?.let { return it }
         }
+
+        var clean = text
+        while (TAG_REGEX.containsMatchIn(clean)) {
+            clean = TAG_REGEX.replace(clean, "")
+        }
+        clean = UNWANTED_TAGS.replace(clean, " ")
+            .replace(',', '.')
+            .replace('-', ' ')
+            .trim()
+
+        val cleanedBasic = BASIC_EP_REGEX.find(clean)
+        if (cleanedBasic != null) {
+            val numStr = cleanedBasic.groupValues[1]
+            numStr.toFloatOrNull()?.let { return it }
+        }
+
+        val matches = NUMBER_REGEX.findAll(clean).toList()
+        if (matches.isNotEmpty()) {
+            for (match in matches) {
+                val num = match.groupValues[1].toFloatOrNull()
+                if (num != null) return num
+            }
+        }
+
+        return text.toFloatOrNull()
     }
 
     fun removeEpisodeNumber(text: String): String {

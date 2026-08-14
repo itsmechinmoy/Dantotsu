@@ -693,7 +693,16 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         // Settings Button
         exoSettings.setOnClickListener {
             playerManager.exoPlayer?.let { p ->
-                PrefManager.setCustomVal("${media.id}_${media.anime!!.selectedEpisode}", p.currentPosition)
+                val selEp = media.anime?.selectedEpisode
+                if (selEp != null) {
+                    PrefManager.setCustomVal("${media.id}_${selEp}", p.currentPosition)
+                    val cleanEp = MediaNameAdapter.findEpisodeNumber(selEp)?.let {
+                        if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                    }
+                    if (cleanEp != null && cleanEp != selEp) {
+                        PrefManager.setCustomVal("${media.id}_${cleanEp}", p.currentPosition)
+                    }
+                }
                 p.pause()
             }
             val intent = Intent(this, PlayerSettingsActivity::class.java).apply {
@@ -796,6 +805,12 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
             if (prevEpKey != null) {
                 playerManager.exoPlayer?.let { p ->
                     PrefManager.setCustomVal("${media.id}_$prevEpKey", p.currentPosition)
+                    val cleanEp = MediaNameAdapter.findEpisodeNumber(prevEpKey)?.let {
+                        if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                    }
+                    if (cleanEp != null && cleanEp != prevEpKey) {
+                        PrefManager.setCustomVal("${media.id}_${cleanEp}", p.currentPosition)
+                    }
                 }
                 subtitleManager.clearTransientSubtitleCache("${media.id}-$prevEpKey")
             }
@@ -963,9 +978,15 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         playerErrorRetryCount = 0
         hideSystemBars()
 
-        val savedPosition = PrefManager.getCustomVal("${media.id}_${media.anime!!.selectedEpisode}_max", Long.MAX_VALUE)
-            .takeIf { it != Long.MAX_VALUE }
-            ?.let { if (it <= playbackPosition) max(0, it - 5) else playbackPosition }
+        val selEp = media.anime?.selectedEpisode
+        val cleanEp = selEp?.let { MediaNameAdapter.findEpisodeNumber(it) }?.let {
+            if (it % 1 == 0f) it.toInt().toString() else it.toString()
+        }
+        val savedMax = selEp?.let { PrefManager.getCustomVal("${media.id}_${it}_max", Long.MAX_VALUE) }
+            ?.takeIf { it != Long.MAX_VALUE }
+            ?: (cleanEp?.let { PrefManager.getCustomVal("${media.id}_${it}_max", Long.MAX_VALUE) }?.takeIf { it != Long.MAX_VALUE })
+
+        val savedPosition = savedMax?.let { if (it <= playbackPosition) max(0, it - 5) else playbackPosition }
             ?: playbackPosition
 
         val speeds = if (PrefManager.getVal(PrefName.CursedSpeeds)) {
@@ -1087,6 +1108,14 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
 
     fun applyOnlineSubtitle(subtitle: StremioSub) {
         subtitleManager.applyOnlineSubtitle(subtitle)
+    }
+
+    fun applySubSourceSubtitle(sub: ani.dantotsu.connections.subtitles.SubSourceSub) {
+        subtitleManager.applySubSourceSubtitle(sub)
+    }
+
+    fun applyOpenSubRestSubtitle(item: ani.dantotsu.connections.subtitles.OpenSubRestItem) {
+        subtitleManager.applyOpenSubRestSubtitle(item)
     }
 
     fun onSetTrackGroupOverride(
@@ -1220,7 +1249,16 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         super.onRenderedFirstFrame()
         val player = playerManager.exoPlayer ?: return
 
-        PrefManager.setCustomVal("${media.id}_${media.anime!!.selectedEpisode}_max", player.duration)
+        val selEp = media.anime?.selectedEpisode
+        if (selEp != null) {
+            PrefManager.setCustomVal("${media.id}_${selEp}_max", player.duration)
+            val cleanEp = MediaNameAdapter.findEpisodeNumber(selEp)?.let {
+                if (it % 1 == 0f) it.toInt().toString() else it.toString()
+            }
+            if (cleanEp != null && cleanEp != selEp) {
+                PrefManager.setCustomVal("${media.id}_${cleanEp}_max", player.duration)
+            }
+        }
 
         val format = player.videoFormat ?: return
         var height = format.height
@@ -1394,7 +1432,16 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         super.onStop()
         if (playerManager.isInitialized) {
             playerManager.exoPlayer?.let { p ->
-                PrefManager.setCustomVal("${media.id}_${media.anime!!.selectedEpisode}", p.currentPosition)
+                val selEp = media.anime?.selectedEpisode
+                if (selEp != null) {
+                    PrefManager.setCustomVal("${media.id}_${selEp}", p.currentPosition)
+                    val cleanEp = MediaNameAdapter.findEpisodeNumber(selEp)?.let {
+                        if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                    }
+                    if (cleanEp != null && cleanEp != selEp) {
+                        PrefManager.setCustomVal("${media.id}_${cleanEp}", p.currentPosition)
+                    }
+                }
             }
             progressManager.updateAniProgress()
         }
