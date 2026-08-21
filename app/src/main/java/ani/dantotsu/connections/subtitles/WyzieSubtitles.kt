@@ -11,17 +11,20 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 object WyzieSubtitles {
-
-    private const val BASE_URL = "https://sub.wyzie.ru/search"
-
+    private const val BASE_URL = "https://sub.wyzie.io/search"
+    private const val DEFAULT_API_KEY = "wyzie-g3qzu8pm817cto70wrsm4atoze6oj8bv"
 
     suspend fun getWyzieSubtitles(imdbId: String, season: Int, episode: Int): List<WyzieSub> {
         return withContext(Dispatchers.IO) {
             try {
                 val languages = PrefManager.getVal<Set<String>>(PrefName.OnlineSubtitleLanguages).joinToString(",")
+                val apiKey = try {
+                    PrefManager.getNullableCustomVal("pref_wyzie_api_key", "", String::class.java).orEmpty().ifBlank { DEFAULT_API_KEY }
+                } catch (_: Exception) { DEFAULT_API_KEY }
 
                 suspend fun fetchWyzie(s: Int, e: Int): List<WyzieSub> {
-                    val url = "$BASE_URL?id=$imdbId&season=$s&episode=$e&language=$languages"
+                    val keyParam = if (apiKey.isNotBlank()) "&key=$apiKey" else ""
+                    val url = "$BASE_URL?id=$imdbId&season=$s&episode=$e&language=$languages$keyParam"
                     Logger.log("WyzieSubtitles: Fetching from $url")
                     val response = client.get(url)
                     val text = response.text

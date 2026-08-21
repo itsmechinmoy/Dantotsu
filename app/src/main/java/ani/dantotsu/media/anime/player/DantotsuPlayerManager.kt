@@ -85,7 +85,8 @@ class DantotsuPlayerManager(
         subConfigs: List<MediaItem.SubtitleConfiguration>,
         mimeType: String?,
         downloadedMediaItem: MediaItem?,
-        mediaMetadata: MediaMetadata? = null
+        mediaMetadata: MediaMetadata? = null,
+        audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
     ): Pair<MediaSource, MediaItem> {
         val headers = mutableMapOf<String, String>()
         headers.putAll(defaultHeaders)
@@ -139,8 +140,34 @@ class DantotsuPlayerManager(
         this.activeMediaSourceFactory = activeFactory
         val primarySource = activeFactory.createMediaSource(mediaItem)
 
-        this.mediaSource = primarySource
-        return Pair(primarySource, mediaItem)
+        val audioSources = mutableListOf<MediaSource>()
+        audioTracks.forEach { audioTrack ->
+            val audioUrl = audioTrack.url
+            if (audioUrl.isNotBlank() && audioUrl != video.file.url) {
+                val audioMimeType = when {
+                    audioUrl.contains(".m3u8", ignoreCase = true) || audioUrl.contains("/m3u8", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                    audioUrl.contains(".mpd", ignoreCase = true) || audioUrl.contains("/mpd", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_MPD
+                    else -> null
+                }
+                val audioMediaItem = MediaItem.Builder()
+                    .setUri(audioUrl.toUri())
+                    .apply {
+                        if (audioMimeType != null) setMimeType(audioMimeType)
+                    }
+                    .build()
+                val audioSource = activeFactory.createMediaSource(audioMediaItem)
+                audioSources.add(audioSource)
+            }
+        }
+
+        val finalSource = if (audioSources.isNotEmpty()) {
+            MergingMediaSource(primarySource, *audioSources.toTypedArray())
+        } else {
+            primarySource
+        }
+
+        this.mediaSource = finalSource
+        return Pair(finalSource, mediaItem)
     }
 
     var activeMediaSourceFactory: MediaSource.Factory? = null

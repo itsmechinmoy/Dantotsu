@@ -140,9 +140,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 loaded = true
 
                 fun fail(resId: Int){
-                    snackString(getString(resId))
-                    tryWith {
-                        dismissAllowingStateLoss()
+                    ContextCompat.getMainExecutor(context ?: currContext() ?: return).execute {
+                        snackString(getString(resId))
+                        tryWith {
+                            dismissAllowingStateLoss()
+                        }
                     }
                 }
                 fun initializeVideoServerSelector(ep: Episode, onEpisodeDownloadHandler: EpisodeDownloadHandler? = null) {
@@ -181,7 +183,10 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             }
                         }
                     } else {
-                        media!!.anime?.episodes?.set(media!!.anime?.selectedEpisode!!, ep)
+                        val epKey = media?.anime?.episodes?.getEpisodeKey(ep.number) ?: media?.anime?.selectedEpisode
+                        if (epKey != null) {
+                            media!!.anime?.episodes?.set(epKey, ep)
+                        }
                         adapter.addAll(ep.extractors)
                         if (ep.extractors?.size == 0) {
                             fail(R.string.stream_selection_empty)
@@ -193,7 +198,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     }
                 }
                 suspend fun loadEpisodeSingleServer(episodeName: String, selectedServerName: String): Boolean{
-                    val ep = media?.anime?.episodes?.getEpisode(episodeName) ?: media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode)!!
+                    val ep = media?.anime?.episodes?.getEpisode(episodeName) ?: media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode)
+                    if (ep == null) return false
                     episode = ep
 
                     var success = false
@@ -210,19 +216,22 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 fun startEpisodeDownload(episodeName: String, selectedServerName: String,
                                          selectedSubtitles: MutableList<String>,
                                          selectedAudioTracks: MutableList<String>){
-                    fun downloadUsingSingleServer(extractor: VideoExtractor): Boolean {
-                        val episode =
-                            media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!
-                        media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!.selectedExtractor =
-                            extractor.server.name
-                        media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!.selectedVideo =
-                            episode.selectedVideo
+                    fun downloadUsingSingleServer(extractor: VideoExtractor, currentEp: Episode): Boolean {
+                        currentEp.selectedExtractor = extractor.server.name
+                        if (currentEp.selectedVideo >= extractor.videos.size) {
+                            currentEp.selectedVideo = 0
+                        }
+                        val epKey = media?.anime?.episodes?.getEpisodeKey(currentEp.number) ?: currentEp.number
+                        media?.anime?.episodes?.get(epKey)?.let { mapEp ->
+                            mapEp.selectedExtractor = extractor.server.name
+                            mapEp.selectedVideo = currentEp.selectedVideo
+                        }
                         if ((PrefManager.getVal(PrefName.DownloadManager) as Int) != 0) {
                             val act = activity ?: currActivity()
                             if (act != null) {
                                 download(
                                     act,
-                                    media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!,
+                                    currentEp,
                                     media!!.userPreferredName
                                 )
                             }
@@ -247,7 +256,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             val subtitles = extractor.subtitles
                             val subtitlesToDownload: MutableList<Pair<String, String>> = mutableListOf()
                             subtitles.forEach {
-                                if(it.language in selectedSubtitles){
+                                if(it.language in selectedSubtitles || selectedSubtitles.isEmpty()){
                                     subtitlesToDownload.add(Pair(it.file.url, it.language))
                                 }
                             }
@@ -255,13 +264,15 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             val audioTracks = extractor.audioTracks
                             val audioTracksToDownload: MutableList<Pair<String, String>> = mutableListOf()
                             audioTracks.forEach {
-                                if(it.lang in selectedAudioTracks){
+                                if(it.lang in selectedAudioTracks || selectedAudioTracks.isEmpty()){
                                     audioTracksToDownload.add(Pair(it.url, it.lang))
                                 }
                             }
 
                             val selectedVideo =
-                                if (extractor.videos.size > episode.selectedVideo) extractor.videos[episode.selectedVideo] else null
+                                if (extractor.videos.isNotEmpty()) {
+                                    if (currentEp.selectedVideo in extractor.videos.indices) extractor.videos[currentEp.selectedVideo] else extractor.videos[0]
+                                } else null
                             val activity = activity ?: currActivity()
                             selectedVideo?.file?.url?.let { url ->
                                 if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
@@ -313,19 +324,19 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 Helper.startAnimeDownloadService(
                                     act,
                                     media!!.mainName(),
-                                    episode.number,
+                                    currentEp.number,
                                     selectedVideo,
                                     subtitlesToDownload,
                                     audioTracksToDownload,
                                     media,
-                                    episode.thumb?.url ?: media!!.banner
+                                    currentEp.thumb?.url ?: media!!.banner
                                     ?: media!!.cover
                                 )
                                 val intent =
                                     Intent(AnimeWatchFragment.ACTION_DOWNLOAD_STARTED).apply {
                                         putExtra(
                                             AnimeWatchFragment.EXTRA_EPISODE_NUMBER,
-                                            episode.number,
+                                            currentEp.number,
                                         )
                                         putExtra("mediaId", media?.id)
                                     }
@@ -337,19 +348,23 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         return true
                     }
 
-                    media?.anime?.selectedEpisode = episodeName
-                    val ep = media?.anime?.episodes?.get(episodeName)!!
+                    val ep = media?.anime?.episodes?.getEpisode(episodeName) ?: media?.anime?.episodes?.get(episodeName)
+                    if (ep == null) {
+                        fail(R.string.auto_select_server_error)
+                        return
+                    }
+                    val epKey = media?.anime?.episodes?.getEpisodeKey(episodeName) ?: episodeName
+                    media?.anime?.selectedEpisode = epKey
                     episode = ep
 
                     Log.d("AnimeDownloader", "Downloading Episode: ${ep.number}, server: $selectedServerName")
 
-                    if (ep.extractors?.find { it.server.name == selectedServerName } == null)
+                    val selectedExtractor = ep.extractors?.find { it.server.name == selectedServerName }
+                    if (selectedExtractor == null)
                         fail(R.string.auto_select_server_error)
                     else {
-                        media!!.anime?.episodes?.set(media!!.anime?.selectedEpisode!!, ep)
-                        val selectedExtractor =
-                            ep.extractors?.find { it.server.name == selectedServerName }
-                        if(!downloadUsingSingleServer(selectedExtractor!!))
+                        media!!.anime?.episodes?.set(epKey, ep)
+                        if(!downloadUsingSingleServer(selectedExtractor, ep))
                             fail(R.string.auto_select_server_error)
                     }
                 }
@@ -443,9 +458,10 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 binding.selectorCancel.visibility = View.GONE
 
                                 scope.launch(Dispatchers.IO) {
+                                    val currentEpisodes = episodes ?: return@launch
                                     val serverSelectionScope = CoroutineScope(Dispatchers.IO)
                                     val serverSelectionTasks = mutableListOf<Deferred<Unit>>()
-                                    for (episodeName in episodes!!.drop(1)) {
+                                    for (episodeName in currentEpisodes.drop(1)) {
                                         serverSelectionTasks.add(serverSelectionScope.async {
                                             if(!loadEpisodeSingleServer(episodeName, selectedServerName)){
                                                 Log.d("AnimeDownloader", "Error loading server $selectedServerName for episode $episodeName")
@@ -455,11 +471,13 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     }
                                     serverSelectionTasks.awaitAll()
 
-                                    for(episodeName in episodes!!){
+                                    for(episodeName in currentEpisodes){
                                         startEpisodeDownload(episodeName, selectedServerName, selectedSubtitles, selectedAudioTracks)
                                     }
-                                    tryWith{
-                                        dismissAllowingStateLoss()
+                                    withContext(Dispatchers.Main) {
+                                        tryWith{
+                                            dismissAllowingStateLoss()
+                                        }
                                     }
                                 }
                             })
@@ -639,9 +657,16 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         fun performClick(position: Int) {
             try {
                 val extractor = links[position]
-                media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]?.selectedExtractor =
-                    extractor.server.name
-                media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]?.selectedVideo = 0
+                val currentEp = media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode) ?: episode
+                val epKey = media?.anime?.episodes?.getEpisodeKey(media?.anime?.selectedEpisode) ?: media?.anime?.selectedEpisode
+                if (currentEp != null) {
+                    currentEp.selectedExtractor = extractor.server.name
+                    currentEp.selectedVideo = 0
+                }
+                if (epKey != null) {
+                    media?.anime?.episodes?.get(epKey)?.selectedExtractor = extractor.server.name
+                    media?.anime?.episodes?.get(epKey)?.selectedVideo = 0
+                }
                 startExoplayer(media!!)
             } catch (e: Exception) {
                 Injekt.get<CrashlyticsInterface>().logException(e)
@@ -683,6 +708,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 if (subtitles.isNotEmpty()) {
                     val subtitleNames = subtitles.map { it.language }
                     var subtitleToDownload: Subtitle? = null
+                    val currentEp = media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode) ?: episode
+                    val epNumber = currentEp?.number ?: media?.anime?.selectedEpisode ?: "1"
                     (activity ?: currActivity())?.customAlertDialog()?.apply {
                         setTitle(R.string.download_subtitle)
                         singleChoiceItems(subtitleNames.toTypedArray(),  dismissOnSelect = false) { which ->
@@ -696,7 +723,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                         subtitleToDownload.file.url,
                                         DownloadedType(
                                             media!!.mainName(),
-                                            media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!.number,
+                                            epNumber,
                                             MediaType.ANIME
                                         )
                                     )
@@ -710,25 +737,30 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 }
             }
             binding.urlDownload.setSafeOnClickListener {
-                media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!.selectedExtractor =
-                    extractor.server.name
-                media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!.selectedVideo =
-                    position
+                val currentEp = media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode) ?: episode
+                val epKey = media?.anime?.episodes?.getEpisodeKey(media?.anime?.selectedEpisode) ?: media?.anime?.selectedEpisode
+                if (currentEp != null) {
+                    currentEp.selectedExtractor = extractor.server.name
+                    currentEp.selectedVideo = position
+                }
+                if (epKey != null) {
+                    media?.anime?.episodes?.get(epKey)?.selectedExtractor = extractor.server.name
+                    media?.anime?.episodes?.get(epKey)?.selectedVideo = position
+                }
                 if ((PrefManager.getVal(PrefName.DownloadManager) as Int) != 0) {
                     val act = activity ?: currActivity()
-                    if (act != null) {
+                    if (act != null && currentEp != null) {
                         download(
                             act,
-                            media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!,
+                            currentEp,
                             media!!.userPreferredName
                         )
                     }
                 }
                 else {
-                    val episode =
-                        media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]!!
+                    val ep = currentEp ?: return@setSafeOnClickListener
                     val selectedVideo =
-                        if (extractor.videos.size > episode.selectedVideo) extractor.videos[episode.selectedVideo] else null
+                        if (extractor.videos.size > ep.selectedVideo) extractor.videos[ep.selectedVideo] else extractor.videos.getOrNull(0)
                     val downloadAddonManager: DownloadAddonManager = Injekt.get()
                     if (!downloadAddonManager.isAvailable()) {
                         val context = context ?: currContext()
@@ -806,7 +838,14 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     }
                     if (subtitles.isNotEmpty()) { // ToTest
                         val subtitleNamesArray = subtitleNames.toTypedArray()
-                        val checkedItems = BooleanArray(subtitleNamesArray.size) { false }
+                        val checkedItems = BooleanArray(subtitleNamesArray.size) { index ->
+                            val name = subtitleNamesArray[index]
+                            val isDefaultMatch = name.contains("English", true) || name.contains("en", true) || (subtitles.size == 1)
+                            if (isDefaultMatch) {
+                                selectedSubtitles.add(subtitles[index].language)
+                            }
+                            isDefaultMatch
+                        }
 
                         currContext.customAlertDialog().apply {
                             setTitle(R.string.download_subtitle)
@@ -814,7 +853,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 it.forEachIndexed { index, isChecked ->
                                     val subtitleName = subtitles[index].language
                                     if (isChecked) {
-                                        selectedSubtitles.add(subtitleName)
+                                        if (!selectedSubtitles.contains(subtitleName)) selectedSubtitles.add(subtitleName)
                                     } else {
                                         selectedSubtitles.remove(subtitleName)
                                     }
@@ -865,10 +904,16 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         return@setSafeOnClickListener
                     }
                     tryWith(true) {
-                        media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]?.selectedExtractor =
-                            extractor.server.name
-                        media!!.anime!!.episodes!![media!!.anime!!.selectedEpisode!!]?.selectedVideo =
-                            bindingAdapterPosition
+                        val currentEp = media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode) ?: episode
+                        val epKey = media?.anime?.episodes?.getEpisodeKey(media?.anime?.selectedEpisode) ?: media?.anime?.selectedEpisode
+                        if (currentEp != null) {
+                            currentEp.selectedExtractor = extractor.server.name
+                            currentEp.selectedVideo = bindingAdapterPosition
+                        }
+                        if (epKey != null) {
+                            media?.anime?.episodes?.get(epKey)?.selectedExtractor = extractor.server.name
+                            media?.anime?.episodes?.get(epKey)?.selectedVideo = bindingAdapterPosition
+                        }
                         if (makeDefault) {
                             media!!.selected!!.server = extractor.server.name
                             media!!.selected!!.video = bindingAdapterPosition

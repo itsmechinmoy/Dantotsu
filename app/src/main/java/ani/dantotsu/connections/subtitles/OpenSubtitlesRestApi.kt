@@ -23,12 +23,12 @@ object OpenSubtitlesRestApi {
                 val cleanImdb = imdbId.removePrefix("tt")
                 val urls = mutableListOf<String>()
 
-                urls.add("$HOST/subtitles?imdb_id=$cleanImdb&episode_number=$episode&languages=en")
+                urls.add("$HOST/subtitles?imdb_id=$cleanImdb&episode_number=$episode")
                 if (season != null && season > 1) {
-                    urls.add("$HOST/subtitles?imdb_id=$cleanImdb&season_number=$season&episode_number=$episode&languages=en")
+                    urls.add("$HOST/subtitles?imdb_id=$cleanImdb&season_number=$season&episode_number=$episode")
                 }
                 if (!queryText.isNullOrBlank()) {
-                    urls.add("$HOST/subtitles?query=${java.net.URLEncoder.encode(queryText, "UTF-8")}&episode_number=$episode&languages=en")
+                    urls.add("$HOST/subtitles?query=${java.net.URLEncoder.encode(queryText, "UTF-8")}&episode_number=$episode")
                 }
 
                 val results = mutableListOf<OpenSubRestItem>()

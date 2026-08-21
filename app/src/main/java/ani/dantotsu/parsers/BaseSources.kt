@@ -35,35 +35,23 @@ abstract class WatchSources : BaseSources() {
     ): MutableMap<String, Episode> {
         val map = mutableMapOf<String, Episode>()
         val parser = get(i)
+        val actualAnime = sAnime ?: SAnime.create().apply {
+            url = showLink
+            title = ""
+        }
         tryWithSuspend(true) {
-            if (sAnime != null) {
-                parser.loadEpisodes(showLink, extra, sAnime).forEach {
-                    val key = if (it.sEpisode?.scanlator.isNullOrBlank()) it.number else "${it.number}-${it.sEpisode?.scanlator}"
-                    map[key] = Episode(
-                        it.number,
-                        it.link,
-                        it.title,
-                        it.description,
-                        it.thumbnail,
-                        it.isFiller,
-                        extra = it.extra,
-                        sEpisode = it.sEpisode
-                    )
-                }
-            } else if (parser is OfflineAnimeParser) {
-                parser.loadEpisodes(showLink, extra, SAnime.create()).forEach {
-                    val key = if (it.sEpisode?.scanlator.isNullOrBlank()) it.number else "${it.number}-${it.sEpisode?.scanlator}"
-                    map[key] = Episode(
-                        it.number,
-                        it.link,
-                        it.title,
-                        it.description,
-                        it.thumbnail,
-                        it.isFiller,
-                        extra = it.extra,
-                        sEpisode = it.sEpisode
-                    )
-                }
+            parser.loadEpisodes(showLink, extra, actualAnime).forEach {
+                val key = if (it.sEpisode?.scanlator.isNullOrBlank()) it.number else "${it.number}-${it.sEpisode?.scanlator}"
+                map[key] = Episode(
+                    it.number,
+                    it.link,
+                    it.title,
+                    it.description,
+                    it.thumbnail,
+                    it.isFiller,
+                    extra = it.extra,
+                    sEpisode = it.sEpisode
+                )
             }
         }
         return map
@@ -88,31 +76,17 @@ abstract class MangaReadSources : BaseSources() {
     suspend fun loadChapters(i: Int, show: ShowResponse): MutableMap<String, MangaChapter> {
         val map = mutableMapOf<String, MangaChapter>()
         val parser = get(i)
+        val sManga = show.sManga ?: SManga.create().apply {
+            url = show.link
+            title = show.name
+            thumbnail_url = show.coverUrl.url
+        }
 
-        show.sManga?.let { sManga ->
-            tryWithSuspend(true) {
-                parser.loadChapters(show.link, show.extra, sManga).forEach {
-                    map["${it.number}-${it.scanlator}"] = MangaChapter(it)
-                }
+        tryWithSuspend(true) {
+            parser.loadChapters(show.link, show.extra, sManga).forEach {
+                map["${it.number}-${it.scanlator}"] = MangaChapter(it)
             }
         }
-        //must be downloaded
-        if (show.sManga == null) {
-            Logger.log("sManga is null")
-        }
-        if (parser is OfflineMangaParser && show.sManga == null) {
-            tryWithSuspend(true) {
-                // Since we've checked, we can safely cast parser to OfflineMangaParser and call its methods
-                parser.loadChapters(show.link, show.extra, SManga.create()).forEach {
-                    map["${it.number}-${it.scanlator}"] = MangaChapter(it)
-                }
-            }
-        } else {
-            Logger.log("Parser is not an instance of OfflineMangaParser")
-        }
-
-
-        Logger.log("map size ${map.size}")
         return map
     }
 }

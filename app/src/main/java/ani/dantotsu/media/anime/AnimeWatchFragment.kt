@@ -72,6 +72,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tachiyomi.core.util.lang.launchIO
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -153,6 +154,32 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
         }
 
         binding.mediaSourceRecycler.layoutManager = gridLayoutManager
+
+        binding.mediaSourceSwipeRefresh.apply {
+            val primaryColor = PrefManager.getVal<Int>(PrefName.PrimaryColor)
+            setColorSchemeColors(primaryColor)
+            setProgressBackgroundColorSchemeResource(R.color.nav_bg)
+            setOnRefreshListener {
+                if (!this@AnimeWatchFragment::media.isInitialized) {
+                    isRefreshing = false
+                    return@setOnRefreshListener
+                }
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val offline = !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
+                    val isLocal = model.watchSources?.list?.getOrNull(media.selected!!.sourceIndex)?.name == "Local"
+                    if (!offline && !isLocal) {
+                        val kitsuEpisodes = async { model.loadKitsuEpisodes(media) }
+                        val anifyEpisodes = async { model.loadAnifyEpisodes(media) }
+                        val fillerEpisodes = async { model.loadFillerEpisodes(media) }
+                        awaitAll(kitsuEpisodes, anifyEpisodes, fillerEpisodes)
+                    }
+                    model.loadEpisodes(media, media.selected!!.sourceIndex, invalidate = true)
+                    withContext(Dispatchers.Main) {
+                        binding.mediaSourceSwipeRefresh.isRefreshing = false
+                    }
+                }
+            }
+        }
 
         binding.ScrollTop.setOnClickListener {
             binding.mediaSourceRecycler.scrollToPosition(10)
@@ -666,6 +693,11 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
             val taskName = AnimeDownloaderService.AnimeDownloadTask.getTaskName(media.mainName(), i)
             PrefManager.getAnimeDownloadPreferences().edit().remove(taskName).apply()
             episodeAdapter.deleteDownload(i)
+            val isDownloaded = model.watchSources?.isDownloadedSource(media.selected?.sourceIndex ?: 0) == true
+            if (isDownloaded) {
+                model.invalidateSource(media.selected?.sourceIndex ?: 0)
+                loadEpisodes(media.selected?.sourceIndex ?: 0, true)
+            }
         }
     }
 
@@ -828,6 +860,7 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
         episodeAdapter.arr = arr
         episodeAdapter.updateType(style ?: PrefManager.getVal(PrefName.AnimeDefaultView))
         episodeAdapter.notifyItemRangeInserted(0, arr.size)
+        episodeAdapter.clearAllDownloaded()
         for (download in downloadManager.animeDownloadedTypes) {
             if (media.compareName(download.titleName)) {
                 episodeAdapter.addToDownloadedEpisodes(download.chapterName, downloadManager.getSize(download))

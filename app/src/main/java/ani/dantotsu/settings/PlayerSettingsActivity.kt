@@ -322,8 +322,8 @@ class PlayerSettingsActivity :
         binding.playerSettingsOnlineProviders.isEnabled = binding.playerSettingsOnlineSubtitles.isChecked
         binding.playerSettingsOnlineLanguages.isEnabled = binding.playerSettingsOnlineSubtitles.isChecked
 
-        val allProviders = arrayOf("Wyzie", "Stremio")
-        val allProviderLabels = arrayOf("Wyzie", "Stremio")
+        val allProviders = arrayOf("Wyzie", "Stremio", "SubSource", "OpenSubtitles")
+        val allProviderLabels = arrayOf("Wyzie", "Stremio OpenSubtitles", "SubSource", "OpenSubtitles REST")
         binding.playerSettingsOnlineProviders.setOnClickListener {
             val currentProviders = PrefManager.getVal<Set<String>>(PrefName.OnlineSubtitleProviders)
             val checkedItems = BooleanArray(allProviders.size) { index ->

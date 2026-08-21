@@ -413,6 +413,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:host="add-repo"/>
+                <data android:host="extension-store"/>
                 <data android:scheme="tachiyomi"/>
                 <data android:scheme="aniyomi"/>
                 <data android:scheme="novelyomi"/>

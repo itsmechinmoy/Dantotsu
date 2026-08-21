@@ -136,16 +136,36 @@ suspend fun <A, B> Collection<A>.asyncMapNotNull(
     }.mapNotNull { it.await() }
 }
 
+fun isCloudflareOr403(e: Throwable): Boolean {
+    val msg = e.message?.lowercase(java.util.Locale.ROOT) ?: ""
+    val localized = e.localizedMessage?.lowercase(java.util.Locale.ROOT) ?: ""
+    val className = e.javaClass.simpleName.lowercase(java.util.Locale.ROOT)
+    return msg.contains("403") ||
+            msg.contains("cloudflare") ||
+            msg.contains("turnstile") ||
+            msg.contains("just a moment") ||
+            msg.contains("challenge") ||
+            localized.contains("403") ||
+            localized.contains("cloudflare") ||
+            className.contains("cloudflare") ||
+            (e is java.io.IOException && (msg.contains("403") || localized.contains("403")))
+}
+
 fun logError(e: Throwable, post: Boolean = true, snackbar: Boolean = true) {
     val sw = StringWriter()
     val pw = PrintWriter(sw)
     e.printStackTrace(pw)
     val stackTrace: String = sw.toString()
     if (post) {
+        val message = if (isCloudflareOr403(e)) {
+            "Cloudflare protection detected. Please bypass Cloudflare via WebView."
+        } else {
+            e.localizedMessage ?: e.message ?: "Unknown error"
+        }
         if (snackbar)
-            snackString(e.localizedMessage, null, stackTrace)
+            snackString(message, null, stackTrace)
         else
-            toast(e.localizedMessage)
+            toast(message)
     }
     e.printStackTrace()
     Logger.log(e)

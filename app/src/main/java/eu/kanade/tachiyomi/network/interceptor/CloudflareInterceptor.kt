@@ -3,12 +3,9 @@ package eu.kanade.tachiyomi.network.interceptor
 import android.annotation.SuppressLint
 import android.content.Context
 import android.webkit.WebView
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import eu.kanade.tachiyomi.network.AndroidCookieJar
 import eu.kanade.tachiyomi.util.system.WebViewClientCompat
-import eu.kanade.tachiyomi.util.system.isOutdated
-import eu.kanade.tachiyomi.util.system.toast
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -27,16 +24,26 @@ class CloudflareInterceptor(
 
     override fun shouldIntercept(response: Response): Boolean {
         if (response.request.url.host.contains("anilist.co")) return false
-        return if (response.code in ERROR_CODES && response.header("Server") in SERVER_CHECK) {
-            val bodyString = runCatching { response.peekBody(Long.MAX_VALUE).string() }.getOrNull() ?: return false
-            val document = org.jsoup.Jsoup.parse(bodyString, response.request.url.toString())
-            document.getElementById("challenge-error-title") != null ||
-                document.getElementById("challenge-error-text") != null ||
-                document.getElementById("challenge-running") != null ||
-                document.getElementById("turnstile-wrapper") != null
-        } else {
-            false
-        }
+        if (response.code !in ERROR_CODES) return false
+
+        val isCloudflareServer = response.header("Server") in SERVER_CHECK ||
+                response.header("cf-ray") != null ||
+                response.header("cf-mitigated") != null
+
+        if (!isCloudflareServer) return false
+
+        val bodyString = runCatching { response.peekBody(Long.MAX_VALUE).string() }.getOrNull().orEmpty()
+        val isCloudflareContent = bodyString.contains("challenge-error-title") ||
+                bodyString.contains("challenge-error-text") ||
+                bodyString.contains("challenge-running") ||
+                bodyString.contains("turnstile-wrapper") ||
+                bodyString.contains("window._cf_chl_opt") ||
+                bodyString.contains("Just a moment...") ||
+                bodyString.contains("Attention Required! | Cloudflare") ||
+                bodyString.contains("cf-turnstile") ||
+                bodyString.contains("cf-browser-verification")
+
+        return isCloudflareContent
     }
 
     override fun intercept(
@@ -72,7 +79,6 @@ class CloudflareInterceptor(
 
         var challengeFound = false
         var cloudflareBypassed = false
-        var isWebViewOutdated = false
 
         val origRequestUrl = originalRequest.url.toString()
         val headers = parseHeaders(originalRequest.headers)
@@ -124,10 +130,6 @@ class CloudflareInterceptor(
         latch.awaitFor30Seconds()
 
         executor.execute {
-            if (!cloudflareBypassed) {
-                isWebViewOutdated = webview?.isOutdated() == true
-            }
-
             webview?.run {
                 stopLoading()
                 destroy()
@@ -136,14 +138,6 @@ class CloudflareInterceptor(
 
         // Throw exception if we failed to bypass Cloudflare
         if (!cloudflareBypassed) {
-            // Prompt user to update WebView if it seems too outdated
-            if (isWebViewOutdated) {
-                context.toast(
-                    "Please update the webview app for better compatibility",
-                    Toast.LENGTH_LONG
-                )
-            }
-
             throw CloudflareBypassException()
         }
     }

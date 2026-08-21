@@ -240,37 +240,86 @@ class PlayerGestureManager(
         val gestureSpeed = (300 * PrefManager.getVal<Float>(PrefName.AnimationSpeed)).toLong()
 
         val brightnessRunnable = Runnable {
-            if (exoBrightnessCont.alpha == 1f) {
-                activity.lifecycleScope.launch {
-                    ObjectAnimator.ofFloat(exoBrightnessCont, "alpha", 1f, 0f)
-                        .setDuration(gestureSpeed)
-                        .start()
-                    delay(gestureSpeed)
+            if (exoBrightnessCont.visibility == View.VISIBLE) {
+                val currentAlpha = exoBrightnessCont.alpha
+                if (currentAlpha > 0f) {
+                    val anim = ObjectAnimator.ofFloat(exoBrightnessCont, "alpha", currentAlpha, 0f)
+                    anim.duration = gestureSpeed
+                    anim.addListener(object : android.animation.AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: android.animation.Animator) {
+                            exoBrightnessCont.visibility = View.GONE
+                            exoBrightnessCont.alpha = 1f
+                            checkNotch()
+                        }
+                    })
+                    anim.start()
+                } else {
                     exoBrightnessCont.visibility = View.GONE
+                    exoBrightnessCont.alpha = 1f
                     checkNotch()
                 }
             }
         }
 
         val volumeRunnable = Runnable {
-            if (exoVolumeCont.alpha == 1f) {
-                activity.lifecycleScope.launch {
-                    ObjectAnimator.ofFloat(exoVolumeCont, "alpha", 1f, 0f)
-                        .setDuration(gestureSpeed)
-                        .start()
-                    delay(gestureSpeed)
+            if (exoVolumeCont.visibility == View.VISIBLE) {
+                val currentAlpha = exoVolumeCont.alpha
+                if (currentAlpha > 0f) {
+                    val anim = ObjectAnimator.ofFloat(exoVolumeCont, "alpha", currentAlpha, 0f)
+                    anim.duration = gestureSpeed
+                    anim.addListener(object : android.animation.AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: android.animation.Animator) {
+                            exoVolumeCont.visibility = View.GONE
+                            exoVolumeCont.alpha = 1f
+                            checkNotch()
+                        }
+                    })
+                    anim.start()
+                } else {
                     exoVolumeCont.visibility = View.GONE
+                    exoVolumeCont.alpha = 1f
                     checkNotch()
                 }
             }
         }
 
+        fun brightnessHide() {
+            brightnessTimer.cancel()
+            brightnessTimer.purge()
+            brightnessTimer = Timer()
+            brightnessTimer.schedule(
+                object : TimerTask() {
+                    override fun run() {
+                        handler.post(brightnessRunnable)
+                    }
+                },
+                3000
+            )
+        }
+
+        fun volumeHide() {
+            volumeTimer.cancel()
+            volumeTimer.purge()
+            volumeTimer = Timer()
+            volumeTimer.schedule(
+                object : TimerTask() {
+                    override fun run() {
+                        handler.post(volumeRunnable)
+                    }
+                },
+                3000
+            )
+        }
+
+        exoBrightnessCont.visibility = View.GONE
+        exoVolumeCont.visibility = View.GONE
+
         playerView.setControllerVisibilityListener(
             PlayerView.ControllerVisibilityListener { visibility ->
                 if (visibility == View.GONE) {
                     activity.hideSystemBars()
-                    brightnessRunnable.run()
-                    volumeRunnable.run()
+                    brightnessHide()
+                    volumeHide()
                 }
             }
         )
@@ -297,20 +346,6 @@ class PlayerGestureManager(
                 }
             }
 
-            fun brightnessHide() {
-                brightnessTimer.cancel()
-                brightnessTimer.purge()
-                brightnessTimer = Timer()
-                brightnessTimer.schedule(
-                    object : TimerTask() {
-                        override fun run() {
-                            handler.post(brightnessRunnable)
-                        }
-                    },
-                    3000
-                )
-            }
-
             exoBrightness.value = (getCurrentBrightnessValue(activity) * 10f)
             exoBrightness.addOnChangeListener { _, value, _ ->
                 val lp = activity.window.attributes
@@ -321,20 +356,6 @@ class PlayerGestureManager(
 
             val volumeMax = audioManager.getStreamMaxVolume(STREAM_MUSIC)
             exoVolume.value = audioManager.getStreamVolume(STREAM_MUSIC).toFloat() / volumeMax * 10
-
-            fun volumeHide() {
-                volumeTimer.cancel()
-                volumeTimer.purge()
-                volumeTimer = Timer()
-                volumeTimer.schedule(
-                    object : TimerTask() {
-                        override fun run() {
-                            handler.post(volumeRunnable)
-                        }
-                    },
-                    3000
-                )
-            }
 
             exoVolume.addOnChangeListener { _, value, _ ->
                 val volume = ((value.takeIf { !it.isNaN() } ?: 0f) / 10 * volumeMax).roundToInt()
@@ -401,10 +422,11 @@ class PlayerGestureManager(
                     override fun onScrollYClick(y: Float) {
                         if (!isLocked && PrefManager.getVal(PrefName.Gestures)) {
                             exoBrightness.value = clamp(exoBrightness.value + y / 100, 0f, 10f)
+                            exoBrightnessCont.alpha = 1f
                             if (exoBrightnessCont.visibility != View.VISIBLE) {
                                 exoBrightnessCont.visibility = View.VISIBLE
                             }
-                            exoBrightnessCont.alpha = 1f
+                            brightnessHide()
                         }
                     }
 
@@ -419,7 +441,10 @@ class PlayerGestureManager(
                 fastRewindDetector.onTouchEvent(event)
                 when (event.action) {
                     MotionEvent.ACTION_MOVE -> updateFastForwardSpeed(event)
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stopFastForward()
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        stopFastForward()
+                        if (exoBrightnessCont.visibility == View.VISIBLE) brightnessHide()
+                    }
                 }
                 v.performClick()
                 true
@@ -439,10 +464,11 @@ class PlayerGestureManager(
                     override fun onScrollYClick(y: Float) {
                         if (!isLocked && PrefManager.getVal(PrefName.Gestures)) {
                             exoVolume.value = clamp(exoVolume.value + y / 100, 0f, 10f)
+                            exoVolumeCont.alpha = 1f
                             if (exoVolumeCont.visibility != View.VISIBLE) {
                                 exoVolumeCont.visibility = View.VISIBLE
                             }
-                            exoVolumeCont.alpha = 1f
+                            volumeHide()
                         }
                     }
 
@@ -457,7 +483,10 @@ class PlayerGestureManager(
                 fastForwardDetector.onTouchEvent(event)
                 when (event.action) {
                     MotionEvent.ACTION_MOVE -> updateFastForwardSpeed(event)
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stopFastForward()
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        stopFastForward()
+                        if (exoVolumeCont.visibility == View.VISIBLE) volumeHide()
+                    }
                 }
                 v.performClick()
                 true

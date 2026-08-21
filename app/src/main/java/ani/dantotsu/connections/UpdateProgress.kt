@@ -33,9 +33,11 @@ fun updateProgress(media: Media, number: String) {
             MediaType.MANGA -> downloadsManager.mangaDownloadedTypes
             MediaType.NOVEL -> downloadsManager.novelDownloadedTypes
         }
+        val targetNum = ani.dantotsu.media.MediaNameAdapter.findChapterNumber(number)
         val downloadedType = downloadedTypes.find {
             it.titleName == media.mainName().findValidName() &&
-            it.chapterName == number.findValidName()
+            (it.chapterName == number.findValidName() ||
+             (targetNum != null && ani.dantotsu.media.MediaNameAdapter.findChapterNumber(it.chapterName) == targetNum))
         }
         if (downloadedType != null) {
             downloadsManager.removeDownload(downloadedType, toast = false) {}

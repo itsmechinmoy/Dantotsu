@@ -36,7 +36,10 @@ import ani.dantotsu.media.novel.novelreader.NovelReaderActivity
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.setBaseline
 import ani.dantotsu.toPx
+import ani.dantotsu.isOnline
 import ani.dantotsu.parsers.ShowResponse
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
 import ani.dantotsu.util.StoragePermissions
@@ -419,6 +422,28 @@ class NovelReadFragment : Fragment(),
             }
         }
         binding.mediaSourceRecycler.layoutManager = gridLayoutManager
+
+        binding.mediaSourceSwipeRefresh.apply {
+            val primaryColor = PrefManager.getVal<Int>(PrefName.PrimaryColor)
+            setColorSchemeColors(primaryColor)
+            setProgressBackgroundColorSchemeResource(R.color.nav_bg)
+            setOnRefreshListener {
+                if (!this@NovelReadFragment::media.isInitialized) {
+                    isRefreshing = false
+                    return@setOnRefreshListener
+                }
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val offline = !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
+                    if (offline && media.format != "LOCAL") {
+                        media.selected!!.sourceIndex = model.novelSources.list.lastIndex
+                    }
+                    model.loadNovelChapters(media, source, invalidate = true)
+                    withContext(Dispatchers.Main) {
+                        binding.mediaSourceSwipeRefresh.isRefreshing = false
+                    }
+                }
+            }
+        }
 
         binding.ScrollTop.setOnClickListener {
             binding.mediaSourceRecycler.scrollToPosition(10)

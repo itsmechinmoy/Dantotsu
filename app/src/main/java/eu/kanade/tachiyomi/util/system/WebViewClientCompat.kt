@@ -91,4 +91,8 @@ abstract class WebViewClientCompat : WebViewClient() {
             request.isForMainFrame,
         )
     }
+
+    override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+        return true
+    }
 }

@@ -305,7 +305,9 @@ class MainActivity : AppCompatActivity() {
                     }
             }
             window.navigationBarColor = ContextCompat.getColor(this, android.R.color.transparent)
-            selectedOption = if (fragment != null) {
+            selectedOption = if (intent.getBooleanExtra("goToHome", false)) {
+                1
+            } else if (fragment != null) {
                 when (fragment) {
                     AnimeFragment::class.java.name -> 0
                     HomeFragment::class.java.name -> 1
@@ -503,7 +505,7 @@ class MainActivity : AppCompatActivity() {
             if (uri == null) {
                 throw Exception("Uri is null")
             }
-            if ((uri.scheme == "tachiyomi" || uri.scheme == "aniyomi" || uri.scheme == "novelyomi") && uri.host == "add-repo") {
+            if ((uri.scheme == "tachiyomi" || uri.scheme == "aniyomi" || uri.scheme == "novelyomi") && (uri.host == "add-repo" || uri.host == "extension-store")) {
                 val url = uri.getQueryParameter("url") ?: throw Exception("No url for repo import")
                 val (prefName, name) = when (uri.scheme) {
                     "tachiyomi" -> PrefName.MangaExtensionRepos to "Manga"
@@ -618,4 +620,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("goToHome", false)) {
+            selectedOption = 1
+            binding.includedNavbar.navbar.selectTabAt(1)
+            binding.viewpager.setCurrentItem(1, false)
+        }
+    }
 }

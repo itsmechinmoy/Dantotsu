@@ -15,9 +15,19 @@ import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromByteArray
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.protobuf.ProtoBuf
 import okio.buffer
 import okio.gzip
@@ -428,16 +438,56 @@ internal class ExtensionGithubApi {
     }
 }
 
+object LongOrStringSerializer : KSerializer<Long> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LongOrString", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: Long) = encoder.encodeLong(value)
+    override fun deserialize(decoder: Decoder): Long {
+        val jsonDecoder = decoder as? JsonDecoder ?: return try {
+            decoder.decodeLong()
+        } catch (e: Throwable) {
+            decoder.decodeString().toLongOrNull() ?: 0L
+        }
+        val element = jsonDecoder.decodeJsonElement()
+        return if (element is JsonPrimitive) {
+            element.longOrNull ?: element.content.toLongOrNull() ?: 0L
+        } else {
+            0L
+        }
+    }
+}
+
+object IntOrStringSerializer : KSerializer<Int> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("IntOrString", PrimitiveKind.INT)
+    override fun serialize(encoder: Encoder, value: Int) = encoder.encodeInt(value)
+    override fun deserialize(decoder: Decoder): Int {
+        val jsonDecoder = decoder as? JsonDecoder ?: return try {
+            decoder.decodeInt()
+        } catch (e: Throwable) {
+            decoder.decodeString().toIntOrNull() ?: 0
+        }
+        val element = jsonDecoder.decodeJsonElement()
+        return if (element is JsonPrimitive) {
+            element.intOrNull ?: element.content.toIntOrNull() ?: 0
+        } else {
+            0
+        }
+    }
+}
+
 @Serializable
 private data class ExtensionJsonObject(
     val name: String = "",
     val pkg: String = "",
     val apk: String = "",
     val lang: String = "all",
+    @Serializable(with = LongOrStringSerializer::class)
     val code: Long = 0,
     val version: String = "1.0",
+    @Serializable(with = IntOrStringSerializer::class)
     val nsfw: Int = 0,
+    @Serializable(with = IntOrStringSerializer::class)
     val hasReadme: Int = 0,
+    @Serializable(with = IntOrStringSerializer::class)
     val hasChangelog: Int = 0,
     val sources: List<ExtensionSourceJsonObject>? = null,
     val iconUrl: String? = null,
@@ -446,18 +496,24 @@ private data class ExtensionJsonObject(
 
 @Serializable
 private data class ExtensionSourceJsonObject(
-    val id: Long,
-    val lang: String,
-    val name: String,
-    val baseUrl: String,
+    @Serializable(with = LongOrStringSerializer::class)
+    val id: Long = 0L,
+    val lang: String = "",
+    val name: String = "",
+    val baseUrl: String = "",
 )
 
 private fun ExtensionJsonObject.extractLibVersion(): Double {
     extensionLib?.toDoubleOrNull()?.let { return it }
     val parts = version.split('.')
     return if (parts.size >= 2) {
-        val majorMinor = "${parts[0]}.${parts[1]}"
-        majorMinor.toDoubleOrNull() ?: parts[0].toDoubleOrNull() ?: 1.0
+        val major = parts[0].toDoubleOrNull() ?: 1.0
+        if (major >= 10.0) {
+            major
+        } else {
+            val majorMinor = "${parts[0]}.${parts[1]}"
+            majorMinor.toDoubleOrNull() ?: major
+        }
     } else {
         version.toDoubleOrNull() ?: 1.0
     }

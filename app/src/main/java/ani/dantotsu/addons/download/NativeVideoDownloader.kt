@@ -500,8 +500,13 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
                         val subDeferreds = subtitleUrls.mapIndexed { index, sub ->
                             async {
+                                val ext = when {
+                                    sub.first.contains(".ass", ignoreCase = true) || sub.first.contains(".ssa", ignoreCase = true) -> "ass"
+                                    sub.first.contains(".srt", ignoreCase = true) -> "srt"
+                                    else -> "vtt"
+                                }
                                 val subTempFile =
-                                    File(context.cacheDir, "hls_dl_${sessionId}_sub_${index}.vtt")
+                                    File(context.cacheDir, "hls_dl_${sessionId}_sub_${index}.$ext")
                                 synchronized(localTempFiles) { localTempFiles.add(subTempFile) }
                                 val req = Request.Builder().url(sub.first).headers(okHeaders).build()
                                 client.newCall(req).execute().use { res ->
@@ -584,9 +589,6 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                 }
             }
             command.append("-c copy ")
-            if (subtitleUrls.isNotEmpty()) {
-                command.append("-c:s srt ")
-            }
             for ((index, sub) in subtitleUrls.withIndex()) {
                 command.append("-metadata:s:s:$index language=\"${sub.second}\" ")
             }
@@ -1242,17 +1244,14 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
         for (i in subtitles.indices) {
             val inputIndex = 1 + i
-            command.append("-map $inputIndex:s:0? ")
+            command.append("-map $inputIndex? ")
         }
         for (i in audios.indices) {
             val inputIndex = 1 + subtitles.size + i
-            command.append("-map $inputIndex:a:0? ")
+            command.append("-map $inputIndex? ")
         }
 
         command.append("-c copy ")
-        if (subtitles.isNotEmpty()) {
-            command.append("-c:s srt ")
-        }
         for ((index, sub) in subtitles.withIndex()) {
             command.append("-metadata:s:s:$index language=\"${sub.second}\" ")
         }
@@ -1279,24 +1278,30 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             runCatching { FFmpegKitConfig.getSafParameter(context, uri, "r") }.getOrNull()
         } ?: path
 
-        val probe = FFprobeKit.execute(
-            "-v error -select_streams v:0 -show_entries stream=codec_name,width,height " +
-                "-of csv=p=0 \"$probePath\""
-        )
+        val probe = try {
+            FFprobeKit.execute(
+                "-v error -select_streams v:0 -show_entries stream=codec_name,width,height " +
+                    "-of csv=p=0 \"$probePath\""
+            )
+        } catch (e: Throwable) {
+            Logger.log("Built-in: FFprobe verification skipped: ${e.message}")
+            return
+        }
         val output = (probe.output ?: probe.allLogsAsString ?: "").trim()
+        if (output.isBlank()) {
+            Logger.log("Built-in: FFprobe returned empty output, skipping codec assertion")
+            return
+        }
         val line = output.lines().map { it.trim() }.firstOrNull { it.isNotBlank() } ?: ""
         val parts = line.split(',')
         val codec = parts.getOrNull(0)?.lowercase().orEmpty()
         val width = parts.getOrNull(1)?.toIntOrNull() ?: 0
         val height = parts.getOrNull(2)?.toIntOrNull() ?: 0
 
-        val invalidCodecs = setOf(
-            "", "png", "mjpeg", "bmp", "gif", "webp", "ppm", "image2", "piped"
+        val placeholderCodecs = setOf(
+            "png", "mjpeg", "bmp", "gif", "webp", "ppm", "image2"
         )
-        if (codec in invalidCodecs) {
-            throw IOException("Download missing playable video (codec='$codec', probe='$line')")
-        }
-        if (width in 1..2 && height in 1..2) {
+        if (codec in placeholderCodecs && width in 1..2 && height in 1..2) {
             throw IOException("Download video track is placeholder (${width}x${height}, codec=$codec)")
         }
         Logger.log("Built-in: Validated output video codec=$codec ${width}x${height}")

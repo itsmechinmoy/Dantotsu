@@ -48,8 +48,15 @@ class OfflineNovelParser : NovelParser() {
         )
     }
 
+    override suspend fun autoSearch(mediaObj: ani.dantotsu.media.Media): ShowResponse? {
+        val titles = downloadManager.novelDownloadedTypes.map { it.titleName }.distinct()
+        if (titles.isEmpty()) return null
+        return super.autoSearch(mediaObj)
+    }
+
     override suspend fun search(query: String): List<ShowResponse> {
         val titles = downloadManager.novelDownloadedTypes.map { it.titleName }.distinct()
+        if (titles.isEmpty()) return emptyList()
         val returnTitlesPair: MutableList<Pair<String, Int>> = mutableListOf()
         for (title in titles) {
             Logger.log("Comparing $title to $query")

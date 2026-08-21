@@ -369,15 +369,7 @@ class MangaReadAdapter(
 
         val binding = _binding
         if (binding != null) {
-            if (media.manga?.chapters != null) {
-                val anilistEp = (media.userProgress ?: 0).plus(1)
-                val appEp = PrefManager.getNullableCustomVal(
-                    "${media.id}_current_chp",
-                    null,
-                    String::class.java
-                )
-                    ?.toIntOrNull() ?: 1
-                val continueNumber = (if (anilistEp > appEp) anilistEp else appEp).toString()
+            if (media.manga?.chapters != null && media.manga.chapters!!.isNotEmpty()) {
                 val filteredChapters = media.manga.chapters!!.filter { chapter ->
                     if (mangaReadSources[media.selected!!.sourceIndex] is OfflineMangaParser) {
                         true
@@ -385,45 +377,79 @@ class MangaReadAdapter(
                         chapter.value.scanlator !in hiddenScanlators
                     }
                 }
-                val formattedChapters = filteredChapters.map {
-                    MediaNameAdapter.findChapterNumber(it.value.number)?.toInt()
-                        ?.toString() to it.key
+                val anilistEp = (media.userProgress ?: 0).plus(1)
+                val appEp = PrefManager.getNullableCustomVal(
+                    "${media.id}_current_chp",
+                    null,
+                    String::class.java
+                )?.let { MediaNameAdapter.findChapterNumber(it)?.toInt() ?: it.toIntOrNull() }
+                    ?: PrefManager.getNullableCustomVal("${media.id}_current_chp_num", null, String::class.java)?.toIntOrNull()
+                    ?: 1
+
+                val maxAvailableChapter = filteredChapters.values.maxOfOrNull {
+                    MediaNameAdapter.findChapterNumber(it.number) ?: 0f
+                } ?: filteredChapters.size.toFloat()
+
+                // If user progress already completed all available chapters, hide continue button
+                if (media.userProgress != null && media.userProgress!!.toFloat() >= maxAvailableChapter && (media.userProgress ?: 0) >= appEp) {
+                    binding.sourceContinue.visibility = View.GONE
+                    binding.sourceProgressBar.visibility = View.GONE
+                    return
                 }
-                if (formattedChapters.any { it.first == continueNumber }) {
-                    var continueEp =
-                        media.manga.chapters!![formattedChapters.first { it.first == continueNumber }.second]
-                    binding.sourceContinue.visibility = View.VISIBLE
+
+                val targetChpNum = (if (anilistEp > appEp) anilistEp else appEp).toFloat()
+
+                var continueChap = filteredChapters.values.find { ch ->
+                    val num = MediaNameAdapter.findChapterNumber(ch.number)
+                    num != null && (num == targetChpNum || num.toInt() == targetChpNum.toInt())
+                } ?: filteredChapters.values.elementAtOrNull(targetChpNum.toInt() - 1)
+
+                if (continueChap != null) {
                     handleProgress(
                         binding.itemMediaProgressCont,
                         binding.itemMediaProgress,
                         binding.itemMediaProgressEmpty,
                         media.id,
-                        continueEp!!.number
+                        continueChap.number
                     )
-                    if ((binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight > 0.8f) {
-                        val numberPlusOne =
-                            formattedChapters.indexOfFirst { it.first?.toIntOrNull() == continueNumber.toInt() + 1 }
-                        if (numberPlusOne != -1) {
-                            continueEp =
-                                media.manga.chapters!![formattedChapters[numberPlusOne].second]
+                    val progressWeight = (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight
+                    if (progressWeight > 0.8f) {
+                        val chapterList = filteredChapters.values.toList()
+                        val currIdx = chapterList.indexOf(continueChap)
+                        if (currIdx != -1 && currIdx + 1 < chapterList.size) {
+                            continueChap = chapterList[currIdx + 1]
+                            handleProgress(
+                                binding.itemMediaProgressCont,
+                                binding.itemMediaProgress,
+                                binding.itemMediaProgressEmpty,
+                                media.id,
+                                continueChap.number
+                            )
+                        } else {
+                            continueChap = null
                         }
                     }
-                    binding.itemMediaImage.loadImage(media.banner ?: media.cover)
-                    binding.mediaSourceContinueText.text =
-                        currActivity()!!.getString(
-                            R.string.continue_chapter,
-                            continueEp!!.number,
-                            if (!continueEp.title.isNullOrEmpty()) continueEp.title else ""
-                        )
-                    binding.sourceContinue.setOnClickListener {
-                        fragment.onMangaChapterClick(continueEp)
-                    }
-                    if (fragment.continueEp) {
-                        if ((binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight < 0.8f) {
-                            binding.sourceContinue.performClick()
-                            fragment.continueEp = false
-                        }
 
+                    if (continueChap != null) {
+                        binding.sourceContinue.visibility = View.VISIBLE
+                        binding.itemMediaImage.loadImage(media.banner ?: media.cover)
+                        binding.mediaSourceContinueText.text =
+                            currActivity()!!.getString(
+                                R.string.continue_chapter,
+                                continueChap.number,
+                                if (!continueChap.title.isNullOrEmpty()) continueChap.title else ""
+                            )
+                        binding.sourceContinue.setOnClickListener {
+                            fragment.onMangaChapterClick(continueChap)
+                        }
+                        if (fragment.continueEp) {
+                            if ((binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight < 0.8f) {
+                                binding.sourceContinue.performClick()
+                                fragment.continueEp = false
+                            }
+                        }
+                    } else {
+                        binding.sourceContinue.visibility = View.GONE
                     }
                 } else {
                     binding.sourceContinue.visibility = View.GONE

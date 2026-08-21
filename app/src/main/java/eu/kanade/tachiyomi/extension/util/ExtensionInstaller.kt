@@ -84,18 +84,24 @@ class ExtensionInstaller(private val context: Context) {
         downloadReceiver.register()
 
         val downloadUri = url.toUri()
+        val fileName = downloadUri.lastPathSegment ?: "$pkgName.apk"
+        val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        if (destDir != null) {
+            File(destDir, fileName).delete()
+        }
+
         val request = DownloadManager.Request(downloadUri)
             .setTitle(name)
             .setMimeType(APK_MIME)
             .setDestinationInExternalFilesDir(
                 context,
                 Environment.DIRECTORY_DOWNLOADS,
-                downloadUri.lastPathSegment
+                fileName
             )
             .setDescription(type.asText())
             .setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE)
             .setAllowedOverRoaming(true)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
 
         val id = downloadManager.enqueue(request)
         activeDownloads[pkgName] = id
@@ -310,21 +316,37 @@ class ExtensionInstaller(private val context: Context) {
             // Avoid events for downloads we didn't request
             if (id !in activeDownloads.values) return
 
-            val uri = downloadManager.getUriForDownloadedFile(id)
-
-            // Set next installation step
-            if (uri == null) {
-                Logger.log("Couldn't locate downloaded APK")
-                downloadsRelay.call(id to InstallStep.Error)
-                return
-            }
-
             val query = DownloadManager.Query().setFilterById(id)
             downloadManager.query(query).use { cursor ->
                 if (cursor.moveToFirst()) {
-                    val localUri = cursor.getString(
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    if (status != DownloadManager.STATUS_SUCCESSFUL) {
+                        Logger.log("Download failed with status $status")
+                        downloadsRelay.call(id to InstallStep.Error)
+                        return
+                    }
+
+                    val localUriString = cursor.getString(
                         cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI),
-                    ).removePrefix(FILE_SCHEME)
+                    )
+                    val localFile = if (!localUriString.isNullOrEmpty()) {
+                        File(Uri.parse(localUriString).path ?: localUriString.removePrefix(FILE_SCHEME))
+                    } else {
+                        null
+                    }
+
+                    val fileUri = if (localFile != null && localFile.exists()) {
+                        localFile.getUriCompat(context)
+                    } else {
+                        downloadManager.getUriForDownloadedFile(id)
+                    }
+
+                    if (fileUri == null) {
+                        Logger.log("Couldn't locate downloaded APK")
+                        downloadsRelay.call(id to InstallStep.Error)
+                        return
+                    }
+
                     val type = MediaType.fromText(
                         cursor.getString(
                             cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_DESCRIPTION),
@@ -335,7 +357,7 @@ class ExtensionInstaller(private val context: Context) {
                         )
                     ) ?: return
 
-                    installApk(type, id, File(localUri).getUriCompat(context))
+                    installApk(type, id, fileUri)
                 }
             }
         }

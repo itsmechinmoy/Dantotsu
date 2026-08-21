@@ -155,6 +155,28 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
 
         binding.mediaSourceRecycler.layoutManager = gridLayoutManager
 
+        binding.mediaSourceSwipeRefresh.apply {
+            val primaryColor = PrefManager.getVal<Int>(PrefName.PrimaryColor)
+            setColorSchemeColors(primaryColor)
+            setProgressBackgroundColorSchemeResource(R.color.nav_bg)
+            setOnRefreshListener {
+                if (!this@MangaReadFragment::media.isInitialized) {
+                    isRefreshing = false
+                    return@setOnRefreshListener
+                }
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val offline = !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
+                    if (offline && media.format != "LOCAL") {
+                        media.selected!!.sourceIndex = model.mangaReadSources!!.list.lastIndex
+                    }
+                    model.loadMangaChapters(media, media.selected!!.sourceIndex, invalidate = true)
+                    withContext(Dispatchers.Main) {
+                        binding.mediaSourceSwipeRefresh.isRefreshing = false
+                    }
+                }
+            }
+        }
+
         binding.ScrollTop.setOnClickListener {
             binding.mediaSourceRecycler.scrollToPosition(10)
             binding.mediaSourceRecycler.smoothScrollToPosition(0)
@@ -485,39 +507,49 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                 }
             }
             fun continueDownload() {
+                val uniqueNum = i.uniqueNumber()
+                if (chapterAdapter.isDownloading(uniqueNum) || chapterAdapter.isDownloaded(uniqueNum)) {
+                    return
+                }
+                chapterAdapter.startDownload(uniqueNum)
                 model.continueMedia = false
-                media.manga?.chapters?.get(i.uniqueNumber())?.let { chapter ->
+                media.manga?.chapters?.get(uniqueNum)?.let { chapter ->
                     val parser =
                         model.mangaReadSources?.get(media.selected!!.sourceIndex) as? DynamicMangaParser
                     parser?.let {
                         CoroutineScope(Dispatchers.IO).launch {
-                            val images = parser.imageList(chapter.sChapter)
+                            try {
+                                val images = parser.imageList(chapter.sChapter)
 
-                            // Create a download task
-                            val downloadTask = MangaDownloaderService.DownloadTask(
-                                title = media.mainName(),
-                                chapter = chapter.title!!,
-                                scanlator = chapter.scanlator ?: "Unknown",
-                                imageData = images,
-                                sourceMedia = media,
-                                retries = 25,
-                                simultaneousDownloads = 2
-                            )
+                                // Create a download task
+                                val downloadTask = MangaDownloaderService.DownloadTask(
+                                    title = media.mainName(),
+                                    chapter = chapter.title!!,
+                                    scanlator = chapter.scanlator ?: "Unknown",
+                                    imageData = images,
+                                    sourceMedia = media,
+                                    retries = 25,
+                                    simultaneousDownloads = 2
+                                )
 
-                            MangaServiceDataSingleton.downloadQueue.offer(downloadTask)
-
-                            // If the service is not already running, start it
-                            if (!MangaServiceDataSingleton.isServiceRunning) {
-                                val intent = Intent(context, MangaDownloaderService::class.java)
-                                withContext(Dispatchers.Main) {
-                                    ContextCompat.startForegroundService(requireContext(), intent)
+                                val isAlreadyQueued = MangaServiceDataSingleton.downloadQueue.any { it.title == media.mainName() && it.chapter == chapter.title } ||
+                                                      MangaServiceDataSingleton.currentTasks.any { it.title == media.mainName() && it.chapter == chapter.title }
+                                if (!isAlreadyQueued) {
+                                    MangaServiceDataSingleton.downloadQueue.offer(downloadTask)
                                 }
-                                MangaServiceDataSingleton.isServiceRunning = true
-                            }
 
-                            // Inform the adapter that the download has started
-                            withContext(Dispatchers.Main) {
-                                chapterAdapter.startDownload(i.uniqueNumber())
+                                // If the service is not already running, start it
+                                if (!MangaServiceDataSingleton.isServiceRunning) {
+                                    val intent = Intent(context, MangaDownloaderService::class.java)
+                                    withContext(Dispatchers.Main) {
+                                        ContextCompat.startForegroundService(requireContext(), intent)
+                                    }
+                                    MangaServiceDataSingleton.isServiceRunning = true
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    chapterAdapter.purgeDownload(uniqueNum)
+                                }
                             }
                         }
                     }
@@ -557,6 +589,11 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
             )
         ) {
             chapterAdapter.deleteDownload(i)
+            val isOffline = model.mangaReadSources?.get(media.selected?.sourceIndex ?: 0) is OfflineMangaParser
+            if (isOffline) {
+                model.invalidateMangaSource(media.selected?.sourceIndex ?: 0)
+                loadChapters(media.selected?.sourceIndex ?: 0, true)
+            }
         }
     }
 

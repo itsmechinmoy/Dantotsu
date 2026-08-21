@@ -27,6 +27,9 @@ interface AnimeSource {
     val lang: String
         get() = ""
 
+    val supportsRelatedAnime: Boolean
+        get() = false
+
     /**
      * Get the updated details for a anime.
      *

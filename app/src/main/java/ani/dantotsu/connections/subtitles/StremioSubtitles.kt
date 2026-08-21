@@ -73,7 +73,9 @@ object StremioSubtitles {
                                     val text = response.body!!.string()
                                     val data = Mapper.json.decodeFromString<StremioResponse>(text)
                                     val existingUrls = allSubs.map { it.url }.toSet()
-                                    val newSubs = data.subtitles.filter { it.url !in existingUrls }
+                                    val newSubs = data.subtitles.filter { sub ->
+                                        sub.url !in existingUrls && (!sub.id.contains(":1:1") || episode == 1)
+                                    }
                                     allSubs.addAll(newSubs)
                                 }
                             } catch (_: Exception) {}

@@ -320,7 +320,11 @@ class NovelReaderActivity : AppCompatActivity(), EbookReaderEventListener {
 
     override fun onBookLoaded(book: Book) {
         this.book = book
-        val bookId = book.identifier ?: "stream_${System.currentTimeMillis()}"
+        val session = ani.dantotsu.media.novel.NovelReaderSession
+        val bookId = book.identifier
+            ?: (if (session.isActive()) session.currentChapter()?.url else null)
+            ?: book.title
+            ?: "stream_${System.currentTimeMillis()}"
         toc = book.toc
 
         val illegalCharsRegex = Regex("[^a-zA-Z0-9._-]")
@@ -329,7 +333,6 @@ class NovelReaderActivity : AppCompatActivity(), EbookReaderEventListener {
         binding.novelReaderTitle.text = book.title
         binding.novelReaderSource.text = book.author?.joinToString(", ")
 
-        val session = ani.dantotsu.media.novel.NovelReaderSession
         if (session.isActive()) {
             val chapterLabels = session.chapters.mapIndexed { index, fileUrl ->
                 fileUrl.headers?.get("X-Chapter-Name") ?: "Chapter ${index + 1}"

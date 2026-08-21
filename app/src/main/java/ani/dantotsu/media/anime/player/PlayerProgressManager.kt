@@ -158,6 +158,10 @@ class PlayerProgressManager(
             return
         }
         if (alreadySubscribed) return
+        if (PrefManager.getCustomVal("${m.id}_subscription_declined", false)) return
+
+        val caughtUp = episodeArr.getOrNull(currentEpisodeIndex + 1) == null
+        if (!caughtUp) return
 
         activity.customAlertDialog().apply {
             setTitle(activity.getString(R.string.subscribe_prompt_title))
@@ -166,7 +170,9 @@ class PlayerProgressManager(
                 SubscriptionHelper.saveSubscription(m, true)
                 toast(activity.getString(R.string.subscribed_notification, activity.getString(R.string.anime)))
             }
-            setNegButton(R.string.no)
+            setNegButton(R.string.no) {
+                PrefManager.setCustomVal("${m.id}_subscription_declined", true)
+            }
             show()
         }
     }

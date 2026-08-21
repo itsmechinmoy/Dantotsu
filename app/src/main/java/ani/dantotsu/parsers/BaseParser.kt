@@ -78,6 +78,20 @@ abstract class BaseParser {
         }
         var response: ShowResponse? = loadSavedShowResponse(mediaObj.id)
         if (response != null && this !is OfflineMangaParser && this !is OfflineAnimeParser) {
+            if (response.sManga == null) {
+                response.sManga = SManga.create().apply {
+                    url = response.link
+                    title = response.name
+                    thumbnail_url = response.coverUrl.url
+                }
+            }
+            if (response.sAnime == null) {
+                response.sAnime = SAnime.create().apply {
+                    url = response.link
+                    title = response.name
+                    thumbnail_url = response.coverUrl.url
+                }
+            }
             saveShowResponse(mediaObj.id, response, true)
         } else {
             setUserText("Searching : ${mediaObj.mainName()}")
@@ -233,11 +247,28 @@ abstract class BaseParser {
      */
     open suspend fun loadSavedShowResponse(mediaId: Int): ShowResponse? {
         checkIfVariablesAreEmpty()
-        return PrefManager.getNullableCustomVal(
+        val resp = PrefManager.getNullableCustomVal(
             "${saveName}_$mediaId",
             null,
             ShowResponse::class.java
         )
+        if (resp != null) {
+            if (resp.sManga == null) {
+                resp.sManga = SManga.create().apply {
+                    url = resp.link
+                    title = resp.name
+                    thumbnail_url = resp.coverUrl.url
+                }
+            }
+            if (resp.sAnime == null) {
+                resp.sAnime = SAnime.create().apply {
+                    url = resp.link
+                    title = resp.name
+                    thumbnail_url = resp.coverUrl.url
+                }
+            }
+        }
+        return resp
     }
 
     /**

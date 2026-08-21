@@ -304,8 +304,9 @@ fun ViewGroup.setBaseline(view: View, includeSystemNavBar: Boolean = true) {
             paddingRight,
             (if (includeSystemNavBar) navBarHeight else 0) + baselineHeight
         )
-        updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            bottomMargin = 0
+        (layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+            it.bottomMargin = 0
+            layoutParams = it
         }
     }
 
@@ -332,8 +333,9 @@ fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, extraPaddingBottom: Int) {
             paddingRight,
             (if (isLandscape) navBarHeight else navBarHeight + barHeight) + extraPaddingBottom
         )
-        updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            bottomMargin = 0
+        (layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+            it.bottomMargin = 0
+            layoutParams = it
         }
     }
 
@@ -357,8 +359,9 @@ fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, overlayView: View) {
             paddingRight,
             (if (isLandscape) navBarHeight else navBarHeight + barHeight) + overlayHeight
         )
-        updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            bottomMargin = 0
+        (layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+            it.bottomMargin = 0
+            layoutParams = it
         }
     }
 

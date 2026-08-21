@@ -425,11 +425,31 @@
     </LinearLayout>
 
     <androidx.cardview.widget.CardView
-        android:id="@+id/incognito"
+        android:id="@+id/mediaHome"
         android:layout_width="32dp"
         android:layout_height="32dp"
         android:layout_gravity="start"
         android:layout_margin="16dp"
+        android:translationZ="7dp"
+        app:cardBackgroundColor="@color/nav_bg"
+        app:cardCornerRadius="16dp">
+
+        <androidx.constraintlayout.utils.widget.ImageFilterView
+            android:id="@+id/mediaHomeImage"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_round_home_24"
+            tools:ignore="ContentDescription" />
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/incognito"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="start"
+        android:layout_marginTop="16dp"
+        android:layout_marginStart="56dp"
         android:translationZ="7dp"
         android:visibility="gone"
         app:cardBackgroundColor="@color/bg_opp"

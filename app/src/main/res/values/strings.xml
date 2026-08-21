@@ -1247,8 +1247,26 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="embedded_stream_subs">Embedded Video Tracks</string>
     <string name="searching_subtitles">Searching subtitles…</string>
     <string name="active_sub_prefix">Active: %1$s</string>
-    <string name="status_sub_off">Subtitles: Off</string>
-    <string name="all_providers">All Providers</string>
     <string name="delete_subtitle">Delete</string>
+
+    <!-- Subtitle Sync & Cloudflare -->
+    <string name="tab_sync">Sync</string>
+    <string name="subtitle_delay_title">Subtitle Delay</string>
+    <string name="audio_delay_title">Audio Delay</string>
+    <string name="sync_hearing_audio_btn">I Heard Dialogue Now</string>
+    <string name="sync_seen_subtitle_btn">I Saw Subtitle Now</string>
+    <string name="sync_helper_title">Hearing &amp; Seen Sync Helper</string>
+    <string name="sync_helper_desc">Tap \'I Heard Dialogue Now\' when speech occurs, and \'I Saw Subtitle Now\' when the corresponding subtitle is shown. The offset will be calculated and applied automatically.</string>
+    <string name="sync_applied_toast">Sync applied: %s</string>
+    <string name="sync_in_sync">In sync</string>
+    <string name="sync_delayed">Delayed</string>
+    <string name="sync_earlier">Earlier</string>
+    <string name="sync_reset">Reset</string>
+    <string name="sync_audio_captured">Audio timestamp captured: %s</string>
+    <string name="sync_sub_captured">Subtitle timestamp captured: %s</string>
+    <string name="all_providers">All</string>
+    <string name="time">Time</string>
+    <string name="status_sub_off">Subtitles: Off</string>
+    <string name="cloudflare_protection_toast">Cloudflare protection detected. Please bypass Cloudflare via WebView.</string>
 
 </resources>

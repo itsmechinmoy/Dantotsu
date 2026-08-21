@@ -27,6 +27,8 @@ import ani.dantotsu.parsers.MangaImage
 import ani.dantotsu.parsers.MangaReadSources
 import ani.dantotsu.parsers.MangaSources
 import ani.dantotsu.parsers.NovelSources
+import ani.dantotsu.parsers.OfflineAnimeParser
+import ani.dantotsu.parsers.OfflineMangaParser
 import ani.dantotsu.parsers.ShowResponse
 import ani.dantotsu.parsers.VideoExtractor
 import ani.dantotsu.parsers.WatchSources
@@ -36,6 +38,8 @@ import ani.dantotsu.snackString
 import ani.dantotsu.tryWithSuspend
 import ani.dantotsu.util.Logger
 import com.bumptech.glide.load.resource.bitmap.BitmapTransformation
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
@@ -688,19 +692,31 @@ class MediaDetailsViewModel : ViewModel() {
     private val episodes = MutableLiveData<MutableMap<Int, MutableMap<String, Episode>>>(null)
     private val epsLoaded = mutableMapOf<Int, MutableMap<String, Episode>>()
     fun getEpisodes(): LiveData<MutableMap<Int, MutableMap<String, Episode>>> = episodes
+    fun invalidateSource(sourceIndex: Int) {
+        epsLoaded.remove(sourceIndex)
+    }
+
     suspend fun loadEpisodes(media: Media, i: Int, invalidate: Boolean = false) {
-        if (!epsLoaded.containsKey(i) || invalidate) {
-            epsLoaded[i] = watchSources?.loadEpisodesFromMedia(i, media) ?: return
+        val isOffline = watchSources?.get(i) is OfflineAnimeParser
+        if (!epsLoaded.containsKey(i) || invalidate || isOffline) {
+            epsLoaded[i] = watchSources?.loadEpisodesFromMedia(i, media) ?: mutableMapOf()
         }
         episodes.postValue(epsLoaded)
     }
 
     suspend fun forceLoadEpisode(media: Media, i: Int) {
-        epsLoaded[i] = watchSources?.loadEpisodesFromMedia(i, media) ?: return
+        epsLoaded[i] = watchSources?.loadEpisodesFromMedia(i, media) ?: mutableMapOf()
         episodes.postValue(epsLoaded)
     }
 
     suspend fun overrideEpisodes(i: Int, source: ShowResponse, id: Int) {
+        if (source.sAnime == null) {
+            source.sAnime = SAnime.create().apply {
+                url = source.link
+                title = source.name
+                thumbnail_url = source.coverUrl.url
+            }
+        }
         watchSources?.saveResponse(i, id, source)
         epsLoaded[i] =
             watchSources?.loadEpisodes(i, source.link, source.extra, source.sAnime) ?: return
@@ -891,16 +907,28 @@ class MediaDetailsViewModel : ViewModel() {
     fun getMangaChapters(): LiveData<MutableMap<Int, MutableMap<String, MangaChapter>>> =
         mangaChapters
 
+    fun invalidateMangaSource(sourceIndex: Int) {
+        mangaLoaded.remove(sourceIndex)
+    }
+
     suspend fun loadMangaChapters(media: Media, i: Int, invalidate: Boolean = false) {
         Logger.log("Loading Manga Chapters : $mangaLoaded")
-        if (!mangaLoaded.containsKey(i) || invalidate) tryWithSuspend {
+        val isOffline = mangaReadSources?.get(i) is OfflineMangaParser
+        if (!mangaLoaded.containsKey(i) || invalidate || isOffline) tryWithSuspend {
             mangaLoaded[i] =
-                mangaReadSources?.loadChaptersFromMedia(i, media) ?: return@tryWithSuspend
+                mangaReadSources?.loadChaptersFromMedia(i, media) ?: mutableMapOf()
         }
         mangaChapters.postValue(mangaLoaded)
     }
 
     suspend fun overrideMangaChapters(i: Int, source: ShowResponse, id: Int) {
+        if (source.sManga == null) {
+            source.sManga = SManga.create().apply {
+                url = source.link
+                title = source.name
+                thumbnail_url = source.coverUrl.url
+            }
+        }
         mangaReadSources?.saveResponse(i, id, source)
         tryWithSuspend {
             mangaLoaded[i] = mangaReadSources?.loadChapters(i, source) ?: return@tryWithSuspend

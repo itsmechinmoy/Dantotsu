@@ -53,9 +53,9 @@ object Helper {
         episodeImage: String? = null
     ) {
         if (!isNotificationPermissionGranted(context)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && context is Activity) {
                 ActivityCompat.requestPermissions(
-                    context as Activity,
+                    context,
                     arrayOf(Manifest.permission.POST_NOTIFICATIONS),
                     1
                 )

@@ -71,6 +71,9 @@ class MangaChapterAdapter(
     private val activeDownloads = mutableSetOf<String>()
     private val downloadedChapters = mutableSetOf<String>()
 
+    fun isDownloading(chapterNumber: String): Boolean = activeDownloads.contains(chapterNumber)
+    fun isDownloaded(chapterNumber: String): Boolean = downloadedChapters.contains(chapterNumber)
+
     fun startDownload(chapterNumber: String) {
         activeDownloads.add(chapterNumber)
         // Find the position of the chapter and notify only that item
