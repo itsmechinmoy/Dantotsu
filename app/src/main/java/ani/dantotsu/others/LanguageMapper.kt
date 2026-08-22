@@ -119,29 +119,90 @@ class LanguageMapper {
             "zu" to "Zulu"
         )
 
-        fun getLanguageName(code: String): String {
-            return if (code.contains("-")) {
-                try {
-                    val parts = code.split("-")
-                    Locale(parts[0], parts[1]).displayName
-                } catch (ignored: Exception) {
-                    code
-                }
-            } else {
-                try {
-                    if (code == "all") {
-                        return codeMap[code] ?: code
-                    }
-                    Locale(code).displayName
-                } catch (ignored: Exception) {
-                    code
-                }
+        private val nativeToCodeMap: Map<String, String> = mapOf(
+            "english" to "en",
+            "français" to "fr",
+            "french" to "fr",
+            "español" to "es",
+            "spanish" to "es",
+            "bahasa indonesia" to "id",
+            "indonesian" to "id",
+            "日本語" to "ja",
+            "japanese" to "ja",
+            "조선말, 한국어" to "ko",
+            "한국어" to "ko",
+            "korean" to "ko",
+            "polski" to "pl",
+            "polish" to "pl",
+            "português" to "pt",
+            "portuguese" to "pt",
+            "português (brasil)" to "pt-BR",
+            "portuguese (brazil)" to "pt-BR",
+            "русский" to "ru",
+            "russian" to "ru",
+            "ไทย" to "th",
+            "thai" to "th",
+            "türkçe" to "tr",
+            "turkish" to "tr",
+            "українська" to "uk",
+            "ukrainian" to "uk",
+            "tiếng việt" to "vi",
+            "vietnamese" to "vi",
+            "中文, 汉语, 漢語" to "zh",
+            "中文" to "zh",
+            "chinese" to "zh",
+            "chinese (simplified)" to "zh-Hans",
+            "chinese (traditional)" to "zh-Hant",
+            "العربية" to "ar",
+            "arabic" to "ar",
+            "german" to "de",
+            "deutsch" to "de",
+            "italian" to "it",
+            "italiano" to "it",
+            "multi" to "all",
+            "all" to "all"
+        )
+
+        private fun cleanLangString(raw: String): String {
+            return raw.replace("[\u200B-\u200F\u202A-\u202E\uFEFF]".toRegex(), "")
+                .trim()
+                .lowercase()
+        }
+
+        fun getLanguageName(codeOrName: String): String {
+            val clean = cleanLangString(codeOrName)
+            if (clean.isEmpty() || clean == "all" || clean == "multi") {
+                return codeMap["all"] ?: "Multi"
+            }
+            if (codeMap.containsKey(clean)) {
+                return codeMap[clean] ?: codeOrName.trim()
+            }
+            val mappedCode = nativeToCodeMap[clean]
+            if (mappedCode != null && codeMap.containsKey(mappedCode)) {
+                return codeMap[mappedCode] ?: codeOrName.trim()
+            }
+            val trimmed = codeOrName.trim()
+            return try {
+                val locale = Locale.forLanguageTag(trimmed)
+                val name = locale.displayName
+                if (name.isNotBlank() && name != trimmed) name else trimmed
+            } catch (ignored: Exception) {
+                trimmed
             }
         }
 
         fun getLanguageCode(language: String): String {
-            return codeMap.filterValues { it.lowercase() == language.lowercase() }.keys.firstOrNull()
-                ?: "all"
+            val clean = cleanLangString(language)
+            if (clean.isEmpty() || clean == "all" || clean == "multi") return "all"
+            if (codeMap.containsKey(clean)) return clean
+            nativeToCodeMap[clean]?.let { return it }
+            for ((k, v) in codeMap) {
+                if (v.lowercase() == clean || clean.contains(v.lowercase())) return k
+            }
+            for ((k, v) in nativeToCodeMap) {
+                if (clean.contains(k)) return v
+            }
+            return "all"
         }
 
         enum class Language(val code: String) {
@@ -167,4 +228,3 @@ class LanguageMapper {
         }
     }
 }
-

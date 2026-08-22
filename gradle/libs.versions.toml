@@ -26,7 +26,7 @@ firebase-analytics = { module = "com.google.firebase:firebase-analytics-ktx" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics-ktx" }
 
 # AndroidX Core
-androidx-core = "androidx.core:core-ktx:1.16.0"
+androidx-core = "androidx.core:core-ktx:1.19.0"
 androidx-appcompat = "androidx.appcompat:appcompat:1.7.0"
 androidx-activity = "androidx.activity:activity-ktx:1.10.1"
 androidx-fragment = "androidx.fragment:fragment-ktx:1.8.6"
@@ -34,7 +34,7 @@ androidx-browser = "androidx.browser:browser:1.8.0"
 androidx-swipe = "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
 androidx-legacy = "androidx.legacy:legacy-support-v4:1.0.0"
 
-androidx-work = "androidx.work:work-runtime-ktx:2.10.1"
+androidx-work = "androidx.work:work-runtime-ktx:2.11.2"
 androidx-preference = "androidx.preference:preference-ktx:1.2.1"
 androidx-webkit = "androidx.webkit:webkit:1.13.0"
 androidx-biometric = "androidx.biometric:biometric:1.1.0"
@@ -120,11 +120,11 @@ logcat = "com.squareup.logcat:logcat:0.1"
 injekt = "com.github.mihonapp:injekt:91edab2317"
 
 # OkHttp
-okhttp = "com.squareup.okhttp3:okhttp:5.4.0"
-okhttp-logging = "com.squareup.okhttp3:logging-interceptor:5.4.0"
-okhttp-brotli = "com.squareup.okhttp3:okhttp-brotli:5.4.0"
-okhttp-doh = "com.squareup.okhttp3:okhttp-dnsoverhttps:5.4.0"
-okhttp-zstd = "com.squareup.okhttp3:okhttp-zstd:5.4.0"
+okhttp = "com.squareup.okhttp3:okhttp:5.5.0"
+okhttp-logging = "com.squareup.okhttp3:logging-interceptor:5.5.0"
+okhttp-brotli = "com.squareup.okhttp3:okhttp-brotli:5.5.0"
+okhttp-doh = "com.squareup.okhttp3:okhttp-dnsoverhttps:5.5.0"
+okhttp-zstd = "com.squareup.okhttp3:okhttp-zstd:5.5.0"
 okio = "com.squareup.okio:okio:3.18.1"
 
 # libtorrent4j

@@ -89,6 +89,7 @@ class NovelExtensionsFragment : Fragment(),
                     lifecycleScope.launch {
                         val success = novelExtensionManager.installLnReaderPlugin(plugin)
                         if (success) {
+                            viewModel.invalidatePager()
                             snackString("Extension installed")
                         } else {
                             snackString("Installation failed")

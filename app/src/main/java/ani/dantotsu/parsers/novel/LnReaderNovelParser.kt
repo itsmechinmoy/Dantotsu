@@ -5,6 +5,13 @@ import ani.dantotsu.parsers.NovelParser
 import ani.dantotsu.parsers.ShowResponse
 import ani.dantotsu.util.Logger
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 
 class LnReaderNovelParser(
@@ -22,15 +29,30 @@ class LnReaderNovelParser(
     )
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
     override suspend fun search(query: String): List<ShowResponse> {
         return try {
-            val raw = engineCall("searchNovels", """["${query.jsEscape()}", 1]""")
-            val items = json.decodeFromString<List<LnNovelItem>>(raw)
-            items.map { item ->
+            val raw = if (query.isNotBlank()) {
+                try {
+                    engineCall("searchNovels", """["${query.jsEscape()}", 1]""")
+                } catch (e: Exception) {
+                    Logger.log("LnReaderNovelParser[${plugin.id}] searchNovels failed, fallback to popular: ${e.message}")
+                    engineCall("popularNovels", """[1, {}]""")
+                }
+            } else {
+                engineCall("popularNovels", """[1, {"showLatestNovels": true}]""")
+            }
+            val jsonArr = runCatching { Json.parseToJsonElement(raw) as? JsonArray }.getOrNull() ?: return emptyList()
+            jsonArr.mapNotNull { el ->
+                val obj = el as? JsonObject ?: return@mapNotNull null
+                val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val path = obj["path"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val rawCover = obj["cover"]?.jsonPrimitive?.contentOrNull ?: ""
+                val cover = resolveUrl(rawCover)
                 ShowResponse(
-                    name     = item.name,
-                    link     = item.path,
-                    coverUrl = item.cover ?: ""
+                    name     = name,
+                    link     = path,
+                    coverUrl = cover
                 )
             }
         } catch (e: Exception) {
@@ -42,15 +64,50 @@ class LnReaderNovelParser(
     override suspend fun loadBook(link: String, extra: Map<String, String>?): Book {
         return try {
             val novelRaw = engineCall("parseNovel", """["${link.jsEscape()}"]""")
-            val novel = json.decodeFromString<LnSourceNovel>(novelRaw)
-            val chapters: List<LnChapterItem> = if (!novel.chapters.isNullOrEmpty()) {
-                novel.chapters
-            } else {
+            val jsonElement = runCatching { Json.parseToJsonElement(novelRaw).jsonObject }.getOrNull()
+                ?: throw IllegalStateException("Invalid JSON returned by parseNovel")
+
+            val novelName = jsonElement["name"]?.jsonPrimitive?.contentOrNull ?: "Unknown Novel"
+            val rawCover = jsonElement["cover"]?.jsonPrimitive?.contentOrNull ?: ""
+            val novelCover = resolveUrl(rawCover)
+            val novelSummary = jsonElement["summary"]?.jsonPrimitive?.contentOrNull
+            val totalPages = jsonElement["totalPages"]?.jsonPrimitive?.intOrNull
+                ?: jsonElement["totalPages"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+                ?: 1
+
+            val chapters = mutableListOf<LnChapterItem>()
+
+            fun extractChapters(element: kotlinx.serialization.json.JsonElement?) {
+                val arr = element as? JsonArray ?: return
+                for (item in arr) {
+                    val obj = item as? JsonObject ?: continue
+                    val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: continue
+                    val path = obj["path"]?.jsonPrimitive?.contentOrNull ?: continue
+                    val releaseTime = obj["releaseTime"]?.jsonPrimitive?.contentOrNull
+                    val chNum = obj["chapterNumber"]?.jsonPrimitive?.doubleOrNull
+                        ?: obj["chapterNumber"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+                    chapters.add(LnChapterItem(name = name, path = path, releaseTime = releaseTime, chapterNumber = chNum))
+                }
+            }
+
+            extractChapters(jsonElement["chapters"])
+
+            if (totalPages > 1) {
+                for (p in 2..totalPages) {
+                    try {
+                        val pageRaw = engineCall("parsePage", """["${link.jsEscape()}", "$p"]""")
+                        val pageObj = runCatching { Json.parseToJsonElement(pageRaw).jsonObject }.getOrNull()
+                        extractChapters(pageObj?.get("chapters"))
+                    } catch (e: Exception) {
+                        Logger.log("LnReaderNovelParser[${plugin.id}] parsePage $p failed: ${e.message}")
+                    }
+                }
+            } else if (chapters.isEmpty()) {
                 try {
                     val pageRaw = engineCall("parsePage", """["${link.jsEscape()}", "1"]""")
-                    val page = json.decodeFromString<LnSourcePage>(pageRaw)
-                    page.chapters ?: emptyList()
-                } catch (_: Exception) { emptyList() }
+                    val pageObj = runCatching { Json.parseToJsonElement(pageRaw).jsonObject }.getOrNull()
+                    extractChapters(pageObj?.get("chapters"))
+                } catch (_: Exception) {}
             }
 
             val links = chapters.map { ch ->
@@ -61,9 +118,9 @@ class LnReaderNovelParser(
             }
 
             Book(
-                name        = novel.name,
-                img         = FileUrl(novel.cover ?: ""),
-                description = novel.summary,
+                name        = novelName,
+                img         = FileUrl(novelCover),
+                description = novelSummary,
                 links       = links
             )
         } catch (e: Exception) {
@@ -75,10 +132,11 @@ class LnReaderNovelParser(
     suspend fun loadChapterHtml(chapterPath: String): String {
         return try {
             val raw = engineCall("parseChapter", """["${chapterPath.jsEscape()}"]""")
-            if (raw.startsWith("\"") && raw.endsWith("\"")) {
-                json.decodeFromString<String>(raw)
+            val decoded = runCatching { json.decodeFromString<String>(raw) }.getOrDefault(raw)
+            if (decoded.isBlank() || decoded == "null") {
+                "<html><body><p>No content available for this chapter.</p></body></html>"
             } else {
-                raw
+                decoded
             }
         } catch (e: Exception) {
             Logger.log("LnReaderNovelParser[${plugin.id}].loadChapterHtml error: ${e.message}")
@@ -102,4 +160,13 @@ class LnReaderNovelParser(
             .replace("\n", "\\n")
             .replace("\r", "\\r")
             .replace("`", "\\`")
+
+    private fun resolveUrl(path: String): String {
+        if (path.isBlank() || path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:")) {
+            return path
+        }
+        val site = plugin.site.trimEnd('/')
+        val rel = path.trimStart('/')
+        return "$site/$rel"
+    }
 }

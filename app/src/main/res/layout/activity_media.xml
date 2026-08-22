@@ -163,7 +163,7 @@
                     android:fontFamily="@font/poppins_bold"
                     android:gravity="center_vertical"
                     android:marqueeRepeatLimit="marquee_forever"
-                    android:paddingStart="32dp"
+                    android:paddingStart="64dp"
                     android:paddingEnd="64dp"
                     android:scrollHorizontally="true"
                     android:singleLine="true"

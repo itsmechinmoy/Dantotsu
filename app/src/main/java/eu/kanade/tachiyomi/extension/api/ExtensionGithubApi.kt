@@ -375,26 +375,27 @@ internal class ExtensionGithubApi {
     }
 
     private fun List<ExtensionJsonObject>.toNovelExtensions(repository: String): List<NovelExtension.Available> {
-        return mapNotNull { extension ->
-            val sources = extension.sources?.map { source ->
-                ExtensionSourceJsonObject(
-                    source.id,
-                    source.lang,
-                    source.name,
-                    source.baseUrl,
+        return filter { !it.apk.isNullOrBlank() && !it.pkg.isNullOrBlank() && it.apk.endsWith(".apk", ignoreCase = true) }
+            .mapNotNull { extension ->
+                val sources = extension.sources?.map { source ->
+                    ExtensionSourceJsonObject(
+                        source.id,
+                        source.lang,
+                        source.name,
+                        source.baseUrl,
+                    )
+                }
+                val iconUrl = extension.iconUrl ?: "${cleanRepoUrl(repository)}/icon/${extension.pkg}.png"
+                NovelExtension.Available(
+                    extension.name,
+                    extension.pkg,
+                    extension.apk,
+                    extension.code,
+                    repository,
+                    sources?.toNovelSources() ?: emptyList(),
+                    iconUrl,
                 )
             }
-            val iconUrl = extension.iconUrl ?: "${cleanRepoUrl(repository)}/icon/${extension.pkg}.png"
-            NovelExtension.Available(
-                extension.name,
-                extension.pkg,
-                extension.apk,
-                extension.code,
-                repository,
-                sources?.toNovelSources() ?: emptyList(),
-                iconUrl,
-            )
-        }
     }
 
     private fun List<ExtensionSourceJsonObject>.toNovelSources(): List<AvailableNovelSources> {

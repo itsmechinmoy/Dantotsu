@@ -55,7 +55,7 @@ object LnReaderJsEngine {
                     return id
                 }
                 override fun select(nodeIdsJson: String, selector: String): String {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     val resultIds = mutableListOf<Int>()
                     for (id in ids) {
                         val node = jsoupElements[id] ?: continue
@@ -73,27 +73,43 @@ object LnReaderJsEngine {
                     return Json.encodeToString(resultIds)
                 }
                 override fun text(nodeIdsJson: String): String {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     return ids.mapNotNull { jsoupElements[it]?.text() }.joinToString("")
                 }
                 override fun attr(nodeIdsJson: String, attr: String): String {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     return jsoupElements[ids.firstOrNull()]?.attr(attr) ?: ""
                 }
                 override fun html(nodeIdsJson: String): String {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     return ids.mapNotNull { jsoupElements[it]?.html() }.joinToString("\n")
                 }
                 override fun outerHtml(nodeIdsJson: String): String {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     return ids.mapNotNull { jsoupElements[it]?.outerHtml() }.joinToString("\n")
                 }
                 override fun remove(nodeIdsJson: String) {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     ids.forEach { jsoupElements[it]?.remove() }
                 }
+                override fun removeAttr(nodeIdsJson: String, attr: String) {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    ids.forEach { jsoupElements[it]?.removeAttr(attr) }
+                }
+                override fun setAttr(nodeIdsJson: String, attr: String, value: String) {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    ids.forEach { jsoupElements[it]?.attr(attr, value) }
+                }
+                override fun addClass(nodeIdsJson: String, className: String) {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    ids.forEach { jsoupElements[it]?.addClass(className) }
+                }
+                override fun removeClass(nodeIdsJson: String, className: String) {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    ids.forEach { jsoupElements[it]?.removeClass(className) }
+                }
                 override fun next(nodeIdsJson: String): String {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     val resultIds = mutableListOf<Int>()
                     for (id in ids) {
                         jsoupElements[id]?.nextElementSibling()?.let {
@@ -105,7 +121,7 @@ object LnReaderJsEngine {
                     return Json.encodeToString(resultIds)
                 }
                 override fun prev(nodeIdsJson: String): String {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     val resultIds = mutableListOf<Int>()
                     for (id in ids) {
                         jsoupElements[id]?.previousElementSibling()?.let {
@@ -116,19 +132,93 @@ object LnReaderJsEngine {
                     }
                     return Json.encodeToString(resultIds)
                 }
+                override fun parent(nodeIdsJson: String): String {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    val resultIds = mutableListOf<Int>()
+                    for (id in ids) {
+                        jsoupElements[id]?.parent()?.let {
+                            val newId = ++elementCounter
+                            jsoupElements[newId] = it
+                            resultIds.add(newId)
+                        }
+                    }
+                    return Json.encodeToString(resultIds)
+                }
+                override fun parents(nodeIdsJson: String, selector: String): String {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    val resultIds = mutableListOf<Int>()
+                    for (id in ids) {
+                        val node = jsoupElements[id] ?: continue
+                        val pList = if (selector.isNotBlank()) node.parents().select(selector) else node.parents()
+                        for (el in pList) {
+                            val newId = ++elementCounter
+                            jsoupElements[newId] = el
+                            resultIds.add(newId)
+                        }
+                    }
+                    return Json.encodeToString(resultIds)
+                }
+                override fun closest(nodeIdsJson: String, selector: String): String {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    val resultIds = mutableListOf<Int>()
+                    for (id in ids) {
+                        var curr = jsoupElements[id]
+                        while (curr != null) {
+                            if (selector.isBlank() || curr.`is`(selector)) {
+                                val newId = ++elementCounter
+                                jsoupElements[newId] = curr
+                                resultIds.add(newId)
+                                break
+                            }
+                            curr = curr.parent()
+                        }
+                    }
+                    return Json.encodeToString(resultIds)
+                }
+                override fun children(nodeIdsJson: String, selector: String): String {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    val resultIds = mutableListOf<Int>()
+                    for (id in ids) {
+                        val node = jsoupElements[id] ?: continue
+                        val ch = if (selector.isNotBlank()) node.children().select(selector) else node.children()
+                        for (el in ch) {
+                            val newId = ++elementCounter
+                            jsoupElements[newId] = el
+                            resultIds.add(newId)
+                        }
+                    }
+                    return Json.encodeToString(resultIds)
+                }
+                override fun siblings(nodeIdsJson: String, selector: String): String {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    val resultIds = mutableListOf<Int>()
+                    for (id in ids) {
+                        val node = jsoupElements[id] ?: continue
+                        val sibs = if (selector.isNotBlank()) node.siblingElements().select(selector) else node.siblingElements()
+                        for (el in sibs) {
+                            val newId = ++elementCounter
+                            jsoupElements[newId] = el
+                            resultIds.add(newId)
+                        }
+                    }
+                    return Json.encodeToString(resultIds)
+                }
+                override fun hasClass(nodeIdsJson: String, className: String): Boolean {
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+                    return ids.any { jsoupElements[it]?.hasClass(className) == true }
+                }
                 override fun attrs(nodeIdsJson: String): String {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     val element = jsoupElements[ids.firstOrNull()] ?: return "{}"
                     val map = element.attributes().associate { it.key to it.value }
                     return Json.encodeToString(map)
                 }
                 override fun tagName(nodeIdsJson: String): String {
-                    val ids = Json.decodeFromString<List<Int>>(nodeIdsJson)
+                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
                     return jsoupElements[ids.firstOrNull()]?.tagName() ?: ""
                 }
             })
 
-            
             qjs.set("__dantotsuFetch", FetchBridge::class.java, object : FetchBridge {
                 override fun fetch(url: String, method: String, headersJson: String, body: String?): String {
                     return executeFetch(url, method, headersJson, body)
@@ -141,9 +231,29 @@ object LnReaderJsEngine {
                 }
             })
 
-           
+            qjs.set("__dantotsuStorage", StorageBridge::class.java, object : StorageBridge {
+                private val prefs = ani.dantotsu.App.currentContext()?.getSharedPreferences("lnreader_plugin_storage", Context.MODE_PRIVATE)
+
+                override fun get(key: String): String? {
+                    return prefs?.getString(key, null)
+                }
+
+                override fun set(key: String, value: String) {
+                    prefs?.edit()?.putString(key, value)?.apply()
+                }
+
+                override fun delete(key: String) {
+                    prefs?.edit()?.remove(key)?.apply()
+                }
+
+                override fun getAllKeys(prefix: String): String {
+                    val keys = prefs?.all?.keys?.filter { it.startsWith(prefix) } ?: emptyList()
+                    return Json.encodeToString(keys)
+                }
+            })
+
+            qjs.evaluate(SYNC_PROMISE_JS)
             qjs.evaluate(POLYFILL_JS)
-            qjs.evaluate(SYNC_PROMISE_POLYFILL_JS)
             qjs.evaluate(STRING_HELPERS_JS)
             qjs.evaluate(HTMLPARSER_JS)
             qjs.evaluate(CHEERIO_JSOUP_BRIDGE_JS)
@@ -151,41 +261,75 @@ object LnReaderJsEngine {
             qjs.evaluate(MODULE_BOOTSTRAP_JS)
             qjs.evaluate(REQUIRE_SHIM_JS)
 
-            // Load plugin
+            // Load plugin safely
             qjs.evaluate("""
                 (function() {
-                    $pluginJs
-                    globalThis['__plugin_$pluginId'] = exports.default ?? exports;
+                    var exports = {};
+                    var module = { exports: exports };
+                    (function(module, exports, require) {
+                        $pluginJs
+                    })(module, exports, require);
+                    var pluginInstance = module.exports.default || module.exports;
+                    if (typeof pluginInstance === 'function') {
+                        try {
+                            pluginInstance = new pluginInstance();
+                        } catch(e) {}
+                    }
+                    globalThis['__plugin_$pluginId'] = pluginInstance;
                 })();
             """.trimIndent())
 
-            val callJs = """
+            // Call method and drain async Promise execution
+            val invokeScript = """
+                globalThis.__callResult = null;
+                globalThis.__callError = null;
+                globalThis.__callDone = false;
                 (function() {
                     try {
                         var target = globalThis['__plugin_$pluginId'];
                         if (!target) throw new Error("Plugin '$pluginId' not loaded");
                         var fn = target["$method"];
-                        if (typeof fn !== "function") throw new Error("Method '$method' not found on plugin");
-                        var args = JSON.parse('${argsJson.replace("'", "\\'")}');
-                        var result = fn.apply(target, args);
-                        
-                        if (result && typeof result.then === "function") {
-                            if (result.state === 'fulfilled') {
-                                return JSON.stringify(result.value);
-                            } else if (result.state === 'rejected') {
-                                throw result.reason instanceof Error ? result.reason : new Error(String(result.reason));
-                            } else {
-                                throw new Error("Promise is still pending — async chain broken");
+                        if (typeof fn !== "function") throw new Error("Method '$method' not found on plugin '$pluginId'");
+                        var args = JSON.parse(${Json.encodeToString(argsJson)});
+                        var p = Promise.resolve(fn.apply(target, args));
+                        p.then(
+                            function(r) {
+                                globalThis.__callResult = JSON.stringify(r === undefined ? null : r);
+                                globalThis.__callDone = true;
+                            },
+                            function(e) {
+                                globalThis.__callError = String((e && e.message) || e);
+                                globalThis.__callDone = true;
                             }
-                        }
-                        return JSON.stringify(result);
+                        );
                     } catch(e) {
-                        throw e;
+                        globalThis.__callError = String((e && e.message) || e);
+                        globalThis.__callDone = true;
                     }
                 })();
             """.trimIndent()
-            val raw = qjs.evaluate(callJs)
-            raw?.toString() ?: "null"
+            qjs.evaluate(invokeScript)
+
+            // Drain microtasks in QuickJS until Promise chain completes
+            var isDone = false
+            var iterations = 0
+            while (!isDone && iterations < 500) {
+                isDone = (qjs.evaluate("globalThis.__callDone === true") as? Boolean) == true
+                iterations++
+            }
+
+            val error = qjs.evaluate("globalThis.__callError") as? String
+            if (!error.isNullOrBlank()) {
+                Logger.log("LnReaderJsEngine: error calling '$method' on '$pluginId': $error")
+                throw Exception(error)
+            }
+
+            if (!isDone) {
+                throw Exception("Plugin '$pluginId' method '$method' timed out (still pending after $iterations cycles)")
+            }
+
+            val resultStr = qjs.evaluate("globalThis.__callResult") as? String ?: "null"
+            resultStr
 
         } catch (e: Exception) {
             Logger.log("LnReaderJsEngine.call error [$method]: ${e.message}")
@@ -244,7 +388,7 @@ object LnReaderJsEngine {
 
             val builtReq = reqBuilder.build()
             val response = httpClient.newCall(builtReq).execute()
-            val responseBody = response.body?.string() ?: ""
+            val responseBody = response.body.string()
             val finalUrl = response.request.url.toString()
             val responseHeaders = response.headers.toMultimap()
                 .entries.associate { it.key to it.value.firstOrNull().orEmpty() }
@@ -288,6 +432,13 @@ object LnReaderJsEngine {
         fun log(msg: String)
     }
 
+    interface StorageBridge {
+        fun get(key: String): String?
+        fun set(key: String, value: String)
+        fun delete(key: String)
+        fun getAllKeys(prefix: String): String
+    }
+
     interface JsoupBridge {
         fun parse(html: String): Int
         fun select(nodeIdsJson: String, selector: String): String
@@ -296,8 +447,18 @@ object LnReaderJsEngine {
         fun html(nodeIdsJson: String): String
         fun outerHtml(nodeIdsJson: String): String
         fun remove(nodeIdsJson: String)
+        fun removeAttr(nodeIdsJson: String, attr: String)
+        fun setAttr(nodeIdsJson: String, attr: String, value: String)
+        fun addClass(nodeIdsJson: String, className: String)
+        fun removeClass(nodeIdsJson: String, className: String)
         fun next(nodeIdsJson: String): String
         fun prev(nodeIdsJson: String): String
+        fun parent(nodeIdsJson: String): String
+        fun parents(nodeIdsJson: String, selector: String): String
+        fun closest(nodeIdsJson: String, selector: String): String
+        fun children(nodeIdsJson: String, selector: String): String
+        fun siblings(nodeIdsJson: String, selector: String): String
+        fun hasClass(nodeIdsJson: String, className: String): Boolean
         fun attrs(nodeIdsJson: String): String
         fun tagName(nodeIdsJson: String): String
     }
@@ -330,11 +491,11 @@ const FilterTypes = {
     "Switch":"Switch","ExcludableCheckboxGroup":"XCheckbox"
 };
 
-const isPickerValue      = q => q.type === FilterTypes.Picker && typeof q.value === "string";
-const isCheckboxValue    = q => q.type === FilterTypes.CheckboxGroup && Array.isArray(q.value);
-const isSwitchValue      = q => q.type === FilterTypes.Switch && typeof q.value === "boolean";
-const isTextValue        = q => q.type === FilterTypes.TextInput && typeof q.value === "string";
-const isXCheckboxValue   = q => q.type === FilterTypes.ExcludableCheckboxGroup && typeof q.value === "object" && !Array.isArray(q.value);
+const isPickerValue      = q => q && q.type === FilterTypes.Picker && typeof q.value === "string";
+const isCheckboxValue    = q => q && q.type === FilterTypes.CheckboxGroup && Array.isArray(q.value);
+const isSwitchValue      = q => q && q.type === FilterTypes.Switch && typeof q.value === "boolean";
+const isTextValue        = q => q && q.type === FilterTypes.TextInput && typeof q.value === "string";
+const isXCheckboxValue   = q => q && q.type === FilterTypes.ExcludableCheckboxGroup && typeof q.value === "object" && !Array.isArray(q.value);
 
 const isUrlAbsolute = url => {
     if (!url) return false;
@@ -347,7 +508,56 @@ const isUrlAbsolute = url => {
     return false;
 };
 
-const defaultCover = '';
+const defaultCover = "https://placehold.co/300x400";
+const gcm = function(key, nonce) {
+    return {
+        encrypt: function(plaintext) { return plaintext; },
+        decrypt: function(ciphertext) { return ciphertext; }
+    };
+};
+
+function PluginStorage(pluginId) { this.pluginId = pluginId || ''; }
+PluginStorage.prototype.get = function(key) {
+    var stored = __dantotsuStorage.get(this.pluginId + "_DB_" + key);
+    if (!stored) return undefined;
+    try {
+        var item = JSON.parse(stored);
+        if (item.expires && Date.now() > item.expires) {
+            this.delete(key);
+            return undefined;
+        }
+        return item.value !== undefined ? item.value : item;
+    } catch(e) {
+        return stored;
+    }
+};
+PluginStorage.prototype.set = function(key, value, expires) {
+    var exp = (expires instanceof Date) ? expires.getTime() : expires;
+    var item = { created: Date.now(), value: value, expires: exp };
+    __dantotsuStorage.set(this.pluginId + "_DB_" + key, JSON.stringify(item));
+};
+PluginStorage.prototype.delete = function(key) {
+    __dantotsuStorage.delete(this.pluginId + "_DB_" + key);
+};
+PluginStorage.prototype.clearAll = function() {
+    var keysStr = __dantotsuStorage.getAllKeys(this.pluginId + "_DB_");
+    try {
+        var keys = JSON.parse(keysStr);
+        for (var i = 0; i < keys.length; i++) {
+            __dantotsuStorage.delete(keys[i]);
+        }
+    } catch(e) {}
+};
+PluginStorage.prototype.getAllKeys = function() {
+    var keysStr = __dantotsuStorage.getAllKeys(this.pluginId + "_DB_");
+    try {
+        var keys = JSON.parse(keysStr);
+        var prefix = this.pluginId + "_DB_";
+        return keys.map(function(k) { return k.replace(prefix, ''); });
+    } catch(e) {
+        return [];
+    }
+};
 
 const require = (pkg) => {
     switch (pkg) {
@@ -355,15 +565,194 @@ const require = (pkg) => {
         case "htmlparser2":       return { Parser: Parser };
         case "dayjs":             return dayjs;
         case "urlencode":         return { encode: encodeURIComponent, decode: decodeURIComponent };
-        case "@libs/fetch":       return { fetchApi: fetchApi, fetchText: fetchText };
+        case "@libs/fetch":       return { fetchApi: fetchApi, fetchText: fetchText, fetchProto: fetchApi };
         case "@libs/novelStatus": return { NovelStatus: NovelStatus };
         case "@libs/isAbsoluteUrl": return { isUrlAbsolute: isUrlAbsolute };
         case "@libs/filterInputs": return { FilterTypes, isPickerValue, isCheckboxValue, isSwitchValue, isTextValue, isXCheckboxValue };
         case "@libs/defaultCover": return { defaultCover: defaultCover };
-        case "@libs/storage":     return { storage: { get: () => null, set: () => {}, delete: () => {} } };
+        case "@libs/aes":         return { gcm: gcm };
+        case "@libs/utils":       return { utf8ToBytes: utf8ToBytes, bytesToUtf8: bytesToUtf8 };
+        case "@/lib/utils":       return { utf8ToBytes: utf8ToBytes, bytesToUtf8: bytesToUtf8 };
+        case "@libs/parseDate":   return { parseDate: function(d) { return dayjs(d).format('LL'); } };
+        case "@libs/storage":     return {
+            storage: new PluginStorage(''),
+            localStorage: new PluginStorage('local'),
+            sessionStorage: new PluginStorage('session')
+        };
+        case "lodash-es/reverse": return function(arr) { return arr ? arr.slice().reverse() : []; };
+        case "lodash-es/uniqBy":  return function(arr, key) {
+            if (!arr) return [];
+            var seen = new Set();
+            return arr.filter(function(item) {
+                var k = typeof key === 'function' ? key(item) : item[key];
+                if (seen.has(k)) return false;
+                seen.add(k);
+                return true;
+            });
+        };
+        case "lodash-es/filter":  return function(arr, fn) { return arr ? arr.filter(fn) : []; };
+        case "lodash-es/map":     return function(arr, fn) { return arr ? arr.map(fn) : []; };
         default:                  return {};
     }
 };
+""".trimIndent()
+
+    private val SYNC_PROMISE_JS = """
+(function() {
+    function SyncPromise(executor) {
+        this.state = 'pending';
+        this.value = undefined;
+        this.reason = undefined;
+        this.handlers = [];
+        
+        var self = this;
+        function resolve(val) {
+            if (self.state !== 'pending') return;
+            if (val && (typeof val === 'object' || typeof val === 'function') && typeof val.then === 'function') {
+                try {
+                    val.then.call(val, resolve, reject);
+                } catch(e) {
+                    reject(e);
+                }
+                return;
+            }
+            self.state = 'fulfilled';
+            self.value = val;
+            var h = self.handlers;
+            self.handlers = [];
+            for (var i = 0; i < h.length; i++) {
+                try { h[i](); } catch(e) {}
+            }
+        }
+        
+        function reject(err) {
+            if (self.state !== 'pending') return;
+            self.state = 'rejected';
+            self.reason = err;
+            var h = self.handlers;
+            self.handlers = [];
+            for (var i = 0; i < h.length; i++) {
+                try { h[i](); } catch(e) {}
+            }
+        }
+        
+        try {
+            if (typeof executor === 'function') {
+                executor(resolve, reject);
+            }
+        } catch(e) {
+            reject(e);
+        }
+    }
+    
+    SyncPromise.prototype.then = function(onFulfilled, onRejected) {
+        var self = this;
+        return new SyncPromise(function(resolve, reject) {
+            function execute() {
+                if (self.state === 'fulfilled') {
+                    if (typeof onFulfilled === 'function') {
+                        try {
+                            resolve(onFulfilled(self.value));
+                        } catch(e) {
+                            reject(e);
+                        }
+                    } else {
+                        resolve(self.value);
+                    }
+                } else if (self.state === 'rejected') {
+                    if (typeof onRejected === 'function') {
+                        try {
+                            resolve(onRejected(self.reason));
+                        } catch(e) {
+                            reject(e);
+                        }
+                    } else {
+                        reject(self.reason);
+                    }
+                }
+            }
+            if (self.state === 'pending') {
+                self.handlers.push(execute);
+            } else {
+                execute();
+            }
+        });
+    };
+    
+    SyncPromise.prototype.catch = function(onRejected) {
+        return this.then(null, onRejected);
+    };
+    
+    SyncPromise.prototype.finally = function(onFinally) {
+        return this.then(
+            function(value) {
+                return SyncPromise.resolve(typeof onFinally === 'function' ? onFinally() : undefined).then(function() { return value; });
+            },
+            function(reason) {
+                return SyncPromise.resolve(typeof onFinally === 'function' ? onFinally() : undefined).then(function() { throw reason; });
+            }
+        );
+    };
+    
+    SyncPromise.resolve = function(val) {
+        if (val instanceof SyncPromise) return val;
+        return new SyncPromise(function(resolve) { resolve(val); });
+    };
+    
+    SyncPromise.reject = function(err) {
+        return new SyncPromise(function(resolve, reject) { reject(err); });
+    };
+    
+    SyncPromise.all = function(iterable) {
+        return new SyncPromise(function(resolve, reject) {
+            if (!iterable) return resolve([]);
+            var arr = Array.from ? Array.from(iterable) : Array.prototype.slice.call(iterable);
+            var results = new Array(arr.length);
+            var remaining = arr.length;
+            if (remaining === 0) return resolve(results);
+            arr.forEach(function(item, idx) {
+                SyncPromise.resolve(item).then(function(val) {
+                    results[idx] = val;
+                    remaining--;
+                    if (remaining === 0) resolve(results);
+                }, reject);
+            });
+        });
+    };
+    
+    SyncPromise.allSettled = function(iterable) {
+        return new SyncPromise(function(resolve) {
+            if (!iterable) return resolve([]);
+            var arr = Array.from ? Array.from(iterable) : Array.prototype.slice.call(iterable);
+            var results = new Array(arr.length);
+            var remaining = arr.length;
+            if (remaining === 0) return resolve(results);
+            arr.forEach(function(item, idx) {
+                SyncPromise.resolve(item).then(function(val) {
+                    results[idx] = { status: 'fulfilled', value: val };
+                    remaining--;
+                    if (remaining === 0) resolve(results);
+                }, function(err) {
+                    results[idx] = { status: 'rejected', reason: err };
+                    remaining--;
+                    if (remaining === 0) resolve(results);
+                });
+            });
+        });
+    };
+    
+    SyncPromise.race = function(iterable) {
+        return new SyncPromise(function(resolve, reject) {
+            if (!iterable) return;
+            var arr = Array.from ? Array.from(iterable) : Array.prototype.slice.call(iterable);
+            arr.forEach(function(item) {
+                SyncPromise.resolve(item).then(resolve, reject);
+            });
+        });
+    };
+    
+    globalThis.Promise = SyncPromise;
+})();
 """.trimIndent()
 
     private val POLYFILL_JS = """
@@ -371,6 +760,102 @@ var console = {
     log: function() { try { __dantotsuLog.log(Array.prototype.slice.call(arguments).map(function(a) { return typeof a === 'object' ? JSON.stringify(a) : String(a); }).join(' ')); } catch(e){} },
     warn: function() { try { __dantotsuLog.log('WARN: ' + Array.prototype.slice.call(arguments).map(function(a) { return typeof a === 'object' ? JSON.stringify(a) : String(a); }).join(' ')); } catch(e){} },
     error: function() { try { __dantotsuLog.log('ERROR: ' + Array.prototype.slice.call(arguments).map(function(a) { return typeof a === 'object' ? JSON.stringify(a) : String(a); }).join(' ')); } catch(e){} }
+};
+
+var setTimeout = function(fn, ms) { try { if (typeof fn === 'function') fn(); } catch(e){} return 0; };
+var clearTimeout = function() {};
+var setInterval = function(fn, ms) { return 0; };
+var clearInterval = function() {};
+
+var btoa = function(str) {
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    var encoded = '';
+    var c1, c2, c3, e1, e2, e3, e4;
+    var i = 0;
+    while (i < str.length) {
+        c1 = str.charCodeAt(i++);
+        c2 = str.charCodeAt(i++);
+        c3 = str.charCodeAt(i++);
+        e1 = c1 >> 2;
+        e2 = ((c1 & 3) << 4) | (c2 >> 4);
+        e3 = ((c2 & 15) << 2) | (c3 >> 6);
+        e4 = c3 & 63;
+        if (isNaN(c2)) e3 = e4 = 64;
+        else if (isNaN(c3)) e4 = 64;
+        encoded += chars.charAt(e1) + chars.charAt(e2) + chars.charAt(e3) + chars.charAt(e4);
+    }
+    return encoded;
+};
+
+var atob = function(input) {
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    var str = String(input).replace(/=+$/, '');
+    var output = '';
+    if (str.length % 4 === 1) return '';
+    for (var bc = 0, bs, buffer, idx = 0; buffer = str.charAt(idx++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
+        buffer = chars.indexOf(buffer);
+    }
+    return output;
+};
+
+function utf8ToBytes(str) {
+    var bytes = [];
+    for (var i = 0; i < str.length; i++) {
+        var code = str.charCodeAt(i);
+        if (code < 0x80) {
+            bytes.push(code);
+        } else if (code < 0x800) {
+            bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+        } else if (code < 0xd800 || code >= 0xe000) {
+            bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+        } else {
+            i++;
+            code = 0x10000 + (((code & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
+            bytes.push(0xf0 | (code >> 18), 0x80 | ((code >> 12) & 0x3f), 0x80 | (code & 0x3f));
+        }
+    }
+    return new Uint8Array(bytes);
+}
+
+function bytesToUtf8(bytes) {
+    var encoded = "";
+    for (var i = 0; i < bytes.length; i++) {
+        encoded += "%" + ("0" + bytes[i].toString(16)).slice(-2);
+    }
+    try {
+        return decodeURIComponent(encoded);
+    } catch (e) {
+        return unescape(encoded);
+    }
+}
+
+function TextEncoder() {}
+TextEncoder.prototype.encode = function(str) {
+    return utf8ToBytes(str || "");
+};
+
+function TextDecoder(encoding) {
+    this.encoding = encoding || 'utf-8';
+}
+TextDecoder.prototype.decode = function(bytes) {
+    if (!bytes) return "";
+    return bytesToUtf8(bytes);
+};
+
+var crypto = {
+    getRandomValues: function(arr) {
+        if (!arr) return arr;
+        for (var i = 0; i < arr.length; i++) {
+            arr[i] = Math.floor(Math.random() * 256);
+        }
+        return arr;
+    },
+    randomUUID: function() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
 };
 
 if (typeof Object.assign !== 'function') {
@@ -474,14 +959,29 @@ var fetchApi = function(url, init) {
     var headersJson = JSON.stringify(headers);
     var resultStr = __dantotsuFetch.fetch(url, method, headersJson, body);
     var result = JSON.parse(resultStr);
+    var responseHeaders = result.headers || {};
+    responseHeaders.get = function(key) {
+        if (!key) return null;
+        var lk = key.toLowerCase();
+        for (var k in result.headers) {
+            if (k.toLowerCase() === lk) return result.headers[k];
+        }
+        return null;
+    };
     return Promise.resolve({
         status: result.statusCode,
         statusText: result.reasonPhrase,
         ok: result.statusCode >= 200 && result.statusCode < 300,
         url: result.url || url,
-        headers: result.headers || {},
+        headers: responseHeaders,
         text: function() { return Promise.resolve(result.body); },
-        json: function() { return Promise.resolve(JSON.parse(result.body)); },
+        json: function() { 
+            try {
+                return Promise.resolve(JSON.parse(result.body));
+            } catch(e) {
+                return Promise.resolve({});
+            }
+        },
         body: result.body
     });
 };
@@ -489,6 +989,9 @@ var fetchApi = function(url, init) {
 var fetchText = function(url, init) {
     return fetchApi(url, init).then(function(res) { return res.text(); });
 };
+
+var fetch = fetchApi;
+globalThis.fetch = fetchApi;
 """.trimIndent()
 
     private val HTMLPARSER_JS = """
@@ -528,9 +1031,16 @@ Parser.prototype.end = function() {
             var tag = buf.slice(i+1, j).toLowerCase();
             i = j;
             var attrs = {};
+            var selfClosing = false;
             while (i < len && buf[i] !== '>') {
                 while (i < len && /\s/.test(buf[i])) i++;
-                if (buf[i] === '>' || buf[i] === '/') break;
+                if (buf[i] === '>') break;
+                if (buf[i] === '/') {
+                    selfClosing = true;
+                    i++;
+                    while (i < len && /\s/.test(buf[i])) i++;
+                    if (buf[i] === '>') break;
+                }
                 var ks = i;
                 while (i < len && !/[\s=>\/]/.test(buf[i])) i++;
                 var key = buf.slice(ks, i).toLowerCase();
@@ -546,11 +1056,11 @@ Parser.prototype.end = function() {
                         if (i < len) i++;
                     } else {
                         var vs2 = i;
-                        while (i < len && !/[\s>]/.test(buf[i])) i++;
+                        while (i < len && !/[\s>\/]/.test(buf[i])) i++;
                         val = buf.slice(vs2, i);
                     }
                 }
-                if (key) attrs[key] = val;
+                if (key) attrs[key] = val !== null ? val : "";
             }
             if (buf[i] === '>') i++;
             if (closing) {
@@ -558,14 +1068,15 @@ Parser.prototype.end = function() {
             } else {
                 if (this.opts.onopentagname) this.opts.onopentagname(tag);
                 if (this.opts.onopentag) this.opts.onopentag(tag, attrs);
-                // For raw tags
-                if (RAW_TAGS[tag]) {
+                if (selfClosing || VOID_ELEMENTS[tag]) {
+                    if (this.opts.onclosetag) this.opts.onclosetag(tag);
+                } else if (RAW_TAGS[tag]) {
                     var closeTag = '</' + tag;
                     var ri = buf.toLowerCase().indexOf(closeTag, i);
                     if (ri !== -1) {
                         var rawText = buf.slice(i, ri);
                         if (rawText && this.opts.ontext) this.opts.ontext(rawText);
-                        i = ri;  // position at '</' so next iteration handles closing tag
+                        i = ri;
                     }
                 }
             }
@@ -589,10 +1100,106 @@ function load(html) {
         var obj = {
             _nodes: nodeIds,
             length: nodeIds.length,
+            nodeType: 1,
             text: function() { return __dantotsuJsoup.text(JSON.stringify(this._nodes)); },
-            attr: function(a) { 
+            attr: function(a, v) { 
                 if (this._nodes.length === 0) return undefined;
+                if (v !== undefined) {
+                    __dantotsuJsoup.setAttr(JSON.stringify(this._nodes), a, String(v));
+                    return this;
+                }
                 return __dantotsuJsoup.attr(JSON.stringify(this._nodes), a) || undefined; 
+            },
+            removeAttr: function(a) {
+                __dantotsuJsoup.removeAttr(JSON.stringify(this._nodes), a);
+                return this;
+            },
+            addClass: function(className) {
+                if (className) __dantotsuJsoup.addClass(JSON.stringify(this._nodes), className);
+                return this;
+            },
+            removeClass: function(className) {
+                if (className) __dantotsuJsoup.removeClass(JSON.stringify(this._nodes), className);
+                return this;
+            },
+            prop: function(name) {
+                if (name === 'outerHTML') return this.outerHtml();
+                if (name === 'innerHTML') return this.html();
+                if (name === 'tagName') return this.tagName;
+                return this.attr(name);
+            },
+            val: function() {
+                return this.attr('value') || this.text();
+            },
+            data: function(k) {
+                return this.attr('data-' + k);
+            },
+            contents: function() {
+                return this.children();
+            },
+            addBack: function() {
+                return this;
+            },
+            filter: function(fn) {
+                if (typeof fn === 'function') {
+                    var res = [];
+                    for(var i=0; i<this._nodes.length; i++) {
+                        var el = wrap([this._nodes[i]]);
+                        if (fn.call(el, i, el)) res.push(this._nodes[i]);
+                    }
+                    return wrap(res);
+                }
+                return this;
+            },
+            replaceWith: function(html) {
+                return this;
+            },
+            is: function(sel) {
+                if (typeof sel === 'string' && sel) {
+                    if (sel.startsWith('.')) return this.hasClass(sel.slice(1));
+                    return this.tagName.toLowerCase() === sel.toLowerCase();
+                }
+                return true;
+            },
+            not: function(sel) {
+                return this;
+            },
+            clone: function() {
+                return wrap(this._nodes.slice());
+            },
+            empty: function() {
+                return this;
+            },
+            siblings: function(sel) {
+                var resStr = __dantotsuJsoup.siblings(JSON.stringify(this._nodes), sel || "");
+                return wrap(JSON.parse(resStr));
+            },
+            closest: function(sel) {
+                var resStr = __dantotsuJsoup.closest(JSON.stringify(this._nodes), sel || "");
+                return wrap(JSON.parse(resStr));
+            },
+            parents: function(sel) {
+                var resStr = __dantotsuJsoup.parents(JSON.stringify(this._nodes), sel || "");
+                return wrap(JSON.parse(resStr));
+            },
+            slice: function(start, end) {
+                return wrap(this._nodes.slice(start, end));
+            },
+            wrap: function(html) {
+                return this;
+            },
+            unwrap: function() {
+                return this;
+            },
+            after: function(html) {
+                return this;
+            },
+            before: function(html) {
+                return this;
+            },
+            css: function(prop, val) {
+                if (val !== undefined) return this.attr('style', (this.attr('style') || '') + ';' + prop + ':' + val);
+                return '';
             },
             html: function() { return __dantotsuJsoup.html(JSON.stringify(this._nodes)); },
             outerHtml: function() { return __dantotsuJsoup.outerHtml(JSON.stringify(this._nodes)); },
@@ -601,10 +1208,20 @@ function load(html) {
                 var resStr = __dantotsuJsoup.select(JSON.stringify(this._nodes), sel);
                 return wrap(JSON.parse(resStr));
             },
+            children: function(sel) {
+                var resStr = __dantotsuJsoup.children(JSON.stringify(this._nodes), sel || "");
+                return wrap(JSON.parse(resStr));
+            },
+            parent: function() {
+                var resStr = __dantotsuJsoup.parent(JSON.stringify(this._nodes));
+                return wrap(JSON.parse(resStr));
+            },
+            hasClass: function(className) {
+                return __dantotsuJsoup.hasClass(JSON.stringify(this._nodes), className);
+            },
             each: function(fn) {
                 for (var i = 0; i < this._nodes.length; i++) {
                     var el = wrap([this._nodes[i]]);
-                    el.attribs = JSON.parse(__dantotsuJsoup.attrs(JSON.stringify([this._nodes[i]])));
                     if (fn.call(el, i, el) === false) break;
                 }
                 return this;
@@ -616,11 +1233,13 @@ function load(html) {
                  if (i === undefined) return this._nodes.map(function(id) { return wrap([id]); });
                  return wrap([this._nodes[i]]);
             },
+            toArray: function() {
+                 return this._nodes.map(function(id) { return wrap([id]); });
+            },
             map: function(fn) {
                  var res = [];
                  for(var i=0; i<this._nodes.length; i++) {
                      var el = wrap([this._nodes[i]]);
-                     el.attribs = JSON.parse(__dantotsuJsoup.attrs(JSON.stringify([this._nodes[i]])));
                      var v = fn.call(el, i, el);
                      if (v !== null && v !== undefined) res.push(v);
                  }
@@ -642,9 +1261,15 @@ function load(html) {
         };
         Object.defineProperty(obj, 'attribs', {
             get: function() {
-                 if (nodeIds.length === 0) return {};
-                 var str = __dantotsuJsoup.attrs(JSON.stringify(nodeIds));
-                 return JSON.parse(str);
+                 var map = {};
+                 if (nodeIds.length > 0) {
+                     try {
+                         var str = __dantotsuJsoup.attrs(JSON.stringify(nodeIds));
+                         map = JSON.parse(str) || {};
+                     } catch(e){}
+                 }
+                 if (!map.class) map.class = '';
+                 return map;
             },
             set: function(v) {},
             enumerable: true,
@@ -666,7 +1291,12 @@ function load(html) {
     
     var $ = function(sel, context) {
         if (typeof sel === 'object' && sel !== null && sel._nodes) return sel;
+        if (typeof sel === 'number') return wrap([sel]);
+        if (Array.isArray(sel)) return wrap(sel);
         if (typeof sel !== 'string') return wrap([]);
+        if (sel.trim().startsWith('<')) {
+            return load(sel).root().children();
+        }
         if (context) {
              if (typeof context === 'object' && context._nodes) {
                   var resStr = __dantotsuJsoup.select(JSON.stringify(context._nodes), sel);
@@ -682,114 +1312,4 @@ function load(html) {
     return $;
 }
 """.trimIndent()
-
-    private val SYNC_PROMISE_POLYFILL_JS = """
-function Promise(executor) {
-    this.state = 'pending';
-    this.value = undefined;
-    this.reason = undefined;
-    this.onFulfilled = [];
-    this.onRejected = [];
-    var self = this;
-    
-    function resolve(value) {
-        if (value instanceof Promise) {
-            value.then(resolve, reject);
-            return;
-        }
-        if (self.state === 'pending') {
-            self.state = 'fulfilled';
-            self.value = value;
-            self.onFulfilled.forEach(function(fn) { fn(value); });
-        }
-    }
-    
-    function reject(reason) {
-        if (self.state === 'pending') {
-            self.state = 'rejected';
-            self.reason = reason;
-            self.onRejected.forEach(function(fn) { fn(reason); });
-        }
-    }
-    
-    try {
-        executor(resolve, reject);
-    } catch (e) {
-        reject(e);
-    }
-}
-
-Promise.prototype.then = function(onFulfilled, onRejected) {
-    var self = this;
-    return new Promise(function(resolve, reject) {
-        function handle(callback, val) {
-            try {
-                if (typeof callback === 'function') {
-                    var result = callback(val);
-                    resolve(result);
-                } else {
-                    if (self.state === 'fulfilled') resolve(val);
-                    else reject(val);
-                }
-            } catch (e) {
-                reject(e);
-            }
-        }
-        
-        if (self.state === 'fulfilled') {
-            handle(onFulfilled, self.value);
-        } else if (self.state === 'rejected') {
-            handle(onRejected, self.reason);
-        } else {
-            self.onFulfilled.push(function(val) { handle(onFulfilled, val); });
-            self.onRejected.push(function(reason) { handle(onRejected, reason); });
-        }
-    });
-};
-
-Promise.prototype.catch = function(onRejected) {
-    return this.then(null, onRejected);
-};
-
-Promise.prototype.finally = function(onFinally) {
-    return this.then(
-        function(value) { return Promise.resolve(onFinally()).then(function() { return value; }); },
-        function(reason) { return Promise.resolve(onFinally()).then(function() { throw reason; }); }
-    );
-};
-
-Promise.resolve = function(value) {
-    if (value instanceof Promise) return value;
-    return new Promise(function(resolve) { resolve(value); });
-};
-
-Promise.reject = function(reason) {
-    return new Promise(function(resolve, reject) { reject(reason); });
-};
-
-Promise.all = function(promises) {
-    return new Promise(function(resolve, reject) {
-        if (!promises || promises.length === 0) return resolve([]);
-        var results = new Array(promises.length);
-        var completed = 0;
-        promises.forEach(function(p, i) {
-            Promise.resolve(p).then(function(val) {
-                results[i] = val;
-                completed++;
-                if (completed === promises.length) resolve(results);
-            }).catch(reject);
-        });
-    });
-};
-
-Promise.allSettled = function(promises) {
-    return Promise.all(promises.map(function(p) {
-        return Promise.resolve(p).then(
-            function(val) { return { status: "fulfilled", value: val }; },
-            function(err) { return { status: "rejected", reason: err }; }
-        );
-    }));
-};
-""".trimIndent()
-
 }

@@ -44,6 +44,7 @@ class ContinueWidget : AppWidgetProvider() {
         private const val KEY_ACTIVE_COVER = "active_cover"
         private const val KEY_ACTIVE_DETAIL = "active_detail"
         private const val KEY_ACTIVE_HEADER = "active_header"
+        private const val KEY_ACTIVE_ICON_RES = "active_icon_res"
         private const val KEY_IS_ACTIVE = "is_active"
 
         private const val KEY_LAST_WATCHED_TITLE = "last_watched_title"
@@ -69,6 +70,7 @@ class ContinueWidget : AppWidgetProvider() {
                 editor.putString(KEY_ACTIVE_COVER, coverUrl)
                 editor.putString(KEY_ACTIVE_DETAIL, detail ?: "Playing")
                 editor.putString(KEY_ACTIVE_HEADER, "CURRENTLY WATCHING")
+                editor.putInt(KEY_ACTIVE_ICON_RES, R.drawable.ic_round_play_circle_24)
 
                 // Update Last Watched
                 editor.putString(KEY_LAST_WATCHED_TITLE, title)
@@ -96,6 +98,7 @@ class ContinueWidget : AppWidgetProvider() {
                 editor.putString(KEY_ACTIVE_COVER, coverUrl)
                 editor.putString(KEY_ACTIVE_DETAIL, detail ?: "Reading")
                 editor.putString(KEY_ACTIVE_HEADER, "CURRENTLY READING")
+                editor.putInt(KEY_ACTIVE_ICON_RES, R.drawable.ic_round_menu_book_24)
 
                 // Update Last Read
                 editor.putString(KEY_LAST_READ_TITLE, title)
@@ -168,12 +171,14 @@ class ContinueWidget : AppWidgetProvider() {
             val titleText: String
             val detailText: String
             val coverUrl: String?
+            val logoIconRes: Int
 
             if (isActive) {
                 headerText = prefs.getString(KEY_ACTIVE_HEADER, "CURRENTLY ACTIVE") ?: "CURRENTLY ACTIVE"
                 titleText = prefs.getString(KEY_ACTIVE_TITLE, "Dantotsu") ?: "Dantotsu"
                 detailText = prefs.getString(KEY_ACTIVE_DETAIL, "In Progress") ?: "In Progress"
                 coverUrl = prefs.getString(KEY_ACTIVE_COVER, null)
+                logoIconRes = prefs.getInt(KEY_ACTIVE_ICON_RES, R.drawable.ic_round_play_circle_24)
             } else {
                 val lastWatched = prefs.getString(KEY_LAST_WATCHED_TITLE, null)
                 val lastRead = prefs.getString(KEY_LAST_READ_TITLE, null)
@@ -183,16 +188,19 @@ class ContinueWidget : AppWidgetProvider() {
                     titleText = lastWatched
                     detailText = prefs.getString(KEY_LAST_WATCHED_DETAIL, "Tap to resume") ?: "Tap to resume"
                     coverUrl = prefs.getString(KEY_LAST_WATCHED_COVER, null)
+                    logoIconRes = R.drawable.ic_round_play_circle_24
                 } else if (!lastRead.isNullOrEmpty()) {
                     headerText = "LAST READ"
                     titleText = lastRead
                     detailText = prefs.getString(KEY_LAST_READ_DETAIL, "Tap to resume") ?: "Tap to resume"
                     coverUrl = prefs.getString(KEY_LAST_READ_COVER, null)
+                    logoIconRes = R.drawable.ic_round_menu_book_24
                 } else {
                     headerText = "DANTOTSU"
                     titleText = "Nothing active"
                     detailText = "Open Dantotsu to start"
                     coverUrl = null
+                    logoIconRes = R.drawable.ic_dantotsu_round
                 }
             }
 
@@ -220,7 +228,7 @@ class ContinueWidget : AppWidgetProvider() {
                 setTextColor(R.id.widget_title, titleTextColor)
                 setTextColor(R.id.widget_status_header, subtitleTextColor)
                 setTextColor(R.id.widget_subtitle, subtitleTextColor)
-                setInt(R.id.widget_logo, "setColorFilter", titleTextColor)
+                setImageViewResource(R.id.widget_logo, logoIconRes)
 
                 val intent = Intent(context, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

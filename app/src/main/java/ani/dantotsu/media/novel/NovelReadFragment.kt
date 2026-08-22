@@ -262,6 +262,7 @@ class NovelReadFragment : Fragment(),
             // LNReader handling
             headerAdapter.progress?.visibility = View.VISIBLE
             lifecycleScope.launch(Dispatchers.IO) {
+                model.overrideNovelChapters(source, novel, media.id)
                 model.loadNovelChapters(media, source, invalidate = true)
             }
         } else {
@@ -525,7 +526,10 @@ class NovelReadFragment : Fragment(),
                     isShowingChapters = true
                     currentChapterResponses = chapters
                     currentChapterLinks = chapters.map { ch ->
-                        ani.dantotsu.FileUrl(ch.link)
+                        val headers = mutableMapOf("X-Chapter-Name" to ch.name)
+                        ch.extra?.get("releaseTime")?.let { headers["X-Release-Time"] = it }
+                        ch.extra?.get("chapterNumber")?.let { headers["X-Chapter-Number"] = it }
+                        ani.dantotsu.FileUrl(ch.link, headers)
                     }
                     updateChaptersTabs()
                     novelResponseAdapter.clear()

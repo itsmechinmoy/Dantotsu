@@ -18,6 +18,7 @@ sealed class NovelExtension {
         val hasUpdate: Boolean = false,
         val isObsolete: Boolean = false,
         val isUnofficial: Boolean = false,
+        val lang: String = "all",
     ) : NovelExtension()
 
     data class Available(
@@ -28,6 +29,7 @@ sealed class NovelExtension {
         var repository: String,
         val sources: List<AvailableNovelSources>,
         val iconUrl: String,
+        val lang: String = "all",
     ) : NovelExtension()
 
     data class JsPlugin(

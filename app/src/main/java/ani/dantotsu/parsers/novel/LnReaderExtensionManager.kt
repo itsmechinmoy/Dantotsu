@@ -44,6 +44,13 @@ class LnReaderExtensionManager(private val context: Context) {
         loadInstalledFromDisk()
     }
 
+    private fun safeUrlString(url: String): String {
+        return url.replace("[", "%5B")
+            .replace("]", "%5D")
+            .replace(" ", "%20")
+            .replace("|", "%7C")
+    }
+
     private fun loadInstalledFromDisk() {
         val plugins = mutableListOf<LnReaderInstalledPlugin>()
         val dirs = pluginDir.listFiles() ?: return
@@ -75,10 +82,11 @@ class LnReaderExtensionManager(private val context: Context) {
         val all = mutableListOf<LnReaderPluginItem>()
         val seen = mutableSetOf<String>()
 
-        (defaultRepoUrls + extraRepoUrls).forEach { repoUrl ->
+        (defaultRepoUrls + extraRepoUrls).distinct().forEach { repoUrl ->
             try {
-                val response = http.newCall(Request.Builder().url(repoUrl).build()).execute()
-                val body = response.body?.string() ?: return@forEach
+                val safeRepo = safeUrlString(repoUrl)
+                val response = http.newCall(Request.Builder().url(safeRepo).build()).execute()
+                val body = response.body.string()
                 val items = json.decodeFromString<List<LnReaderPluginItem>>(body)
                 items.forEach { item ->
                     if (seen.add(item.id)) all.add(item)
@@ -102,9 +110,10 @@ class LnReaderExtensionManager(private val context: Context) {
 
     suspend fun installPlugin(item: LnReaderPluginItem): Boolean = withContext(Dispatchers.IO) {
         try {
+            val safeUrl = safeUrlString(item.url)
             val response = http.newCall(
                 Request.Builder()
-                    .url(item.url)
+                    .url(safeUrl)
                     .header("pragma", "no-cache")
                     .header("cache-control", "no-cache")
                     .build()
@@ -115,8 +124,7 @@ class LnReaderExtensionManager(private val context: Context) {
                 return@withContext false
             }
 
-            val jsCode = response.body?.string()
-                ?: return@withContext false
+            val jsCode = response.body.string()
 
             val dir = safePluginDir(item.id).also { it.mkdirs() }
             File(dir, "index.js").writeText(jsCode)

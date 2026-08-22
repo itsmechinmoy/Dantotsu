@@ -168,11 +168,17 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     val adapter = ExtractorAdapter(onEpisodeDownloadHandler)
                     binding.selectorRecyclerView.adapter = adapter
                     if (!ep.allStreams) {
+                        ep.extractorCallback = { extractor ->
+                            scope.launch(Dispatchers.Main) {
+                                if (_binding == null || !isAdded) return@launch
+                                adapter.add(extractor)
+                                binding.selectorProgressBar.visibility = View.GONE
+                            }
+                        }
                         scope.launch(Dispatchers.IO) {
                             model.loadEpisodeVideos(ep, media!!.selected!!.sourceIndex)
                             withContext(Dispatchers.Main) {
                                 if (_binding == null || !isAdded) return@withContext
-                                adapter.addAll(ep.extractors)
                                 binding.selectorProgressBar.visibility = View.GONE
                                 if (adapter.itemCount == 0) {
                                     fail(R.string.stream_selection_empty)
@@ -644,8 +650,14 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
         fun add(videoExtractor: VideoExtractor) {
             if (videoExtractor.videos.isNotEmpty()) {
-                links.add(videoExtractor)
-                notifyItemInserted(links.size - 1)
+                val existingIndex = links.indexOfFirst { it.server.name == videoExtractor.server.name }
+                if (existingIndex >= 0) {
+                    links[existingIndex] = videoExtractor
+                    notifyItemChanged(existingIndex)
+                } else {
+                    links.add(videoExtractor)
+                    notifyItemInserted(links.size - 1)
+                }
             }
         }
 

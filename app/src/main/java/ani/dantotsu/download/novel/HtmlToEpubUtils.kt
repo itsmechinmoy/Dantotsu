@@ -120,6 +120,26 @@ object HtmlToEpubUtils {
         zos.closeEntry()
 
       
+        val formattedContent = if (!htmlContent.contains("<p", ignoreCase = true) &&
+            !htmlContent.contains("<div", ignoreCase = true) &&
+            !htmlContent.contains("<br", ignoreCase = true)
+        ) {
+            htmlContent.split("\n\n", "\n")
+                .filter { it.isNotBlank() }
+                .joinToString("") { "<p>${it.trim()}</p>" }
+        } else {
+            htmlContent
+        }
+
+        val cleanBody = try {
+            val doc = org.jsoup.Jsoup.parseBodyFragment(formattedContent)
+            doc.outputSettings().syntax(org.jsoup.nodes.Document.OutputSettings.Syntax.xml)
+            doc.outputSettings().charset("UTF-8")
+            doc.body().html()
+        } catch (_: Exception) {
+            formattedContent
+        }
+
         val htmlWrapper = """
             <?xml version="1.0" encoding="utf-8"?>
             <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
@@ -130,7 +150,7 @@ object HtmlToEpubUtils {
             </head>
             <body>
                 <h2>$cleanTitle</h2>
-                $htmlContent
+                $cleanBody
             </body>
             </html>
         """.trimIndent().toByteArray(Charsets.UTF_8)

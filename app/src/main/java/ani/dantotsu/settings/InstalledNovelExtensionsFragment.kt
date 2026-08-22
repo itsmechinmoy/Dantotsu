@@ -117,6 +117,20 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
                             snackString("No update available")
                         }
                     }
+                    is NovelExtension.JsPlugin -> {
+                        if (ext.hasUpdate) {
+                            lifecycleScope.launch {
+                                val success = novelExtensionManager.updateLnReaderPlugin(ext.pkgName)
+                                if (success) {
+                                    snackString("Extension updated")
+                                } else {
+                                    snackString("Update failed")
+                                }
+                            }
+                        } else {
+                            snackString("No update available")
+                        }
+                    }
                     else -> snackString("No update available")
                 }
             }
@@ -241,7 +255,7 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
 
             when (extension) {
                 is NovelExtension.Installed -> {
-                    val lang = LanguageMapper.getLanguageName("all")
+                    val lang = LanguageMapper.getLanguageName(extension.lang)
                     holder.extensionVersionTextView.text = "$lang ${extension.versionName}"
                     if (!skipIcons) {
                         holder.extensionIconImageView.setImageDrawable(extension.icon)
@@ -249,7 +263,7 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
                     holder.updateView.isVisible = extension.hasUpdate
                 }
                 is NovelExtension.JsPlugin -> {
-                    val lang = extension.plugin.lang
+                    val lang = LanguageMapper.getLanguageName(extension.plugin.lang)
                     holder.extensionVersionTextView.text = "$lang ${extension.versionName}"
                     if (!skipIcons) {
                         Glide.with(holder.itemView.context)

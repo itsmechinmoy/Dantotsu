@@ -57,6 +57,7 @@ data class LnSourceNovel(
     val status: String? = null,
     val rating: Double? = null,
     val chapters: List<LnChapterItem>? = null,
+    val totalPages: Int? = null,
 )
 
 @Serializable
