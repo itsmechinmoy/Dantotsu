@@ -3,8 +3,13 @@ package eu.kanade.domain.base
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import tachiyomi.core.preference.PreferenceStore
 
+@Inject
+@SingleIn(AppScope::class)
 class BasePreferences(
     val context: Context,
     private val preferenceStore: PreferenceStore,

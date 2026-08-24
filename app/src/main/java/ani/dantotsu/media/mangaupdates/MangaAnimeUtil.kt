@@ -214,7 +214,7 @@ object MangaAnimeUtil {
         val rowMatcher = rowPattern.matcher(html)
 
         while (rowMatcher.find()) {
-            val row = rowMatcher.group(1)
+            val row = rowMatcher.group(1) ?: continue
 
             val date = datePattern.matcher(row).takeIf { it.find() }?.group(1)
             val chapter = chapterPattern.matcher(row).let {
@@ -268,7 +268,7 @@ object MangaAnimeUtil {
         val chapterName = latestChapter?.let { chapter ->
             val numericMatcher = Pattern.compile("(\\d+(?:\\.\\d+)?)").matcher(chapter)
             if (numericMatcher.find()) {
-                numericMatcher.group(1).toDoubleOrNull()?.let { num ->
+                numericMatcher.group(1)?.toDoubleOrNull()?.let { num ->
                     val nextNum = num + chaptersToAdd
                     if (nextNum % 1 == 0.0) "Chapter ${nextNum.toInt()}"
                     else "Chapter $nextNum"

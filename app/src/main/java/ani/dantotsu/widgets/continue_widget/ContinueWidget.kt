@@ -33,8 +33,15 @@ class ContinueWidget : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        appWidgetIds.forEach { appWidgetId ->
-            updateWidget(context, appWidgetManager, appWidgetId)
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                appWidgetIds.forEach { appWidgetId ->
+                    updateWidget(context, appWidgetManager, appWidgetId)
+                }
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 
@@ -112,12 +119,16 @@ class ContinueWidget : AppWidgetProvider() {
         }
 
         fun notifyWidgets(context: Context) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(
-                ComponentName(context, ContinueWidget::class.java)
-            )
-            appWidgetIds.forEach { appWidgetId ->
-                updateWidget(context, appWidgetManager, appWidgetId)
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val appWidgetManager = AppWidgetManager.getInstance(context)
+                    val appWidgetIds = appWidgetManager.getAppWidgetIds(
+                        ComponentName(context, ContinueWidget::class.java)
+                    )
+                    appWidgetIds.forEach { appWidgetId ->
+                        updateWidget(context, appWidgetManager, appWidgetId)
+                    }
+                } catch (_: Exception) {}
             }
         }
 

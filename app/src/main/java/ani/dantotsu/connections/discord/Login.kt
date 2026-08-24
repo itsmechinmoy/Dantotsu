@@ -110,7 +110,7 @@ class Login : AppCompatActivity() {
                     throw IllegalStateException("Failed to fetch user: ${userResponse.code}")
                 }
 
-                userResponse.body?.string()?.let { jsonString ->
+                userResponse.body.string().let { jsonString ->
                     val json = JSONObject(jsonString)
                     PrefManager.setVal(PrefName.DiscordId, json.optString("id"))
                     PrefManager.setVal(PrefName.DiscordUserName, json.optString("username"))

@@ -165,8 +165,8 @@ class AnilistHomeViewModel : ViewModel() {
 
         tryWithSuspend {
             val suggestions = MAL.query.getAnimeSuggestions(limit = 15)
-            if (!suggestions?.data.isNullOrEmpty()) {
-                recommendation.postValue(ArrayList(suggestions!!.data.map { Media(it.node, true) }))
+            if (suggestions?.data?.isNotEmpty() == true) {
+                recommendation.postValue(ArrayList(suggestions.data.map { Media(it.node, true) }))
             } else {
                 val res = MAL.jikan.getSeasonUpcoming(limit = 15)
                 recommendation.postValue(ArrayList(res?.data?.map { Media(it, true) } ?: emptyList()))

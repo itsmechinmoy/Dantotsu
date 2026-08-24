@@ -426,7 +426,13 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
 }
 
 class DynamicMangaParser(extension: MangaExtension.Installed) : MangaParser() {
-    private val mangaCache = Injekt.get<MangaCache>()
+    private val mangaCache by lazy {
+        try {
+            Injekt.get<MangaCache>()
+        } catch (_: Throwable) {
+            MangaCache()
+        }
+    }
     val extension: MangaExtension.Installed
     var sourceLanguage = 0
 

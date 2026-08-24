@@ -44,10 +44,8 @@ class AppModule(val app: Application) : InjektModule {
 
         addSingletonFactory { NetworkHelper(app) }
         addSingletonFactory { get<NetworkHelper>().client }
-        addSingletonFactory { eu.kanade.tachiyomi.network.JavaScriptEngine(app) }
-
-        addSingletonFactory { AnimeExtensionManager(app) }
-        addSingletonFactory { MangaExtensionManager(app) }
+        addSingletonFactory { AnimeExtensionManager(app, get()) }
+        addSingletonFactory { MangaExtensionManager(app, get()) }
         addSingletonFactory { NovelExtensionManager(app) }
         addSingletonFactory { TorrentServerManager(app) }
         addSingletonFactory { DownloadAddonManager(app) }

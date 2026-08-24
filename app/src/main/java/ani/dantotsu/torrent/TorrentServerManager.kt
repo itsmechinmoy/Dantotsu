@@ -4,11 +4,16 @@ import android.content.Context
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import eu.kanade.tachiyomi.data.torrentServer.model.FileStat
 import eu.kanade.tachiyomi.data.torrentServer.model.Torrent
 import org.libtorrent4j.*
 import java.io.File
 
+@Inject
+@SingleIn(AppScope::class)
 class TorrentServerManager(private val context: Context) {
     private val sessionManager by lazy { SessionManager() }
     private var httpServer: TorrentHttpServer? = null

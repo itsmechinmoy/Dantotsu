@@ -3,6 +3,10 @@ package eu.kanade.tachiyomi.core.preference
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.PreferenceManager
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.ContributesBinding
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import eu.kanade.tachiyomi.core.preference.AndroidPreference.BooleanPrimitive
 import eu.kanade.tachiyomi.core.preference.AndroidPreference.FloatPrimitive
 import eu.kanade.tachiyomi.core.preference.AndroidPreference.IntPrimitive
@@ -16,7 +20,9 @@ import kotlinx.coroutines.flow.callbackFlow
 import tachiyomi.core.preference.Preference
 import tachiyomi.core.preference.PreferenceStore
 
-class AndroidPreferenceStore(
+@SingleIn(AppScope::class)
+@ContributesBinding(AppScope::class)
+class AndroidPreferenceStore @Inject constructor(
     context: Context,
 ) : PreferenceStore {
 

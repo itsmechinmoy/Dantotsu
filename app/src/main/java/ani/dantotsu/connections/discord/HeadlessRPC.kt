@@ -96,7 +96,7 @@ class HeadlessRPC(
                     .build()
             ).execute()
             if (!resp.isSuccessful) {
-                Logger.log("HeadlessRPC: deleteSession failed: ${resp.code} ${resp.body?.string()}")
+                Logger.log("HeadlessRPC: deleteSession failed: ${resp.code} ${resp.body.string()}")
             } else {
                 Logger.log("HeadlessRPC: deleteSession succeeded")
             }
@@ -121,7 +121,7 @@ class HeadlessRPC(
                         .build()
                 ).execute()
 
-                val respBody = resp.body?.string() ?: ""
+                val respBody = resp.body.string()
                 
                 if (resp.code == 429) {
                     val retryAfter = resp.header("Retry-After")?.toLongOrNull() ?: 5L
@@ -166,7 +166,7 @@ class HeadlessRPC(
                 .get()
                 .build()
         ).execute()
-        val body = resp.body?.string() ?: "{}"
+        val body = resp.body.string()
         json.decodeFromString<JsonObject>(body)["user"]!!.jsonObject
     }
 

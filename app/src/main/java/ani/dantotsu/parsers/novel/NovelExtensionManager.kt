@@ -4,6 +4,9 @@ import android.content.Context
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import eu.kanade.tachiyomi.extension.InstallStep
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +18,8 @@ import rx.Observable
  * Maintains a clean separation of concerns by delegating to [DanNovelExtensionManager]
  * and [LnReaderExtensionManager].
  */
+@Inject
+@SingleIn(AppScope::class)
 class NovelExtensionManager(private val context: Context) {
 
     val danNovelManager = DanNovelExtensionManager(context)

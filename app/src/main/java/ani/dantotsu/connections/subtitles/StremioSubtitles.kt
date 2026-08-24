@@ -69,8 +69,8 @@ object StremioSubtitles {
                             try {
                                 val request = Request.Builder().url(url).build()
                                 val response = okHttpClient.newCall(request).execute()
-                                if (response.isSuccessful && response.body != null) {
-                                    val text = response.body!!.string()
+                                if (response.isSuccessful) {
+                                    val text = response.body.string()
                                     val data = Mapper.json.decodeFromString<StremioResponse>(text)
                                     val existingUrls = allSubs.map { it.url }.toSet()
                                     val newSubs = data.subtitles.filter { sub ->

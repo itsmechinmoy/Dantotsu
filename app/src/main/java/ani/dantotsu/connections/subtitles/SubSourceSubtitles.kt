@@ -37,7 +37,7 @@ object SubSourceSubtitles {
                 }
 
                 val resp = okHttpClient.newCall(reqBuilder.build()).execute()
-                val json = resp.body?.string().orEmpty()
+                val json = resp.body.string()
                 if (!resp.isSuccessful || json.isBlank()) return@withContext emptyList()
                 val searchResult = Mapper.json.decodeFromString<SubSourceSearchResponseV1>(json)
                 val movie = searchResult.data.firstOrNull() ?: return@withContext emptyList()
@@ -60,7 +60,7 @@ object SubSourceSubtitles {
                 }
 
                 val subResp = okHttpClient.newCall(subReqBuilder.build()).execute()
-                val subJson = subResp.body?.string().orEmpty()
+                val subJson = subResp.body.string()
                 if (!subResp.isSuccessful || subJson.isBlank()) return@withContext emptyList()
                 val subResult = Mapper.json.decodeFromString<SubSourceListResponseV1>(subJson)
 
@@ -115,8 +115,8 @@ object SubSourceSubtitles {
                 }
 
                 val resp = okHttpClient.newCall(reqBuilder.build()).execute()
-                val bytes = resp.body?.bytes()
-                if (!resp.isSuccessful || bytes == null || bytes.isEmpty()) return@withContext null
+                val bytes = resp.body.bytes()
+                if (!resp.isSuccessful || bytes.isEmpty()) return@withContext null
                 // Parse ZIP stream
                 val zipIn = ZipInputStream(ByteArrayInputStream(bytes))
                 var entry = zipIn.nextEntry

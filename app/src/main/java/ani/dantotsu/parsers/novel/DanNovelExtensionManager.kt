@@ -10,8 +10,11 @@ import eu.kanade.tachiyomi.extension.api.ExtensionGithubApi
 import eu.kanade.tachiyomi.extension.util.ExtensionInstallReceiver
 import eu.kanade.tachiyomi.extension.util.ExtensionInstaller
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import rx.Observable
 import tachiyomi.core.util.lang.withUIContext
 
@@ -25,6 +28,7 @@ class DanNovelExtensionManager(private val context: Context) {
     var isInitialized = false
         private set
 
+    private val scope = CoroutineScope(Dispatchers.IO)
     private val api = ExtensionGithubApi()
     private val installer by lazy { ExtensionInstaller(context) }
     private val iconMap = mutableMapOf<String, Drawable>()
@@ -49,8 +53,10 @@ class DanNovelExtensionManager(private val context: Context) {
     }
 
     init {
-        initNovelExtensions()
-        ExtensionInstallReceiver().setNovelListener(NovelInstallationListener()).register(context)
+        scope.launch {
+            initNovelExtensions()
+            ExtensionInstallReceiver().setNovelListener(NovelInstallationListener()).register(context)
+        }
     }
 
     private fun initNovelExtensions() {

@@ -505,6 +505,10 @@ class MainActivity : AppCompatActivity() {
             if (uri == null) {
                 throw Exception("Uri is null")
             }
+            if (uri.scheme.equals("dantotsu", ignoreCase = true)) {
+                startActivity(Intent(this, ani.dantotsu.connections.anilist.UrlMedia::class.java).setData(uri))
+                return
+            }
             if ((uri.scheme == "tachiyomi" || uri.scheme == "aniyomi" || uri.scheme == "novelyomi") && (uri.host == "add-repo" || uri.host == "extension-store")) {
                 val url = uri.getQueryParameter("url") ?: throw Exception("No url for repo import")
                 val (prefName, name) = when (uri.scheme) {
@@ -627,6 +631,80 @@ class MainActivity : AppCompatActivity() {
             selectedOption = 1
             binding.includedNavbar.navbar.selectTabAt(1)
             binding.viewpager.setCurrentItem(1, false)
+        }
+        if (Intent.ACTION_VIEW == intent.action) {
+            handleViewIntent(intent)
+        }
+        handleIncomingExtras(intent)
+    }
+
+    private fun handleIncomingExtras(targetIntent: Intent) {
+        targetIntent.extras?.let { extras ->
+            val fragmentToLoad = extras.getString("FRAGMENT_TO_LOAD")
+            val mediaId = extras.getInt("mediaId", -1)
+            val commentId = extras.getInt("commentId", -1)
+            val activityId = extras.getInt("activityId", -1)
+
+            if (fragmentToLoad != null && mediaId != -1 && commentId != -1) {
+                val detailIntent = Intent(this, MediaDetailsActivity::class.java).apply {
+                    putExtra("FRAGMENT_TO_LOAD", fragmentToLoad)
+                    putExtra("mediaId", mediaId)
+                    putExtra("commentId", commentId)
+                }
+                startActivity(detailIntent)
+                return
+            } else if (fragmentToLoad == "FEED" && activityId != -1) {
+                if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+                    val feedIntent = Intent(this, FeedActivity::class.java).apply {
+                        putExtra("FRAGMENT_TO_LOAD", "NOTIFICATIONS")
+                        putExtra("activityId", activityId)
+                    }
+                    startActivity(feedIntent)
+                    return
+                }
+            } else if (fragmentToLoad == "NOTIFICATIONS" && activityId != -1) {
+                if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+                    val notificationIntent = Intent(this, NotificationActivity::class.java).apply {
+                        putExtra("activityId", activityId)
+                    }
+                    startActivity(notificationIntent)
+                    return
+                }
+            }
+
+            val id = extras.getInt("mediaId", 0)
+            val isMAL = extras.getBoolean("mal", false)
+            val cont = extras.getBoolean("continue", false)
+            val mediaType = extras.getString("mediaType")
+            if (id > 0) {
+                scope.launch(Dispatchers.IO) {
+                    val media = Anilist.query.getMedia(id, isMAL, mediaType)
+                    if (media != null) {
+                        media.cameFromContinue = cont
+                        startActivity(
+                            Intent(this@MainActivity, MediaDetailsActivity::class.java)
+                                .putExtra("media", media as java.io.Serializable)
+                        )
+                    } else {
+                        snackString(this@MainActivity.getString(R.string.anilist_not_found))
+                    }
+                }
+            }
+            val username = extras.getString("username")
+            if (username != null) {
+                val nameInt = username.toIntOrNull()
+                if (nameInt != null) {
+                    startActivity(
+                        Intent(this@MainActivity, ProfileActivity::class.java)
+                            .putExtra("userId", nameInt)
+                    )
+                } else {
+                    startActivity(
+                        Intent(this@MainActivity, ProfileActivity::class.java)
+                            .putExtra("username", username)
+                    )
+                }
+            }
         }
     }
 }

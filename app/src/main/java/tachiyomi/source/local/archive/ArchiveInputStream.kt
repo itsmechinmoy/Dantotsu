@@ -55,9 +55,10 @@ class ArchiveInputStream(buffer: Long, size: Long) : InputStream() {
         Archive.readFree(archive)
     }
 
-    fun getNextEntry() = Archive.readNextHeader(archive).takeUnless { it == 0L }?.let { entry ->
+    fun getNextEntry(): tachiyomi.source.local.archive.ArchiveEntry? {
+        val entry = Archive.readNextHeader(archive).takeUnless { it == 0L } ?: return null
         val name = ArchiveEntry.pathnameUtf8(entry) ?: ArchiveEntry.pathname(entry)?.decodeToString() ?: return null
         val isFile = ArchiveEntry.filetype(entry) == ArchiveEntry.AE_IFREG
-        tachiyomi.source.local.archive.ArchiveEntry(name, isFile)
+        return tachiyomi.source.local.archive.ArchiveEntry(name, isFile)
     }
 }

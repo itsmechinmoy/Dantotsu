@@ -8,8 +8,6 @@ import android.os.Bundle
 import android.util.Log
 import ani.dantotsu.addons.download.DownloadAddonManager
 import ani.dantotsu.torrent.TorrentServerManager
-import ani.dantotsu.aniyomi.anime.custom.AppModule
-import ani.dantotsu.aniyomi.anime.custom.PreferenceModule
 import ani.dantotsu.connections.comments.CommentsAPI
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.connections.discord.Discord
@@ -34,8 +32,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import ani.dantotsu.core.metro.GraphProvider
+import ani.dantotsu.di.AppGraph
+import ani.dantotsu.di.injekt.MetroInteropModule
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.createGraphFactory
 import logcat.AndroidLogcatLogger
 import logcat.LogPriority
 import logcat.LogcatLogger
@@ -45,7 +49,14 @@ import uy.kohesive.injekt.api.get
 
 
 @SuppressLint("StaticFieldLeak")
-class App : Application() {
+class App : Application(), GraphProvider<AppGraph> {
+
+    override val graph: AppGraph by lazy {
+        createGraphFactory<AppGraph.Factory>().create(context = this)
+    }
+
+    @Inject lateinit var interopModule: MetroInteropModule
+
     private lateinit var animeExtensionManager: AnimeExtensionManager
     private lateinit var mangaExtensionManager: MangaExtensionManager
     private lateinit var novelExtensionManager: NovelExtensionManager
@@ -62,6 +73,8 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         PrefManager.init(this)
+        graph.inject(this)
+        Injekt.importModule(interopModule)
 
         val crashlytics =
             ani.dantotsu.connections.crashlytics.CrashlyticsFactory.createCrashlytics()
@@ -70,9 +83,6 @@ class App : Application() {
         Logger.init(this)
         Thread.setDefaultUncaughtExceptionHandler(FinalExceptionHandler())
         Logger.log(Log.WARN, "App: Logging started")
-
-        Injekt.importModule(AppModule(this))
-        Injekt.importModule(PreferenceModule(this))
 
 
         val useMaterialYou: Boolean = PrefManager.getVal(PrefName.UseMaterialYou)
@@ -114,25 +124,25 @@ class App : Application() {
         scope.launch {
             animeExtensionManager = Injekt.get()
             launch {
+                delay(1500)
                 animeExtensionManager.findAvailableExtensions()
             }
-            Logger.log("Anime Extensions: ${animeExtensionManager.installedExtensionsFlow.first()}")
             AnimeSources.init(animeExtensionManager.installedExtensionsFlow)
         }
         scope.launch {
             mangaExtensionManager = Injekt.get()
             launch {
+                delay(1500)
                 mangaExtensionManager.findAvailableExtensions()
             }
-            Logger.log("Manga Extensions: ${mangaExtensionManager.installedExtensionsFlow.first()}")
             MangaSources.init(mangaExtensionManager.installedExtensionsFlow)
         }
         scope.launch {
             novelExtensionManager = Injekt.get()
             launch {
+                delay(1500)
                 novelExtensionManager.findAvailableExtensions()
             }
-            Logger.log("Novel Extensions: ${novelExtensionManager.installedExtensionsFlow.first()}")
             NovelSources.init(novelExtensionManager.allInstalledExtensionsFlow)
         }
         GlobalScope.launch {

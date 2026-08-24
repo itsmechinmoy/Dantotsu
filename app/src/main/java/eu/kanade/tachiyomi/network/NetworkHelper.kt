@@ -7,6 +7,9 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
 import com.lagradost.nicehttp.Requests
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
@@ -24,6 +27,8 @@ import okhttp3.Credentials
 import okhttp3.Response
 import okhttp3.Route
 
+@Inject
+@SingleIn(AppScope::class)
 class NetworkHelper(
     context: Context
 ) {

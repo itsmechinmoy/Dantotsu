@@ -1,10 +1,15 @@
 package eu.kanade.domain.source.service
 
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import tachiyomi.core.preference.PreferenceStore
 import tachiyomi.core.preference.getEnum
 import tachiyomi.domain.library.model.LibraryDisplayMode
 
+@Inject
+@SingleIn(AppScope::class)
 class SourcePreferences(
     private val preferenceStore: PreferenceStore,
 ) {

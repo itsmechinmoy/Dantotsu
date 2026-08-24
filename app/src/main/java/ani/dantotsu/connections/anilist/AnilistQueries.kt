@@ -995,11 +995,12 @@ class AnilistQueries {
                 force = true,
                 useToken = false
             )?.data?.genreCollection?.apply {
-                genres = arrayListOf()
+                val list = arrayListOf<String>()
                 forEach {
-                    genres?.add(it)
+                    list.add(it)
                 }
-                PrefManager.setVal(PrefName.GenresList, genres?.toSet())
+                genres = list
+                PrefManager.setVal(PrefName.GenresList, list.toSet())
             }
         }
         if (tags == null) {
@@ -1022,7 +1023,7 @@ class AnilistQueries {
             }
         }
         return if (!genres.isNullOrEmpty() && tags != null) {
-            Anilist.genres = genres?.sortedBy { it }?.toMutableList() as ArrayList<String>
+            Anilist.genres = ArrayList(genres.sorted())
             Anilist.tags = tags
             true
         } else false

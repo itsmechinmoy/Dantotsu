@@ -41,8 +41,8 @@ object OpenSubtitlesRestApi {
                             .addHeader("Accept", "application/json")
                             .build()
                         val resp = okHttpClient.newCall(req).execute()
-                        if (resp.isSuccessful && resp.body != null) {
-                            val json = resp.body!!.string()
+                        if (resp.isSuccessful) {
+                            val json = resp.body.string()
                             val parsed = Mapper.json.decodeFromString<OpenSubRestResponse>(json)
                             parsed.data.forEach { item ->
                                 val file = item.attributes.files.firstOrNull() ?: return@forEach
@@ -84,8 +84,8 @@ object OpenSubtitlesRestApi {
                     .post(bodyStr.toRequestBody(JSON_MEDIA_TYPE))
                     .build()
                 val resp = okHttpClient.newCall(req).execute()
-                if (resp.isSuccessful && resp.body != null) {
-                    val json = resp.body!!.string()
+                if (resp.isSuccessful) {
+                    val json = resp.body.string()
                     val parsed = Mapper.json.decodeFromString<OpenSubDownloadResponse>(json)
                     parsed.link
                 } else null

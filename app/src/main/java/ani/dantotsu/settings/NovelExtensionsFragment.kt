@@ -22,6 +22,7 @@ import ani.dantotsu.settings.paging.NovelExtensionsViewModelFactory
 import ani.dantotsu.settings.paging.OnNovelInstallClickListener
 import ani.dantotsu.snackString
 import eu.kanade.tachiyomi.data.notification.Notifications
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import rx.android.schedulers.AndroidSchedulers
@@ -62,6 +63,11 @@ class NovelExtensionsFragment : Fragment(),
             }
         }
 
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            if (novelExtensionManager.availableExtensionsFlow.value.isEmpty()) {
+                novelExtensionManager.findAvailableExtensions()
+            }
+        }
 
         viewModel.invalidatePager() // Force a refresh of the pager
         return binding.root

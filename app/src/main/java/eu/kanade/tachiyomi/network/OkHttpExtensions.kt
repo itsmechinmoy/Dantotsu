@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.network
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.okio.decodeFromBufferedSource
 import kotlinx.serialization.serializer
@@ -147,11 +148,13 @@ fun OkHttpClient.newCachelessCallWithProgress(
     return progressClient.newCall(request)
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 context(_: Json)
 inline fun <reified T> Response.parseAs(): T {
     return decodeFromJsonResponse(serializer(), this)
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 context(json: Json)
 fun <T> decodeFromJsonResponse(
     deserializer: DeserializationStrategy<T>,

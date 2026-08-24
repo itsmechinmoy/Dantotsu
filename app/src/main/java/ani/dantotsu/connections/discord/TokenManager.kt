@@ -1,5 +1,6 @@
 package ani.dantotsu.connections.discord
 
+import ani.dantotsu.Mapper
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import ani.dantotsu.util.Logger
@@ -156,13 +157,13 @@ class TokenManager(
         ).execute()
 
         if (!authorizeResp.isSuccessful) {
-            val errorBody = authorizeResp.body?.string() ?: "empty"
+            val errorBody = authorizeResp.body.string()
             Logger.log("TokenManager: OAuth2 authorize failed: ${authorizeResp.code} $errorBody")
             throw ifUnauthorized
                 ?: IllegalStateException("OAuth2 authorize failed: ${authorizeResp.code} $errorBody")
         }
 
-        val locationJson = Json.decodeFromString<JsonObject>(authorizeResp.body!!.string())
+        val locationJson = Mapper.json.decodeFromString<JsonObject>(authorizeResp.body.string())
         val location = locationJson["location"]?.jsonPrimitive?.content
             ?: throw IllegalStateException("No location in OAuth2 response")
         val code = location.toHttpUrl().queryParameter("code")
@@ -185,13 +186,13 @@ class TokenManager(
                 .build()
         ).execute()
 
-        val tokenBody = tokenResp.body?.string()
+        val tokenBody = tokenResp.body.string()
         if (!tokenResp.isSuccessful) {
             Logger.log("TokenManager: Token exchange failed: ${tokenResp.code} $tokenBody")
             throw IllegalStateException("Token exchange failed: ${tokenResp.code} $tokenBody")
         }
             
-        val response = Json { ignoreUnknownKeys = true }.decodeFromString<TokenResponse>(tokenBody ?: throw IllegalStateException("Empty token response"))
+        val response = Mapper.json.decodeFromString<TokenResponse>(tokenBody)
         Logger.log("TokenManager: Successfully obtained Discord Bearer token!")
         response.accessToken ?: throw IllegalStateException("No access_token in response: $tokenBody")
         response
@@ -211,12 +212,12 @@ class TokenManager(
                 .build()
         ).execute()
 
-        val tokenBody = tokenResp.body?.string()
+        val tokenBody = tokenResp.body.string()
         if (!tokenResp.isSuccessful) {
             throw IllegalStateException("Refresh failed: ${tokenResp.code} $tokenBody")
         }
             
-        val response = Json { ignoreUnknownKeys = true }.decodeFromString<TokenResponse>(tokenBody ?: "")
+        val response = Mapper.json.decodeFromString<TokenResponse>(tokenBody)
         response.accessToken ?: throw IllegalStateException("No access_token in refresh response: $tokenBody")
         response
     }

@@ -23,8 +23,11 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.okio.decodeFromBufferedSource
 import kotlinx.serialization.serializer
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import okio.BufferedSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.PrintWriter
@@ -87,6 +90,25 @@ object Mapper : ResponseParser {
 
     inline fun <reified T> parse(text: String): T {
         return json.decodeFromString(text)
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    inline fun <reified T> parseStream(source: BufferedSource): T {
+        return json.decodeFromBufferedSource(serializer<T>(), source)
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    inline fun <reified T> parseResponse(response: Response): T {
+        return response.body.source().use { source ->
+            json.decodeFromBufferedSource(serializer<T>(), source)
+        }
+    }
+}
+
+@OptIn(ExperimentalSerializationApi::class)
+inline fun <reified T> Response.parseAs(json: Json = Mapper.json): T {
+    return body.source().use { source ->
+        json.decodeFromBufferedSource(serializer<T>(), source)
     }
 }
 

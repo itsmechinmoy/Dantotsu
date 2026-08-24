@@ -15,13 +15,19 @@ import eu.kanade.tachiyomi.extension.util.ExtensionInstallReceiver
 import eu.kanade.tachiyomi.extension.util.ExtensionInstaller
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import eu.kanade.tachiyomi.util.preference.plusAssign
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import rx.Observable
 import tachiyomi.core.util.lang.launchNow
 import tachiyomi.core.util.lang.withUIContext
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import tachiyomi.domain.source.manga.model.MangaSourceData
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -37,13 +43,17 @@ import java.util.Locale
  * @param context The application context.
  * @param preferences The application preferences.
  */
+@Inject
+@SingleIn(AppScope::class)
 class MangaExtensionManager(
     private val context: Context,
-    private val preferences: SourcePreferences = Injekt.get(),
+    private val preferences: SourcePreferences,
 ) {
 
     var isInitialized = false
         private set
+
+    private val scope = CoroutineScope(Dispatchers.IO)
 
     /**
      * API where all the available extensions can be found.
@@ -89,8 +99,10 @@ class MangaExtensionManager(
     val untrustedExtensionsFlow = _untrustedExtensionsFlow.asStateFlow()
 
     init {
-        initExtensions()
-        ExtensionInstallReceiver().setMangaListener(InstallationListener()).register(context)
+        scope.launch {
+            initExtensions()
+            ExtensionInstallReceiver().setMangaListener(InstallationListener()).register(context)
+        }
     }
 
     /**

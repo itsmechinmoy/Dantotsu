@@ -279,7 +279,7 @@ class MediaAdaptor(
                         b.itemCompactTotal.text = "${media.manga.totalChapters ?: "??"}"
                     }
                     @SuppressLint("NotifyDataSetChanged")
-                    if (position == mediaList!!.size - 2 && viewPager != null) viewPager.post {
+                    if (position == mediaList.size - 2 && viewPager != null) viewPager.post {
                         val size = mediaList.size
                         mediaList.addAll(mediaList)
                         notifyItemRangeInserted(size - 1, mediaList.size)
@@ -340,7 +340,7 @@ class MediaAdaptor(
                         b.itemCompactTotal.text = "${media.manga.totalChapters ?: "??"}"
                     }
                     @SuppressLint("NotifyDataSetChanged")
-                    if (position == mediaList!!.size - 2 && viewPager != null) viewPager.post {
+                    if (position == mediaList.size - 2 && viewPager != null) viewPager.post {
                         val size = mediaList.size
                         mediaList.addAll(mediaList)
                         notifyItemRangeInserted(size - 1, mediaList.size)

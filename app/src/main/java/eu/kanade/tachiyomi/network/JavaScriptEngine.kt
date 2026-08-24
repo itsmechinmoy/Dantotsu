@@ -2,12 +2,17 @@ package eu.kanade.tachiyomi.network
 
 import android.content.Context
 import app.cash.quickjs.QuickJs
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * Util for evaluating JavaScript in sources.
  */
+@Inject
+@SingleIn(AppScope::class)
 @Suppress("UNUSED", "UNCHECKED_CAST")
 class JavaScriptEngine(context: Context) {
 

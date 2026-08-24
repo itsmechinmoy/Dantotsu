@@ -16,6 +16,9 @@ import com.anggrayudi.storage.file.deleteRecursively
 import com.anggrayudi.storage.file.moveFolderTo
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -25,6 +28,8 @@ import java.io.Serializable
 import kotlin.math.ln
 import kotlin.math.pow
 
+@Inject
+@SingleIn(AppScope::class)
 class DownloadsManager(private val context: Context) {
     private val gson = Gson()
     private val downloadsList = loadDownloads().toMutableList()

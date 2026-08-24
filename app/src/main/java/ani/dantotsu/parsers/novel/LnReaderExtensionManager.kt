@@ -1,9 +1,11 @@
 package ani.dantotsu.parsers.novel
 import android.content.Context
 import ani.dantotsu.util.Logger
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -22,12 +24,13 @@ class LnReaderExtensionManager(private val context: Context) {
         .build()
 
     private val pluginDir: File
-        get() = File(context.filesDir, "lnreader_plugins").also { it.mkdirs() }
+        get() = File(context.filesDir, "lnreader_plugins")
 
     private fun safePluginDir(pluginId: String): File {
+        val base = pluginDir.also { it.mkdirs() }
         val sanitized = pluginId.replace(Regex("""[^a-zA-Z0-9._-]"""), "_")
-        val dir = File(pluginDir, sanitized)
-        require(dir.canonicalPath.startsWith(pluginDir.canonicalPath)) {
+        val dir = File(base, sanitized)
+        require(dir.canonicalPath.startsWith(base.canonicalPath)) {
             "Invalid plugin ID: path traversal detected in '$pluginId'"
         }
         return dir
@@ -41,7 +44,9 @@ class LnReaderExtensionManager(private val context: Context) {
     private val defaultRepoUrls = emptyList<String>()
 
     init {
-        loadInstalledFromDisk()
+        CoroutineScope(Dispatchers.IO).launch {
+            loadInstalledFromDisk()
+        }
     }
 
     private fun safeUrlString(url: String): String {

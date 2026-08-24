@@ -606,7 +606,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                 }) {
                 val sid = ffmpegSessionId.get()
                 if (sid != -1L) {
-                    emitProgress(sid, statCallback, it.time.toDouble())
+                    emitProgress(sid, statCallback, it.time)
                 }
             }
             val rawId = exec.sessionId

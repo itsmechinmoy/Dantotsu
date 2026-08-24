@@ -17,6 +17,7 @@ import ani.dantotsu.settings.paging.MangaExtensionsViewModelFactory
 import ani.dantotsu.settings.paging.OnMangaInstallClickListener
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import rx.android.schedulers.AndroidSchedulers
@@ -55,6 +56,12 @@ class MangaExtensionsFragment : Fragment(),
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.pagerFlow.collectLatest { pagingData ->
                 adapter.submitData(pagingData)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            if (mangaExtensionManager.availableExtensionsFlow.value.isEmpty()) {
+                mangaExtensionManager.findAvailableExtensions()
             }
         }
 

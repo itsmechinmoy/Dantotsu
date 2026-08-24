@@ -12,10 +12,15 @@ import ani.dantotsu.addons.AddonManager
 import ani.dantotsu.addons.LoadResult
 import ani.dantotsu.media.AddonType
 import ani.dantotsu.util.Logger
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import eu.kanade.tachiyomi.extension.InstallStep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+@Inject
+@SingleIn(AppScope::class)
 class DownloadAddonManager(
     private val context: Context
 ) : AddonManager<DownloadAddon.Installed>(context) {

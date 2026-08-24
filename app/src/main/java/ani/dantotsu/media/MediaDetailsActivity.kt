@@ -86,22 +86,20 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         super.onCreate(savedInstanceState)
         var media: Media = intent.getSerialized("media") ?: mediaSingleton ?: emptyMedia()
         val id = intent.getIntExtra("mediaId", -1)
-        if (id != -1) {
+        if (id != -1 && media.name == "No media found") {
             val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-            runBlocking {
-                withContext(Dispatchers.IO) {
-                    if (rescueMode) {
-                        val animeNode = MAL.query.getAnimeDetails(id)
-                        if (animeNode != null) {
-                            media = Media(animeNode, true)
-                        } else {
-                            val mangaNode = MAL.query.getMangaDetails(id)
-                            media = if (mangaNode != null) Media(mangaNode, false)
-                            else emptyMedia()
-                        }
+            runBlocking(Dispatchers.IO) {
+                if (rescueMode) {
+                    val animeNode = MAL.query.getAnimeDetails(id)
+                    if (animeNode != null) {
+                        media = Media(animeNode, true)
                     } else {
-                        media = Anilist.query.getMedia(id, false) ?: emptyMedia()
+                        val mangaNode = MAL.query.getMangaDetails(id)
+                        media = if (mangaNode != null) Media(mangaNode, false)
+                        else emptyMedia()
                     }
+                } else {
+                    media = Anilist.query.getMedia(id, false) ?: emptyMedia()
                 }
             }
         }
@@ -136,7 +134,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         binding.mediaBanner.updateLayoutParams { height += statusBarHeight }
         binding.mediaBannerNoKen.updateLayoutParams { height += statusBarHeight }
         binding.mediaClose.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
-        binding.mediaHome?.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
+        binding.mediaHome.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
         binding.incognito.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
         binding.mediaCollapsing.minimumHeight = statusBarHeight
 
@@ -145,7 +143,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         mMaxScrollSize = binding.mediaAppBar.totalScrollRange
         binding.mediaAppBar.addOnOffsetChangedListener(this)
 
-        binding.mediaHome?.setOnClickListener {
+        binding.mediaHome.setOnClickListener {
             val intent = Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 putExtra("goToHome", true)
