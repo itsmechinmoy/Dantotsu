@@ -261,9 +261,16 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             }
                             val subtitles = extractor.subtitles
                             val subtitlesToDownload: MutableList<Pair<String, String>> = mutableListOf()
+                            val embedUrl = extractor.server.embed.url
+                            val selectedVideoUrl = if (extractor.videos.isNotEmpty()) {
+                                if (currentEp.selectedVideo in extractor.videos.indices) extractor.videos[currentEp.selectedVideo].file.url else extractor.videos[0].file.url
+                            } else ""
                             subtitles.forEach {
-                                if(it.language in selectedSubtitles || selectedSubtitles.isEmpty()){
-                                    subtitlesToDownload.add(Pair(it.file.url, it.language))
+                                if (it.language in selectedSubtitles || selectedSubtitles.isEmpty()) {
+                                    val resolvedUrl = ani.dantotsu.media.anime.player.PlayerSubtitleManager.resolveSubtitleUrl(
+                                        it.file.url, embedUrl, selectedVideoUrl
+                                    )
+                                    subtitlesToDownload.add(Pair(resolvedUrl, it.language))
                                 }
                             }
 

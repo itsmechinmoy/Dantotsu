@@ -103,10 +103,26 @@ object PrefManager {
                     prefName.data.default as String?
                 ) as T
 
-                Set::class -> pref.getStringSet(
-                    prefName.name,
-                    prefName.data.default as Set<String>
-                ) as T
+                Set::class -> {
+                    val raw = try {
+                        pref.all[prefName.name]
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val stringSet: Set<String> = when (raw) {
+                        is Set<*> -> raw.mapNotNull { it?.toString() }.toSet()
+                        is Collection<*> -> raw.mapNotNull { it?.toString() }.toSet()
+                        else -> {
+                            val prefsSet = try {
+                                pref.getStringSet(prefName.name, null)
+                            } catch (_: Exception) {
+                                null
+                            }
+                            prefsSet?.mapNotNull { (it as? Any)?.toString() }?.toSet() ?: (prefName.data.default as Set<String>)
+                        }
+                    }
+                    stringSet as T
+                }
 
                 List::class -> deserializeClass(
                     prefName.name,
@@ -134,7 +150,26 @@ object PrefManager {
                 Float::class -> pref.getFloat(prefName.name, default as Float) as T?
                 Long::class -> pref.getLong(prefName.name, default as Long) as T?
                 String::class -> pref.getString(prefName.name, default as String?) as T?
-                Set::class -> pref.getStringSet(prefName.name, default as Set<String>) as T?
+                Set::class -> {
+                    val raw = try {
+                        pref.all[prefName.name]
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val stringSet: Set<String>? = when (raw) {
+                        is Set<*> -> raw.mapNotNull { it?.toString() }.toSet()
+                        is Collection<*> -> raw.mapNotNull { it?.toString() }.toSet()
+                        else -> {
+                            val prefsSet = try {
+                                pref.getStringSet(prefName.name, null)
+                            } catch (_: Exception) {
+                                null
+                            }
+                            prefsSet?.mapNotNull { (it as? Any)?.toString() }?.toSet() ?: (default as? Set<String>)
+                        }
+                    }
+                    stringSet as T?
+                }
 
                 else -> deserializeClass(prefName.name, default, prefName.data.prefLocation)
             }
@@ -152,7 +187,31 @@ object PrefManager {
                 is Float -> irrelevantPreferences!!.getFloat(key, default) as T
                 is Long -> irrelevantPreferences!!.getLong(key, default) as T
                 is String -> irrelevantPreferences!!.getString(key, default) as T
-                is Set<*> -> irrelevantPreferences!!.getStringSet(key, default as Set<String>) as T
+                is Set<*> -> {
+                    val raw = try {
+                        irrelevantPreferences!!.all[key]
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val stringSet: Set<String> = when (raw) {
+                        is Set<*> -> raw.mapNotNull { it?.toString() }.toSet()
+                        is Collection<*> -> raw.mapNotNull { it?.toString() }.toSet()
+                        else -> {
+                            val prefsSet = try {
+                                irrelevantPreferences!!.getStringSet(key, null)
+                            } catch (_: Exception) {
+                                null
+                            }
+                            prefsSet?.mapNotNull { (it as? Any)?.toString() }?.toSet() ?: return default
+                        }
+                    }
+                    val sample = (default as Set<*>).firstOrNull()
+                    when (sample) {
+                        is Int -> stringSet.mapNotNull { it.toIntOrNull() }.toSet() as T
+                        is Long -> stringSet.mapNotNull { it.toLongOrNull() }.toSet() as T
+                        else -> stringSet as T
+                    }
+                }
                 else -> throw IllegalArgumentException("Type not supported")
             }
         } catch (e: Exception) {
@@ -189,10 +248,26 @@ object PrefManager {
                     default as? String
                 ) as T?
 
-                clazz.isAssignableFrom(Set::class.java) -> irrelevantPreferences!!.getStringSet(
-                    key,
-                    default as? Set<String> ?: setOf()
-                ) as T?
+                clazz.isAssignableFrom(Set::class.java) -> {
+                    val raw = try {
+                        irrelevantPreferences!!.all[key]
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val stringSet: Set<String>? = when (raw) {
+                        is Set<*> -> raw.mapNotNull { it?.toString() }.toSet()
+                        is Collection<*> -> raw.mapNotNull { it?.toString() }.toSet()
+                        else -> {
+                            val prefsSet = try {
+                                irrelevantPreferences!!.getStringSet(key, null)
+                            } catch (_: Exception) {
+                                null
+                            }
+                            prefsSet?.mapNotNull { (it as? Any)?.toString() }?.toSet()
+                        }
+                    }
+                    (stringSet ?: (default as? Set<String>)) as T?
+                }
 
                 else -> deserializeClass(key, default, Location.Irrelevant)
             }
@@ -220,7 +295,7 @@ object PrefManager {
                 is Float -> putFloat(key, value as Float)
                 is Long -> putLong(key, value as Long)
                 is String -> putString(key, value as String)
-                is Set<*> -> putStringSet(key, value as Set<String>)
+                is Set<*> -> putStringSet(key, (value as Set<*>).map { it.toString() }.toSet())
                 null -> remove(key)
                 else -> serializeClass(key, value, Location.Irrelevant)
             }

@@ -585,13 +585,13 @@ class HomeFragment : Fragment() {
                                     ?.toIntOrNull()
                             if (Anilist.userid == null) {
                                 withContext(Dispatchers.Main) {
-                                    getUserId(requireContext()) {
+                                    getUserId(context) {
                                         load()
                                     }
                                 }
                             } else {
                                 launch(Dispatchers.Main) {
-                                    getUserId(requireContext()) {
+                                    getUserId(context) {
                                         load()
                                     }
                                 }
@@ -602,14 +602,15 @@ class HomeFragment : Fragment() {
 
                     if (Anilist.anilistDisabledSignal && !PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
                         withContext(Dispatchers.Main) {
+                            val ctx = context ?: return@withContext
                             if (isAdded && _binding != null) {
-                                requireContext().customAlertDialog().apply {
+                                ctx.customAlertDialog().apply {
                                     setTitle(R.string.rescue_mode_prompt_title)
                                     setMessage(R.string.rescue_mode_prompt_message)
                                     setPosButton(R.string.rescue_mode_enable) {
                                         PrefManager.setVal(PrefName.RescueMode, true)
                                         Anilist.anilistDisabledSignal = false
-                                        val intent = Intent(requireContext(), MainActivity::class.java)
+                                        val intent = Intent(ctx, MainActivity::class.java)
                                         intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
                                         startActivity(intent)
                                         activity?.overridePendingTransition(0, 0)
@@ -656,7 +657,7 @@ class HomeFragment : Fragment() {
                     val initHomePage = async(Dispatchers.IO) { model.initHomePage(forceRefresh = isPullToRefresh) }
                     async(Dispatchers.IO) { model.setListImages() }
                     if (!rescueMode) {
-                        async(Dispatchers.IO) { model.initUserStatus() }
+                        async(Dispatchers.IO) { model.initUserStatus(forceRefresh = isPullToRefresh) }
                     }
                     initHomePage.await()
 

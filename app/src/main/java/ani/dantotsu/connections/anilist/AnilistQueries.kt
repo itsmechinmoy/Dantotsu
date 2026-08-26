@@ -82,6 +82,10 @@ class AnilistQueries {
         )
     }
 
+    fun invalidateHomePageCache() {
+        PrefManager.setCustomVal("home_page_cache", null)
+    }
+
     suspend fun getUserData(): Boolean {
         val response: Query.Viewer?
         measureTimeMillis {
@@ -518,25 +522,36 @@ class AnilistQueries {
         return responseArray
     }
 
-    suspend fun getUserStatus(): ArrayList<User>? {
+    fun invalidateUserStatusCache() {
+        PrefManager.setCustomVal("user_status_cache", null)
+    }
+
+    suspend fun getUserStatus(forceRefresh: Boolean = false): ArrayList<User>? {
         val toShow: List<Boolean> =
             PrefManager.getVal(PrefName.HomeLayout)
         if (toShow.getOrNull(7) != true) return null
-        loadUserStatusCache()?.let { return sortUserStatusList(it) }
-        val query = """{Page1:${status(1)}Page2:${status(2)}}"""
-        val response = executeQuery<Query.HomePageMedia>(query)
+        if (!forceRefresh) {
+            loadUserStatusCache()?.let { return sortUserStatusList(it) }
+        }
+        val myQuery = if (Anilist.userid != null) myStatus() else ""
+        val query = """{Page1:${status(1)}Page2:${status(2)}$myQuery}"""
+        val response = executeQuery<Query.HomePageMedia>(query, force = forceRefresh)
         val list = mutableListOf<User>()
         val threeDaysAgo = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_MONTH, -3)
         }.timeInMillis
         if (response?.data?.page1 != null && response.data.page2 != null) {
-            val activities = listOf(
+            val allPages = mutableListOf(
                 response.data.page1.activities,
                 response.data.page2.activities
-            ).asSequence().flatten()
+            )
+            response.data.myActivities?.activities?.let { allPages.add(it) }
+            val activities = allPages.asSequence().flatten()
                 .filter { it.typename != "MessageActivity" }
                 .filter { if (Anilist.adult) true else it.media?.isAdult != true }
-                .filter { it.createdAt * 1000L > threeDaysAgo }.toList()
+                .filter { it.createdAt * 1000L > threeDaysAgo }
+                .distinctBy { it.id }
+                .toList()
                 .sortedByDescending { it.createdAt }
             val anilistActivities = mutableListOf<User>()
             val groupedActivities = activities.groupBy { it.userId }
@@ -633,7 +648,8 @@ class AnilistQueries {
     }
 
     suspend fun initHomePage(): Map<String, ArrayList<Media>> {
-        val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
+        val removeList = PrefManager.getCustomVal<Set<String>>("removeList", emptySet())
+            .mapNotNull { it.toIntOrNull() }.toSet()
         val hidePrivate = PrefManager.getVal<Boolean>(PrefName.HidePrivate)
         val removedMedia = ArrayList<Media>()
         val toShow = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout).toMutableList()
@@ -1853,6 +1869,11 @@ Page(page:$page,perPage:50) {
 
     private fun status(page: Int = 1): String {
         return """Page(page:$page,perPage:50){activities(isFollowing: true,type_in:[TEXT,ANIME_LIST,MANGA_LIST,MEDIA_LIST],sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed replyCount likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed replyCount likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{extraLarge medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id type createdAt}}}"""
+    }
+
+    private fun myStatus(): String {
+        val uid = Anilist.userid ?: return ""
+        return """MyActivities:Page(page:1,perPage:25){activities(userId:$uid,type_in:[TEXT,ANIME_LIST,MANGA_LIST,MEDIA_LIST],sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed replyCount likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed replyCount likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{extraLarge medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id type createdAt}}}"""
     }
 
     suspend fun getUpcomingAnime(id: String): List<Media> {

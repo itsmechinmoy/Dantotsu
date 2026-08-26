@@ -941,7 +941,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                     null // ExoPlayer auto-detect for non-local containers
                 }
             }
-            else -> androidx.media3.common.MimeTypes.APPLICATION_MP4
+            else -> null
         }
 
         val downloadedMediaItem = if (ext.server.offline) {

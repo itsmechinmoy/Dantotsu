@@ -8,9 +8,13 @@ import kotlinx.coroutines.sync.withLock
 import java.net.URLEncoder
 
 class JikanQueries {
-    private val apiUrl = "https://api.jikan.moe/v4"
 
     companion object {
+        val apiUrls = listOf(
+            "https://api.jikan.moe/v4",
+            "https://jikanfortheweebs.midnightignite.me/v4",
+            "https://api.tenrai.org/v1"
+        )
         private val rateMutex = Mutex()
         private var lastRequestTime = 0L
         private const val MIN_INTERVAL_MS = 350L
@@ -20,7 +24,7 @@ class JikanQueries {
         var lastResponse: com.lagradost.nicehttp.NiceResponse? = null
         var lastException: Exception? = null
         var delayMs = 1000L
-        val maxAttempts = 4
+        val maxAttempts = 3
 
         for (attempt in 1..maxAttempts) {
             rateMutex.withLock {
@@ -50,6 +54,26 @@ class JikanQueries {
         }
 
         return lastResponse ?: throw (lastException ?: Exception("Request failed after $maxAttempts attempts"))
+    }
+
+    private suspend inline fun <reified T : Any> fetchWithFallback(path: String): T? {
+        val cleanPath = if (path.startsWith("/")) path else "/$path"
+
+        for (baseUrl in apiUrls) {
+            val url = "$baseUrl$cleanPath"
+            try {
+                val response = rateLimitedGet(url)
+                if (response.code in 200..299) {
+                    val parsed = response.parsed<T>()
+                    if (parsed != null) {
+                        return parsed
+                    }
+                }
+            } catch (_: Exception) {
+                // Try next fallback URL in chain
+            }
+        }
+        return null
     }
 
     suspend fun search(
@@ -84,8 +108,7 @@ class JikanQueries {
 
         val queryString = params.joinToString("&") { "${it.first}=${it.second}" }
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/$endpoint?$queryString")
-                .parsed<JikanSearchResponse>()
+            fetchWithFallback<JikanSearchResponse>("/$endpoint?$queryString")
         }
     }
 
@@ -95,8 +118,7 @@ class JikanQueries {
         limit: Int = 15,
     ): JikanSearchResponse? {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/top/anime?filter=$filter&page=$page&limit=$limit")
-                .parsed<JikanSearchResponse>()
+            fetchWithFallback<JikanSearchResponse>("/top/anime?filter=$filter&page=$page&limit=$limit")
         }
     }
 
@@ -106,8 +128,7 @@ class JikanQueries {
         limit: Int = 15,
     ): JikanSearchResponse? {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/top/manga?filter=$filter&page=$page&limit=$limit")
-                .parsed<JikanSearchResponse>()
+            fetchWithFallback<JikanSearchResponse>("/top/manga?filter=$filter&page=$page&limit=$limit")
         }
     }
 
@@ -116,8 +137,7 @@ class JikanQueries {
         limit: Int = 15,
     ): JikanSearchResponse? {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/seasons/now?page=$page&limit=$limit")
-                .parsed<JikanSearchResponse>()
+            fetchWithFallback<JikanSearchResponse>("/seasons/now?page=$page&limit=$limit")
         }
     }
 
@@ -126,8 +146,7 @@ class JikanQueries {
         limit: Int = 15,
     ): JikanSearchResponse? {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/seasons/upcoming?page=$page&limit=$limit")
-                .parsed<JikanSearchResponse>()
+            fetchWithFallback<JikanSearchResponse>("/seasons/upcoming?page=$page&limit=$limit")
         }
     }
 
@@ -138,16 +157,13 @@ class JikanQueries {
         limit: Int = 15,
     ): JikanSearchResponse? {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/seasons/$year/$season?page=$page&limit=$limit")
-                .parsed<JikanSearchResponse>()
+            fetchWithFallback<JikanSearchResponse>("/seasons/$year/$season?page=$page&limit=$limit")
         }
     }
 
     suspend fun getAnimeById(malId: Int): JikanMediaData? {
         return tryWithSuspend {
-            val response = rateLimitedGet("$apiUrl/anime/$malId/full")
-            val wrapper = response.parsed<JikanSingleResponse>()
-            wrapper.data
+            fetchWithFallback<JikanSingleResponse>("/anime/$malId/full")?.data
         }
     }
 
@@ -164,146 +180,116 @@ class JikanQueries {
         filter?.let { params.add("filter" to it) }
         val queryString = params.joinToString("&") { "${it.first}=${it.second}" }
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/schedules?$queryString")
-                .parsed<JikanSearchResponse>()
+            fetchWithFallback<JikanSearchResponse>("/schedules?$queryString")
         }
     }
 
     suspend fun getMangaById(malId: Int): JikanMediaData? {
         return tryWithSuspend {
-            val response = rateLimitedGet("$apiUrl/manga/$malId/full")
-            val wrapper = response.parsed<JikanSingleResponse>()
-            wrapper.data
+            fetchWithFallback<JikanSingleResponse>("/manga/$malId/full")?.data
         }
     }
 
     suspend fun getAnimeCharacters(malId: Int): List<JikanAnimeCharacter> {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/anime/$malId/characters")
-                .parsed<JikanAnimeCharactersResponse>()
-                .data
+            fetchWithFallback<JikanAnimeCharactersResponse>("/anime/$malId/characters")?.data
         } ?: emptyList()
     }
 
     suspend fun getMangaCharacters(malId: Int): List<JikanAnimeCharacter> {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/manga/$malId/characters")
-                .parsed<JikanAnimeCharactersResponse>()
-                .data
+            fetchWithFallback<JikanAnimeCharactersResponse>("/manga/$malId/characters")?.data
         } ?: emptyList()
     }
 
     suspend fun getAnimeStaff(malId: Int): List<JikanStaffMember> {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/anime/$malId/staff")
-                .parsed<JikanStaffResponse>()
-                .data
+            fetchWithFallback<JikanStaffResponse>("/anime/$malId/staff")?.data
         } ?: emptyList()
     }
 
     suspend fun getAnimeReviews(malId: Int, page: Int = 1): List<JikanReview> {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/anime/$malId/reviews?page=$page&preliminary=true&spoilers=false")
-                .parsed<JikanReviewResponse>()
-                .data
+            fetchWithFallback<JikanReviewResponse>("/anime/$malId/reviews?page=$page&preliminary=true&spoilers=false")?.data
         } ?: emptyList()
     }
 
     suspend fun getMangaReviews(malId: Int, page: Int = 1): List<JikanReview> {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/manga/$malId/reviews?page=$page&preliminary=true&spoilers=false")
-                .parsed<JikanReviewResponse>()
-                .data
+            fetchWithFallback<JikanReviewResponse>("/manga/$malId/reviews?page=$page&preliminary=true&spoilers=false")?.data
         } ?: emptyList()
     }
 
     suspend fun searchCharacters(query: String, page: Int = 1): JikanCharacterSearchResponse? {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/characters?q=$encodedQuery&page=$page&order_by=favorites&sort=desc")
-                .parsed<JikanCharacterSearchResponse>()
+            fetchWithFallback<JikanCharacterSearchResponse>("/characters?q=$encodedQuery&page=$page&order_by=favorites&sort=desc")
         }
     }
 
     suspend fun searchStaff(query: String, page: Int = 1): JikanPersonSearchResponse? {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/people?q=$encodedQuery&page=$page")
-                .parsed<JikanPersonSearchResponse>()
+            fetchWithFallback<JikanPersonSearchResponse>("/people?q=$encodedQuery&page=$page")
         }
     }
 
     suspend fun searchStudios(query: String, page: Int = 1): JikanProducerSearchResponse? {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/producers?q=$encodedQuery&page=$page")
-                .parsed<JikanProducerSearchResponse>()
+            fetchWithFallback<JikanProducerSearchResponse>("/producers?q=$encodedQuery&page=$page")
         }
     }
 
     suspend fun searchUsers(query: String, page: Int = 1): JikanUserSearchResponse? {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/users?q=$encodedQuery&page=$page")
-                .parsed<JikanUserSearchResponse>()
+            fetchWithFallback<JikanUserSearchResponse>("/users?q=$encodedQuery&page=$page")
         }
     }
 
     suspend fun getUserProfile(username: String): JikanUserRef? {
         val encodedUsername = URLEncoder.encode(username, "UTF-8")
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/users/$encodedUsername")
-                .parsed<JikanUserProfileResponse>()
-                .data
+            fetchWithFallback<JikanUserProfileResponse>("/users/$encodedUsername")?.data
         }
     }
 
     suspend fun getCharacterFull(malId: Int): JikanCharacterFullData? {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/characters/$malId/full")
-                .parsed<JikanCharacterFullResponse>()
-                .data
+            fetchWithFallback<JikanCharacterFullResponse>("/characters/$malId/full")?.data
         }
     }
 
     suspend fun getPersonFull(malId: Int): JikanPersonFullData? {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/people/$malId/full")
-                .parsed<JikanPersonFullResponse>()
-                .data
+            fetchWithFallback<JikanPersonFullResponse>("/people/$malId/full")?.data
         }
     }
 
     suspend fun getProducerFull(malId: Int): JikanProducerFullData? {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/producers/$malId/full")
-                .parsed<JikanProducerFullResponse>()
-                .data
+            fetchWithFallback<JikanProducerFullResponse>("/producers/$malId/full")?.data
         }
     }
 
     suspend fun getProducerAnime(malId: Int, page: Int = 1): JikanSearchResponse? {
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/anime?producers=$malId&order_by=start_date&sort=desc&page=$page&limit=25")
-                .parsed<JikanSearchResponse>()
+            fetchWithFallback<JikanSearchResponse>("/anime?producers=$malId&order_by=start_date&sort=desc&page=$page&limit=25")
         }
     }
 
     suspend fun getUserFavorites(username: String): JikanUserFavoritesData? {
         return tryWithSuspend {
             val encodedUsername = URLEncoder.encode(username, "UTF-8")
-            rateLimitedGet("$apiUrl/users/$encodedUsername/favorites")
-                .parsed<JikanUserFavoritesResponse>()
-                .data
+            fetchWithFallback<JikanUserFavoritesResponse>("/users/$encodedUsername/favorites")?.data
         }
     }
 
     suspend fun getRecommendations(isAnime: Boolean, malId: Int): List<JikanRecommendation> {
         val type = if (isAnime) "anime" else "manga"
         return tryWithSuspend {
-            rateLimitedGet("$apiUrl/$type/$malId/recommendations")
-                .parsed<JikanRecommendationsResponse>()
-                .data
+            fetchWithFallback<JikanRecommendationsResponse>("/$type/$malId/recommendations")?.data
         } ?: emptyList()
     }
 }

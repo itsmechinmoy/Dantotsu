@@ -57,11 +57,13 @@ class PlayerProgressManager(
         isProgressSavedForCurrentEpisode = false
         handler.removeCallbacks(progressRunnable)
         handler.post(progressRunnable)
+        updateWidgetState(isExiting = false)
     }
 
     fun stopTracking() {
         isTrackingProgress = false
         handler.removeCallbacks(progressRunnable)
+        updateWidgetState(isExiting = true)
     }
 
     fun updateWidgetState(isExiting: Boolean) {

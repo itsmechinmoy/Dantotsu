@@ -45,7 +45,8 @@ class StatusActivity : AppCompatActivity(), StoriesCallback {
         slideInRight = AnimationUtils.loadAnimation(this, R.anim.slide_in_right)
 
         val key = "activities"
-        val watchedActivity = PrefManager.getCustomVal<Set<Int>>(key, setOf())
+        val watchedActivity = PrefManager.getCustomVal<Set<String>>(key, emptySet())
+            .mapNotNull { it.toIntOrNull() }.toSet()
         if (activity.getOrNull(position) != null) {
             val startFrom = findFirstNonMatch(watchedActivity, activity[position].activity)
             val startIndex = if (startFrom > 0) startFrom else 0

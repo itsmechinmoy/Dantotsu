@@ -239,7 +239,30 @@ class ContinueWidget : AppWidgetProvider() {
                 setTextColor(R.id.widget_title, titleTextColor)
                 setTextColor(R.id.widget_status_header, subtitleTextColor)
                 setTextColor(R.id.widget_subtitle, subtitleTextColor)
-                setImageViewResource(R.id.widget_logo, logoIconRes)
+
+                if (logoIconRes == R.drawable.ic_dantotsu_round) {
+                    val drawable = ResourcesCompat.getDrawable(context.resources, R.drawable.ic_dantotsu_round, null)
+                    if (drawable != null) {
+                        val density = context.resources.displayMetrics.density
+                        val size = (16 * density).toInt().coerceAtLeast(1)
+                        val bitmap = drawable.toBitmap(size, size)
+                        setImageViewBitmap(R.id.widget_logo, bitmap)
+                    } else {
+                        setImageViewResource(R.id.widget_logo, R.drawable.ic_dantotsu_round)
+                    }
+                } else {
+                    val drawable = ResourcesCompat.getDrawable(context.resources, logoIconRes, null)
+                    if (drawable != null) {
+                        val tinted = drawable.mutate()
+                        tinted.setTint(titleTextColor)
+                        val density = context.resources.displayMetrics.density
+                        val size = (16 * density).toInt().coerceAtLeast(1)
+                        val bitmap = tinted.toBitmap(size, size)
+                        setImageViewBitmap(R.id.widget_logo, bitmap)
+                    } else {
+                        setImageViewResource(R.id.widget_logo, logoIconRes)
+                    }
+                }
 
                 val intent = Intent(context, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

@@ -8,10 +8,24 @@ import kotlinx.serialization.Serializable
 
 object Jikan {
 
-    const val apiUrl = "https://api.jikan.moe/v4/"
+    val apiUrls = listOf(
+        "https://api.jikan.moe/v4/",
+        "https://jikanfortheweebs.midnightignite.me/v4/",
+        "https://api.tenrai.org/v1/"
+    )
 
     suspend inline fun <reified T : Any> query(endpoint: String): T? {
-        return tryWithSuspend { client.get("$apiUrl$endpoint").parsed() }
+        val cleanEndpoint = endpoint.removePrefix("/")
+        for (base in apiUrls) {
+            val res = tryWithSuspend {
+                val response = client.get("$base$cleanEndpoint")
+                if (response.code in 200..299) {
+                    response.parsed<T>()
+                } else null
+            }
+            if (res != null) return res
+        }
+        return null
     }
 
     suspend fun getEpisodes(malId: Int): Map<String, Episode> {
@@ -59,5 +73,3 @@ object Jikan {
     }
 
 }
-
-

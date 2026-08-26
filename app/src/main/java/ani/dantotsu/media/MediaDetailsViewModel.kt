@@ -286,14 +286,16 @@ class MediaDetailsViewModel : ViewModel() {
                         if (media.anime?.nextAiringEpisodeTime == null && anime.nextAiringEpisodeTime != null) {
                             media.anime?.nextAiringEpisodeTime = anime.nextAiringEpisodeTime
                         }
-                        val estimated = anime.nextAiringEpisode ?: 0
+                        val estimated = anime.nextAiringEpisode
                         val watched = media.userProgress ?: 0
-                        val nextAiring = if (watched > 0) {
-                            if (watched >= (estimated + 1)) watched else estimated
+                        val nextAiring = if (estimated != null) {
+                            if (watched > 0 && watched >= (estimated + 1)) watched else estimated
                         } else {
-                            estimated
+                            if (watched > 0) watched else null
                         }
-                        media.anime?.nextAiringEpisode = nextAiring
+                        if (nextAiring != null) {
+                            media.anime?.nextAiringEpisode = nextAiring
+                        }
                     }
                 } else {
                     fullMapped.manga?.author?.let { media.manga?.author = it }
@@ -648,9 +650,9 @@ class MediaDetailsViewModel : ViewModel() {
         MutableLiveData<Map<String, Episode>>(null)
 
     fun getKitsuEpisodes(): LiveData<Map<String, Episode>> = kitsuEpisodes
-    suspend fun loadKitsuEpisodes(s: Media) {
+    suspend fun loadKitsuEpisodes(s: Media, force: Boolean = false) {
         tryWithSuspend {
-            if (kitsuEpisodes.value == null) kitsuEpisodes.postValue(Kitsu.getKitsuEpisodesDetails(s))
+            if (kitsuEpisodes.value == null || force) kitsuEpisodes.postValue(Kitsu.getKitsuEpisodesDetails(s))
         }
     }
 
@@ -658,18 +660,18 @@ class MediaDetailsViewModel : ViewModel() {
         MutableLiveData<Map<String, Episode>>(null)
 
     fun getAnifyEpisodes(): LiveData<Map<String, Episode>> = anifyEpisodes
-    suspend fun loadAnifyEpisodes(s: Media) {
+    suspend fun loadAnifyEpisodes(s: Media, force: Boolean = false) {
         tryWithSuspend {
-            if (anifyEpisodes.value == null) {
+            if (anifyEpisodes.value == null || force) {
                 val anilistId = s.id.takeIf { it != 0 }
                 val malId = s.idMAL
                 anifyEpisodes.postValue(Anify.fetchAndParseMetadata(anilistId = anilistId, malId = malId))
             }
         }
     }
-    suspend fun loadAnifyEpisodes(s: Int) {
+    suspend fun loadAnifyEpisodes(s: Int, force: Boolean = false) {
         tryWithSuspend {
-            if (anifyEpisodes.value == null) anifyEpisodes.postValue(Anify.fetchAndParseMetadata(anilistId = s, malId = null))
+            if (anifyEpisodes.value == null || force) anifyEpisodes.postValue(Anify.fetchAndParseMetadata(anilistId = s, malId = null))
         }
     }
 
@@ -677,9 +679,9 @@ class MediaDetailsViewModel : ViewModel() {
         MutableLiveData<Map<String, Episode>>(null)
 
     fun getFillerEpisodes(): LiveData<Map<String, Episode>> = fillerEpisodes
-    suspend fun loadFillerEpisodes(s: Media) {
+    suspend fun loadFillerEpisodes(s: Media, force: Boolean = false) {
         tryWithSuspend {
-            if (fillerEpisodes.value == null) fillerEpisodes.postValue(
+            if (fillerEpisodes.value == null || force) fillerEpisodes.postValue(
                 Jikan.getEpisodes(
                     s.idMAL ?: return@tryWithSuspend
                 )

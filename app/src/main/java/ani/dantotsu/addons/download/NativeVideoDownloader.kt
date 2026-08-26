@@ -508,7 +508,12 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                                 val subTempFile =
                                     File(context.cacheDir, "hls_dl_${sessionId}_sub_${index}.$ext")
                                 synchronized(localTempFiles) { localTempFiles.add(subTempFile) }
-                                val req = Request.Builder().url(sub.first).headers(okHeaders).build()
+                                val subUrl = if (sub.first.startsWith("http://") || sub.first.startsWith("https://")) {
+                                    sub.first
+                                } else {
+                                    ani.dantotsu.media.anime.player.PlayerSubtitleManager.resolveSubtitleUrl(sub.first, videoUrl)
+                                }
+                                val req = Request.Builder().url(subUrl).headers(okHeaders).build()
                                 client.newCall(req).execute().use { res ->
                                     if (!res.isSuccessful) {
                                         throw IOException(
@@ -576,7 +581,12 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             command.append("${headersStr}-allowed_extensions ALL -extension_picky 0 -allowed_segment_extensions ALL -i \"$videoUrl\" ")
 
             for (sub in subtitleUrls) {
-                command.append("${headersStr}-i \"${sub.first}\" ")
+                val subUrl = if (sub.first.startsWith("http://") || sub.first.startsWith("https://")) {
+                    sub.first
+                } else {
+                    ani.dantotsu.media.anime.player.PlayerSubtitleManager.resolveSubtitleUrl(sub.first, videoUrl)
+                }
+                command.append("${headersStr}-i \"$subUrl\" ")
             }
             for (audio in audioUrls) {
                 command.append("${headersStr}-i \"${audio.first}\" ")
@@ -588,7 +598,16 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                     command.append("-map $i ")
                 }
             }
-            command.append("-c copy ")
+            if (subtitleUrls.isNotEmpty()) {
+                val allAss = subtitleUrls.all { it.first.contains(".ass", ignoreCase = true) || it.first.contains(".ssa", ignoreCase = true) }
+                if (allAss) {
+                    command.append("-c copy ")
+                } else {
+                    command.append("-c:v copy -c:a copy -c:s srt ")
+                }
+            } else {
+                command.append("-c copy ")
+            }
             for ((index, sub) in subtitleUrls.withIndex()) {
                 command.append("-metadata:s:s:$index language=\"${sub.second}\" ")
             }
@@ -1251,7 +1270,16 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             command.append("-map $inputIndex? ")
         }
 
-        command.append("-c copy ")
+        if (subtitles.isNotEmpty()) {
+            val allAss = subtitles.all { it.first.endsWith(".ass", ignoreCase = true) || it.first.endsWith(".ssa", ignoreCase = true) }
+            if (allAss) {
+                command.append("-c copy ")
+            } else {
+                command.append("-c:v copy -c:a copy -c:s srt ")
+            }
+        } else {
+            command.append("-c copy ")
+        }
         for ((index, sub) in subtitles.withIndex()) {
             command.append("-metadata:s:s:$index language=\"${sub.second}\" ")
         }

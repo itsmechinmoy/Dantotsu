@@ -275,12 +275,12 @@ class MangaFragment : Fragment() {
                                 PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
                                     ?.toIntOrNull()
                             if (Anilist.userid == null) {
-                                getUserId(requireContext()) {
+                                getUserId(context) {
                                     load()
                                 }
                             } else {
                                 CoroutineScope(Dispatchers.IO).launch {
-                                    getUserId(requireContext()) {
+                                    getUserId(context) {
                                         load()
                                     }
                                 }
@@ -288,6 +288,12 @@ class MangaFragment : Fragment() {
                         }
                     }
                     model.loaded = true
+                    if (_binding?.mangaRefresh?.isRefreshing == true) {
+                        withContext(Dispatchers.Main) {
+                            model.aniMangaSearchResults.results.clear()
+                            popularAdaptor.notifyDataSetChanged()
+                        }
+                    }
                     withContext(Dispatchers.IO) {
                         model.loadAll(PrefManager.getVal(PrefName.PopularMangaList))
                     }

@@ -400,17 +400,27 @@ class DownloadsManager(private val context: Context) {
         }
 
         private fun DocumentFile.findFolder(name: String): DocumentFile? {
-            val direct = findFile(name)
+            val validName = name.findValidName()
+            val direct = findFile(validName)
             if (direct != null && direct.isDirectory) return direct
             val list = listFiles()
-            return list.find { it.isDirectory && (it.name.equals(name, ignoreCase = true) || it.name?.trim().equals(name.trim(), ignoreCase = true)) }
-                ?: list.find { it.isDirectory && it.name != null && name.compareName(it.name!!) }
+            val exact = list.find { it.isDirectory && it.name?.findValidName().equals(validName, ignoreCase = true) }
+            if (exact != null) return exact
+
+            val baseNameWithoutSuffix = validName.replace(Regex("\\s*\\(\\d+\\)$"), "")
+            val withoutSuffixMatch = list.find {
+                it.isDirectory && it.name?.findValidName()?.replace(Regex("\\s*\\(\\d+\\)$"), "").equals(baseNameWithoutSuffix, ignoreCase = true)
+            }
+            if (withoutSuffixMatch != null) return withoutSuffixMatch
+
+            return list.find { it.isDirectory && it.name != null && validName.compareName(it.name!!) }
         }
 
         private const val RATIO_THRESHOLD = 95
         fun Media.compareName(name: String): Boolean {
             val mainName = mainName().findValidName().lowercase()
-            val ratio = FuzzySearch.ratio(mainName, name.lowercase())
+            val compareName = name.findValidName().lowercase()
+            val ratio = FuzzySearch.ratio(mainName, compareName)
             return ratio > RATIO_THRESHOLD
         }
 
@@ -437,7 +447,10 @@ class DownloadsManager(private val context: Context) {
 
 private const val RESERVED_CHARS = "|\\?*<\":>+[]/'"
 fun String?.findValidName(): String {
-    return this?.replace("/", "_")?.filterNot { RESERVED_CHARS.contains(it) } ?: ""
+    return this?.replace("/", "_")
+        ?.filterNot { RESERVED_CHARS.contains(it) }
+        ?.replace(Regex("\\s+"), " ")
+        ?.trim() ?: ""
 }
 
 data class DownloadedType(

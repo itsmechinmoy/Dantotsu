@@ -205,8 +205,8 @@ data class Media(
                     if (year != null && month != null && day != null) {
                         val parsedStart = java.time.LocalDate.of(year, month, day)
                         val targetDate = java.time.LocalDate.now()
-                        if (targetDate.isAfter(parsedStart)) {
-                            val weeks = java.time.temporal.ChronoUnit.WEEKS.between(parsedStart, targetDate)
+                        val weeks = java.time.temporal.ChronoUnit.WEEKS.between(parsedStart, targetDate)
+                        if (weeks in 0..52) {
                             var estimatedEp = (weeks + 1).toInt()
                             val totalEpisodes = if (node.numEpisodes == 0) null else node.numEpisodes
                             if (totalEpisodes != null && totalEpisodes > 0 && estimatedEp > totalEpisodes) {
@@ -214,7 +214,7 @@ data class Media(
                             }
                             estimatedEp - 1
                         } else {
-                            0
+                            null
                         }
                     } else {
                         null
@@ -583,8 +583,8 @@ data class Media(
                             } else {
                                 java.time.LocalDate.now()
                             }
-                            if (targetDate.isAfter(parsedStart)) {
-                                val weeks = java.time.temporal.ChronoUnit.WEEKS.between(parsedStart, targetDate)
+                            val weeks = java.time.temporal.ChronoUnit.WEEKS.between(parsedStart, targetDate)
+                            if (weeks in 0..52) {
                                 var estimatedEp = (weeks + 1).toInt()
                                 val totalEpisodes = jikan.episodes ?: 0
                                 if (totalEpisodes > 0 && estimatedEp > totalEpisodes) {
@@ -592,16 +592,16 @@ data class Media(
                                 }
                                 this.anime?.nextAiringEpisode = estimatedEp - 1
                             } else {
-                                this.anime?.nextAiringEpisode = 0
+                                this.anime?.nextAiringEpisode = null
                             }
                         } else {
-                            this.anime?.nextAiringEpisode = 0
+                            this.anime?.nextAiringEpisode = null
                         }
                     } else {
-                        this.anime?.nextAiringEpisode = 0
+                        this.anime?.nextAiringEpisode = null
                     }
                 } catch (_: Exception) {
-                    this.anime?.nextAiringEpisode = 0
+                    this.anime?.nextAiringEpisode = null
                 }
             }
         } else {
@@ -730,8 +730,8 @@ fun Media?.deleteFromList(
                         PrefManager.getVal(PrefName.PendingDeletions, listOf())
                     val updated = existing.filterNot { it.mediaId == media.id } + pending
                     PrefManager.setVal(PrefName.PendingDeletions, updated)
-                    val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
-                    PrefManager.setCustomVal("removeList", removeList.minus(media.id))
+                    val removeList = PrefManager.getCustomVal<Set<String>>("removeList", emptySet())
+                    PrefManager.setCustomVal("removeList", removeList.minus(media.id.toString()))
                     try {
                         MAL.query.deleteList(media.anime != null, media.idMAL)
                     } catch (_: Exception) { /* MAL delete failed; AniList sync still queued */ }
@@ -743,9 +743,9 @@ fun Media?.deleteFromList(
                             Anilist.mutation.deleteList(listId)
                             MAL.query.deleteList(media.anime != null, media.idMAL)
 
-                            val removeList = PrefManager.getCustomVal("removeList", setOf<Int>())
+                            val removeList = PrefManager.getCustomVal<Set<String>>("removeList", emptySet())
                             PrefManager.setCustomVal(
-                                "removeList", removeList.minus(media.id)
+                                "removeList", removeList.minus(media.id.toString())
                             )
 
                             onSuccess()

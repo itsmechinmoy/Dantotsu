@@ -321,8 +321,9 @@ class Stories @JvmOverloads constructor(
         binding.linkPreviewContainer.visibility = GONE
         
         val key = "activities"
-        val set = PrefManager.getCustomVal<Set<Int>>(key, setOf()).plus((story.id))
-        val newList = set.sorted().takeLast(200).toSet()
+        val set = PrefManager.getCustomVal<Set<String>>(key, emptySet())
+            .mapNotNull { it.toIntOrNull() }.toSet().plus(story.id)
+        val newList = set.sorted().takeLast(200).map { it.toString() }.toSet()
         PrefManager.setCustomVal(key, newList)
         binding.statusUserAvatar.loadImage(story.user?.avatar?.large)
         binding.statusUserName.text = story.user?.name

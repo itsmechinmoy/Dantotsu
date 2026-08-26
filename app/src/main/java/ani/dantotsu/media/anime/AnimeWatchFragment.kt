@@ -168,9 +168,9 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
                     val offline = !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
                     val isLocal = model.watchSources?.list?.getOrNull(media.selected!!.sourceIndex)?.name == "Local"
                     if (!offline && !isLocal) {
-                        val kitsuEpisodes = async { model.loadKitsuEpisodes(media) }
-                        val anifyEpisodes = async { model.loadAnifyEpisodes(media) }
-                        val fillerEpisodes = async { model.loadFillerEpisodes(media) }
+                        val kitsuEpisodes = async { model.loadKitsuEpisodes(media, force = true) }
+                        val anifyEpisodes = async { model.loadAnifyEpisodes(media, force = true) }
+                        val fillerEpisodes = async { model.loadFillerEpisodes(media, force = true) }
                         awaitAll(kitsuEpisodes, anifyEpisodes, fillerEpisodes)
                     }
                     model.loadEpisodes(media, media.selected!!.sourceIndex, invalidate = true)

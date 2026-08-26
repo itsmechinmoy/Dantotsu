@@ -413,29 +413,31 @@ class PlayerSubtitleManager(
         }
     }
 
-    fun resolveSubtitleUrl(subtitleUrl: String, vararg baseUrls: String): String {
-        val subtitleUri = runCatching { URI(subtitleUrl) }.getOrElse {
-            Logger.log("Failed to parse subtitle URL '$subtitleUrl': ${it.message}")
+    companion object {
+        fun resolveSubtitleUrl(subtitleUrl: String, vararg baseUrls: String): String {
+            val subtitleUri = runCatching { URI(subtitleUrl) }.getOrElse {
+                Logger.log("Failed to parse subtitle URL '$subtitleUrl': ${it.message}")
+                return subtitleUrl
+            }
+            if (subtitleUri.isAbsolute) return subtitleUri.toString()
+
+            baseUrls.forEach { baseUrl ->
+                val resolved = runCatching {
+                    if (baseUrl.isBlank()) null else URI(baseUrl).resolve(subtitleUri).takeIf { it.isAbsolute }?.toString()
+                }.getOrNull()
+                if (!resolved.isNullOrBlank()) return resolved
+            }
             return subtitleUrl
         }
-        if (subtitleUri.isAbsolute) return subtitleUri.toString()
 
-        baseUrls.forEach { baseUrl ->
-            val resolved = runCatching {
-                if (baseUrl.isBlank()) null else URI(baseUrl).resolve(subtitleUri).takeIf { it.isAbsolute }?.toString()
-            }.getOrNull()
-            if (!resolved.isNullOrBlank()) return resolved
+        fun buildSubtitleId(index: Int, language: String, url: String): String {
+            val normalizedLanguage = language.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "_")
+            val normalizedUrlTail = runCatching { URI(url).path.substringAfterLast('/').ifBlank { "track" } }
+                .getOrDefault("track")
+                .lowercase(Locale.ROOT)
+                .replace(Regex("[^a-z0-9]+"), "_")
+            return "ext_sub_${index}_${normalizedLanguage}_${normalizedUrlTail}"
         }
-        return subtitleUrl
-    }
-
-    fun buildSubtitleId(index: Int, language: String, url: String): String {
-        val normalizedLanguage = language.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "_")
-        val normalizedUrlTail = runCatching { URI(url).path.substringAfterLast('/').ifBlank { "track" } }
-            .getOrDefault("track")
-            .lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9]+"), "_")
-        return "ext_sub_${index}_${normalizedLanguage}_${normalizedUrlTail}"
     }
 
     fun buildSubtitleConfigurations(

@@ -20,14 +20,13 @@ import kotlin.system.exitProcess
 
 class ShellInterface : IShellInterface.Stub() {
 
-    private val context = createContext()
     private val userId = UserHandle::class.java
         .getMethod("myUserId")
         .invoke(null) as Int
     private val packageName = BuildConfig.APPLICATION_ID
 
     @SuppressLint("PrivateApi")
-    override fun install(apk: AssetFileDescriptor) {
+    override fun install(apk: AssetFileDescriptor, intentSender: IntentSender) {
         val pmInterface = Class.forName("android.content.pm.IPackageManager\$Stub")
             .getMethod("asInterface", IBinder::class.java)
             .invoke(null, SystemServiceHelper.getSystemService("package"))
@@ -62,6 +61,7 @@ class ShellInterface : IShellInterface.Stub() {
                 PackageInstaller.SessionParams::class.java,
                 String::class.java,
                 String::class.java,
+                Int::class.java,
                 Int::class.java,
             ).invoke(packageInstaller, params, packageName, packageName, userId) as Int
         } else {
@@ -108,49 +108,17 @@ class ShellInterface : IShellInterface.Stub() {
                 }
             }
 
-        val statusIntent = PendingIntent.getBroadcast(
-            context,
-            0,
-            Intent(ACTION_INSTALL_RESULT).setPackage(packageName),
-            PendingIntent.FLAG_MUTABLE,
-        )
-
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             session::class.java.getMethod("commit", IntentSender::class.java, Boolean::class.java)
-                .invoke(session, statusIntent.intentSender, false)
+                .invoke(session, intentSender, false)
         } else {
             session::class.java.getMethod("commit", IntentSender::class.java)
-                .invoke(session, statusIntent.intentSender)
+                .invoke(session, intentSender)
         }
     }
 
     override fun destroy() {
         exitProcess(0)
-    }
-
-    @SuppressLint("PrivateApi")
-    private fun createContext(): Context {
-        val activityThread = Class.forName("android.app.ActivityThread")
-        val systemMain = activityThread.getMethod("systemMain").invoke(null)
-        val systemContext = activityThread.getMethod("getSystemContext").invoke(systemMain) as Context
-
-        val shellUserHandle = UserHandle::class.java
-            .getConstructor(Int::class.java)
-            .newInstance(userId)
-
-        val shellContext = systemContext::class.java.getMethod(
-            "createPackageContextAsUser",
-            String::class.java,
-            Int::class.java,
-            UserHandle::class.java,
-        ).invoke(
-            systemContext,
-            "com.android.shell",
-            Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY,
-            shellUserHandle,
-        ) as Context
-
-        return shellContext.createPackageContext("com.android.shell", 0)
     }
 }
 

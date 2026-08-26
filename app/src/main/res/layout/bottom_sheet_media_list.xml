@@ -133,10 +133,34 @@
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
                     android:minWidth="@null"
-                    android:paddingLeft="16dp"
-                    android:paddingRight="16dp"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
                     android:singleLine="true"
                     android:text="+1\u0020"
+                    android:textSize="16sp"
+                    app:cornerRadius="16dp"
+                    app:strokeColor="?attr/colorPrimaryContainer"
+                    tools:ignore="HardcodedText" />
+
+                <View
+                    android:layout_width="8dp"
+                    android:layout_height="match_parent" />
+
+                <Button
+                    android:id="@+id/mediaListDecrement"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="-2dp"
+                    android:elevation="0dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="@null"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
+                    android:singleLine="true"
+                    android:text="-1\u0020"
                     android:textSize="16sp"
                     app:cornerRadius="16dp"
                     app:strokeColor="?attr/colorPrimaryContainer"

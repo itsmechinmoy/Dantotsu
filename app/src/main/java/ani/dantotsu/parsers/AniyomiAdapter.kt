@@ -309,8 +309,12 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         }
 
         val allVideos = (resolvedDirect + hosterVideos)
-            .distinctBy { if (it.videoUrl.isNotBlank() && it.videoUrl != "null") it.videoUrl else it.videoTitle }
-            .filter { it.videoUrl.isNotBlank() && it.videoUrl != "null" }
+            .distinctBy {
+                if (it.videoUrl.isNotBlank() && it.videoUrl != "null") it.videoUrl
+                else if (it.url.isNotBlank() && it.url != "null") it.url
+                else it.videoTitle
+            }
+            .filter { (it.videoUrl.isNotBlank() && it.videoUrl != "null") || (it.url.isNotBlank() && it.url != "null") }
 
         return runCatching {
             if (source is AnimeHttpSource) source.run { allVideos.sortVideos() } else allVideos
@@ -416,9 +420,13 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     }
 
     private fun videoToVideoServer(video: Video): VideoServer {
+        val targetUrl = video.videoUrl.takeIf { it.isNotBlank() && it != "null" }
+            ?: video.url.takeIf { it.isNotBlank() && it != "null" }
+            ?: ""
+        val headersMap = video.headers?.toMultimap()?.mapValues { it.value.joinToString() } ?: mapOf()
         return VideoServer(
-            video.quality,
-            video.url,
+            video.videoTitle.ifBlank { video.quality },
+            FileUrl(targetUrl, headersMap),
             null,
             video
         )
@@ -654,7 +662,9 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
 
     override suspend fun extract(): VideoContainer {
         val vidList = listOfNotNull(videoServer.video?.let { aniVideoToSaiVideo(it) })
-        val subList = videoServer.video?.subtitleTracks?.map { trackToSubtitle(it) } ?: emptyList()
+        val headersMap = videoServer.video?.headers?.toMultimap()?.mapValues { it.value.joinToString() } ?: mapOf()
+        val videoUrl = vidList.firstOrNull()?.file?.url ?: ""
+        val subList = videoServer.video?.subtitleTracks?.map { trackToSubtitle(it, videoUrl, headersMap) } ?: emptyList()
         val audioList = videoServer.video?.audioTracks ?: emptyList()
 
         return if (vidList.isNotEmpty()) {
@@ -668,8 +678,10 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
         // Find the number value from the .quality string
         val number = Regex("""\d+""").find(aniVideo.quality)?.value?.toInt() ?: 0
 
-        // Check for null video URL
-        val videoUrl = aniVideo.videoUrl ?: throw Exception("Video URL is null")
+        // Check for null video URL 
+        val videoUrl = aniVideo.videoUrl.takeIf { it.isNotBlank() && it != "null" }
+            ?: aniVideo.url.takeIf { it.isNotBlank() && it != "null" }
+            ?: throw Exception("Video URL is null")
 
         var format: VideoType?
 
@@ -782,18 +794,27 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
 
     }
 
-    private fun trackToSubtitle(track: Track): Subtitle {
-        val type = runBlocking { findSubtitleType(track.url) }
-        if (type == SubtitleType.UNKNOWN) {
-            Logger.log("Warning: subtitle type unresolved for '${track.url}', defaulting to SRT")
+    private fun trackToSubtitle(
+        track: Track,
+        videoUrl: String = "",
+        headers: Map<String, String> = emptyMap()
+    ): Subtitle {
+        val resolvedUrl = if (track.url.startsWith("http://") || track.url.startsWith("https://")) {
+            track.url
+        } else {
+            ani.dantotsu.media.anime.player.PlayerSubtitleManager.resolveSubtitleUrl(track.url, videoUrl)
         }
-        return Subtitle(track.lang, track.url, type.takeUnless { it == SubtitleType.UNKNOWN } ?: SubtitleType.SRT)
-    }
-
-    private suspend fun findSubtitleType(url: String): SubtitleType {
-        val typeFromUrl = findSubtitleTypeFromUrl(url)
-        if (typeFromUrl != SubtitleType.UNKNOWN) return typeFromUrl
-        return SubtitleDownloader.loadSubtitleType(url)
+        var type = findSubtitleTypeFromUrl(resolvedUrl)
+        if (type == SubtitleType.UNKNOWN) {
+            val lower = resolvedUrl.lowercase(Locale.ROOT)
+            type = when {
+                lower.contains(".ass") || lower.contains(".ssa") || lower.contains("format=ass") -> SubtitleType.ASS
+                lower.contains(".vtt") || lower.contains("format=vtt") -> SubtitleType.VTT
+                lower.contains(".srt") || lower.contains("format=srt") -> SubtitleType.SRT
+                else -> SubtitleType.VTT
+            }
+        }
+        return Subtitle(track.lang, FileUrl(resolvedUrl, headers), type)
     }
 
     private fun findSubtitleTypeFromUrl(url: String): SubtitleType {

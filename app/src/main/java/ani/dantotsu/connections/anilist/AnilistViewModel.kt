@@ -30,15 +30,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-suspend fun getUserId(context: Context, block: () -> Unit) {
+suspend fun getUserId(context: Context? = null, block: () -> Unit) {
     if (!Anilist.initialized && PrefManager.getVal<String>(PrefName.AnilistToken) != "") {
         if (Anilist.query.getUserData()) {
             tryWithSuspend {
                 if (MAL.token != null && !MAL.query.getUserData())
-                    snackString(context.getString(R.string.error_loading_mal_user_data))
+                    context?.let { snackString(it.getString(R.string.error_loading_mal_user_data)) }
             }
         } else {
-            snackString(context.getString(R.string.error_loading_anilist_user_data))
+            context?.let { snackString(it.getString(R.string.error_loading_anilist_user_data)) }
         }
     }
     block.invoke()
@@ -95,8 +95,8 @@ class AnilistHomeViewModel : ViewModel() {
         MutableLiveData<ArrayList<User>>(null)
 
     fun getUserStatus(): LiveData<ArrayList<User>> = userStatus
-    suspend fun initUserStatus() {
-        val res = Anilist.query.getUserStatus()
+    suspend fun initUserStatus(forceRefresh: Boolean = false) {
+        val res = Anilist.query.getUserStatus(forceRefresh)
         res?.let { userStatus.postValue(it) }
     }
 

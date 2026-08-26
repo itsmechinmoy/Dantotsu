@@ -255,6 +255,8 @@ class AnilistMutations {
             }""".replace("\n", "").replace("""    """, "")
         println(variables)
         executeQuery<JsonObject>(query, variables, show = true)
+        Anilist.query.invalidateUserStatusCache()
+        Anilist.query.invalidateHomePageCache()
     }
 
     suspend fun deleteList(listId: Int) {
@@ -267,6 +269,8 @@ class AnilistMutations {
         """.trimIndent()
         val variables = """{"id":"$listId"}"""
         executeQuery<JsonObject>(query, variables)
+        Anilist.query.invalidateUserStatusCache()
+        Anilist.query.invalidateHomePageCache()
     }
 
     suspend fun rateReview(reviewId: Int, rating: String): Query.RateReviewResponse? {
@@ -353,6 +357,9 @@ class AnilistMutations {
         """.trimIndent()
         val result = executeQuery<JsonObject>(query)
         val errors = result?.get("errors")
+        if (errors == null && result != null) {
+            Anilist.query.invalidateUserStatusCache()
+        }
         return errors?.toString() ?: (currContext()?.getString(ani.dantotsu.R.string.success)
             ?: "Success")
     }
@@ -445,6 +452,9 @@ class AnilistMutations {
         """.trimIndent()
         val result = executeQuery<JsonObject>(query)
         val errors = result?.get("errors")
+        if (errors == null && result != null) {
+            Anilist.query.invalidateUserStatusCache()
+        }
         return errors == null
     }
 
