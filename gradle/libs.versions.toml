@@ -74,7 +74,7 @@ natsort = "com.github.gpanther:java-nat-sort:natural-comparator-1.1"
 unifile = "com.github.tachiyomiorg:unifile:17bec43"
 libarchive = "me.zhanghai.android.libarchive:library:1.1.4"
 xmlutil-core = "io.github.pdvrieze.xmlutil:core-android:0.90.3"
-xmlutil-serialization = "io.github.pdvrieze.xmlutil:serialization-android:0.90.3"
+xmlutil-serialization = "io.github.pdvrieze.xmlutil:serialization-android:1.0.2.1"
 nanohttpd = { module = "org.nanohttpd:nanohttpd", version.ref = "nanohttpd" }
 
 # Glide
