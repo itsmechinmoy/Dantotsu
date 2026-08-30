@@ -51,7 +51,7 @@ androidx-preference = "androidx.preference:preference-ktx:1.2.1"
 androidx-webkit = "androidx.webkit:webkit:1.17.0"
 androidx-biometric = "androidx.biometric:biometric:1.1.0"
 mediarouter = "androidx.mediarouter:mediarouter:1.7.0"
-paging = "androidx.paging:paging-runtime-ktx:3.3.6"
+paging = "androidx.paging:paging-runtime-ktx:3.5.1"
 
 # Kotlin
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
