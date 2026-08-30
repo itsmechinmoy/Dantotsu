@@ -58,7 +58,7 @@ kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref =
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk7", version.ref = "kotlin" }
 
 # Networking / misc
-gson = "com.google.code.gson:gson:2.10.1"
+gson = "com.google.code.gson:gson:2.14.0"
 nicehttp = "com.github.Blatzar:NiceHttp:0.4.4"
 
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
