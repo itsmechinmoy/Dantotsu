@@ -59,7 +59,7 @@ kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk7", version.re
 
 # Networking / misc
 gson = "com.google.code.gson:gson:2.14.0"
-nicehttp = "com.github.Blatzar:NiceHttp:0.4.4"
+nicehttp = "com.github.Blatzar:NiceHttp:0.4.18"
 
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
