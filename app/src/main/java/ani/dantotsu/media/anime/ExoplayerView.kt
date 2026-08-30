@@ -687,9 +687,21 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                 }
                 if (playerManager.isInitialized) {
                     releasePlayer()
-                    playbackPosition = currentPos ?: PrefManager.getCustomVal("${media.id}_${epKey ?: ep.number}", 0L)
+                    playbackPosition = if (changingServer) {
+                        currentPos ?: PrefManager.getCustomVal("${media.id}_${epKey ?: ep.number}", 0L)
+                    } else {
+                        val cleanEp = (epKey ?: ep.number).let { MediaNameAdapter.findEpisodeNumber(it) }?.let {
+                            if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                        }
+                        val savedEpPos = PrefManager.getCustomVal("${media.id}_${epKey ?: ep.number}", 0L)
+                        if (savedEpPos > 0L) savedEpPos else cleanEp?.let { PrefManager.getCustomVal("${media.id}_${it}", 0L) } ?: 0L
+                    }
                 } else {
-                    playbackPosition = PrefManager.getCustomVal("${media.id}_${epKey ?: ep.number}", 0L)
+                    val cleanEp = (epKey ?: ep.number).let { MediaNameAdapter.findEpisodeNumber(it) }?.let {
+                        if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                    }
+                    val savedEpPos = PrefManager.getCustomVal("${media.id}_${epKey ?: ep.number}", 0L)
+                    playbackPosition = if (savedEpPos > 0L) savedEpPos else cleanEp?.let { PrefManager.getCustomVal("${media.id}_${it}", 0L) } ?: 0L
                 }
                 aniSkipManager.resetForNewEpisode()
                 initPlayer()
@@ -833,6 +845,8 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
     private fun changeEpisode(index: Int) {
         if (playerManager.isInitialized && index in episodeArr.indices) {
             changingServer = false
+            progressManager.stopTracking()
+            aniSkipManager.stopTracking()
             val prevEpKey = episodeArr.getOrNull(currentEpisodeIndex)
             if (prevEpKey != null) {
                 playerManager.exoPlayer?.let { p ->
@@ -846,6 +860,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                 }
                 subtitleManager.clearTransientSubtitleCache("${media.id}-$prevEpKey")
             }
+            playerManager.exoPlayer?.pause()
             aniSkipManager.resetForNewEpisode()
             progressManager.episodeLength = 0f
             val newEpKey = episodeArr[index]
@@ -1048,8 +1063,16 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
             ?.takeIf { it != Long.MAX_VALUE }
             ?: (cleanEp?.let { PrefManager.getCustomVal("${media.id}_${it}_max", Long.MAX_VALUE) }?.takeIf { it != Long.MAX_VALUE })
 
-        val savedPosition = savedMax?.let { if (it <= playbackPosition) max(0, it - 5) else playbackPosition }
-            ?: playbackPosition
+        val savedPosition = if (savedMax != null && savedMax > 0L) {
+            if (playbackPosition >= savedMax || playbackPosition > savedMax.toFloat() * 0.92f) {
+                playbackPosition = 0L
+                0L
+            } else {
+                playbackPosition
+            }
+        } else {
+            playbackPosition
+        }
 
         val speeds = if (PrefManager.getVal(PrefName.CursedSpeeds)) {
             arrayOf(1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f, 4f, 5f, 10f, 25f, 50f)

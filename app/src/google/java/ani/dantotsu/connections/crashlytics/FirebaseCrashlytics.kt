@@ -3,8 +3,6 @@ package ani.dantotsu.connections.crashlytics
 import android.content.Context
 import com.google.firebase.FirebaseApp
 import com.google.firebase.crashlytics.FirebaseCrashlytics
-import com.google.firebase.crashlytics.ktx.crashlytics
-import com.google.firebase.ktx.Firebase
 
 class FirebaseCrashlytics : CrashlyticsInterface {
     override fun initialize(context: Context) {
@@ -20,7 +18,7 @@ class FirebaseCrashlytics : CrashlyticsInterface {
     }
 
     override fun setUserId(id: String) {
-        Firebase.crashlytics.setUserId(id)
+        FirebaseCrashlytics.getInstance().setUserId(id)
     }
 
     override fun setCustomKey(key: String, value: String) {

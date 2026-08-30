@@ -54,7 +54,7 @@ class ChartBuilder {
             normalize: Boolean = false
         ): AAOptions {
             val primaryColor =
-                context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+                context.getThemeColor(androidx.appcompat.R.attr.colorPrimary)
             var chartType = passedChartType
             var aaChartType = passedAaChartType
             var categories = passedCategories

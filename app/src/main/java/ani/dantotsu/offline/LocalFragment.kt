@@ -201,9 +201,9 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
             
             setTabTextColors(
                 requireContext().getThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant),
-                requireContext().getThemeColor(com.google.android.material.R.attr.colorPrimary)
+                requireContext().getThemeColor(androidx.appcompat.R.attr.colorPrimary)
             )
-            setSelectedTabIndicatorColor(requireContext().getThemeColor(com.google.android.material.R.attr.colorPrimary))
+            setSelectedTabIndicatorColor(requireContext().getThemeColor(androidx.appcompat.R.attr.colorPrimary))
         }
 
         val animeTab = tabLayout.newTab().setText("ANIME")

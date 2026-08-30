@@ -619,7 +619,7 @@ class CommentsFragment : Fragment() {
             isManualFilter -> {
                 badge.text = "$label $activeFilter  ✕"
                 badge.alpha = 1f
-                val primaryColor = resolveColorAttr(com.google.android.material.R.attr.colorPrimary)
+                val primaryColor = resolveColorAttr(androidx.appcompat.R.attr.colorPrimary)
                 badge.setTextColor(
                     resolveColorAttr(com.google.android.material.R.attr.colorOnPrimary)
                 )

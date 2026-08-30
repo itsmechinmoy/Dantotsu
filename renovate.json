@@ -2,5 +2,27 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "labels": ["Dependencies"],
+  "semanticCommits": "disabled",
+  "packageRules": [
+    {
+      "groupName": "GitHub Actions",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    },
+    {
+      "matchDatasources": ["maven"],
+      "matchPackageNames": [
+        "com.github.tachiyomiorg:unifile",
+        "com.github.mihonapp:injekt",
+        "com.github.mihon.sqldelight-androidx-driver:sqldelight-androidx-driver"
+      ],
+      "registryUrls": [
+        "https://maven.org",
+        "https://maven.google.com",
+        "https://jitpack.io"
+      ]
+    }
   ]
 }

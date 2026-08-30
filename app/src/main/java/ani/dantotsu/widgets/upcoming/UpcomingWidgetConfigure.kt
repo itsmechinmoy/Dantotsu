@@ -158,7 +158,7 @@ class UpcomingWidgetConfigure : AppCompatActivity(),
 
     private fun themeColors() {
         val backgroundColor = getThemeColor(com.google.android.material.R.attr.colorSurface)
-        val textColor = getThemeColor(com.google.android.material.R.attr.colorPrimary)
+        val textColor = getThemeColor(androidx.appcompat.R.attr.colorPrimary)
         val subTextColor = getThemeColor(com.google.android.material.R.attr.colorOutline)
 
         getSharedPreferences(UpcomingWidget.PREFS_NAME, Context.MODE_PRIVATE).edit().apply {

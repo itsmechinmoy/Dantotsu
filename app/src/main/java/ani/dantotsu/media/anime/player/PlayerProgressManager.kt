@@ -127,8 +127,10 @@ class PlayerProgressManager(
             if (PrefManager.getCustomVal("${m.id}_save_progress", true) &&
                 (if (m.isAdult) PrefManager.getVal(PrefName.UpdateForHPlayer) else true)
             ) {
-                val epNum = m.anime?.selectedEpisode
-                    ?: episodeArr.getOrNull(currentEpisodeIndex)
+                val epKey = episodeArr.getOrNull(currentEpisodeIndex)
+                val epNum = epKey?.let { episodes[it]?.number }
+                    ?: epKey
+                    ?: m.anime?.selectedEpisode
                     ?: "1"
                 if (episode0 && !episodeEnd) {
                     updateProgress(m, "0")
@@ -143,7 +145,11 @@ class PlayerProgressManager(
     private fun maybeHandleSubscriptionAfterEpisodeCompletion(episodeEnd: Boolean, incognito: Boolean) {
         if (!episodeEnd || incognito) return
         val m = media ?: return
-        val currentEpisode = m.anime?.selectedEpisode ?: episodeArr.getOrNull(currentEpisodeIndex) ?: return
+        val epKey = episodeArr.getOrNull(currentEpisodeIndex)
+        val currentEpisode = epKey?.let { episodes[it]?.number }
+            ?: epKey
+            ?: m.anime?.selectedEpisode
+            ?: return
         if (lastSubscriptionPromptEpisode == currentEpisode) return
         lastSubscriptionPromptEpisode = currentEpisode
 

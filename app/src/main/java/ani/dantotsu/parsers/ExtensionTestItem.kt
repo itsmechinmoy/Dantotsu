@@ -237,7 +237,7 @@ class ExtensionTestItem(
             binding.pingResultText.isVisible = true
         }
         binding.pingResultText.setTextColor(
-            context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+            context.getThemeColor(androidx.appcompat.R.attr.colorPrimary)
         )
         val (code, time, message) = pingResult!!
         if (code == 200) {
@@ -253,7 +253,7 @@ class ExtensionTestItem(
             R.drawable.ic_circle_cancel, 0, 0, 0
         )
         binding.pingResultText.setTextColor(
-            context.getThemeColor(com.google.android.material.R.attr.colorError)
+            context.getThemeColor(androidx.appcompat.R.attr.colorError)
         )
     }
 
@@ -265,7 +265,7 @@ class ExtensionTestItem(
             return
         }
         binding.searchResultText.setTextColor(
-            context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+            context.getThemeColor(androidx.appcompat.R.attr.colorPrimary)
         )
         binding.searchResultText.isVisible = true
         if (searchResultData.size == 0) {
@@ -278,7 +278,7 @@ class ExtensionTestItem(
                 R.drawable.ic_circle_cancel, 0, 0, 0
             )
             binding.searchResultText.setTextColor(
-                context.getThemeColor(com.google.android.material.R.attr.colorError)
+                context.getThemeColor(androidx.appcompat.R.attr.colorError)
             )
             return
         }
@@ -300,7 +300,7 @@ class ExtensionTestItem(
             return
         }
         binding.episodeResultText.setTextColor(
-            context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+            context.getThemeColor(androidx.appcompat.R.attr.colorPrimary)
         )
         binding.episodeResultText.isVisible = true
         if (episodeResultData.size == 0) {
@@ -325,7 +325,7 @@ class ExtensionTestItem(
                 R.drawable.ic_circle_cancel, 0, 0, 0
             )
             binding.episodeResultText.setTextColor(
-                context.getThemeColor(com.google.android.material.R.attr.colorError)
+                context.getThemeColor(androidx.appcompat.R.attr.colorError)
             )
             return
         }
@@ -363,7 +363,7 @@ class ExtensionTestItem(
             return
         }
         binding.serverResultText.setTextColor(
-            context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+            context.getThemeColor(androidx.appcompat.R.attr.colorPrimary)
         )
         binding.serverResultText.isVisible = true
         if (serverResultData.size == 0) {
@@ -388,7 +388,7 @@ class ExtensionTestItem(
                 R.drawable.ic_circle_cancel, 0, 0, 0
             )
             binding.serverResultText.setTextColor(
-                context.getThemeColor(com.google.android.material.R.attr.colorError)
+                context.getThemeColor(androidx.appcompat.R.attr.colorError)
             )
             return
         }

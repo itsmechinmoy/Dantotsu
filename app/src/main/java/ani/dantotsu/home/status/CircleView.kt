@@ -29,7 +29,7 @@ class CircleView(context: Context, attrs: AttributeSet?) : View(context, attrs) 
         val centerY = height / 2f
         val radius = centerX.coerceAtMost(centerY) - paint.strokeWidth / 2
 
-        val primaryColor = context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+        val primaryColor = context.getThemeColor(androidx.appcompat.R.attr.colorPrimary)
         val secondColor = context.getThemeColor(com.google.android.material.R.attr.colorOnPrimary)
 
         fun setColor(int: Int) {

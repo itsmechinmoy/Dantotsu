@@ -11,9 +11,9 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
-import com.anggrayudi.storage.callback.FolderCallback
-import com.anggrayudi.storage.file.deleteRecursively
-import com.anggrayudi.storage.file.moveFolderTo
+import com.anggrayudi.storage.*
+import com.anggrayudi.storage.file.*
+import com.anggrayudi.storage.transfer.*
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dev.zacsweers.metro.AppScope
@@ -102,7 +102,7 @@ class DownloadsManager(private val context: Context) {
         val baseDirectory = getBaseDirectory(context, type)
         val directory = baseDirectory?.findFolder(title)
         if (directory?.exists() == true) {
-            val deleted = directory.deleteRecursively(context, false)
+            val deleted = directory.delete()
             if (deleted) {
                 snackString("Successfully deleted")
             } else {
@@ -146,7 +146,7 @@ class DownloadsManager(private val context: Context) {
             val files = directory.listFiles()
             for (file in files) {
                 if (!downloadsSubLists.any { it.titleName == file.name }) {
-                    file.deleteRecursively(context, false)
+                    file.delete()
                 }
             }
         }
@@ -185,53 +185,27 @@ class DownloadsManager(private val context: Context) {
                     DocumentFile.fromTreeUri(context, newUri) ?: throw Exception("New base is null")
                 val folder =
                     oldBase.findFolder(BASE_LOCATION) ?: throw Exception("Base folder not found")
-                folder.moveFolderTo(context, newBase, false, BASE_LOCATION, object :
-                    FolderCallback() {
-                    override fun onFailed(errorCode: ErrorCode) {
-                        when (errorCode) {
-                            ErrorCode.CANCELED -> finished(false, "Move canceled")
-                            ErrorCode.CANNOT_CREATE_FILE_IN_TARGET -> finished(
-                                false,
-                                "Cannot create file in target"
-                            )
 
-                            ErrorCode.INVALID_TARGET_FOLDER -> finished(
-                                true,
-                                "Invalid target folder"
-                            ) // seems to still work
-                            ErrorCode.NO_SPACE_LEFT_ON_TARGET_PATH -> finished(
-                                false,
-                                "No space left on target path"
-                            )
+                val sourceStorageFile = folder.toStorageFile(context)
+                val targetStorageFile = newBase.toStorageFile(context)
 
-                            ErrorCode.UNKNOWN_IO_ERROR -> finished(false, "Unknown IO error")
-                            ErrorCode.SOURCE_FOLDER_NOT_FOUND -> finished(
-                                false,
-                                "Source folder not found"
-                            )
+                val result = sourceStorageFile.moveTo(targetStorageFile)
 
-                            ErrorCode.STORAGE_PERMISSION_DENIED -> finished(
-                                false,
-                                "Storage permission denied"
-                            )
-
-                            ErrorCode.TARGET_FOLDER_CANNOT_HAVE_SAME_PATH_WITH_SOURCE_FOLDER -> finished(
-                                false,
-                                "Target folder cannot have same path with source folder"
-                            )
-
-                            else -> finished(false, "Failed to move downloads: $errorCode")
-                        }
-                        Logger.log("Failed to move downloads: $errorCode")
-                        super.onFailed(errorCode)
-                    }
-
-                    override fun onCompleted(result: Result) {
+                when (result) {
+                    is TransferResult.Success<*> -> {
                         finished(true, "Successfully moved downloads")
-                        super.onCompleted(result)
                     }
 
-                })
+                    is TransferResult.Skipped -> {
+                        finished(false, "Move skipped")
+                    }
+
+                    is TransferResult.Failure -> {
+                        val message = result.message ?: "Failed to move downloads"
+                        Logger.log("Failed to move downloads: $message")
+                        finished(false, message)
+                    }
+                }
 
             } catch (e: Exception) {
                 snackString("Error: ${e.message}")
@@ -264,7 +238,7 @@ class DownloadsManager(private val context: Context) {
         downloadsList.removeAll { it.titleName == downloadedType.titleName && it.chapterName == downloadedType.chapterName }
         // Check if the directory exists and delete it recursively
         if (directory?.exists() == true) {
-            val deleted = directory.deleteRecursively(context, false)
+            val deleted = directory.delete()
             if (deleted) {
                 if (toast) snackString("Successfully deleted")
             } else {
@@ -278,7 +252,7 @@ class DownloadsManager(private val context: Context) {
     fun purgeDownloads(type: MediaType) {
         val directory = getBaseDirectory(context, type)
         if (directory?.exists() == true) {
-            val deleted = directory.deleteRecursively(context, false)
+            val deleted = directory.delete()
             if (deleted) {
                 snackString("Successfully deleted")
             } else {
