@@ -128,7 +128,7 @@ rxrelay = "com.jakewharton.rxrelay:rxrelay:1.2.0"
 flowreactive = "ru.beryukhov:flowreactivenetwork:1.0.4"
 fuzzy = "me.xdrop:fuzzywuzzy:1.4.0"
 voyager = "ca.gosyer:voyager-navigator:1.0.0-rc07"
-logcat = "com.squareup.logcat:logcat:0.1"
+logcat = "com.squareup.logcat:logcat:0.4"
 injekt = "com.github.mihonapp:injekt:91edab2317"
 
 # OkHttp
