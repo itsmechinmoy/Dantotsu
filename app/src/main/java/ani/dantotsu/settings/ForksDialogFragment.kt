@@ -47,8 +47,9 @@ class ForksDialogFragment : BottomSheetDialogFragment() {
         binding.devsRecyclerView.layoutManager = LinearLayoutManager(requireContext())
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
+        _binding?.devsRecyclerView?.adapter = null
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 }

@@ -135,8 +135,8 @@ fun saveImage(
 }
 
 class MangaCache {
-    private val maxMemory = (Runtime.getRuntime().maxMemory() / 1024 / 2).toInt()
-    private val cache = LruCache<String, ImageData>(maxMemory)
+    private val maxEntries = 60
+    private val cache = LruCache<String, ImageData>(maxEntries)
 
     @Synchronized
     fun put(key: String, imageDate: ImageData) {

@@ -78,6 +78,7 @@ class HomeFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        Refresh.activity.remove(this.hashCode())
         _binding = null
     }
 
@@ -88,39 +89,40 @@ class HomeFragment : Fragment() {
         Logger.log("HomeFragment")
         fun load() {
             Logger.log("Loading HomeFragment")
-            if (activity != null && _binding != null) lifecycleScope.launch(Dispatchers.Main) {
+            if (activity != null && _binding != null) viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                val currentBinding = _binding ?: return@launch
                 val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                 if (rescueMode && MAL.token != null) {
-                    binding.homeUserName.text = MAL.username ?: Anilist.username
-                    binding.homeUserAvatar.loadImage(MAL.avatar ?: Anilist.avatar)
+                    currentBinding.homeUserName.text = MAL.username ?: Anilist.username
+                    currentBinding.homeUserAvatar.loadImage(MAL.avatar ?: Anilist.avatar)
                 } else {
-                    binding.homeUserName.text = Anilist.username
-                    binding.homeUserAvatar.loadImage(Anilist.avatar)
+                    currentBinding.homeUserName.text = Anilist.username
+                    currentBinding.homeUserAvatar.loadImage(Anilist.avatar)
                 }
 
                 if (!rescueMode) {
-                    binding.homeUserEpisodesWatched.text = Anilist.episodesWatched.toString()
-                    binding.homeUserChaptersRead.text = Anilist.chapterRead.toString()
-                    binding.homeNotificationCount.isVisible = Anilist.unreadNotificationCount > 0
+                    currentBinding.homeUserEpisodesWatched.text = Anilist.episodesWatched.toString()
+                    currentBinding.homeUserChaptersRead.text = Anilist.chapterRead.toString()
+                    currentBinding.homeNotificationCount.isVisible = Anilist.unreadNotificationCount > 0
                             && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
-                    binding.homeNotificationCount.text = Anilist.unreadNotificationCount.toString()
+                    currentBinding.homeNotificationCount.text = Anilist.unreadNotificationCount.toString()
                 } else {
-                    binding.homeUserEpisodesWatched.text = MAL.episodesWatched?.toString() ?: "—"
-                    binding.homeUserChaptersRead.text = MAL.chaptersRead?.toString() ?: "—"
-                    binding.homeNotificationCount.isVisible = false
+                    currentBinding.homeUserEpisodesWatched.text = MAL.episodesWatched?.toString() ?: "—"
+                    currentBinding.homeUserChaptersRead.text = MAL.chaptersRead?.toString() ?: "—"
+                    currentBinding.homeNotificationCount.isVisible = false
                 }
 
                 val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
                 val bannerUrl = if (rescueMode) (Anilist.bg ?: MAL.avatar) else Anilist.bg
                 blurImage(
-                    if (bannerAnimations) binding.homeUserBg else binding.homeUserBgNoKen,
+                    if (bannerAnimations) currentBinding.homeUserBg else currentBinding.homeUserBgNoKen,
                     bannerUrl
                 )
-                binding.homeUserDataProgressBar.visibility = View.GONE
+                currentBinding.homeUserDataProgressBar.visibility = View.GONE
 
                 val listUserId = Anilist.userid ?: 0
                 val listUsername = if (rescueMode) MAL.username ?: Anilist.username else Anilist.username
-                binding.homeAnimeList.setOnClickListener {
+                currentBinding.homeAnimeList.setOnClickListener {
                     ContextCompat.startActivity(
                         requireActivity(), Intent(requireActivity(), ListActivity::class.java)
                             .putExtra("anime", true)
@@ -128,7 +130,7 @@ class HomeFragment : Fragment() {
                             .putExtra("username", listUsername), null
                     )
                 }
-                binding.homeMangaList.setOnClickListener {
+                currentBinding.homeMangaList.setOnClickListener {
                     ContextCompat.startActivity(
                         requireActivity(), Intent(requireActivity(), ListActivity::class.java)
                             .putExtra("anime", false)

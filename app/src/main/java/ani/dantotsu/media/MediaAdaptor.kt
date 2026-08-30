@@ -314,13 +314,8 @@ class MediaAdaptor(
                         b.root.context,
                         (if (media.userScore != 0) R.drawable.item_user_score else R.drawable.item_score)
                     )
-                    media.genres.apply {
-                        if (isNotEmpty()) {
-                            var genres = ""
-                            forEach { genres += "$it • " }
-                            genres = genres.removeSuffix(" • ")
-                            b.itemCompactGenres.text = genres
-                        }
+                    if (media.genres.isNotEmpty()) {
+                        b.itemCompactGenres.text = media.genres.joinToString(" • ")
                     }
                     b.itemCompactStatus.text = media.status ?: ""
                     if (media.anime != null) {

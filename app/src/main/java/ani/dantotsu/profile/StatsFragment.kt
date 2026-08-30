@@ -29,13 +29,14 @@ import java.util.Locale
 
 class StatsFragment :
     Fragment() {
-    private lateinit var binding: FragmentStatisticsBinding
+    private var _binding: FragmentStatisticsBinding? = null
+    private val binding get() = _binding!!
     private var adapter: GroupieAdapter = GroupieAdapter()
     private var stats: MutableList<Query.StatisticsUser?> = mutableListOf()
     private var type: MediaType = MediaType.ANIME
     private var statType: StatType = StatType.COUNT
     private lateinit var user: Query.UserProfile
-    private lateinit var activity: ProfileActivity
+    private val activity: ProfileActivity get() = requireActivity() as ProfileActivity
     private var loadedFirstTime = false
 
     override fun onCreateView(
@@ -43,13 +44,18 @@ class StatsFragment :
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        binding = FragmentStatisticsBinding.inflate(inflater, container, false)
+        _binding = FragmentStatisticsBinding.inflate(inflater, container, false)
         return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding?.statisticList?.adapter = null
+        _binding = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        activity = requireActivity() as ProfileActivity
 
         user = arguments?.getSerializableCompat<Query.UserProfile>("user") as Query.UserProfile
 
@@ -83,20 +89,22 @@ class StatsFragment :
 
         binding.compare.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                activity.lifecycleScope.launch {
+                viewLifecycleOwner.lifecycleScope.launch {
                     if (Anilist.userid != null) {
                         withContext(Dispatchers.Main) {
-                            binding.statisticProgressBar.visibility = View.VISIBLE
-                            binding.statisticList.visibility = View.GONE
+                            val currentBinding = _binding ?: return@withContext
+                            currentBinding.statisticProgressBar.visibility = View.VISIBLE
+                            currentBinding.statisticList.visibility = View.GONE
                         }
                         val userStats =
                             Anilist.query.getUserStatistics(Anilist.userid!!)?.data?.user
                         if (userStats != null) {
                             stats.add(userStats)
                             withContext(Dispatchers.Main) {
+                                val currentBinding = _binding ?: return@withContext
                                 loadStats(type == MediaType.ANIME)
-                                binding.statisticProgressBar.visibility = View.GONE
-                                binding.statisticList.visibility = View.VISIBLE
+                                currentBinding.statisticProgressBar.visibility = View.GONE
+                                currentBinding.statisticList.visibility = View.VISIBLE
                             }
                         }
                     }
@@ -119,26 +127,27 @@ class StatsFragment :
 
     override fun onResume() {
         super.onResume()
-        if (this::binding.isInitialized) {
+        if (_binding != null) {
             binding.statisticList.visibility = View.VISIBLE
             binding.statisticList.setBaseline(activity.binding.profileNavBarContainer!!)
             binding.root.requestLayout()
             if (!loadedFirstTime) {
-                activity.lifecycleScope.launch {
+                viewLifecycleOwner.lifecycleScope.launch {
                     stats.clear()
                     stats.add(Anilist.query.getUserStatistics(user.id)?.data?.user)
                     withContext(Dispatchers.Main) {
-                        binding.filterContainer.visibility = View.VISIBLE
-                        binding.sourceType.setOnItemClickListener { _, _, i, _ ->
+                        val currentBinding = _binding ?: return@withContext
+                        currentBinding.filterContainer.visibility = View.VISIBLE
+                        currentBinding.sourceType.setOnItemClickListener { _, _, i, _ ->
                             type = MediaType.entries.toTypedArray()[i]
                             loadStats(type == MediaType.ANIME)
                         }
-                        binding.sourceFilter.setOnItemClickListener { _, _, i, _ ->
+                        currentBinding.sourceFilter.setOnItemClickListener { _, _, i, _ ->
                             statType = StatType.entries.toTypedArray()[i]
                             loadStats(type == MediaType.ANIME)
                         }
                         loadStats(type == MediaType.ANIME)
-                        binding.statisticProgressBar.visibility = View.GONE
+                        currentBinding.statisticProgressBar.visibility = View.GONE
                     }
                 }
                 loadedFirstTime = true

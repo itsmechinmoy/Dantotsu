@@ -14,9 +14,16 @@ object MediaNameAdapter {
     private const val REGEX_SUBDUB = "^(soft)?[\\s-]*(sub|dub|mixed)(bed|s)?\\s*$"
     private const val REGEX_CHAPTER = "(chapter|chap|ch|c)${REGEX_ITEM}"
 
+    private val SUBDUB_PATTERN = Pattern.compile(REGEX_SUBDUB, Pattern.CASE_INSENSITIVE)
+    private val SEASON_PATTERN = Pattern.compile(REGEX_SEASON, Pattern.CASE_INSENSITIVE)
+    private val CHAPTER_PATTERN = Pattern.compile(REGEX_CHAPTER, Pattern.CASE_INSENSITIVE)
+    private val PART_NUMBER_PATTERN = Pattern.compile(REGEX_PART_NUMBER, Pattern.CASE_INSENSITIVE)
+    private val EPISODE_REGEX = Regex(REGEX_EPISODE, RegexOption.IGNORE_CASE)
+    private val PART_NUMBER_REGEX = Regex(REGEX_PART_NUMBER, RegexOption.IGNORE_CASE)
+    private val LETTER_REGEX = Regex("[a-zA-Z]")
+
     fun setSubDub(text: String, typeToSetTo: SubDubType): String? {
-        val subdubPattern: Pattern = Pattern.compile(REGEX_SUBDUB, Pattern.CASE_INSENSITIVE)
-        val subdubMatcher: Matcher = subdubPattern.matcher(text)
+        val subdubMatcher: Matcher = SUBDUB_PATTERN.matcher(text)
 
         return if (subdubMatcher.find()) {
             val soft = subdubMatcher.group(1)
@@ -44,8 +51,7 @@ object MediaNameAdapter {
     }
 
     fun getSubDub(text: String): SubDubType {
-        val subdubPattern: Pattern = Pattern.compile(REGEX_SUBDUB, Pattern.CASE_INSENSITIVE)
-        val subdubMatcher: Matcher = subdubPattern.matcher(text)
+        val subdubMatcher: Matcher = SUBDUB_PATTERN.matcher(text)
 
         return if (subdubMatcher.find()) {
             val subdub = subdubMatcher.group(2)?.lowercase(Locale.ROOT)
@@ -64,8 +70,7 @@ object MediaNameAdapter {
     }
 
     fun findSeasonNumber(text: String): Int? {
-        val seasonPattern: Pattern = Pattern.compile(REGEX_SEASON, Pattern.CASE_INSENSITIVE)
-        val seasonMatcher: Matcher = seasonPattern.matcher(text)
+        val seasonMatcher: Matcher = SEASON_PATTERN.matcher(text)
 
         return if (seasonMatcher.find()) {
             seasonMatcher.group(2)?.toInt()
@@ -117,12 +122,10 @@ object MediaNameAdapter {
     }
 
     fun removeEpisodeNumber(text: String): String {
-        val regexPattern = Regex(REGEX_EPISODE, RegexOption.IGNORE_CASE)
-        val removedNumber = text.replace(regexPattern, "").ifEmpty {
+        val removedNumber = text.replace(EPISODE_REGEX, "").ifEmpty {
             text
         }
-        val letterPattern = Regex("[a-zA-Z]")
-        return if (letterPattern.containsMatchIn(removedNumber)) {
+        return if (LETTER_REGEX.containsMatchIn(removedNumber)) {
             removedNumber
         } else {
             text
@@ -131,12 +134,9 @@ object MediaNameAdapter {
 
 
     fun removeEpisodeNumberCompletely(text: String): String {
-        val regexPattern = Regex(REGEX_EPISODE, RegexOption.IGNORE_CASE)
-        val removedNumber = text.replace(regexPattern, "")
+        val removedNumber = text.replace(EPISODE_REGEX, "")
         return if (removedNumber.equals(text, true)) {  // if nothing was removed
-            val failedEpisodeNumberPattern =
-                Regex(REGEX_PART_NUMBER, RegexOption.IGNORE_CASE)
-            failedEpisodeNumberPattern.replace(removedNumber) { mr ->
+            PART_NUMBER_REGEX.replace(removedNumber) { mr ->
                 mr.value.replaceFirst(mr.groupValues[1], "")
             }
         } else {
@@ -145,16 +145,13 @@ object MediaNameAdapter {
     }
 
     fun findChapterNumber(text: String): Float? {
-        val pattern: Pattern = Pattern.compile(REGEX_CHAPTER, Pattern.CASE_INSENSITIVE)
-        val matcher: Matcher = pattern.matcher(text)
+        val matcher: Matcher = CHAPTER_PATTERN.matcher(text)
 
         return if (matcher.find()) {
             matcher.group(2)?.toFloat()
         } else {
-            val failedChapterNumberPattern: Pattern =
-                Pattern.compile(REGEX_PART_NUMBER, Pattern.CASE_INSENSITIVE)
             val failedChapterNumberMatcher: Matcher =
-                failedChapterNumberPattern.matcher(text)
+                PART_NUMBER_PATTERN.matcher(text)
             if (failedChapterNumberMatcher.find()) {
                 failedChapterNumberMatcher.group(1)?.toFloat()
             } else {

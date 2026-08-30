@@ -277,11 +277,12 @@ class MangaExtensionManager(
      */
     private fun registerUpdatedExtension(extension: MangaExtension.Installed) {
         val mutInstalledExtensions = _installedExtensionsFlow.value.toMutableList()
-        val oldExtension = mutInstalledExtensions.find { it.pkgName == extension.pkgName }
-        if (oldExtension != null) {
-            mutInstalledExtensions -= oldExtension
+        val index = mutInstalledExtensions.indexOfFirst { it.pkgName == extension.pkgName }
+        if (index != -1) {
+            mutInstalledExtensions[index] = extension
+        } else {
+            mutInstalledExtensions.add(extension)
         }
-        mutInstalledExtensions += extension
         _installedExtensionsFlow.value = mutInstalledExtensions
     }
 

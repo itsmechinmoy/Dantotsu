@@ -24,8 +24,11 @@ sqldelight = "2.3.2"
 sqldelight-androidx-driver = "0637a964a1"
 androidx-baselineProfile = "1.5.0-rc01"
 androidx-profileInstaller = "1.4.1"
+leakcanary = "2.14"
 
 [libraries]
+leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanary" }
+leakcanary-plumber = { module = "com.squareup.leakcanary:plumber-android", version.ref = "leakcanary" }
 ffmpeg-kit = { module = "com.antonkarpenko:ffmpeg-kit-https", version.ref = "ffmpeg-kit" }
 
 

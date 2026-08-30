@@ -353,7 +353,33 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="dantotsu" />
+                <data
+                    android:host="anime"
+                    android:scheme="dantotsu" />
+                <data
+                    android:host="watch"
+                    android:scheme="dantotsu" />
+                <data
+                    android:host="manga"
+                    android:scheme="dantotsu" />
+                <data
+                    android:host="read"
+                    android:scheme="dantotsu" />
+                <data
+                    android:host="media"
+                    android:scheme="dantotsu" />
+                <data
+                    android:host="open"
+                    android:scheme="dantotsu" />
+                <data
+                    android:host="user"
+                    android:scheme="dantotsu" />
+                <data
+                    android:host="u"
+                    android:scheme="dantotsu" />
+                <data
+                    android:host="profile"
+                    android:scheme="dantotsu" />
             </intent-filter>
             <intent-filter android:label="Open in Dantotsu">
                 <action android:name="android.intent.action.VIEW" />
@@ -436,6 +462,31 @@
                 <data android:scheme="tachiyomi"/>
                 <data android:scheme="aniyomi"/>
                 <data android:scheme="novelyomi"/>
+                <data android:scheme="mihon"/>
+                <data android:scheme="dantotsu"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="magnet" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/x-bittorrent" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.torrent" />
             </intent-filter>
         </activity>
         <activity

@@ -146,9 +146,12 @@ class DanNovelExtensionManager(private val context: Context) {
 
     private fun registerUpdatedExtension(ext: NovelExtension.Installed) {
         val mut = _installedNovelExtensionsFlow.value.toMutableList()
-        val old = mut.find { it.pkgName == ext.pkgName }
-        if (old != null) mut -= old
-        mut += ext
+        val index = mut.indexOfFirst { it.pkgName == ext.pkgName }
+        if (index != -1) {
+            mut[index] = ext
+        } else {
+            mut.add(ext)
+        }
         _installedNovelExtensionsFlow.value = mut
     }
 

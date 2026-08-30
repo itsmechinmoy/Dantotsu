@@ -37,9 +37,8 @@ import ani.dantotsu.toast
 import ani.dantotsu.util.LauncherWrapper
 import ani.dantotsu.util.StoragePermissions
 import ani.dantotsu.util.customAlertDialog
-import kotlinx.coroutines.DelicateCoroutinesApi
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -49,7 +48,6 @@ class SettingsCommonActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsCommonBinding
     private lateinit var launcher: LauncherWrapper
 
-    @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ThemeManager(this).applyTheme()
@@ -338,7 +336,7 @@ class SettingsCommonActivity : AppCompatActivity() {
                                                 toast(getString(R.string.please_wait))
                                                 val newUri =
                                                     PrefManager.getVal<String>(PrefName.DownloadsDir)
-                                                GlobalScope.launch(Dispatchers.IO) {
+                                                lifecycleScope.launch(Dispatchers.IO) {
                                                     Injekt.get<DownloadsManager>().moveDownloadsDir(
                                                         context,
                                                         Uri.parse(oldUri),

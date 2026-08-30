@@ -113,4 +113,10 @@ class CalendarActivity : AppCompatActivity() {
             }
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Refresh.activity.remove(this.hashCode())
+        binding.listViewPager.adapter = null
+    }
 }

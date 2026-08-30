@@ -184,28 +184,42 @@ class PlayerSubtitleManager(
         applyDelayInternal()
     }
 
+    private val srtVttRegex = Regex("""^(\d{1,2}:\d{2}:\d{2}[,\.]\d{3}|\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,\.]\d{3}|\d{2}:\d{2}[,\.]\d{3})(.*)$""")
+    private val assDialogueRegex = Regex("""^(Dialogue:\s*[^,]+,)(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2})(,.*)$""", RegexOption.IGNORE_CASE)
+
     private fun applyDelayInternal() {
         val rawContent = currentActiveSubRawContent
         val file = currentActiveSubFile
         val effectiveDelay = subtitleDelayMs - audioDelayMs
-        if (rawContent != null && file != null) {
-            try {
-                // Clean up previous shifted files
-                activity.cacheDir.listFiles()?.filter {
-                    it.isFile && it.name.startsWith("shifted_${file.nameWithoutExtension}_")
-                }?.forEach { it.delete() }
+        val lang = currentActiveSubLang
+        val mimeType = currentActiveSubMimeType
+        val format = currentActiveSubFormat
 
-                if (effectiveDelay == 0L) {
-                    applyShiftedSubtitle(file, currentActiveSubLang, currentActiveSubMimeType, isShifted = false)
-                    return
+        if (rawContent != null && file != null) {
+            activity.lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    // Clean up previous shifted files on background thread
+                    activity.cacheDir.listFiles()?.filter {
+                        it.isFile && it.name.startsWith("shifted_${file.nameWithoutExtension}_")
+                    }?.forEach { it.delete() }
+
+                    if (effectiveDelay == 0L) {
+                        withContext(Dispatchers.Main) {
+                            applyShiftedSubtitle(file, lang, mimeType, isShifted = false)
+                        }
+                        return@launch
+                    }
+                    val shiftedContent = shiftSubtitleTimestamps(rawContent, format, effectiveDelay)
+                    val ext = file.extension.ifBlank { "srt" }
+                    val shiftedFile = File(activity.cacheDir, "shifted_${file.nameWithoutExtension}_${effectiveDelay}.$ext")
+                    shiftedFile.writeText(shiftedContent)
+
+                    withContext(Dispatchers.Main) {
+                        applyShiftedSubtitle(shiftedFile, lang, mimeType, isShifted = true)
+                    }
+                } catch (e: Exception) {
+                    Logger.log("PlayerSubtitleManager: Failed to shift subtitle: ${e.message}")
                 }
-                val shiftedContent = shiftSubtitleTimestamps(rawContent, currentActiveSubFormat, effectiveDelay)
-                val ext = file.extension.ifBlank { "srt" }
-                val shiftedFile = File(activity.cacheDir, "shifted_${file.nameWithoutExtension}_${effectiveDelay}.$ext")
-                shiftedFile.writeText(shiftedContent)
-                applyShiftedSubtitle(shiftedFile, currentActiveSubLang, currentActiveSubMimeType, isShifted = true)
-            } catch (e: Exception) {
-                Logger.log("PlayerSubtitleManager: Failed to shift subtitle: ${e.message}")
             }
         } else if (serverSubJob?.isActive == true) {
             Logger.log("PlayerSubtitleManager: Subtitle caching in progress; will apply ${effectiveDelay}ms once cached")
@@ -265,9 +279,6 @@ class PlayerSubtitleManager(
 
             return "%d:%02d:%02d.%02d".format(newHours, newMins, newSecs, newCentis)
         }
-
-        val srtVttRegex = Regex("""^(\d{1,2}:\d{2}:\d{2}[,\.]\d{3}|\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,\.]\d{3}|\d{2}:\d{2}[,\.]\d{3})(.*)$""")
-        val assDialogueRegex = Regex("""^(Dialogue:\s*[^,]+,)(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2})(,.*)$""", RegexOption.IGNORE_CASE)
 
         return when (format.uppercase(Locale.ROOT)) {
             "ASS", "SSA" -> {
@@ -444,8 +455,10 @@ class PlayerSubtitleManager(
         subtitles: List<Subtitle>,
         embedUrl: String,
         currentVideoUrl: String,
-        hasExtSubtitles: Boolean
+        hasExtSubtitles: Boolean,
+        defaultSubLanguage: String? = null
     ): List<MediaItem.SubtitleConfiguration> {
+        val targetLabel = defaultSubLanguage ?: initialSubtitleLabel
         return subtitles.mapIndexed { index, subtitle ->
             val subtitleUrl = if (!hasExtSubtitles) currentVideoUrl else subtitle.file.url
             val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, embedUrl, currentVideoUrl)
@@ -462,11 +475,18 @@ class PlayerSubtitleManager(
                     MimeTypes.APPLICATION_SUBRIP
                 }
             }
+            val isMatch = targetLabel != null && (
+                subtitle.language.equals(targetLabel, ignoreCase = true) ||
+                subtitle.language.contains(targetLabel, ignoreCase = true) ||
+                (targetLabel.equals("English", ignoreCase = true) && (subtitle.language.contains("Eng", ignoreCase = true) || subtitle.language.contains("en", ignoreCase = true)))
+            )
+            val isDefaultSelection = isMatch || (targetLabel == null && index == 0)
             MediaItem.SubtitleConfiguration.Builder(resolvedSubtitleUrl.toUri())
                 .setMimeType(subtitleMime)
                 .setId(subtitleId)
                 .setLanguage(subtitleLanguageCode)
                 .setLabel(subtitle.language)
+                .setSelectionFlags(if (isDefaultSelection) C.SELECTION_FLAG_DEFAULT else 0)
                 .build()
         }
     }
@@ -559,7 +579,7 @@ class PlayerSubtitleManager(
     fun handleCues(cueGroup: CueGroup, subtitle: Subtitle?) {
         val player = getPlayer() ?: return
         val exoSubtitleView = playerView.subtitleView
-        val libassActive = assHandler?.hasTracks() == true || subtitle?.type == SubtitleType.ASS
+        val libassActive = assHandler?.hasTracks() == true
         if (libassActive) {
             exoSubtitleView?.visibility = View.GONE
             customSubtitleView.visibility = View.GONE

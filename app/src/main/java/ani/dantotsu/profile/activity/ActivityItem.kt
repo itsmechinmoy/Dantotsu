@@ -47,7 +47,9 @@ class ActivityItem(
         binding.activityLinkPreviewContainer.removeAllViews()
         binding.activityLinkPreviewContainer.visibility = View.GONE
         val context = binding.root.context
-        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val scope = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
+            ?: (context as? FragmentActivity)?.lifecycleScope
+            ?: CoroutineScope(Dispatchers.Main + SupervisorJob())
         setAnimation(binding.root.context, binding.root)
         binding.activityUserName.text = activity.user?.name ?: activity.messenger?.name
         binding.activityUserAvatar.loadImage(

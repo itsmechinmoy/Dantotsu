@@ -119,9 +119,10 @@ class ImageViewDialog : BottomSheetDialogFragment() {
         }
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
+        _binding?.bottomImageView?.recycle()
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 
     companion object {

@@ -130,10 +130,10 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         animeLink: String,
         extra: Map<String, String>?,
         sAnime: SAnime
-    ): List<Episode> {
+    ): List<Episode> = withContext(Dispatchers.IO) {
         val source = (extension.sources.getOrNull(sourceLanguage)
             ?: extension.sources.firstOrNull()) as? AnimeSource
-            ?: return emptyList()
+            ?: return@withContext emptyList()
         try {
             val networkAnime = runCatching {
                 source.getAnimeDetails(sAnime)
@@ -170,23 +170,42 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
                 source.getEpisodeListCompat(sAnime)
             }
 
-            if (res.isEmpty()) return emptyList()
+            if (res.isEmpty()) return@withContext emptyList()
 
-            val sortedEpisodes = if (res[0].episode_number == -1f) {
-                // Find the number in the string and sort by that number
+            // Pre-process episodes: extract folder hierarchy for scanlator/season chips and detect true episode numbers
+            res.forEach { ep ->
+                val normalizedName = ep.name.replace('\\', '/')
+                if (normalizedName.contains('/')) {
+                    val parts = normalizedName.split('/').filter { it.isNotBlank() }
+                    if (parts.size > 1) {
+                        if (ep.scanlator.isNullOrBlank()) {
+                            ep.scanlator = parts.dropLast(1).joinToString(" / ")
+                        }
+                        ep.name = parts.last()
+                    }
+                }
+                val detected = MediaNameAdapter.findEpisodeNumber(ep.name)
+                    ?: MediaNameAdapter.findEpisodeNumber(ep.url)
+                if (detected != null && (ep.episode_number <= 0f || ep.episode_number == -1f)) {
+                    ep.episode_number = detected
+                }
+            }
+
+            val sortedEpisodes = if (res.all { it.episode_number > 0f }) {
+                res.sortedBy { it.episode_number }
+            } else if (res[0].episode_number == -1f) {
                 val sortedByStringNumber = res.sortedBy {
-                    val matchResult = MediaNameAdapter.findEpisodeNumber(it.name)
-                    val number = matchResult ?: Float.MAX_VALUE
-                    it.episode_number = number  // Store the found number in episode_number
+                    val number = it.episode_number.takeIf { n -> n > 0f }
+                        ?: MediaNameAdapter.findEpisodeNumber(it.name)
+                        ?: MediaNameAdapter.findEpisodeNumber(it.url)
+                        ?: Float.MAX_VALUE
+                    it.episode_number = number
                     number
                 }
-
-                // If there is no number, reverse the order and give them an incrementing number
                 var incrementingNumber = 1f
                 sortedByStringNumber.map {
                     if (it.episode_number == Float.MAX_VALUE) {
-                        it.episode_number =
-                            incrementingNumber++  // Update episode_number with the incrementing number
+                        it.episode_number = incrementingNumber++
                     }
                     it
                 }
@@ -194,31 +213,28 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
                 res.sortedBy { it.episode_number }
             } else {
                 var episodeCounter = 1f
-                // Group by season, sort within each season, and then renumber while keeping episode number 0 as is
-                val seasonGroups =
-                    res.groupBy { MediaNameAdapter.findSeasonNumber(it.name) ?: 0 }
-                seasonGroups.keys.sortedBy { it }
-                    .flatMap { season ->
-                        seasonGroups[season]?.sortedBy { it.episode_number }?.map { episode ->
-                            if (episode.episode_number != 0f) { // Skip renumbering for episode number 0
-                                val potentialNumber =
-                                    MediaNameAdapter.findEpisodeNumber(episode.name)
-                                if (potentialNumber != null) {
-                                    episode.episode_number = potentialNumber
-                                } else {
-                                    episode.episode_number = episodeCounter
-                                }
-                                episodeCounter++
+                val seasonGroups = res.groupBy { MediaNameAdapter.findSeasonNumber(it.name) ?: 0 }
+                seasonGroups.keys.sortedBy { it }.flatMap { season ->
+                    seasonGroups[season]?.sortedBy { it.episode_number }?.map { episode ->
+                        if (episode.episode_number <= 0f) {
+                            val potentialNumber = MediaNameAdapter.findEpisodeNumber(episode.name)
+                                ?: MediaNameAdapter.findEpisodeNumber(episode.url)
+                            if (potentialNumber != null) {
+                                episode.episode_number = potentialNumber
+                            } else {
+                                episode.episode_number = episodeCounter
                             }
-                            episode
-                        } ?: emptyList()
-                    }
+                            episodeCounter++
+                        }
+                        episode
+                    } ?: emptyList()
+                }
             }
-            return sortedEpisodes.map { sEpisodeToEpisode(it) }
+            return@withContext sortedEpisodes.map { sEpisodeToEpisode(it) }
         } catch (e: Exception) {
             Logger.log("Exception: $e")
         }
-        return emptyList()
+        return@withContext emptyList()
     }
 
     private fun episodesAreIncrementing(episodes: List<SEpisode>): Boolean {
@@ -237,11 +253,11 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         episodeLink: String,
         extra: Map<String, String>?,
         sEpisode: SEpisode
-    ): List<VideoServer> {
+    ): List<VideoServer> = withContext(Dispatchers.IO) {
         val source = (extension.sources.getOrNull(sourceLanguage)
-            ?: extension.sources.firstOrNull()) as? AnimeSource ?: return emptyList()
+            ?: extension.sources.firstOrNull()) as? AnimeSource ?: return@withContext emptyList()
 
-        return try {
+        return@withContext try {
             val videos = getVideoList(source, sEpisode)
 
             videos.map { videoToVideoServer(it) }
@@ -253,7 +269,7 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     suspend fun getVideoList(
         source: AnimeSource,
         episode: SEpisode
-    ): List<Video> {
+    ): List<Video> = withContext(Dispatchers.IO) {
         val directVideos = runCatching {
             source.getVideoList(episode)
         }.getOrElse { emptyList() }
@@ -316,7 +332,7 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             }
             .filter { (it.videoUrl.isNotBlank() && it.videoUrl != "null") || (it.url.isNotBlank() && it.url != "null") }
 
-        return runCatching {
+        return@withContext runCatching {
             if (source is AnimeHttpSource) source.run { allVideos.sortVideos() } else allVideos
         }.getOrElse { allVideos }
     }
@@ -324,9 +340,9 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     private suspend fun resolveVideo(
         source: AnimeSource,
         video: Video
-    ): Video {
+    ): Video = withContext(Dispatchers.IO) {
         if (video.initialized && video.videoUrl.isNotEmpty() && video.videoUrl != "null") {
-            return video
+            return@withContext video
         }
 
         if (video.videoUrl == "null" || video.videoUrl.isEmpty()) {
@@ -335,7 +351,7 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             }.getOrNull()
 
             if (!newUrl.isNullOrEmpty() && newUrl != "null") {
-                return video.copy(videoUrl = newUrl, initialized = true)
+                return@withContext video.copy(videoUrl = newUrl, initialized = true)
             }
         }
 
@@ -343,9 +359,9 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             if (source is AnimeHttpSource) source.resolveVideo(video) else null
         }.getOrNull()
 
-        if (resolved != null) return resolved
+        if (resolved != null) return@withContext resolved
 
-        return video
+        return@withContext video
     }
 
     override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor {

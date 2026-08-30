@@ -58,8 +58,15 @@ abstract class WebViewBottomDialog : BottomSheetDialogFragment() {
         this.dismiss()
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
+        _binding?.webView?.apply {
+            stopLoading()
+            loadUrl("about:blank")
+            clearHistory()
+            removeAllViews()
+            destroy()
+        }
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 }

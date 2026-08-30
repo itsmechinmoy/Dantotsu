@@ -42,7 +42,7 @@ import ani.dantotsu.databinding.ItemUrlBinding
 import ani.dantotsu.download.DownloadedType
 import ani.dantotsu.download.video.Helper
 import ani.dantotsu.getThemeColor
-import ani.dantotsu.hideSystemBars
+import ani.dantotsu.hideSystemBarsExtendView
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.media.MediaType
@@ -537,29 +537,38 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 it.server.name == ep.selectedExtractor
             }?.videos?.getOrNull(ep.selectedVideo)
             video?.file?.url?.let { url ->
-                if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
+                val isTorrent = url.startsWith("magnet:") || url.endsWith(".torrent") ||
+                        url.contains("/stream?hash=") || url.contains("127.0.0.1") ||
+                        ep.extra?.containsKey("torrentHash") == true
+                if (isTorrent) {
                     val torrentManager = Injekt.get<TorrentServerManager>()
                     if (torrentManager.isAvailable()) {
                         val activity = activity ?: currActivity()
                         launchIO {
                             try {
-                                torrentManager.activeTorrentHash?.let {
-                                    torrentManager.removeTorrent(it)
+                                ani.dantotsu.addons.torrent.TorrentServerService.start()
+                                torrentManager.start()
+                                val torrentHash = ep.extra?.get("torrentHash")
+                                    ?: (if (url.contains("hash=")) url.substringAfter("hash=").substringBefore("&") else null)
+                                val index = ep.extra?.get("fileId")?.toIntOrNull()
+                                    ?: (if (url.contains("index=")) url.substringAfter("index=").substringBefore("&").toIntOrNull() else null)
+                                    ?: 0
+
+                                if (torrentHash != null) {
+                                    torrentManager.activeTorrentHash = torrentHash
+                                    torrentManager.prebuffer(torrentHash, index)
+                                } else if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
+                                    torrentManager.activeTorrentHash?.let {
+                                        torrentManager.removeTorrent(it)
+                                    }
+                                    val currentTorrent = torrentManager.addTorrent(
+                                        url, video.quality.toString(), "", "", false
+                                    )
+                                    torrentManager.activeTorrentHash = currentTorrent.hash
+                                    torrentManager.prebuffer(currentTorrent.hash!!, index)
+                                    video.file.url = torrentManager.getLink(currentTorrent, index)
                                 }
-                                val index = if (url.contains("index=")) {
-                                    url.substringAfter("index=").toIntOrNull() ?: 0
-                                } else 0
-                                Logger.log("Sending: ${url}, ${video.quality}, $index")
-                                val currentTorrent = torrentManager.addTorrent(
-                                    url, video.quality.toString(), "", "", false
-                                )
-                                torrentManager.activeTorrentHash = currentTorrent.hash
 
-                                // Pre-buffer the first piece
-                                torrentManager.prebuffer(currentTorrent.hash!!, index)
-
-                                video.file.url = torrentManager.getLink(currentTorrent, index)
-                                Logger.log("Received: ${video.file.url}")
                                 if (launch == true) {
                                     Intent(activity, ExoplayerView::class.java).apply {
                                         ExoplayerView.media = media
@@ -581,27 +590,28 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 dismissAllowingStateLoss()
                             }
                         }
-                    } else {
+                        return
+                    }
+                } else if (url.startsWith("magnet:")) {
+                    try {
+                        externalPlayerResult.launch(exportMagnetIntent(ep, video))
+                    } catch (e: ActivityNotFoundException) {
+                        val amnis = "com.amnis"
                         try {
-                            externalPlayerResult.launch(exportMagnetIntent(ep, video))
+                            startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("market://details?id=$amnis")
+                                )
+                            )
+                            dismissAllowingStateLoss()
                         } catch (e: ActivityNotFoundException) {
-                            val amnis = "com.amnis"
-                            try {
-                                startActivity(
-                                    Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse("market://details?id=$amnis")
-                                    )
+                            startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://play.google.com/store/apps/details?id=$amnis")
                                 )
-                                dismissAllowingStateLoss()
-                            } catch (e: ActivityNotFoundException) {
-                                startActivity(
-                                    Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse("https://play.google.com/store/apps/details?id=$amnis")
-                                    )
-                                )
-                            }
+                            )
                         }
                     }
                     return
@@ -979,7 +989,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
     override fun onDismiss(dialog: DialogInterface) {
         if (launch == false) {
-            activity?.hideSystemBars()
+            activity?.hideSystemBarsExtendView()
             model.epChanged.postValue(true)
             if (prevEpisode != null) {
                 media?.anime?.selectedEpisode = prevEpisode

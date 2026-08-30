@@ -131,7 +131,10 @@ class EpisodeAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val ep = arr[position]
-        val title = if (!ep.title.isNullOrEmpty() && ep.title != "null") {
+        val isTorrent = ep.extra?.containsKey("torrentHash") == true || ep.link?.contains("127.0.0.1:8090") == true
+        val title = if (isTorrent) {
+            ep.title ?: ep.sEpisode?.name ?: ep.number
+        } else if (!ep.title.isNullOrEmpty() && ep.title != "null") {
             ep.title?.let { MediaNameAdapter.removeEpisodeNumber(it) }
         } else {
             ep.number

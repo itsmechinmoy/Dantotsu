@@ -52,6 +52,7 @@ import android.view.View
 import android.view.ViewAnimationUtils
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.ViewTreeObserver
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.AlphaAnimation
 import android.view.animation.Animation
@@ -168,8 +169,18 @@ var navBarHeight = 0
 private const val MARKDOWN_IMAGE_MAX_SCREEN_SCALE_FACTOR = 2L
 val Int.dp: Float get() = (this / getSystem().displayMetrics.density)
 val Float.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
+val Int.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
+val Double.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
+private var _bottomBarRef: java.lang.ref.WeakReference<AnimatedBottomBar>? = null
+var bottomBar: AnimatedBottomBar
+    get() = _bottomBarRef?.get() ?: throw IllegalStateException("bottomBar is not attached or has been destroyed")
+    set(value) {
+        _bottomBarRef = java.lang.ref.WeakReference(value)
+    }
 
-lateinit var bottomBar: AnimatedBottomBar
+fun clearBottomBar() {
+    _bottomBarRef = null
+}
 var selectedOption = 1
 
 object Refresh {
@@ -368,7 +379,17 @@ fun ViewGroup.setBaseline(navBar: AnimatedBottomBar, overlayView: View) {
     post { updateLayout() }
     navBar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> post { updateLayout() } }
     overlayView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> post { updateLayout() } }
-    rootView.viewTreeObserver.addOnGlobalLayoutListener { post { updateLayout() } }
+    val layoutListener = ViewTreeObserver.OnGlobalLayoutListener { post { updateLayout() } }
+    rootView.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
+    addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) {}
+        override fun onViewDetachedFromWindow(v: View) {
+            if (rootView.viewTreeObserver.isAlive) {
+                rootView.viewTreeObserver.removeOnGlobalLayoutListener(layoutListener)
+            }
+            removeOnAttachStateChangeListener(this)
+        }
+    })
 }
 
 fun Activity.reloadActivity() {
@@ -648,14 +669,15 @@ fun levenshtein(lhs: CharSequence, rhs: CharSequence): Int {
     val lhsLength = lhs.length + 1
     val rhsLength = rhs.length + 1
 
-    var cost = Array(lhsLength) { it }
-    var newCost = Array(lhsLength) { 0 }
+    var cost = IntArray(lhsLength) { it }
+    var newCost = IntArray(lhsLength)
 
     for (i in 1 until rhsLength) {
         newCost[0] = i
+        val rhsChar = rhs[i - 1]
 
         for (j in 1 until lhsLength) {
-            val match = if (lhs[j - 1] == rhs[i - 1]) 0 else 1
+            val match = if (lhs[j - 1] == rhsChar) 0 else 1
 
             val costReplace = cost[j - 1] + match
             val costInsert = cost[j] + 1
@@ -673,26 +695,26 @@ fun levenshtein(lhs: CharSequence, rhs: CharSequence): Int {
 }
 
 fun List<ShowResponse>.sortByTitle(string: String): List<ShowResponse> {
-    val list = this.toMutableList()
+    val list = ArrayList(this)
     list.sortByTitle(string)
     return list
 }
 
 fun MutableList<ShowResponse>.sortByTitle(string: String) {
-    val temp: MutableMap<Int, Int> = mutableMapOf()
-    for ((i, element) in this.withIndex()) {
-        temp[i] = levenshtein(string.lowercase(), element.name.lowercase())
+    if (isEmpty()) return
+    val targetLower = string.lowercase()
+    val scored = Array(size) { i ->
+        i to levenshtein(targetLower, get(i).name.lowercase())
     }
-    val c = temp.toList().sortedBy { (_, value) -> value }.toMap()
-    val a = ArrayList(c.keys.toList().subList(0, min(this.size, 25)))
-    val b = c.values.toList().subList(0, min(this.size, 25))
-    for (i in b.indices.reversed()) {
-        if (b[i] > 18 && i < a.size) a.removeAt(i)
-    }
-    val temp2 = this.toMutableList()
-    this.clear()
-    for (i in a.indices) {
-        this.add(temp2[a[i]])
+    scored.sortBy { it.second }
+    val maxCount = min(size, 25)
+    val original = ArrayList(this)
+    clear()
+    for (i in 0 until maxCount) {
+        val entry = scored[i]
+        if (entry.second <= 18) {
+            add(original[entry.first])
+        }
     }
 }
 
@@ -790,7 +812,8 @@ suspend fun getSize(file: String): Double? {
 
 
 abstract class GesturesListener : GestureDetector.SimpleOnGestureListener() {
-    private var timer: Timer? = null //at class level;
+    private val handler = Handler(Looper.getMainLooper())
+    private var pendingRunnable: Runnable? = null
     private val delay: Long = 200
 
     override fun onSingleTapUp(e: MotionEvent): Boolean {
@@ -820,31 +843,26 @@ abstract class GesturesListener : GestureDetector.SimpleOnGestureListener() {
     }
 
     private fun processSingleClickEvent(e: MotionEvent) {
-        val handler = Handler(Looper.getMainLooper())
-        val mRunnable = Runnable {
+        pendingRunnable?.let { handler.removeCallbacks(it) }
+        val runnable = Runnable {
             onSingleClick(e)
         }
-        timer = Timer().apply {
-            schedule(object : TimerTask() {
-                override fun run() {
-                    handler.post(mRunnable)
-                }
-            }, delay)
-        }
+        pendingRunnable = runnable
+        handler.postDelayed(runnable, delay)
     }
 
     private fun processDoubleClickEvent(e: MotionEvent) {
-        timer?.apply {
-            cancel()
-            purge()
+        pendingRunnable?.let {
+            handler.removeCallbacks(it)
+            pendingRunnable = null
         }
         onDoubleClick(e)
     }
 
     private fun processLongClickEvent(e: MotionEvent) {
-        timer?.apply {
-            cancel()
-            purge()
+        pendingRunnable?.let {
+            handler.removeCallbacks(it)
+            pendingRunnable = null
         }
         onLongClick(e)
     }
@@ -1086,7 +1104,7 @@ fun countDown(media: Media, view: ViewGroup) {
     if (media.anime?.nextAiringEpisode != null && media.anime.nextAiringEpisodeTime != null
         && (media.anime.nextAiringEpisodeTime!! - System.currentTimeMillis() / 1000) <= 86400 * 28.toLong()
     ) {
-        activeTimers[view]?.cancel()
+        activeTimers.remove(view)?.cancel()
         for (i in view.childCount - 1 downTo 0) {
             val child = view.getChildAt(i)
             if (child.tag == "countdown_view") {
@@ -1103,13 +1121,20 @@ fun countDown(media: Media, view: ViewGroup) {
                 media.anime.nextAiringEpisode!! + 1
             )
 
+        val countdownTextRef = java.lang.ref.WeakReference(v.mediaCountdown)
+        val countdownContainerRef = java.lang.ref.WeakReference(v.mediaCountdownContainer)
+
         val timer = object : CountDownTimer(
             media.anime.nextAiringEpisodeTime!! * 1000 - System.currentTimeMillis(),
             1000
         ) {
             override fun onTick(millisUntilFinished: Long) {
+                val countdownText = countdownTextRef.get() ?: run {
+                    cancel()
+                    return
+                }
                 val a = millisUntilFinished / 1000
-                v.mediaCountdown.text = currActivity()?.getString(
+                countdownText.text = currActivity()?.getString(
                     R.string.time_format,
                     a / 86400,
                     a % 86400 / 3600,
@@ -1119,10 +1144,20 @@ fun countDown(media: Media, view: ViewGroup) {
             }
 
             override fun onFinish() {
-                v.mediaCountdownContainer.visibility = View.GONE
+                countdownContainerRef.get()?.visibility = View.GONE
                 snackString(currContext()?.getString(R.string.congrats_vro))
             }
         }
+
+        v.root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {}
+            override fun onViewDetachedFromWindow(v: View) {
+                timer.cancel()
+                activeTimers.remove(view)
+                v.removeOnAttachStateChangeListener(this)
+            }
+        })
+
         activeTimers[view] = timer
         timer.start()
     }

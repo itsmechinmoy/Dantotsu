@@ -204,4 +204,11 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
                 ContextCompat.getColor(this, R.color.transparent)
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Refresh.activity.remove(this.hashCode())
+        binding.characterRecyclerView.adapter = null
+        binding.authorCharactersRecycler.adapter = null
+    }
 }

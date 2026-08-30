@@ -28,7 +28,8 @@ class ActivityFragment : Fragment() {
     private lateinit var type: ActivityType
     private var userId: Int? = null
     private var activityId: Int? = null
-    private lateinit var binding: FragmentFeedBinding
+    private var _binding: FragmentFeedBinding? = null
+    private val binding get() = _binding!!
     private var adapter: GroupieAdapter = GroupieAdapter()
     private var page: Int = 1
     private var allActivities: MutableList<Activity> = mutableListOf()
@@ -40,8 +41,14 @@ class ActivityFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        binding = FragmentFeedBinding.inflate(inflater, container, false)
+        _binding = FragmentFeedBinding.inflate(inflater, container, false)
         return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding?.listRecyclerView?.adapter = null
+        _binding = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -71,21 +78,22 @@ class ActivityFragment : Fragment() {
             bottomMargin = navBarHeight
         }
         binding.emptyTextView.text = getString(R.string.nothing_here)
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             getList()
+            val currentBinding = _binding ?: return@launch
             if (adapter.itemCount == 0) {
-                binding.emptyTextView.isVisible = true
+                currentBinding.emptyTextView.isVisible = true
             }
-            binding.listProgressBar.isVisible = false
+            currentBinding.listProgressBar.isVisible = false
         }
         binding.feedSwipeRefresh.setOnRefreshListener {
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 adapter.clear()
                 allActivities.clear()
                 page = 1
                 hasMoreActivities = true
                 getList()
-                binding.feedSwipeRefresh.isRefreshing = false
+                _binding?.feedSwipeRefresh?.isRefreshing = false
             }
         }
         binding.listRecyclerView.addOnScrollListener(object :
@@ -93,10 +101,10 @@ class ActivityFragment : Fragment() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
                 if (shouldLoadMore()) {
-                    lifecycleScope.launch {
-                        binding.feedRefresh.isVisible = true
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        _binding?.feedRefresh?.isVisible = true
                         getList()
-                        binding.feedRefresh.isVisible = false
+                        _binding?.feedRefresh?.isVisible = false
                     }
                 }
             }
@@ -106,14 +114,14 @@ class ActivityFragment : Fragment() {
     private fun showFilterBottomSheet() {
         ActivityFilterBottomSheet.newInstance(currentFilter) { filterType ->
             currentFilter = filterType
-            lifecycleScope.launch {
-                binding.listProgressBar.isVisible = true
+            viewLifecycleOwner.lifecycleScope.launch {
+                _binding?.listProgressBar?.isVisible = true
                 adapter.clear()
                 allActivities.clear()
                 page = 1
                 hasMoreActivities = true
                 getList()
-                binding.listProgressBar.isVisible = false
+                _binding?.listProgressBar?.isVisible = false
             }
         }.show(childFragmentManager, "ActivityFilterBottomSheet")
     }
@@ -224,7 +232,7 @@ class ActivityFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (this::binding.isInitialized) {
+        if (_binding != null) {
             binding.root.requestLayout()
         }
     }

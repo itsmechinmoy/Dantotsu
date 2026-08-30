@@ -181,6 +181,10 @@ object PrefManager {
     @Suppress("UNCHECKED_CAST")
     fun <T> getCustomVal(key: String, default: T): T {
         return try {
+            if (default == null) {
+                val raw = irrelevantPreferences?.all?.get(key)
+                return (raw as? T) ?: default
+            }
             when (default) {
                 is Boolean -> irrelevantPreferences!!.getBoolean(key, default) as T
                 is Int -> irrelevantPreferences!!.getInt(key, default) as T

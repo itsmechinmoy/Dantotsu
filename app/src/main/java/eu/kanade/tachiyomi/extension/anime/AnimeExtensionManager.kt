@@ -281,11 +281,12 @@ class AnimeExtensionManager(
      */
     private fun registerUpdatedExtension(extension: AnimeExtension.Installed) {
         val mutInstalledAnimeExtensions = _installedAnimeExtensionsFlow.value.toMutableList()
-        val oldAnimeExtension = mutInstalledAnimeExtensions.find { it.pkgName == extension.pkgName }
-        if (oldAnimeExtension != null) {
-            mutInstalledAnimeExtensions -= oldAnimeExtension
+        val index = mutInstalledAnimeExtensions.indexOfFirst { it.pkgName == extension.pkgName }
+        if (index != -1) {
+            mutInstalledAnimeExtensions[index] = extension
+        } else {
+            mutInstalledAnimeExtensions.add(extension)
         }
-        mutInstalledAnimeExtensions += extension
         _installedAnimeExtensionsFlow.value = mutInstalledAnimeExtensions
     }
 

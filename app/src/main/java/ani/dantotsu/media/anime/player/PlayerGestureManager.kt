@@ -30,6 +30,7 @@ import ani.dantotsu.circularReveal
 import ani.dantotsu.dp
 import ani.dantotsu.getCurrentBrightnessValue
 import ani.dantotsu.hideSystemBars
+import ani.dantotsu.hideSystemBarsExtendView
 import ani.dantotsu.others.ResettableTimer
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -317,7 +318,7 @@ class PlayerGestureManager(
         playerView.setControllerVisibilityListener(
             PlayerView.ControllerVisibilityListener { visibility ->
                 if (visibility == View.GONE) {
-                    activity.hideSystemBars()
+                    activity.hideSystemBarsExtendView()
                     brightnessHide()
                     volumeHide()
                 }

@@ -209,4 +209,10 @@ class ListActivity : AppCompatActivity() {
             imm.showSoftInput(binding.searchViewText, InputMethodManager.SHOW_IMPLICIT)
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Refresh.activity.remove(this.hashCode())
+        binding.listViewPager.adapter = null
+    }
 }

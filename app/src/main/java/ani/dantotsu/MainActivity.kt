@@ -505,16 +505,27 @@ class MainActivity : AppCompatActivity() {
             if (uri == null) {
                 throw Exception("Uri is null")
             }
-            if (uri.scheme.equals("dantotsu", ignoreCase = true)) {
-                startActivity(Intent(this, ani.dantotsu.connections.anilist.UrlMedia::class.java).setData(uri))
+            val isRepoHost = uri.host == "add-repo" || uri.host == "extension-store"
+            val schemeLower = uri.scheme?.lowercase() ?: ""
+            if (schemeLower == "magnet" || uri.toString().endsWith(".torrent", ignoreCase = true) || intent.type == "application/x-bittorrent") {
+                ani.dantotsu.torrent.DirectTorrentBottomSheet.newInstance(uri.toString())
+                    .show(supportFragmentManager, "DirectTorrentBottomSheet")
                 return
             }
-            if ((uri.scheme == "tachiyomi" || uri.scheme == "aniyomi" || uri.scheme == "novelyomi") && (uri.host == "add-repo" || uri.host == "extension-store")) {
+            if (isRepoHost && (schemeLower == "tachiyomi" || schemeLower == "aniyomi" || schemeLower == "novelyomi" || schemeLower == "mihon" || schemeLower == "dantotsu")) {
                 val url = uri.getQueryParameter("url") ?: throw Exception("No url for repo import")
-                val (prefName, name) = when (uri.scheme) {
-                    "tachiyomi" -> PrefName.MangaExtensionRepos to "Manga"
+                val (prefName, name) = when (schemeLower) {
+                    "tachiyomi", "mihon" -> PrefName.MangaExtensionRepos to "Manga"
                     "aniyomi" -> PrefName.AnimeExtensionRepos to "Anime"
                     "novelyomi" -> PrefName.NovelExtensionRepos to "Novel"
+                    "dantotsu" -> {
+                        val type = uri.getQueryParameter("type")?.lowercase()
+                        when (type) {
+                            "anime" -> PrefName.AnimeExtensionRepos to "Anime"
+                            "novel" -> PrefName.NovelExtensionRepos to "Novel"
+                            else -> PrefName.MangaExtensionRepos to "Manga"
+                        }
+                    }
                     else -> throw Exception("Invalid scheme")
                 }
                 val savedRepos: Set<String> = PrefManager.getVal(prefName)
@@ -524,6 +535,10 @@ class MainActivity : AppCompatActivity() {
                     PrefManager.setVal(prefName, newRepos)
                     toast("$name Extension Repo added")
                 }
+                return
+            }
+            if (uri.scheme.equals("dantotsu", ignoreCase = true)) {
+                startActivity(Intent(this, ani.dantotsu.connections.anilist.UrlMedia::class.java).setData(uri))
                 return
             }
             if (intent.type == null) return
@@ -706,5 +721,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        binding.viewpager.adapter = null
+        clearBottomBar()
     }
 }

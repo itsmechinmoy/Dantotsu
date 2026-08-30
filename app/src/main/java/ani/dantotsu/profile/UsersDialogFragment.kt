@@ -34,8 +34,9 @@ class UsersDialogFragment : BottomSheetDialogFragment() {
         binding.usersRecyclerView.layoutManager = LinearLayoutManager(requireContext())
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
+        _binding?.usersRecyclerView?.adapter = null
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 }

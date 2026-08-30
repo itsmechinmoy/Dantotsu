@@ -36,6 +36,17 @@ class TorrentSettingsActivity : AppCompatActivity() {
 
             torrentSettingsBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
+            val playTorrentItem = Settings(
+                type = 1,
+                name = getString(R.string.play_magnet_or_torrent),
+                desc = getString(R.string.play_magnet_or_torrent_desc),
+                icon = R.drawable.ic_round_play_arrow_24,
+                onClick = {
+                    ani.dantotsu.torrent.DirectTorrentBottomSheet()
+                        .show(supportFragmentManager, "DirectTorrentBottomSheet")
+                }
+            )
+
             val encryptionItem = Settings(
                 type = 2,
                 name = getString(R.string.torrent_encryption),
@@ -151,6 +162,7 @@ class TorrentSettingsActivity : AppCompatActivity() {
             val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.adapter = SettingsAdapter(
                 arrayListOf(
+                    playTorrentItem,
                     encryptionItem,
                     wifiOnlyItem,
                     downloadSpeedItem,

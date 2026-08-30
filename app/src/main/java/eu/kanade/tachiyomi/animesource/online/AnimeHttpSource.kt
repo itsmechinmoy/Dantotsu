@@ -20,6 +20,7 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import tachiyomi.core.util.lang.awaitSingle
+import tachiyomi.core.util.lang.withIOContext
 import uy.kohesive.injekt.injectLazy
 import java.net.URI
 import java.net.URISyntaxException
@@ -350,8 +351,8 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
      * @param episode the episode.
      * @return the hosters for the episode.
      */
-    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        return client.newCall(hosterListRequest(episode))
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> = withIOContext {
+        client.newCall(hosterListRequest(episode))
             .awaitSuccess()
             .let { response ->
                 hosterListParse(response)
@@ -386,8 +387,8 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
      * @param hoster the hoster.
      * @return the videos for the hoster.
      */
-    override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        return client.newCall(videoListRequest(hoster))
+    override suspend fun getVideoList(hoster: Hoster): List<Video> = withIOContext {
+        client.newCall(videoListRequest(hoster))
             .awaitSuccess()
             .let { response ->
                 videoListParse(response, hoster)
@@ -435,9 +436,9 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
      * @param episode the episode.
      * @return the videos for the episode.
      */
-    override suspend fun getVideoList(episode: SEpisode): List<Video> {
+    override suspend fun getVideoList(episode: SEpisode): List<Video> = withIOContext {
         @Suppress("DEPRECATION")
-        return fetchVideoList(episode).awaitSingle()
+        fetchVideoList(episode).awaitSingle()
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getVideoList"))
@@ -501,8 +502,8 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
      * @param video the video whose source image has to be fetched.
      */
     @Suppress("DEPRECATION")
-    open suspend fun getVideoUrl(video: Video): String {
-        return fetchVideoUrl(video).awaitSingle()
+    open suspend fun getVideoUrl(video: Video): String = withIOContext {
+        fetchVideoUrl(video).awaitSingle()
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getVideoUrl"))

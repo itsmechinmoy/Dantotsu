@@ -34,6 +34,7 @@ import androidx.media3.ui.PlayerView
 import ani.dantotsu.defaultHeaders
 import ani.dantotsu.media.anime.AudioFocusListener
 import ani.dantotsu.media.anime.VideoCache
+import ani.dantotsu.others.LanguageMapper
 import ani.dantotsu.parsers.Video
 import ani.dantotsu.parsers.VideoType
 import ani.dantotsu.settings.saving.PrefManager
@@ -70,14 +71,30 @@ class DantotsuPlayerManager(
     var isInitialized = false
         private set
 
-    private val DEFAULT_MIN_BUFFER_MS = 30_000
-    private val DEFAULT_MAX_BUFFER_MS = 120_000
-    private val BUFFER_FOR_PLAYBACK_MS = 2_500
-    private val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5_000
-    private val BACK_BUFFER_DURATION_MS = 60_000
+    private val DEFAULT_MIN_BUFFER_MS = 15_000
+    private val DEFAULT_MAX_BUFFER_MS = 45_000
+    private val BUFFER_FOR_PLAYBACK_MS = 1_500
+    private val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 3_000
+    private val BACK_BUFFER_DURATION_MS = 15_000
 
     fun initTrackSelector() {
-        trackSelector = DefaultTrackSelector(activity)
+        val subLanguages = arrayOf(
+            "Albanian", "Arabic", "Bosnian", "Bulgarian", "Chinese", "Croatian", "Czech", "Danish", "Dutch", "English",
+            "Estonian", "Finnish", "French", "Georgian", "German", "Greek", "Hebrew", "Hindi", "Indonesian", "Irish",
+            "Italian", "Japanese", "Korean", "Lithuanian", "Luxembourgish", "Macedonian", "Mongolian", "Norwegian",
+            "Polish", "Portuguese", "Punjabi", "Romanian", "Russian", "Serbian", "Slovak", "Slovenian", "Spanish",
+            "Turkish", "Ukrainian", "Urdu", "Vietnamese"
+        )
+        val langName = subLanguages.getOrNull(PrefManager.getVal<Int>(PrefName.SubLanguage)) ?: "English"
+        val langCode = LanguageMapper.getLanguageCode(langName)
+        val selector = DefaultTrackSelector(activity)
+        val params = selector.buildUponParameters()
+        if (langCode.isNotBlank() && !langCode.equals("all", ignoreCase = true)) {
+            params.setPreferredTextLanguage(langCode)
+        }
+        trackSelector = selector.apply {
+            parameters = params.build()
+        }
     }
 
     fun buildMediaSource(
@@ -130,9 +147,18 @@ class DantotsuPlayerManager(
         this.currentMediaItem = mediaItem
 
         val isContentUri = video.file.url.startsWith("content://")
+        val isLocalhostTorrent = runCatching {
+            val host = video.file.url.toUri().host
+            host == "127.0.0.1" || host == "localhost"
+        }.getOrDefault(false)
+
         val activeFactory = if (isContentUri) {
             val localDataSourceFactory = DefaultDataSource.Factory(activity)
             DefaultMediaSourceFactory(localDataSourceFactory, extractorsFactory)
+                .setSubtitleParserFactory(assParserFactory)
+        } else if (isLocalhostTorrent) {
+            // Direct upstream for localhost torrent streams - avoids double writing to flash via VideoCache
+            DefaultMediaSourceFactory(upstream, extractorsFactory)
                 .setSubtitleParserFactory(assParserFactory)
         } else {
             assMediaSourceFactory
@@ -201,19 +227,24 @@ class DantotsuPlayerManager(
     ): ExoPlayer {
         releaseExoPlayer()
 
+        val isTorrentStream = mediaSource?.let {
+            currentMediaItem?.localConfiguration?.uri?.host == "127.0.0.1"
+        } == true
+        val targetBufferBytes = if (isTorrentStream) 96 * 1024 * 1024 else 32 * 1024 * 1024
+        val maxBufferMs = if (isTorrentStream) 90_000 else DEFAULT_MAX_BUFFER_MS
         val loadControl = DefaultLoadControl.Builder()
-            .setBackBuffer(BACK_BUFFER_DURATION_MS, false)
+            .setBackBuffer(BACK_BUFFER_DURATION_MS, true)
             .setBufferDurationsMs(
                 DEFAULT_MIN_BUFFER_MS,
-                DEFAULT_MAX_BUFFER_MS,
+                maxBufferMs,
                 BUFFER_FOR_PLAYBACK_MS,
                 BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
             )
-            .setTargetBufferBytes(C.LENGTH_UNSET)
+            .setTargetBufferBytes(targetBufferBytes)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        val useExtensionDecoder = PrefManager.getVal<Boolean>(PrefName.UseAdditionalCodec) && !forceDefaultRenderers
+        val useExtensionDecoder = !forceDefaultRenderers
         val decoder = if (useExtensionDecoder) {
             DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
         } else {

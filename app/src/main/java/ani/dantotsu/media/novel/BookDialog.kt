@@ -70,9 +70,9 @@ class BookDialog : BottomSheetDialogFragment() {
         }
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 
     companion object {

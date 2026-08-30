@@ -236,6 +236,9 @@ enum class PrefName(val data: Pref) {
     CommentAuthResponse(Pref(Location.Irrelevant, AuthResponse::class, "")),
     CommentTokenExpiry(Pref(Location.Irrelevant, Long::class, 0L)),
     LogToFile(Pref(Location.Irrelevant, Boolean::class, false)),
+    TrackMemoryLeaks(Pref(Location.Irrelevant, Boolean::class, false)),
+    DailyLeakCount(Pref(Location.Irrelevant, Int::class, 0)),
+    LastLeakSummaryTimestamp(Pref(Location.Irrelevant, Long::class, 0L)),
     RecentGlobalNotification(Pref(Location.Irrelevant, Int::class, 0)),
     CommentNotificationStore(Pref(Location.Irrelevant, List::class, listOf<CommentStore>())),
     SubscriptionNotificationStore(

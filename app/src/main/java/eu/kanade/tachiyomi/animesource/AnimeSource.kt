@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.animesource
 
+import eu.kanade.tachiyomi.animesource.model.AnimeRelation
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SAnimeEpisodeUpdate
@@ -8,6 +9,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.util.awaitSingle
 import rx.Observable
+import tachiyomi.core.util.lang.withIOContext
 
 /**
  * A basic interface for creating a source. It could be an online source, a local source, etc.
@@ -31,6 +33,15 @@ interface AnimeSource {
         get() = false
 
     /**
+     * Get the related anime list for an anime.
+     *
+     * @since extensions-lib 17
+     * @param anime the anime to fetch related anime for.
+     * @return the related anime list for the anime.
+     */
+    suspend fun getRelatedAnimeList(anime: SAnime): List<AnimeRelation> = emptyList()
+
+    /**
      * Get the updated details for a anime.
      *
      * @since extensions-lib 1.5
@@ -38,8 +49,8 @@ interface AnimeSource {
      * @return the updated anime.
      */
     @Suppress("DEPRECATION")
-    suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        return fetchAnimeDetails(anime).awaitSingle()
+    suspend fun getAnimeDetails(anime: SAnime): SAnime = withIOContext {
+        fetchAnimeDetails(anime).awaitSingle()
     }
 
     /**
@@ -50,8 +61,8 @@ interface AnimeSource {
      * @return the episodes for the anime.
      */
     @Suppress("DEPRECATION")
-    suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        return fetchEpisodeList(anime).awaitSingle()
+    suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = withIOContext {
+        fetchEpisodeList(anime).awaitSingle()
     }
 
     /**
@@ -131,8 +142,8 @@ interface AnimeSource {
      * @return the videos for the episode.
      */
     @Suppress("DEPRECATION")
-    suspend fun getVideoList(episode: SEpisode): List<Video> {
-        return fetchVideoList(episode).awaitSingle()
+    suspend fun getVideoList(episode: SEpisode): List<Video> = withIOContext {
+        fetchVideoList(episode).awaitSingle()
     }
 
     @Deprecated(

@@ -370,7 +370,20 @@ class NovelReadFragment : Fragment(),
         if (total > limit) {
             val arr = chapterResponses.map { it.name }.toTypedArray()
             val stored = kotlin.math.ceil((total).toDouble() / limit).toInt()
-            val position = (media.selected?.chip ?: 0).coerceIn(0, stored - 1)
+
+            val lastReadName = PrefManager.getCustomVal("${media.id}_last_read_volume", "")
+            var targetIndex = if (lastReadName.isNotBlank()) chapterResponses.indexOfFirst { it.name == lastReadName } else -1
+            if (targetIndex == -1 && (media.userProgress ?: 0) > 0) {
+                targetIndex = ((media.userProgress ?: 1) - 1).coerceIn(0, chapterResponses.size - 1)
+            }
+
+            val targetChip = if (targetIndex >= 0) (targetIndex / limit).coerceIn(0, stored - 1) else 0
+            val position = if ((media.selected?.chip ?: 0) == 0 && targetChip > 0) {
+                media.selected?.chip = targetChip
+                targetChip
+            } else {
+                (media.selected?.chip ?: 0).coerceIn(0, stored - 1)
+            }
             val last = if (position + 1 == stored) total else (limit * (position + 1))
             start = limit * position
             end = last - 1
@@ -433,14 +446,15 @@ class NovelReadFragment : Fragment(),
                     isRefreshing = false
                     return@setOnRefreshListener
                 }
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val offline = !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
+                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                    val ctx = context
+                    val offline = (ctx != null && !isOnline(ctx)) || PrefManager.getVal(PrefName.OfflineMode)
                     if (offline && media.format != "LOCAL") {
                         media.selected!!.sourceIndex = model.novelSources.list.lastIndex
                     }
                     model.loadNovelChapters(media, source, invalidate = true)
                     withContext(Dispatchers.Main) {
-                        binding.mediaSourceSwipeRefresh.isRefreshing = false
+                        _binding?.mediaSourceSwipeRefresh?.isRefreshing = false
                     }
                 }
             }
@@ -622,9 +636,18 @@ class NovelReadFragment : Fragment(),
         return _binding?.root
     }
 
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding?.mediaSourceRecycler?.adapter = null
+        _binding = null
+    }
+
     override fun onDestroy() {
         model.mangaReadSources?.flushText()
-        requireContext().unregisterReceiver(downloadStatusReceiver)
+        try {
+            requireContext().unregisterReceiver(downloadStatusReceiver)
+        } catch (_: IllegalArgumentException) {
+        }
         super.onDestroy()
     }
 

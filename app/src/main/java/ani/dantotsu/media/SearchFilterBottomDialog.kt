@@ -422,9 +422,11 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
         override fun getItemCount(): Int = list.size
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
+        _binding?.searchFilterGenres?.adapter = null
+        _binding?.searchFilterTags?.adapter = null
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 
     companion object {

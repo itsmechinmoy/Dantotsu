@@ -71,6 +71,7 @@ class SettingsAddonActivity : AppCompatActivity() {
                 isVisible = PrefManager.getVal(PrefName.TorrentEnabled)
             )
 
+            /*
             settingsList.add(
                 Settings(
                     type = 2,
@@ -99,6 +100,9 @@ class SettingsAddonActivity : AppCompatActivity() {
                     isVisible = true
                 )
             )
+            */
+            torrentSettingsItem.isVisible = true
+            settingsList.add(torrentSettingsItem)
 
             val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             settingsRecyclerView.adapter = SettingsAdapter(settingsList, highlightKey = highlightKey)

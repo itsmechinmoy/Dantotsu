@@ -150,6 +150,7 @@ class SettingsActivity : AppCompatActivity() {
                         },
                         isActivity = true
                     ),
+                    /*
                     Settings(
                         type = 1,
                         name = getString(R.string.addons),
@@ -157,6 +158,17 @@ class SettingsActivity : AppCompatActivity() {
                         icon = R.drawable.ic_round_restaurant_24,
                         onClick = {
                             startActivity(Intent(context, SettingsAddonActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    */
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.torrent_settings),
+                        desc = getString(R.string.torrent_settings_desc),
+                        icon = R.drawable.ic_round_dns_24,
+                        onClick = {
+                            startActivity(Intent(context, TorrentSettingsActivity::class.java))
                         },
                         isActivity = true
                     ),

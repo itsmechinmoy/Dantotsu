@@ -695,6 +695,14 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        Refresh.activity.remove(this.hashCode())
+        mediaSingleton = null
+        MediaSingleton.bitmap = null
+        binding.mediaViewPager.adapter = null
+    }
+
     companion object {
         var mediaSingleton: Media? = null
     }

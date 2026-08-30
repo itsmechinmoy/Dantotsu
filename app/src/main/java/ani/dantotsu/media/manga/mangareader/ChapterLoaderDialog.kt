@@ -85,9 +85,9 @@ class ChapterLoaderDialog : BottomSheetDialogFragment() {
         return binding.root
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 
     companion object {

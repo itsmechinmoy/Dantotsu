@@ -115,11 +115,12 @@ class DiscordDialogFragment : BottomSheetDialogFragment() {
             }.getOrDefault(0L)
         }
 
+        val currentBinding = _binding ?: return
         if (expiresAt > 0L) {
             val remaining = expiresAt - System.currentTimeMillis()
-            binding.tokenExpiryStatus.visibility = View.VISIBLE
+            currentBinding.tokenExpiryStatus.visibility = View.VISIBLE
             if (remaining <= 0) {
-                binding.tokenExpiryStatus.text = "\u26a0 Token expired \u2014 will auto-refresh on next RPC"
+                currentBinding.tokenExpiryStatus.text = "⚠️ Token expired — will auto-refresh on next RPC"
             } else {
                 val days = remaining / (1000 * 60 * 60 * 24)
                 val hours = (remaining / (1000 * 60 * 60)) % 24
@@ -129,10 +130,10 @@ class DiscordDialogFragment : BottomSheetDialogFragment() {
                     if (hours > 0) append("${hours}h ")
                     if (days == 0L) append("${mins}m")
                 }.trim()
-                binding.tokenExpiryStatus.text = "\ud83d\udd04 Token auto-refreshes in $timeStr"
+                currentBinding.tokenExpiryStatus.text = "🔄 Token auto-refreshes in $timeStr"
             }
         } else {
-            binding.tokenExpiryStatus.visibility = View.GONE
+            currentBinding.tokenExpiryStatus.visibility = View.GONE
         }
     }
 
@@ -218,9 +219,10 @@ class DiscordDialogFragment : BottomSheetDialogFragment() {
         }
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
         tokenRefreshJob?.cancel()
+        tokenRefreshJob = null
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 }

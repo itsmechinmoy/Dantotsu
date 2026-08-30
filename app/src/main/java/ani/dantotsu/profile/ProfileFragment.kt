@@ -38,24 +38,41 @@ import kotlinx.coroutines.launch
 
 
 class ProfileFragment : Fragment() {
-    lateinit var binding: FragmentProfileBinding
-    private lateinit var activity: ProfileActivity
+    private var _binding: FragmentProfileBinding? = null
+    val binding get() = _binding!!
+    private val activity: ProfileActivity get() = requireActivity() as ProfileActivity
     private lateinit var user: Query.UserProfile
     private val favStaff = arrayListOf<Author>()
     private val favCharacter = arrayListOf<Character>()
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        binding = FragmentProfileBinding.inflate(inflater, container, false)
+        _binding = FragmentProfileBinding.inflate(inflater, container, false)
         return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding?.profileUserBio?.apply {
+            stopLoading()
+            loadUrl("about:blank")
+            clearHistory()
+            removeAllViews()
+            destroy()
+        }
+        _binding?.profileFavAnimeRecyclerView?.adapter = null
+        _binding?.profileFavMangaRecyclerView?.adapter = null
+        _binding?.profileFavStaffRecycler?.adapter = null
+        _binding?.profileFavCharactersRecycler?.adapter = null
+        _binding = null
     }
 
     val model: ProfileViewModel by activityViewModels()
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        activity = requireActivity() as ProfileActivity
 
         binding.root.setBaseline(activity.binding.profileNavBarContainer)
 
@@ -143,7 +160,7 @@ class ProfileFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (this::binding.isInitialized) {
+        if (_binding != null) {
             binding.root.requestLayout()
             binding.root.setBaseline(activity.binding.profileNavBarContainer)
         }

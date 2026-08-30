@@ -71,6 +71,27 @@ class AnimeWatchAdapter(
     var hiddenScanlators: MutableList<String> = mutableListOf()
     var scanlatorSelectionListener: ScanlatorSelectionListener? = null
 
+    fun updateSelectedSource(newIndex: Int) {
+        val b = _binding ?: return
+        if (newIndex in 0 until watchSources.names.size) {
+            val displayNames = watchSources.names.filter { it != "Local" }
+            b.mediaSource.setAdapter(
+                ArrayAdapter(
+                    fragment.requireContext(),
+                    R.layout.item_dropdown,
+                    displayNames
+                )
+            )
+            b.mediaSource.setText(watchSources.names[newIndex], false)
+            watchSources[newIndex].apply {
+                this.selectDub = media.selected!!.preferDub
+                b.mediaSourceTitle.text = showUserText
+                b.animeSourceDubbedCont.isVisible = isDubAvailableSeparately()
+            }
+            setLanguageList(0, newIndex)
+        }
+    }
+
     interface ScanlatorSelectionListener {
         fun onScanlatorsSelected()
     }
@@ -135,15 +156,6 @@ class AnimeWatchAdapter(
             media.selected!!.sourceIndex.let { if (it >= watchSources.names.size) 0 else it }
         setLanguageList(media.selected!!.langIndex, source)
         updateScanlatorDropdown()
-        if (watchSources.names.isNotEmpty() && source in 0 until watchSources.names.size) {
-            binding.mediaSource.setText(watchSources.names[source])
-            watchSources[source].apply {
-                this.selectDub = media.selected!!.preferDub
-                binding.mediaSourceTitle.text = showUserText
-                showUserTextListener = { MainScope().launch { binding.mediaSourceTitle.text = it } }
-                binding.animeSourceDubbedCont.isVisible = isDubAvailableSeparately()
-            }
-        }
 
         val displayNames = watchSources.names.filter { it != "Local" }
         binding.mediaSource.setAdapter(
@@ -153,6 +165,16 @@ class AnimeWatchAdapter(
                 displayNames
             )
         )
+
+        if (watchSources.names.isNotEmpty() && source in 0 until watchSources.names.size) {
+            binding.mediaSource.setText(watchSources.names[source], false)
+            watchSources[source].apply {
+                this.selectDub = media.selected!!.preferDub
+                binding.mediaSourceTitle.text = showUserText
+                showUserTextListener = { MainScope().launch { binding.mediaSourceTitle.text = it } }
+                binding.animeSourceDubbedCont.isVisible = isDubAvailableSeparately()
+            }
+        }
         binding.mediaSourceTitle.isSelected = true
         binding.mediaSource.setOnItemClickListener { _, _, i, _ ->
             val actualIndex = watchSources.names.indexOf(displayNames[i])
@@ -218,6 +240,15 @@ class AnimeWatchAdapter(
 
         binding.mediaSourceSubscribe.setOnLongClickListener {
             openSettings(fragment.requireContext(), CHANNEL_SUBSCRIPTION_CHECK)
+        }
+
+        // Play via Torrent / Magnet Button
+        binding.mediaTorrentButton.setOnClickListener {
+            fragment.openDirectTorrent()
+        }
+        binding.mediaTorrentButton.setOnLongClickListener {
+            toast(fragment.getString(R.string.play_via_torrent_magnet))
+            true
         }
 
         // Nested Button
@@ -497,7 +528,26 @@ class AnimeWatchAdapter(
                     return
                 }
 
-                val targetEpNum = (if (anilistEp > appEp) anilistEp else appEp).toFloat()
+                // Prefer appEp if it has active in-progress data below the completion threshold,
+                // to avoid jumping to the next episode while the user is still mid-episode.
+                val appEpKey = episodes.find { key ->
+                    val epObj = media.anime?.episodes?.get(key)
+                    MediaNameAdapter.findEpisodeNumber(key)?.toInt() == appEp ||
+                    (epObj?.number != null && MediaNameAdapter.findEpisodeNumber(epObj.number)?.toInt() == appEp)
+                } ?: episodes.getOrNull(appEp - 1)
+                val appEpHasActiveProgress = appEpKey != null && run {
+                    val cleanNum = MediaNameAdapter.findEpisodeNumber(appEpKey)?.let {
+                        if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                    }
+                    val curr = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}", null, Long::class.java)
+                        ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}", null, Long::class.java) }
+                    val max = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}_max", null, Long::class.java)
+                        ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}_max", null, Long::class.java) }
+                    if (curr != null && max != null && max > 0L) {
+                        (curr.toFloat() / max.toFloat()) < PrefManager.getVal<Float>(PrefName.WatchPercentage)
+                    } else false
+                }
+                val targetEpNum = if (anilistEp > appEp && !appEpHasActiveProgress) anilistEp.toFloat() else appEp.toFloat()
 
                 // Find matching episode key in media.anime.episodes
                 var matchingKey: String? = episodes.find { key ->

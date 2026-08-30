@@ -98,7 +98,12 @@ class NoInternet : AppCompatActivity() {
         navbar.selectTabAt(selectedOption)
 
         //supportFragmentManager.beginTransaction().replace(binding.fragmentContainer.id, OfflineFragment()).commit()
+    }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        binding.viewpager.adapter = null
+        ani.dantotsu.clearBottomBar()
     }
 
     private class ViewPagerAdapter(fragmentManager: FragmentManager, lifecycle: Lifecycle) :

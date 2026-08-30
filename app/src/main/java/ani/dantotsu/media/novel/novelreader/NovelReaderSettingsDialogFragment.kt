@@ -212,9 +212,9 @@ class NovelReaderSettingsDialogFragment : BottomSheetDialogFragment() {
     }
 
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 
 

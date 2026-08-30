@@ -63,7 +63,9 @@ class AnimeFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        super.onDestroyView();_binding = null
+        super.onDestroyView()
+        Refresh.activity.remove(this.hashCode())
+        _binding = null
     }
 
     @SuppressLint("NotifyDataSetChanged")

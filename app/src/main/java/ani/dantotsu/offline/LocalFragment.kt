@@ -454,6 +454,7 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                             SAnime.COMPLETED -> "FINISHED"
                             SAnime.CANCELLED -> "CANCELLED"
                             SAnime.ON_HIATUS -> "HIATUS"
+                            SAnime.UPCOMING -> "NOT_YET_RELEASED"
                             else -> "UNKNOWN"
                         },
                         author = details.author ?: details.artist

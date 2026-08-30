@@ -49,6 +49,11 @@ class AnimePlayerService : MediaSessionService() {
         return activeSession
     }
 
+    override fun onDestroy() {
+        activeSession = null
+        super.onDestroy()
+    }
+
     companion object {
         var activeSession: MediaSession? = null
 

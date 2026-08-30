@@ -35,7 +35,8 @@ import kotlinx.coroutines.launch
 class NotificationFragment : Fragment() {
     private lateinit var type: NotificationType
     private var getID: Int = -1
-    private lateinit var binding: FragmentNotificationsBinding
+    private var _binding: FragmentNotificationsBinding? = null
+    private val binding get() = _binding!!
     private var adapter: GroupieAdapter = GroupieAdapter()
     private var currentPage = 1
     private var hasNextPage = false
@@ -46,8 +47,14 @@ class NotificationFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        binding = FragmentNotificationsBinding.inflate(inflater, container, false)
+        _binding = FragmentNotificationsBinding.inflate(inflater, container, false)
         return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding?.notificationRecyclerView?.adapter = null
+        _binding = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -60,19 +67,19 @@ class NotificationFragment : Fragment() {
         binding.notificationRecyclerView.layoutManager = LinearLayoutManager(context)
         binding.notificationProgressBar.isVisible = true
         binding.emptyTextView.text = getString(R.string.nothing_here)
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             getList()
             resetCountIfNeeded()
 
-            binding.notificationProgressBar.isVisible = false
+            _binding?.notificationProgressBar?.isVisible = false
         }
         binding.notificationSwipeRefresh.setOnRefreshListener {
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 adapter.clear()
                 currentPage = 1
                 resetCountIfNeeded()
                 getList()
-                binding.notificationSwipeRefresh.isRefreshing = false
+                _binding?.notificationSwipeRefresh?.isRefreshing = false
             }
         }
         binding.notificationRecyclerView.addOnScrollListener(object :
@@ -80,10 +87,10 @@ class NotificationFragment : Fragment() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
                 if (shouldLoadMore()) {
-                    lifecycleScope.launch {
-                        binding.notificationRefresh.isVisible = true
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        _binding?.notificationRefresh?.isVisible = true
                         getList()
-                        binding.notificationRefresh.isVisible = false
+                        _binding?.notificationRefresh?.isVisible = false
                     }
                 }
             }
@@ -235,7 +242,7 @@ class NotificationFragment : Fragment() {
     }
     override fun onResume() {
         super.onResume()
-        if (this::binding.isInitialized) {
+        if (_binding != null) {
             binding.root.requestLayout()
         }
     }

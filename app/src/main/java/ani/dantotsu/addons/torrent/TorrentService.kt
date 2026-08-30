@@ -135,11 +135,12 @@ class TorrentServerService : Service() {
 
         fun start() {
             try {
+                val app = Injekt.get<Application>()
                 val intent =
-                    Intent(Injekt.get<Application>(), TorrentServerService::class.java).apply {
+                    Intent(app, TorrentServerService::class.java).apply {
                         action = ACTION_START
                     }
-                Injekt.get<Application>().startService(intent)
+                androidx.core.content.ContextCompat.startForegroundService(app, intent)
             } catch (e: Exception) {
                 e.printStackTrace()
             }

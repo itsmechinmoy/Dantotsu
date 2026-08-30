@@ -133,6 +133,11 @@ kotlin {
 }
 
 dependencies {
+    // Media3 & decoders (placed before ffmpeg-kit so nextlib native binaries take precedence)
+    implementation(libs.bundles.media3)
+    implementation(libs.bundles.subtitles)
+    implementation(libs.mediarouter)
+
     // ffmpeg-kit
     implementation(libs.ffmpeg.kit)
 
@@ -160,10 +165,6 @@ dependencies {
     // Glide
     implementation(libs.bundles.glide)
     ksp(libs.glide.ksp)
-
-    implementation(libs.bundles.media3)
-    implementation(libs.bundles.subtitles)
-    implementation(libs.mediarouter)
 
     // UI
     implementation(libs.material)
@@ -194,4 +195,8 @@ dependencies {
     implementation(libs.libtorrent4j.android.arm64)
     implementation(libs.libtorrent4j.android.x86)
     implementation(libs.libtorrent4j.android.x86.x64)
+
+    // LeakCanary & Plumber (Active in Debug, Alpha, and Release builds for memory leak diagnosis)
+    implementation(libs.leakcanary.android)
+    implementation(libs.leakcanary.plumber)
 }

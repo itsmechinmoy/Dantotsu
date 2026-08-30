@@ -89,9 +89,10 @@ open class CustomBottomDialog : BottomSheetDialogFragment() {
 
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
+        _binding?.bottomDialogCustomContainer?.removeAllViews()
         _binding = null
-        super.onDestroy()
+        super.onDestroyView()
     }
 
     companion object {

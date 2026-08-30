@@ -1,9 +1,12 @@
 package eu.kanade.tachiyomi.animesource
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimeRelation
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import rx.Observable
 import tachiyomi.core.util.lang.awaitSingle
+import tachiyomi.core.util.lang.withIOContext
 
 interface AnimeCatalogueSource : AnimeSource {
 
@@ -18,14 +21,23 @@ interface AnimeCatalogueSource : AnimeSource {
     val supportsLatest: Boolean
 
     /**
+     * Get the related anime list for an anime.
+     *
+     * @since extensions-lib 17
+     * @param anime the anime to fetch related anime for.
+     * @return the related anime list for the anime.
+     */
+    override suspend fun getRelatedAnimeList(anime: SAnime): List<AnimeRelation> = emptyList()
+
+    /**
      * Get a page with a list of anime.
      *
      * @since extensions-lib 1.5
      * @param page the page number to retrieve.
      */
     @Suppress("DEPRECATION")
-    suspend fun getPopularAnime(page: Int): AnimesPage {
-        return fetchPopularAnime(page).awaitSingle()
+    suspend fun getPopularAnime(page: Int): AnimesPage = withIOContext {
+        fetchPopularAnime(page).awaitSingle()
     }
 
     /**
@@ -37,8 +49,8 @@ interface AnimeCatalogueSource : AnimeSource {
      * @param filters the list of filters to apply.
      */
     @Suppress("DEPRECATION")
-    suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        return fetchSearchAnime(page, query, filters).awaitSingle()
+    suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage = withIOContext {
+        fetchSearchAnime(page, query, filters).awaitSingle()
     }
 
     /**
@@ -48,8 +60,8 @@ interface AnimeCatalogueSource : AnimeSource {
      * @param page the page number to retrieve.
      */
     @Suppress("DEPRECATION")
-    suspend fun getLatestUpdates(page: Int): AnimesPage {
-        return fetchLatestUpdates(page).awaitSingle()
+    suspend fun getLatestUpdates(page: Int): AnimesPage = withIOContext {
+        fetchLatestUpdates(page).awaitSingle()
     }
 
     /**
