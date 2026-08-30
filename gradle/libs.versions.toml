@@ -99,7 +99,7 @@ ass-media = { module = "io.github.peerless2012:ass-media", version.ref = "ass" }
 ass-kt = { module = "io.github.peerless2012:ass-kt", version.ref = "ass" }
 
 # UI
-material = "com.google.android.material:material:1.12.0"
+material = "com.google.android.material:material:1.14.0"
 flexbox = "com.google.android.flexbox:flexbox:3.0.0"
 kenburns = "com.flaviofaria:kenburnsview:1.0.7"
 subsampling = "com.davemorrissey.labs:subsampling-scale-image-view-androidx:3.10.0"
