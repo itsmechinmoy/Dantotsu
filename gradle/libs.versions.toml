@@ -106,7 +106,7 @@ subsampling = "com.davemorrissey.labs:subsampling-scale-image-view-androidx:3.10
 gesture = "com.alexvasilkov:gesture-views:2.8.3"
 ebook = "com.github.VipulOG:ebook-reader:0.1.6"
 dialogs = "com.github.eltos:simpledialogfragments:v3.7"
-charts = "com.github.AAChartModel:AAChartCore-Kotlin:7.2.3"
+charts = "com.github.AAChartModel:AAChartCore-Kotlin:7.5.0"
 
 # Markwon
 markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
