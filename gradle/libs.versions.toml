@@ -42,7 +42,7 @@ androidx-core = "androidx.core:core-ktx:1.19.0"
 androidx-appcompat = "androidx.appcompat:appcompat:1.8.0"
 androidx-activity = "androidx.activity:activity-ktx:1.10.1"
 androidx-fragment = "androidx.fragment:fragment-ktx:1.9.0"
-androidx-browser = "androidx.browser:browser:1.8.0"
+androidx-browser = "androidx.browser:browser:1.10.0"
 androidx-swipe = "androidx.swiperefreshlayout:swiperefreshlayout:1.2.0"
 androidx-legacy = "androidx.legacy:legacy-support-v4:1.0.0"
 
