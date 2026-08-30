@@ -48,7 +48,7 @@ androidx-legacy = "androidx.legacy:legacy-support-v4:1.0.0"
 
 androidx-work = "androidx.work:work-runtime-ktx:2.11.2"
 androidx-preference = "androidx.preference:preference-ktx:1.2.1"
-androidx-webkit = "androidx.webkit:webkit:1.13.0"
+androidx-webkit = "androidx.webkit:webkit:1.17.0"
 androidx-biometric = "androidx.biometric:biometric:1.1.0"
 mediarouter = "androidx.mediarouter:mediarouter:1.7.0"
 paging = "androidx.paging:paging-runtime-ktx:3.3.6"
