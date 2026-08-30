@@ -130,6 +130,12 @@ class UserInterfaceSettingsActivity : AppCompatActivity() {
             restartApp()
         }
 
+        binding.uiSettingsClearLogo.isChecked = PrefManager.getVal(PrefName.CarouselClearLogo)
+        binding.uiSettingsClearLogo.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setVal(PrefName.CarouselClearLogo, isChecked)
+            restartApp()
+        }
+
         binding.uiSettingsImmersive.isChecked = PrefManager.getVal(PrefName.ImmersiveMode)
         binding.uiSettingsImmersive.setOnCheckedChangeListener { _, isChecked ->
             PrefManager.setVal(PrefName.ImmersiveMode, isChecked)

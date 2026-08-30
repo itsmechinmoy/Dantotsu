@@ -129,23 +129,44 @@
 
             <LinearLayout
                 android:id="@+id/itemCompactTitleContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
                 android:orientation="vertical"
-                android:padding="8dp">
+                android:paddingStart="8dp"
+                android:paddingEnd="0dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp">
 
-                <TextView
-                    android:id="@+id/itemCompactTitle"
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:fontFamily="@font/poppins_bold"
-                    android:maxLines="3"
-                    android:textSize="16dp"
-                    android:transitionName="mediaTitle"
-                    tools:ignore="SpUsage"
-                    tools:text="@string/slogan" />
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:minHeight="28dp">
+
+                    <TextView
+                        android:id="@+id/itemCompactTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom|start"
+                        android:ellipsize="end"
+                        android:fontFamily="@font/poppins_bold"
+                        android:maxLines="3"
+                        android:textSize="16dp"
+                        android:transitionName="mediaTitle"
+                        tools:ignore="SpUsage"
+                        tools:text="@string/slogan" />
+
+                    <ImageView
+                        android:id="@+id/itemCompactLogo"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="bottom|start"
+                        android:adjustViewBounds="true"
+                        android:scaleType="fitStart"
+                        android:visibility="gone"
+                        tools:ignore="ContentDescription" />
+                </FrameLayout>
 
                 <TextView
                     android:id="@+id/itemCompactStatus"

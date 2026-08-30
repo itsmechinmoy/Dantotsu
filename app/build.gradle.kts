@@ -133,13 +133,13 @@ kotlin {
 }
 
 dependencies {
-    // Media3 & decoders (placed before ffmpeg-kit so nextlib native binaries take precedence)
+    // ffmpeg-kit (must precede media3 so complete native binaries with av_log_default_callback are chosen by pickFirsts)
+    implementation(libs.ffmpeg.kit)
+
+    // Media3 & decoders
     implementation(libs.bundles.media3)
     implementation(libs.bundles.subtitles)
     implementation(libs.mediarouter)
-
-    // ffmpeg-kit
-    implementation(libs.ffmpeg.kit)
 
     // Firebase
     add("googleImplementation", platform(libs.firebase.bom))

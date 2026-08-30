@@ -82,6 +82,7 @@ enum class PrefName(val data: Pref) {
     BlurSampling(Pref(Location.UI, Float::class, 2f)),
     ImmersiveMode(Pref(Location.UI, Boolean::class, false)),
     SmallView(Pref(Location.UI, Boolean::class, true)),
+    CarouselClearLogo(Pref(Location.UI, Boolean::class, false)),
     DefaultStartUpTab(Pref(Location.UI, Int::class, 1)),
     HomeLayout(
         Pref(

@@ -18,8 +18,11 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import ani.dantotsu.R
 import ani.dantotsu.blurImage
 import ani.dantotsu.currActivity
@@ -255,6 +258,7 @@ class MediaAdaptor(
                     b.itemCompactOngoing.isVisible =
                         media.status == currActivity()!!.getString(R.string.status_releasing)
                     b.itemCompactTitle.text = media.userPreferredName
+                    bindCarouselLogo(media, b.itemCompactTitle, b.itemCompactLogo)
                     b.itemCompactScore.text =
                         ((if (media.userScore == 0) (media.meanScore
                             ?: 0) else media.userScore) / 10.0).toString()
@@ -307,6 +311,7 @@ class MediaAdaptor(
                     b.itemCompactOngoing.isVisible =
                         media.status == currActivity()!!.getString(R.string.status_releasing)
                     b.itemCompactTitle.text = media.userPreferredName
+                    bindCarouselLogo(media, b.itemCompactTitle, b.itemCompactLogo)
                     b.itemCompactScore.text =
                         ((if (media.userScore == 0) (media.meanScore
                             ?: 0) else media.userScore) / 10.0).toString()
@@ -339,6 +344,50 @@ class MediaAdaptor(
                         val size = mediaList.size
                         mediaList.addAll(mediaList)
                         notifyItemRangeInserted(size - 1, mediaList.size)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun bindCarouselLogo(
+        media: Media,
+        titleView: android.widget.TextView,
+        logoView: ImageView
+    ) {
+        val clearLogoEnabled: Boolean = PrefManager.getVal(PrefName.CarouselClearLogo)
+        if (!clearLogoEnabled) {
+            titleView.visibility = View.VISIBLE
+            logoView.visibility = View.GONE
+            return
+        }
+
+        val currentId = media.id
+        logoView.tag = currentId
+
+        fun showLogo(url: String) {
+            logoView.loadImage(url)
+            logoView.visibility = View.VISIBLE
+            titleView.visibility = View.GONE
+        }
+
+        fun showTitle() {
+            titleView.visibility = View.VISIBLE
+            logoView.visibility = View.GONE
+        }
+
+        if (!media.clearLogo.isNullOrBlank()) {
+            showLogo(media.clearLogo!!)
+        } else {
+            showTitle()
+            activity.lifecycleScope.launch(Dispatchers.Main) {
+                val logo = CarouselLogoResolver.resolve(media)
+                if (logoView.tag == currentId) {
+                    if (!logo.isNullOrBlank()) {
+                        media.clearLogo = logo
+                        showLogo(logo)
+                    } else {
+                        showTitle()
                     }
                 }
             }

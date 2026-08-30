@@ -27,6 +27,7 @@ import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.AnilistAnimeViewModel
 import ani.dantotsu.connections.anilist.getUserId
 import ani.dantotsu.databinding.FragmentAnimeBinding
+import ani.dantotsu.media.CarouselLogoResolver
 import ani.dantotsu.media.MediaAdaptor
 import ani.dantotsu.media.ProgressAdapter
 import ani.dantotsu.media.SearchActivity
@@ -232,6 +233,11 @@ class AnimeFragment : Fragment() {
                     animePageAdapter.updateHeight()
                     model.getTrending().observe(viewLifecycleOwner) {
                         if (it != null) {
+                            if (PrefManager.getVal(PrefName.CarouselClearLogo)) {
+                                scope.launch(Dispatchers.IO) {
+                                    CarouselLogoResolver.preload(it)
+                                }
+                            }
                             animePageAdapter.updateTrending(
                                 MediaAdaptor(
                                     if (PrefManager.getVal(PrefName.SmallView)) 3 else 2,

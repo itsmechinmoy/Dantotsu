@@ -132,22 +132,40 @@
                     android:layout_width="match_parent"
                     android:layout_height="48dp" />
 
-                <TextView
-                    android:id="@+id/itemCompactTitle"
+                <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="24dp"
-                    android:layout_marginEnd="24dp"
-                    android:ellipsize="marquee"
-                    android:fontFamily="@font/poppins_bold"
-                    android:lineSpacingExtra="-8sp"
-                    android:maxLines="3"
-                    android:singleLine="true"
-                    android:textAlignment="center"
-                    android:textSize="18dp"
-                    android:transitionName="mediaTitle"
-                    tools:ignore="SpUsage"
-                    tools:text="@string/slogan" />
+                    android:layout_marginEnd="24dp">
+
+                    <TextView
+                        android:id="@+id/itemCompactTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:ellipsize="marquee"
+                        android:fontFamily="@font/poppins_bold"
+                        android:lineSpacingExtra="-8sp"
+                        android:maxLines="3"
+                        android:singleLine="true"
+                        android:textAlignment="center"
+                        android:textSize="18dp"
+                        android:transitionName="mediaTitle"
+                        tools:ignore="SpUsage"
+                        tools:text="@string/slogan" />
+
+                    <ImageView
+                        android:id="@+id/itemCompactLogo"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:adjustViewBounds="true"
+                        android:maxHeight="68dp"
+                        android:maxWidth="320dp"
+                        android:scaleType="fitCenter"
+                        android:visibility="gone"
+                        tools:ignore="ContentDescription" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="wrap_content"

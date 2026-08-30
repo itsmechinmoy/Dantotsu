@@ -12,17 +12,25 @@
       "pinDigests": true
     },
     {
-      "matchDatasources": ["maven"],
       "matchPackageNames": [
         "com.github.tachiyomiorg:unifile",
+        "com.github.mihon:unifile",
         "com.github.mihonapp:injekt",
         "com.github.mihon.sqldelight-androidx-driver:sqldelight-androidx-driver"
       ],
-      "registryUrls": [
-        "https://maven.org",
-        "https://maven.google.com",
-        "https://jitpack.io"
-      ]
+      "enabled": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)gradle/libs\\.versions\\.toml$"],
+      "matchStrings": [
+        "injekt\\s*=\\s*\"(?<currentDigest>[0-9a-f]{7,40})\""
+      ],
+      "currentValueTemplate": "master",
+      "depNameTemplate": "https://github.com/mihonapp/injekt.git",
+      "datasourceTemplate": "git-refs"
     }
   ]
 }

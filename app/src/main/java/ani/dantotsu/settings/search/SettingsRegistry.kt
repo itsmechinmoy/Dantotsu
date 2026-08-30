@@ -245,6 +245,17 @@ object SettingsRegistry {
         )
         list.add(
             SearchableSetting(
+                title = context.getString(R.string.carousel_clearlogo),
+                desc = context.getString(R.string.carousel_clearlogo_desc),
+                icon = R.drawable.ic_round_auto_awesome_24,
+                category = context.getString(R.string.ui_settings),
+                breadcrumbs = "${context.getString(R.string.settings)} > ${context.getString(R.string.common)} > ${context.getString(R.string.ui_settings)}",
+                targetActivity = UserInterfaceSettingsActivity::class.java,
+                highlightKey = context.getString(R.string.carousel_clearlogo)
+            )
+        )
+        list.add(
+            SearchableSetting(
                 title = context.getString(R.string.banner_animations),
                 desc = context.getString(R.string.banner_animations),
                 icon = R.drawable.ic_round_animation_24,
