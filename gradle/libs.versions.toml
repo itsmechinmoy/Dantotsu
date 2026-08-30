@@ -105,7 +105,7 @@ kenburns = "com.flaviofaria:kenburnsview:1.0.7"
 subsampling = "com.davemorrissey.labs:subsampling-scale-image-view-androidx:3.10.0"
 gesture = "com.alexvasilkov:gesture-views:2.8.3"
 ebook = "com.github.VipulOG:ebook-reader:0.1.6"
-dialogs = "com.github.eltos:simpledialogfragments:v3.7"
+dialogs = "com.github.eltos:simpledialogfragments:3.10"
 charts = "com.github.AAChartModel:AAChartCore-Kotlin:8.2.1"
 
 # Markwon
