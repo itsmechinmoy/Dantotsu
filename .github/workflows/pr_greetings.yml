@@ -49,7 +49,7 @@ jobs:
 
     - name: Send Greeting Message
       if: env.skip != 'true'
-      uses: actions/github-script@v6
+      uses: actions/github-script@v9
       with:
         script: |
           const prNumber = context.payload.pull_request.number;

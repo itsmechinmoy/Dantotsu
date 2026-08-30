@@ -60,7 +60,7 @@ jobs:
         fi
     - name: Send Greeting Message
       if: env.skip_label_check == 'false' && env.skip != 'true' && env.skip_first_report != 'true'
-      uses: actions/github-script@v6
+      uses: actions/github-script@v9
       with:
         script: |
           const issueNumber = context.payload.issue.number;
