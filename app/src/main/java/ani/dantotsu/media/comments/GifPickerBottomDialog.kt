@@ -19,7 +19,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 class GifPickerBottomDialog : BottomSheetDialogFragment() {
 
@@ -126,21 +130,22 @@ class GifPickerBottomDialog : BottomSheetDialogFragment() {
 
     private fun parseGifs(json: String): List<String> {
         return try {
-            val root = JSONObject(json)
-            val results = root.getJSONArray("results")
+            val root = Json.parseToJsonElement(json) as? JsonObject ?: return emptyList()
+            val results = root["results"] as? JsonArray ?: return emptyList()
             val urls = mutableListOf<String>()
 
-            for (i in 0 until results.length()) {
-                val item = results.getJSONObject(i)
-                val formats = item.optJSONObject("media_formats")
-                val tinygif = formats?.optJSONObject("tinygif")
-                val url = tinygif?.optString("url") ?: item.optString("url")
+            for (element in results) {
+                val item = element as? JsonObject ?: continue
+                val formats = item["media_formats"] as? JsonObject
+                val tinygif = formats?.get("tinygif") as? JsonObject
+                val url = (tinygif?.get("url") as? JsonPrimitive)?.contentOrNull
+                    ?: (item["url"] as? JsonPrimitive)?.contentOrNull
 
-                if (url.isNotEmpty()) urls.add(url)
+                if (!url.isNullOrEmpty()) urls.add(url)
             }
 
             urls
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             emptyList()
         }
     }
