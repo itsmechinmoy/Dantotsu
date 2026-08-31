@@ -17,6 +17,7 @@ import ani.dantotsu.profile.UsersDialogFragment
 import ani.dantotsu.snackString
 import ani.dantotsu.util.ActivityMarkdownCreator
 import ani.dantotsu.util.AniMarkdown.Companion.getBasicAniHTML
+import ani.dantotsu.util.customAlertDialog
 import com.xwray.groupie.GroupieAdapter
 import com.xwray.groupie.viewbinding.BindableItem
 import kotlinx.coroutines.CoroutineScope
@@ -103,16 +104,24 @@ class ActivityReplyItem(
         }
         binding.activityDelete.isVisible = reply.userId == Anilist.userid
         binding.activityDelete.setOnClickListener {
-            scope.launch {
-                val res = Anilist.mutation.deleteActivityReply(reply.id)
-                withContext(Dispatchers.Main) {
-                    if (res) {
-                        snackString("Deleted")
-                        parentAdapter.remove(this@ActivityReplyItem)
-                    } else {
-                        snackString("Failed to delete")
+            binding.root.context.customAlertDialog().apply {
+                setTitle(R.string.delete)
+                setMessage(binding.root.context.getString(R.string.delete_reply_confirm))
+                setPosButton(R.string.delete) {
+                    scope.launch {
+                        val res = Anilist.mutation.deleteActivityReply(reply.id)
+                        withContext(Dispatchers.Main) {
+                            if (res) {
+                                snackString("Deleted")
+                                parentAdapter.remove(this@ActivityReplyItem)
+                            } else {
+                                snackString("Failed to delete")
+                            }
+                        }
                     }
                 }
+                setNegButton(R.string.cancel)
+                show()
             }
         }
 

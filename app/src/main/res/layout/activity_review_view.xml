@@ -69,7 +69,7 @@
                 android:id="@+id/userTime"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_gravity="end|center_vertical"
+                android:layout_gravity="center_vertical"
                 android:layout_marginEnd="6dp"
                 android:layout_weight="1"
                 android:alpha="0.6"
@@ -77,6 +77,30 @@
                 android:text="Time"
                 android:textSize="14sp"
                 tools:ignore="HardcodedText,RtlSymmetry" />
+
+            <ImageView
+                android:id="@+id/reviewEdit"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginEnd="6dp"
+                android:padding="6dp"
+                android:src="@drawable/ic_round_edit_note_24"
+                android:visibility="gone"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription" />
+
+            <ImageView
+                android:id="@+id/reviewDelete"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginEnd="12dp"
+                android:padding="6dp"
+                android:src="@drawable/ic_round_delete_24"
+                android:visibility="gone"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription" />
         </LinearLayout>
 
         <WebView

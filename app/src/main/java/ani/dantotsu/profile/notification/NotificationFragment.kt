@@ -233,6 +233,13 @@ class NotificationFragment : Fragment() {
                 putExtra("commentId", optional ?: -1)
             }
 
+            NotificationClickType.THREAD -> Intent(
+                requireContext(),
+                ani.dantotsu.forum.ThreadViewActivity::class.java
+            ).apply {
+                putExtra("threadId", id)
+            }
+
             NotificationClickType.UNDEFINED -> null
         }
 
@@ -250,7 +257,7 @@ class NotificationFragment : Fragment() {
         resetCountIfNeeded()
     }
     companion object {
-        enum class NotificationClickType { USER, MEDIA, ACTIVITY, COMMENT, UNDEFINED }
+        enum class NotificationClickType { USER, MEDIA, ACTIVITY, COMMENT, THREAD, UNDEFINED }
         enum class NotificationType { MEDIA, USER, SUBSCRIPTION, COMMENT, ONE }
 
         fun newInstance(

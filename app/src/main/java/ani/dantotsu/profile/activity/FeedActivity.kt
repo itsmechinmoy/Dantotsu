@@ -40,6 +40,7 @@ class FeedActivity : AppCompatActivity() {
         val tabs = listOf(
             Pair(R.drawable.ic_round_person_24, "Following"),
             Pair(R.drawable.ic_globe_24, "Global"),
+            Pair(R.drawable.ic_round_comment_24, "Forum"),
         )
         tabs.forEach { (icon, title) -> navBar.addTab(navBar.createTab(icon, title)) }
 
@@ -61,8 +62,19 @@ class FeedActivity : AppCompatActivity() {
                 newIndex: Int,
                 newTab: AnimatedBottomBar.Tab
             ) {
-                selected = newIndex
-                binding.notificationViewPager.setCurrentItem(selected, false)
+                if (newIndex == 2) {
+                    startActivity(android.content.Intent(this@FeedActivity, ani.dantotsu.forum.ForumActivity::class.java))
+                    navBar.selectTabAt(lastIndex, false)
+                } else {
+                    selected = newIndex
+                    binding.notificationViewPager.setCurrentItem(selected, false)
+                }
+            }
+
+            override fun onTabReselected(index: Int, tab: AnimatedBottomBar.Tab) {
+                if (index == 2) {
+                    startActivity(android.content.Intent(this@FeedActivity, ani.dantotsu.forum.ForumActivity::class.java))
+                }
             }
         })
     }

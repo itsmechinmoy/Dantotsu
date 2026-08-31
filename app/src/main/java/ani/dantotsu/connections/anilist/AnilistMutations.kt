@@ -185,15 +185,20 @@ class AnilistMutations {
         notes: String? = null,
         status: String? = null,
         private: Boolean? = null,
+        priority: Int? = null,
+        hiddenFromStatusLists: Boolean? = null,
         startedAt: FuzzyDate? = null,
         completedAt: FuzzyDate? = null,
-        customList: List<String>? = null
+        customList: List<String>? = null,
+        advancedScores: List<Double>? = null
     ) {
         val headerParams = mutableListOf(
             "${"$"}mediaID: Int",
             "${"$"}progress: Int",
             "${"$"}progressVolumes: Int",
             "${"$"}private: Boolean",
+            "${"$"}priority: Int",
+            "${"$"}hiddenFromStatusLists: Boolean",
             "${"$"}repeat: Int",
             "${"$"}notes: String",
             "${"$"}customLists: [String]",
@@ -207,6 +212,8 @@ class AnilistMutations {
             "repeat: ${"$"}repeat",
             "notes: ${"$"}notes",
             "private: ${"$"}private",
+            "priority: ${"$"}priority",
+            "hiddenFromStatusLists: ${"$"}hiddenFromStatusLists",
             "scoreRaw: ${"$"}scoreRaw",
             "status: ${"$"}status",
             "customLists: ${"$"}customLists"
@@ -219,6 +226,10 @@ class AnilistMutations {
         if (completedAt != null) {
             headerParams.add("${"$"}completed: FuzzyDateInput = ${completedAt.toVariableString()}")
             entryArgs.add("completedAt: ${"$"}completed")
+        }
+        if (advancedScores != null) {
+            headerParams.add("${"$"}advancedScores: [Float]")
+            entryArgs.add("advancedScores: ${"$"}advancedScores")
         }
 
         val query = """
@@ -245,6 +256,8 @@ class AnilistMutations {
 
         val variables = """{"mediaID":$mediaID
             ${if (private != null) ""","private":$private""" else ""}
+            ${if (priority != null) ""","priority":$priority""" else ""}
+            ${if (hiddenFromStatusLists != null) ""","hiddenFromStatusLists":$hiddenFromStatusLists""" else ""}
             ${if (progress != null) ""","progress":$progress""" else ""}
             ${if (progressVolumes != null) ""","progressVolumes":$progressVolumes""" else ""}
             ${if (score != null) ""","scoreRaw":$score""" else ""}
@@ -252,6 +265,7 @@ class AnilistMutations {
             ${if (notes != null) ""","notes":"${notes.replace("\n", "\\n")}"""" else ""}
             ${if (status != null) ""","status":"$status"""" else ""}
             ${if (customList != null) ""","customLists":[${customList.joinToString { "\"$it\"" }}]""" else ""}
+            ${if (advancedScores != null) ""","advancedScores":[${advancedScores.joinToString(",")}]""" else ""}
             }""".replace("\n", "").replace("""    """, "")
         println(variables)
         executeQuery<JsonObject>(query, variables, show = true)
@@ -319,6 +333,19 @@ class AnilistMutations {
         )
     }
 
+    suspend fun toggleBlock(userId: Int): Boolean {
+        val query = """
+            mutation {
+                ToggleBlock(userId: $userId) {
+                    id
+                    isBlocked
+                }
+            }
+        """.trimIndent()
+        val result = executeQuery<JsonObject>(query)
+        return result?.get("errors") == null && result != null
+    }
+
     suspend fun toggleLike(id: Int, type: String): ToggleLike? {
         return executeQuery<ToggleLike>(
             """
@@ -343,7 +370,29 @@ class AnilistMutations {
         )
         val errors = result?.get("errors") as? JsonArray
 
-        return result != null && errors.isNullOrEmpty()
+        if (result != null && errors.isNullOrEmpty()) {
+            Anilist.query.invalidateUserStatusCache()
+            return true
+        }
+        return false
+    }
+
+    suspend fun toggleActivityPin(activityId: Int, pinned: Boolean): Boolean {
+        val result = executeQuery<JsonObject>(
+            """
+            mutation {
+                ToggleActivityPin(id: $activityId, pinned: $pinned) {
+                    __typename
+                }
+            }
+        """.trimIndent()
+        )
+        val errors = result?.get("errors") as? JsonArray
+        if (result != null && errors.isNullOrEmpty()) {
+            Anilist.query.invalidateUserStatusCache()
+            return true
+        }
+        return false
     }
 
     suspend fun postActivity(text: String, edit: Int? = null): String {
@@ -408,17 +457,95 @@ class AnilistMutations {
             ?: "Success")
     }
 
-    suspend fun postReview(summary: String, body: String, mediaId: Int, score: Int): String {
+    suspend fun postReview(
+        summary: String,
+        body: String,
+        mediaId: Int,
+        score: Int,
+        edit: Int? = null,
+        isPrivate: Boolean = false
+    ): String {
         val encodedSummary = summary.stringSanitizer()
         val encodedBody = body.stringSanitizer()
         val query = """
             mutation {
                 SaveReview(
+                    ${if (edit != null) "id: $edit," else ""}
                     mediaId: $mediaId,
                     summary: $encodedSummary,
                     body: $encodedBody,
-                    score: $score
+                    score: $score,
+                    private: $isPrivate
                 ) {
+                    siteUrl
+                    id
+                }
+            }
+        """.trimIndent()
+        val result = executeQuery<JsonObject>(query)
+        val errors = result?.get("errors")
+        return errors?.toString() ?: (currContext()?.getString(ani.dantotsu.R.string.success)
+            ?: "Success")
+    }
+
+    suspend fun deleteReview(reviewId: Int): Boolean {
+        val query = """
+            mutation {
+                DeleteReview(id: $reviewId) {
+                    deleted
+                }
+            }
+        """.trimIndent()
+        val result = executeQuery<JsonObject>(query)
+        val errors = result?.get("errors")
+        return errors == null && result != null
+    }
+
+    suspend fun saveRecommendation(
+        mediaId: Int,
+        mediaRecommendationId: Int,
+        rating: String? = null
+    ): Boolean {
+        val ratingArg = if (rating != null) ", rating: $rating" else ""
+        val query = """
+            mutation {
+                SaveRecommendation(
+                    mediaId: $mediaId,
+                    mediaRecommendationId: $mediaRecommendationId
+                    $ratingArg
+                ) {
+                    id
+                    rating
+                    userRating
+                }
+            }
+        """.trimIndent()
+        val result = executeQuery<JsonObject>(query)
+        val errors = result?.get("errors")
+        return errors == null && result != null
+    }
+
+    suspend fun saveThread(
+        title: String,
+        body: String,
+        categories: List<Int>? = null,
+        mediaCategories: List<Int>? = null,
+        edit: Int? = null
+    ): String {
+        val encodedTitle = title.stringSanitizer()
+        val encodedBody = body.stringSanitizer()
+        val categoriesArg = if (!categories.isNullOrEmpty()) ", categories: [${categories.joinToString(",")}]" else ""
+        val mediaCategoriesArg = if (!mediaCategories.isNullOrEmpty()) ", mediaCategories: [${mediaCategories.joinToString(",")}]" else ""
+        val query = """
+            mutation {
+                SaveThread(
+                    ${if (edit != null) "id: $edit," else ""}
+                    title: $encodedTitle,
+                    body: $encodedBody
+                    $categoriesArg
+                    $mediaCategoriesArg
+                ) {
+                    id
                     siteUrl
                 }
             }
@@ -427,6 +554,88 @@ class AnilistMutations {
         val errors = result?.get("errors")
         return errors?.toString() ?: (currContext()?.getString(ani.dantotsu.R.string.success)
             ?: "Success")
+    }
+
+    suspend fun deleteThread(threadId: Int): Boolean {
+        val query = """
+            mutation {
+                DeleteThread(id: $threadId) {
+                    deleted
+                }
+            }
+        """.trimIndent()
+        val result = executeQuery<JsonObject>(query)
+        val errors = result?.get("errors")
+        return errors == null && result != null
+    }
+
+    suspend fun saveThreadComment(
+        threadId: Int,
+        comment: String,
+        parentCommentId: Int? = null,
+        edit: Int? = null
+    ): String {
+        val encodedComment = comment.stringSanitizer()
+        val parentArg = if (parentCommentId != null) ", parentCommentId: $parentCommentId" else ""
+        val query = """
+            mutation {
+                SaveThreadComment(
+                    ${if (edit != null) "id: $edit," else ""}
+                    threadId: $threadId,
+                    comment: $encodedComment
+                    $parentArg
+                ) {
+                    id
+                    siteUrl
+                }
+            }
+        """.trimIndent()
+        val result = executeQuery<JsonObject>(query)
+        val errors = result?.get("errors")
+        return errors?.toString() ?: (currContext()?.getString(ani.dantotsu.R.string.success)
+            ?: "Success")
+    }
+
+    suspend fun deleteThreadComment(commentId: Int): Boolean {
+        val query = """
+            mutation {
+                DeleteThreadComment(id: $commentId) {
+                    deleted
+                }
+            }
+        """.trimIndent()
+        val result = executeQuery<JsonObject>(query)
+        val errors = result?.get("errors")
+        return errors == null && result != null
+    }
+
+    suspend fun toggleThreadSubscription(threadId: Int, subscribe: Boolean): Boolean {
+        val query = """
+            mutation {
+                ToggleThreadSubscription(threadId: $threadId, subscribe: $subscribe) {
+                    id
+                    isSubscribed
+                }
+            }
+        """.trimIndent()
+        val result = executeQuery<JsonObject>(query)
+        val errors = result?.get("errors")
+        return errors == null && result != null
+    }
+
+    suspend fun updateUserBio(about: String): Boolean {
+        val encodedAbout = about.stringSanitizer()
+        val query = """
+            mutation {
+                UpdateUser(about: $encodedAbout) {
+                    id
+                    about
+                }
+            }
+        """.trimIndent()
+        val result = executeQuery<JsonObject>(query)
+        val errors = result?.get("errors")
+        return errors == null && result != null
     }
 
     suspend fun deleteActivityReply(activityId: Int): Boolean {

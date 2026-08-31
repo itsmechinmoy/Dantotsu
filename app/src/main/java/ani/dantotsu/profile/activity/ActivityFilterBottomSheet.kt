@@ -36,9 +36,13 @@ class ActivityFilterBottomSheet : BottomSheetDialogFragment() {
 
             currentFilter = when (id) {
                 R.id.filterAll -> ActivityFilterType.ALL
+                R.id.filterText -> ActivityFilterType.TEXT
                 R.id.filterAnimeProgress -> ActivityFilterType.ANIME_PROGRESS
                 R.id.filterMangaProgress -> ActivityFilterType.MANGA_PROGRESS
+                R.id.filterAllProgress -> ActivityFilterType.ALL_PROGRESS
                 R.id.filterMessages -> ActivityFilterType.MESSAGES
+                R.id.filterPinned -> ActivityFilterType.PINNED
+                R.id.filterSubscribed -> ActivityFilterType.SUBSCRIBED
                 else -> return@setOnCheckedStateChangeListener
             }
         }
@@ -52,9 +56,13 @@ class ActivityFilterBottomSheet : BottomSheetDialogFragment() {
     private fun getChipId(filter: ActivityFilterType): Int {
         return when (filter) {
             ActivityFilterType.ALL -> R.id.filterAll
+            ActivityFilterType.TEXT -> R.id.filterText
             ActivityFilterType.ANIME_PROGRESS -> R.id.filterAnimeProgress
             ActivityFilterType.MANGA_PROGRESS -> R.id.filterMangaProgress
+            ActivityFilterType.ALL_PROGRESS -> R.id.filterAllProgress
             ActivityFilterType.MESSAGES -> R.id.filterMessages
+            ActivityFilterType.PINNED -> R.id.filterPinned
+            ActivityFilterType.SUBSCRIBED -> R.id.filterSubscribed
         }
     }
 
@@ -78,7 +86,11 @@ class ActivityFilterBottomSheet : BottomSheetDialogFragment() {
 
 enum class ActivityFilterType {
     ALL,
+    TEXT,
     ANIME_PROGRESS,
     MANGA_PROGRESS,
-    MESSAGES
+    ALL_PROGRESS,
+    MESSAGES,
+    PINNED,
+    SUBSCRIBED
 }

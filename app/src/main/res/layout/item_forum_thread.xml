@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="12dp"
+    android:layout_marginVertical="6dp"
+    app:cardBackgroundColor="?attr/colorSurface"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="2dp"
+    app:strokeColor="@color/transparent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/threadAuthorAvatar"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                app:shapeAppearanceOverlay="@style/roundedImageView"
+                tools:srcCompat="@drawable/ic_round_person_24" />
+
+            <TextView
+                android:id="@+id/threadAuthorName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="13sp"
+                tools:text="Username" />
+
+            <TextView
+                android:id="@+id/threadTime"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:alpha="0.6"
+                android:fontFamily="@font/poppins"
+                android:textSize="11sp"
+                tools:text="2h ago" />
+
+            <TextView
+                android:id="@+id/threadCategory"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/badge_bg_rounded"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="2dp"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="11sp"
+                tools:text="Anime" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/threadTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="@font/poppins_bold"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="16sp"
+            tools:text="Best anime of Fall 2026 discussion" />
+
+        <TextView
+            android:id="@+id/threadBodyPreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:alpha="0.8"
+            android:ellipsize="end"
+            android:fontFamily="@font/poppins"
+            android:maxLines="2"
+            android:textSize="13sp"
+            tools:text="What are everyone's thoughts on the new season line up?" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:alpha="0.6"
+                android:src="@drawable/ic_round_comment_24"
+                app:tint="?attr/colorOnSurface"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/threadReplyCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:alpha="0.7"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:textSize="12sp"
+                tools:text="24" />
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginStart="16dp"
+                android:alpha="0.6"
+                android:src="@drawable/ic_round_remove_red_eye_24"
+                app:tint="?attr/colorOnSurface"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/threadViewCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:alpha="0.7"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:textSize="12sp"
+                tools:text="1.2k" />
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginStart="16dp"
+                android:alpha="0.6"
+                android:src="@drawable/ic_round_favorite_24"
+                app:tint="?attr/colorOnSurface"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/threadLikeCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:alpha="0.7"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:textSize="12sp"
+                tools:text="15" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageView
+                android:id="@+id/threadLockedBadge"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:alpha="0.6"
+                android:src="@drawable/ic_round_lock_24"
+                android:visibility="gone"
+                app:tint="?attr/colorOnSurface"
+                tools:ignore="ContentDescription" />
+
+            <ImageView
+                android:id="@+id/threadPinnedBadge"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginStart="4dp"
+                android:alpha="0.6"
+                android:src="@drawable/ic_pin"
+                android:visibility="gone"
+                app:tint="?attr/colorPrimary"
+                tools:ignore="ContentDescription" />
+        </LinearLayout>
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

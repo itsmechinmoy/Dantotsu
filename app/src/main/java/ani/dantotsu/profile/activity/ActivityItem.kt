@@ -21,6 +21,7 @@ import ani.dantotsu.snackString
 import ani.dantotsu.util.ActivityMarkdownCreator
 import ani.dantotsu.util.AniMarkdown.Companion.getBasicAniHTML
 import ani.dantotsu.util.AnilistLinkParser
+import ani.dantotsu.util.customAlertDialog
 import com.xwray.groupie.GroupieAdapter
 import com.xwray.groupie.viewbinding.BindableItem
 import kotlinx.coroutines.CoroutineScope
@@ -103,16 +104,63 @@ class ActivityItem(
             }
         }
         binding.activityDelete.isVisible =
-            activity.userId == Anilist.userid || activity.messenger?.id == Anilist.userid
+            activity.userId == Anilist.userid ||
+            activity.messenger?.id == Anilist.userid ||
+            activity.recipientId == Anilist.userid ||
+            activity.recipient?.id == Anilist.userid
         binding.activityDelete.setOnClickListener {
+            binding.root.context.customAlertDialog().apply {
+                setTitle(R.string.delete)
+                setMessage(binding.root.context.getString(R.string.delete_activity_confirm))
+                setPosButton(R.string.delete) {
+                    scope.launch {
+                        val res = Anilist.mutation.deleteActivity(activity.id)
+                        withContext(Dispatchers.Main) {
+                            if (res) {
+                                snackString("Deleted activity")
+                                parentAdapter.remove(this@ActivityItem)
+                            } else {
+                                snackString("Failed to delete activity")
+                            }
+                        }
+                    }
+                }
+                setNegButton(R.string.cancel)
+                show()
+            }
+        }
+
+        binding.activityPin.isVisible = activity.userId == Anilist.userid
+        binding.activityPin.text = if (activity.isPinned == true) "Unpin" else "Pin"
+        binding.activityPin.setOnClickListener {
             scope.launch {
-                val res = Anilist.mutation.deleteActivity(activity.id)
+                val newPinned = !(activity.isPinned ?: false)
+                val success = Anilist.mutation.toggleActivityPin(activity.id, newPinned)
                 withContext(Dispatchers.Main) {
-                    if (res) {
-                        snackString("Deleted activity")
-                        parentAdapter.remove(this@ActivityItem)
+                    if (success) {
+                        activity.isPinned = newPinned
+                        binding.activityPin.text = if (activity.isPinned == true) "Unpin" else "Pin"
+                        snackString(if (newPinned) "Pinned activity" else "Unpinned activity")
                     } else {
-                        snackString("Failed to delete activity")
+                        snackString("Failed to pin/unpin activity")
+                    }
+                }
+            }
+        }
+
+        binding.activitySubscribe.isVisible = Anilist.token != null
+        binding.activitySubscribe.text = if (activity.isSubscribed == true) "Unsubscribe" else "Subscribe"
+        binding.activitySubscribe.setOnClickListener {
+            scope.launch {
+                val newSub = !(activity.isSubscribed ?: false)
+                val success = Anilist.mutation.toggleActivitySubscription(activity.id, newSub)
+                withContext(Dispatchers.Main) {
+                    if (success) {
+                        activity.isSubscribed = newSub
+                        binding.activitySubscribe.text = if (activity.isSubscribed == true) "Unsubscribe" else "Subscribe"
+                        snackString(if (newSub) "Subscribed to activity" else "Unsubscribed from activity")
+                    } else {
+                        snackString("Failed to update subscription")
                     }
                 }
             }

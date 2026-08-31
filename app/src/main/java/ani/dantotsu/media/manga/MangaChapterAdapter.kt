@@ -74,10 +74,21 @@ class MangaChapterAdapter(
     fun isDownloading(chapterNumber: String): Boolean = activeDownloads.contains(chapterNumber)
     fun isDownloaded(chapterNumber: String): Boolean = downloadedChapters.contains(chapterNumber)
 
+    fun isDownloaded(chapter: MangaChapter): Boolean {
+        val unique = chapter.uniqueNumber()
+        val num = chapter.number
+        val title = chapter.title
+        val titleUnique = title?.let { "$it-${chapter.scanlator ?: "Unknown"}" }
+        return downloadedChapters.contains(unique) ||
+                downloadedChapters.contains(num) ||
+                (title != null && downloadedChapters.contains(title)) ||
+                (titleUnique != null && downloadedChapters.contains(titleUnique))
+    }
+
     fun startDownload(chapterNumber: String) {
         activeDownloads.add(chapterNumber)
         // Find the position of the chapter and notify only that item
-        val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber }
+        val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber || it.number == chapterNumber }
         if (position != -1) {
             notifyItemChanged(position)
         }
@@ -87,7 +98,7 @@ class MangaChapterAdapter(
         activeDownloads.remove(chapterNumber)
         downloadedChapters.add(chapterNumber)
         // Find the position of the chapter and notify only that item
-        val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber }
+        val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber || it.number == chapterNumber }
         if (position != -1) {
             arr[position].progress = "Downloaded"
             notifyItemChanged(position)
@@ -96,6 +107,8 @@ class MangaChapterAdapter(
 
     fun deleteDownload(chapterNumber: MangaChapter) {
         downloadedChapters.remove(chapterNumber.uniqueNumber())
+        downloadedChapters.remove(chapterNumber.number)
+        chapterNumber.title?.let { downloadedChapters.remove(it) }
         // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber.uniqueNumber() }
         if (position != -1) {
@@ -108,7 +121,7 @@ class MangaChapterAdapter(
         activeDownloads.remove(chapterNumber)
         downloadedChapters.remove(chapterNumber)
         // Find the position of the chapter and notify only that item
-        val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber }
+        val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber || it.number == chapterNumber }
         if (position != -1) {
             arr[position].progress = ""
             notifyItemChanged(position)
@@ -164,7 +177,7 @@ class MangaChapterAdapter(
                 if (activeDownloads.contains(chapterNumber)) {
                     //do nothing
                     continue
-                } else if (downloadedChapters.contains(chapterNumber)) {
+                } else if (isDownloaded(chapter)) {
                     //do nothing
                     continue
                 } else {
@@ -181,10 +194,10 @@ class MangaChapterAdapter(
             if (position + i < arr.size) {
                 val chapter = arr[position + i]
                 val chapterNumber = chapter.uniqueNumber()
-                if(activeDownloads.contains(chapterNumber)){
+                if(activeDownloads.contains(chapterNumber) || activeDownloads.contains(chapter.number)){
                     fragment.onMangaChapterStopDownloadClick(chapter)
                 }
-                else if (downloadedChapters.contains(chapterNumber)) {
+                else if (isDownloaded(chapter)) {
                     fragment.onMangaChapterRemoveDownloadClick(chapter)
                 }
             }
@@ -194,7 +207,8 @@ class MangaChapterAdapter(
     inner class ChapterListViewHolder(val binding: ItemChapterListBinding) :
         RecyclerView.ViewHolder(binding.root) {
         private val activeCoroutines = mutableSetOf<String>()
-        fun bind(chapterNumber: String, progress: String?) {
+        fun bind(chapter: MangaChapter, progress: String?) {
+            val chapterNumber = chapter.uniqueNumber()
             if (progress != null) {
                 binding.itemChapterTitle.visibility = View.VISIBLE
                 binding.itemChapterTitle.text = "$progress"
@@ -209,19 +223,16 @@ class MangaChapterAdapter(
             }
             binding.itemDownload.visibility = View.VISIBLE
 
-            if (activeDownloads.contains(chapterNumber)) {
+            if (activeDownloads.contains(chapterNumber) || activeDownloads.contains(chapter.number)) {
                 // Show spinner
                 binding.itemDownload.setImageResource(R.drawable.ic_sync)
                 startOrContinueRotation(chapterNumber) {
                     binding.itemDownload.rotation = 0f
                 }
-            } else if (downloadedChapters.contains(chapterNumber)) {
-                // Show checkmark
-                binding.itemDownload.setImageResource(R.drawable.ic_circle_check)
-                binding.itemDownload.postDelayed({
-                    binding.itemDownload.setImageResource(R.drawable.ic_round_delete_24)
-                    binding.itemDownload.rotation = 0f
-                }, 1000)
+            } else if (isDownloaded(chapter)) {
+                // Show delete icon
+                binding.itemDownload.setImageResource(R.drawable.ic_round_delete_24)
+                binding.itemDownload.rotation = 0f
             } else {
                 // Show download icon
                 binding.itemDownload.setImageResource(R.drawable.ic_download_24)
@@ -263,13 +274,13 @@ class MangaChapterAdapter(
                 if (0 <= bindingAdapterPosition && bindingAdapterPosition < arr.size) {
                     val chapter = arr[bindingAdapterPosition]
                     val chapterNumber = chapter.uniqueNumber()
-                    if (activeDownloads.contains(chapterNumber)) {
+                    if (activeDownloads.contains(chapterNumber) || activeDownloads.contains(chapter.number)) {
                         fragment.onMangaChapterStopDownloadClick(chapter)
                         return@setOnClickListener
-                    } else if (downloadedChapters.contains(chapterNumber)) {
+                    } else if (isDownloaded(chapter)) {
                         it.context.customAlertDialog().apply {
                             setTitle("Delete Chapter")
-                            setMessage("Are you sure you want to delete ${chapterNumber}?")
+                            setMessage("Are you sure you want to delete ${chapter.number}?")
                             setPosButton(R.string.delete) {
                                 fragment.onMangaChapterRemoveDownloadClick(chapter)
                             }
@@ -284,8 +295,9 @@ class MangaChapterAdapter(
             }
             binding.itemDownload.setOnLongClickListener {
                 if (0 <= bindingAdapterPosition && bindingAdapterPosition < arr.size){
-                    val chapterNumber = arr[bindingAdapterPosition].uniqueNumber()
-                    if(activeDownloads.contains(chapterNumber) || downloadedChapters.contains(chapterNumber)){
+                    val chapter = arr[bindingAdapterPosition]
+                    val chapterNumber = chapter.uniqueNumber()
+                    if(activeDownloads.contains(chapterNumber) || isDownloaded(chapter)){
                         fragment.requireContext().customAlertDialog().apply {
                             setTitle("Multi Chapter Deleter")
                             setMessage("Enter the number of chapters to delete")
@@ -360,7 +372,7 @@ class MangaChapterAdapter(
             is ChapterListViewHolder -> {
                 val binding = holder.binding
                 val ep = arr[position]
-                holder.bind(ep.uniqueNumber(), ep.progress)
+                holder.bind(ep, ep.progress)
                 setAnimation(fragment.requireContext(), holder.binding.root)
                 binding.itemChapterNumber.text = ep.number
 

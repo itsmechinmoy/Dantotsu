@@ -391,7 +391,7 @@ class NotificationItem(
                 }
                 binding.notificationBannerImage.setOnClickListener {
                     clickCallback(
-                        notification.user?.id ?: 0, null, NotificationClickType.USER
+                        notification.thread?.id ?: 0, null, NotificationClickType.THREAD
                     )
                 }
             }
@@ -406,7 +406,7 @@ class NotificationItem(
                 }
                 binding.notificationBannerImage.setOnClickListener {
                     clickCallback(
-                        notification.user?.id ?: 0, null, NotificationClickType.USER
+                        notification.thread?.id ?: 0, notification.commentId, NotificationClickType.THREAD
                     )
                 }
             }

@@ -903,7 +903,7 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="anilist_notification_filters">Filter Notifications</string>
     <string name="anilist_notifications_checking_time">Anilist notifications update frequency : %1$s</string>
     <string name="comment_notification_checking_time">Comment notifications update frequency : %1$s</string>
-    <string name="activities">Activities</string>
+    <string name="activities">Activities &amp; Forums</string>
     <string name="enable_rpc">Enable Discord RPC</string>
     <string name="enable_rpc_desc">Display your taste to plebs on Discord!</string>
 
@@ -1109,6 +1109,21 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="create_new_review">Create New Review</string>
     <string name="create_new_reply">Create New Reply</string>
     <string name="create_new_message">Create New Message</string>
+    <string name="review_summary">Review Summary (20-120 chars)</string>
+    <string name="review_score">Score (0-100)</string>
+    <string name="review_summary_length_error">Summary must be between 20 and 120 characters</string>
+    <string name="delete_activity_confirm">Are you sure you want to delete this activity?</string>
+    <string name="delete_reply_confirm">Are you sure you want to delete this reply?</string>
+    <string name="delete_review_confirm">Are you sure you want to delete this review?</string>
+    <string name="delete_thread_confirm">Are you sure you want to delete this thread?</string>
+    <string name="subscribed">Subscribed</string>
+    <string name="unsubscribed">Unsubscribed</string>
+    <string name="thread_title">Thread Title</string>
+    <string name="create_thread">Create Thread</string>
+    <string name="forum">Forum</string>
+    <string name="recommend">Recommend</string>
+    <string name="recommend_media">Recommend Similar Anime / Manga</string>
+    <string name="edit_bio">Edit Profile Bio</string>
     <string name="create">Create</string>
     <string name="preview">Preview</string>
     <string name="cannot_be_empty">Text cannot be empty</string>
@@ -1187,16 +1202,22 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="filter_activity_subtitle">Choose what type of activities to show</string>
     <string name="filter_by_type">Filter by type</string>
     <string name="all">All</string>
+    <string name="text">Text Posts</string>
     <string name="anime_progress">Anime Progress</string>
     <string name="manga_progress">Manga Progress</string>
+    <string name="all_progress">All Progress</string>
     <string name="messages">Messages</string>
-    <string name="text">Text</string>
+    <string name="pinned">Pinned</string>
+    <string name="subscribed_activities">Subscribed</string>
     <string name="apply_filters">Apply Filters</string>
     <string name="no_anime_progress">No anime progress activities</string>
     <string name="no_manga_progress">No manga progress activities</string>
+    <string name="no_all_progress">No list progress activities</string>
     <string name="no_status_activities">No status activities</string>
     <string name="no_messages">No messages</string>
     <string name="no_text_activities">No text activities</string>
+    <string name="no_pinned_activities">No pinned activities</string>
+    <string name="no_subscribed_activities">No subscribed activities</string>
 
     <string name="show_logcat">Show Logcat</string>
     <string name="show_crash_report">Show Crash Report</string>

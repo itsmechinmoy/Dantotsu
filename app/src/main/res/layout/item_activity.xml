@@ -197,6 +197,32 @@
             android:visibility="gone"
             tools:ignore="HardcodedText"
             tools:visibility="visible" />
+
+        <TextView
+            android:id="@+id/activityPin"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
+            android:layout_marginStart="24dp"
+            android:alpha="0.6"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:gravity="center"
+            android:text="Pin"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:id="@+id/activitySubscribe"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
+            android:layout_marginStart="24dp"
+            android:alpha="0.6"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:gravity="center"
+            android:text="Subscribe"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:ignore="HardcodedText" />
     </LinearLayout>
 
     <FrameLayout

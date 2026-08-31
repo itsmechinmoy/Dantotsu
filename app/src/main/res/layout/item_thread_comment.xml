@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/commentAvatar"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            app:shapeAppearanceOverlay="@style/roundedImageView"
+            tools:srcCompat="@drawable/ic_round_person_24" />
+
+        <TextView
+            android:id="@+id/commentAuthor"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:textColor="?attr/colorOnBackground"
+            android:textSize="13sp"
+            tools:text="Commenter" />
+
+        <TextView
+            android:id="@+id/commentTime"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:alpha="0.6"
+            android:fontFamily="@font/poppins"
+            android:textSize="11sp"
+            tools:text="1h ago" />
+
+        <ImageView
+            android:id="@+id/commentDelete"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:alpha="0.6"
+            android:padding="2dp"
+            android:src="@drawable/ic_round_delete_24"
+            android:visibility="gone"
+            app:tint="?attr/colorOnBackground"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/commentBody"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="40dp"
+        android:layout_marginTop="4dp"
+        android:fontFamily="@font/poppins"
+        android:textColor="?attr/colorOnBackground"
+        android:textSize="14sp"
+        tools:text="This is a great discussion!" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="40dp"
+        android:layout_marginTop="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/commentLikeButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/commentLikeIcon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_round_favorite_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/commentLikeCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:alpha="0.7"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:textSize="12sp"
+                tools:text="5" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/commentReplyButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:alpha="0.8"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:text="@string/reply"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="10dp"
+        android:alpha="0.05"
+        android:background="?attr/colorOnBackground" />
+
+</LinearLayout>

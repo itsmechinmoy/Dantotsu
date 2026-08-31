@@ -85,7 +85,13 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         }
         val editId = intent.getIntExtra("edit", -1)
         val userId = intent.getIntExtra("userId", -1)
+        val mediaId = intent.getIntExtra("mediaId", -1)
+        val initialSummary = intent.getStringExtra("summary") ?: ""
+        val initialScore = intent.getIntExtra("score", 0)
+        val initialTitle = intent.getStringExtra("title") ?: ""
+        var private = intent.getBooleanExtra("private", false)
         parentId = intent.getIntExtra("parentId", -1)
+
         when (type) {
             "replyActivity" -> if (parentId == -1) {
                 toast("Error: No parent ID")
@@ -98,8 +104,21 @@ class ActivityMarkdownCreator : AppCompatActivity() {
                     binding.privateCheckbox.visibility = ViewGroup.VISIBLE
                 }
             }
+
+            "review" -> {
+                binding.reviewInputsContainer.visibility = ViewGroup.VISIBLE
+                binding.privateCheckbox.visibility = ViewGroup.VISIBLE
+                if (initialSummary.isNotEmpty()) binding.reviewSummaryEditText.setText(initialSummary)
+                if (initialScore > 0) binding.reviewScoreEditText.setText(initialScore.toString())
+                binding.privateCheckbox.isChecked = private
+            }
+
+            "thread" -> {
+                binding.threadTitleLayout.visibility = ViewGroup.VISIBLE
+                if (initialTitle.isNotEmpty()) binding.threadTitleEditText.setText(initialTitle)
+            }
         }
-        var private = false
+
         binding.privateCheckbox.setOnCheckedChangeListener { _, isChecked ->
             private = isChecked
         }
@@ -110,6 +129,18 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         binding.editText.addTextChangedListener {
             if (!isPreviewMode) {
                 text = it.toString()
+            }
+        }
+        if (type == "bio" && text.isBlank()) {
+            launchIO {
+                val currentBio = Anilist.userid?.let { Anilist.query.getUserRawBio(it) } ?: ""
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    if (currentBio.isNotBlank() && !isFinishing) {
+                        text = currentBio
+                        binding.editText.setText(currentBio)
+                        binding.editText.setSelection(currentBio.length)
+                    }
+                }
             }
         }
         previewMarkdown(false)
@@ -123,6 +154,28 @@ class ActivityMarkdownCreator : AppCompatActivity() {
                 toast(getString(R.string.cannot_be_empty))
                 return@setOnClickListener
             }
+
+            val summary = binding.reviewSummaryEditText.text.toString().trim()
+            val scoreText = binding.reviewScoreEditText.text.toString().trim()
+            val titleText = binding.threadTitleEditText.text.toString().trim()
+
+            if (type == "review") {
+                if (summary.length < 20 || summary.length > 120) {
+                    toast(getString(R.string.review_summary_length_error))
+                    return@setOnClickListener
+                }
+                val score = scoreText.toIntOrNull()
+                if (score == null || score < 0 || score > 100) {
+                    toast("Please enter a valid score between 0 and 100")
+                    return@setOnClickListener
+                }
+            } else if (type == "thread") {
+                if (titleText.length < 6) {
+                    toast("Thread title must be at least 6 characters")
+                    return@setOnClickListener
+                }
+            }
+
             customAlertDialog().apply {
                 setTitle(R.string.warning)
                 setMessage(R.string.post_to_anilist_warning)
@@ -135,7 +188,47 @@ class ActivityMarkdownCreator : AppCompatActivity() {
                             } else {
                                 Anilist.mutation.postActivity(text)
                             }
-                            //"review" -> Anilist.mutation.postReview(text)
+
+                            "review" -> {
+                                val score = scoreText.toIntOrNull() ?: 0
+                                Anilist.mutation.postReview(
+                                    summary = summary,
+                                    body = text,
+                                    mediaId = mediaId,
+                                    score = score,
+                                    edit = if (isEdit) editId else null,
+                                    isPrivate = private
+                                )
+                            }
+
+                            "bio" -> {
+                                val ok = Anilist.mutation.updateUserBio(text)
+                                if (ok) "Profile bio updated" else "Failed to update bio"
+                            }
+
+                            "thread" -> {
+                                val categories = intent.getIntegerArrayListExtra("categories")
+                                val mediaCategories = intent.getIntegerArrayListExtra("mediaCategories")
+                                Anilist.mutation.saveThread(
+                                    title = titleText,
+                                    body = text,
+                                    categories = categories,
+                                    mediaCategories = mediaCategories,
+                                    edit = if (isEdit) editId else null
+                                )
+                            }
+
+                            "threadComment" -> {
+                                val parentCommentId = if (parentId != -1) parentId else null
+                                val threadId = intent.getIntExtra("threadId", -1)
+                                Anilist.mutation.saveThreadComment(
+                                    threadId = threadId,
+                                    comment = text,
+                                    parentCommentId = parentCommentId,
+                                    edit = if (isEdit) editId else null
+                                )
+                            }
+
                             "replyActivity" -> if (isEdit) {
                                 Anilist.mutation.postReply(parentId, text, editId)
                             } else {

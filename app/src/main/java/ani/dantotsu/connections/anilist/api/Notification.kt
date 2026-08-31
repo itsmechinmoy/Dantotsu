@@ -132,9 +132,3 @@ data class Thread(
     @SerialName("id")
     val id: Int?,
 ) : java.io.Serializable
-
-@Serializable
-data class ThreadComment(
-    @SerialName("id")
-    val id: Int?,
-) : java.io.Serializable

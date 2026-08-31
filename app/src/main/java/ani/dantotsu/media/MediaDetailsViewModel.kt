@@ -249,9 +249,9 @@ class MediaDetailsViewModel : ViewModel() {
                 if (media.description.isNullOrBlank() && !fullMapped.description.isNullOrBlank()) {
                     media.description = fullMapped.description
                 }
-                if (fullMapped.synonyms.isNotEmpty()) media.synonyms = fullMapped.synonyms
-                if (fullMapped.genres.isNotEmpty()) media.genres = fullMapped.genres
-                if (!fullMapped.externalLinks.isNullOrEmpty()) media.externalLinks = fullMapped.externalLinks
+                if (media.synonyms.isEmpty() && fullMapped.synonyms.isNotEmpty()) media.synonyms = fullMapped.synonyms
+                if (media.genres.isEmpty() && fullMapped.genres.isNotEmpty()) media.genres = fullMapped.genres
+                if (media.externalLinks.isNullOrEmpty() && !fullMapped.externalLinks.isNullOrEmpty()) media.externalLinks = fullMapped.externalLinks
                 if ((media.meanScore == null || media.meanScore == 0) && fullMapped.meanScore != null) {
                     media.meanScore = fullMapped.meanScore
                 }
@@ -274,15 +274,19 @@ class MediaDetailsViewModel : ViewModel() {
                     (fullMapped.recommendations?.size ?: 0) > (media.recommendations?.size ?: 0)) {
                     media.recommendations = fullMapped.recommendations
                 }
-                if (!fullMapped.trailer.isNullOrBlank()) media.trailer = fullMapped.trailer
+                if (media.trailer.isNullOrBlank() && !fullMapped.trailer.isNullOrBlank()) media.trailer = fullMapped.trailer
                 if (isAnime) {
                     fullMapped.anime?.let { anime ->
                         if (anime.op.isNotEmpty()) media.anime?.op = anime.op
                         if (anime.ed.isNotEmpty()) media.anime?.ed = anime.ed
-                        anime.mainStudio?.let { media.anime?.mainStudio = it }
-                        if (!anime.producers.isNullOrEmpty()) media.anime?.producers = anime.producers
-                        anime.season?.let { media.anime?.season = it }
-                        anime.seasonYear?.let { media.anime?.seasonYear = it }
+                        if (media.anime?.mainStudio == null) {
+                            anime.mainStudio?.let { media.anime?.mainStudio = it }
+                        }
+                        if (media.anime?.producers.isNullOrEmpty() && !anime.producers.isNullOrEmpty()) {
+                            media.anime?.producers = anime.producers
+                        }
+                        if (media.anime?.season.isNullOrBlank()) anime.season?.let { media.anime?.season = it }
+                        if (media.anime?.seasonYear == null) anime.seasonYear?.let { media.anime?.seasonYear = it }
                         if (media.anime?.nextAiringEpisodeTime == null && anime.nextAiringEpisodeTime != null) {
                             media.anime?.nextAiringEpisodeTime = anime.nextAiringEpisodeTime
                         }

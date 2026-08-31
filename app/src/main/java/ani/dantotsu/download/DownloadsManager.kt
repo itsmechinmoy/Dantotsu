@@ -219,14 +219,18 @@ class DownloadsManager(private val context: Context) {
     }
 
     fun queryDownload(downloadedType: DownloadedType): Boolean {
-        return downloadsList.contains(downloadedType)
+        return downloadsList.any {
+            it.type == downloadedType.type &&
+                    it.titleName.equals(downloadedType.titleName, ignoreCase = true) &&
+                    it.chapterName.equals(downloadedType.chapterName, ignoreCase = true)
+        }
     }
 
     fun queryDownload(title: String, chapter: String, type: MediaType? = null): Boolean {
         return if (type == null) {
-            downloadsList.any { it.titleName == title && it.chapterName == chapter }
+            downloadsList.any { it.titleName.equals(title, ignoreCase = true) && it.chapterName.equals(chapter, ignoreCase = true) }
         } else {
-            downloadsList.any { it.titleName == title && it.chapterName == chapter && it.type == type }
+            downloadsList.any { it.titleName.equals(title, ignoreCase = true) && it.chapterName.equals(chapter, ignoreCase = true) && it.type == type }
         }
     }
 

@@ -12,7 +12,7 @@ data class Recommendation(
     @SerialName("rating") var rating: Int?,
 
     // The rating of the recommendation by currently authenticated user
-    // @SerialName("userRating") var userRating: RecommendationRating?,
+    @SerialName("userRating") var userRating: String? = null,
 
     // The media the recommendation is from
     @SerialName("media") var media: Media?,

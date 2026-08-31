@@ -59,11 +59,12 @@ class ReviewActivity : AppCompatActivity() {
             ContextCompat.startActivity(
                 this,
                 Intent(this, ActivityMarkdownCreator::class.java)
-                    .putExtra("type", "review"),
+                    .putExtra("type", "review")
+                    .putExtra("mediaId", mediaId),
                 null
             )
         }
-        binding.followFilterButton.visibility = View.GONE
+        binding.followFilterButton.visibility = if (Anilist.token != null) View.VISIBLE else View.GONE
         binding.listTitle.text = getString(R.string.reviews)
         binding.listRecyclerView.adapter = adapter
         binding.listRecyclerView.layoutManager = LinearLayoutManager(

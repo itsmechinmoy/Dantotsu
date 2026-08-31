@@ -149,7 +149,7 @@ data class Media(
     @SerialName("streamingEpisodes") var streamingEpisodes: List<MediaStreamingEpisode>?,
 
     // The ranking of the media in a particular time span and format compared to other media
-    // @SerialName("rankings") var rankings: List<MediaRank>?,
+    @SerialName("rankings") var rankings: List<MediaRank>? = null,
 
     // The authenticated user's media list entry for the media
     @SerialName("mediaListEntry") var mediaListEntry: MediaList?,
@@ -160,8 +160,8 @@ data class Media(
     // User recommendations for similar media
     @SerialName("recommendations") var recommendations: RecommendationConnection?,
 
-    //
-    // @SerialName("stats") var stats: MediaStats?,
+    // Stats
+    @SerialName("stats") var stats: MediaStats? = null,
 
     // The url for the media page on the AniList website
     @SerialName("siteUrl") var siteUrl: String?,
@@ -562,3 +562,33 @@ data class MediaListGroup(
 data class ReviewConnection(
     @SerialName("nodes") var nodes: List<Query.Review>?,
 )
+
+@Serializable
+data class MediaStats(
+    @SerialName("scoreDistribution") var scoreDistribution: List<ScoreDistribution>? = null,
+    @SerialName("statusDistribution") var statusDistribution: List<StatusDistribution>? = null,
+) : java.io.Serializable
+
+@Serializable
+data class ScoreDistribution(
+    @SerialName("score") var score: Int? = null,
+    @SerialName("amount") var amount: Int? = null,
+) : java.io.Serializable
+
+@Serializable
+data class StatusDistribution(
+    @SerialName("status") var status: MediaListStatus? = null,
+    @SerialName("amount") var amount: Int? = null,
+) : java.io.Serializable
+
+@Serializable
+data class MediaRank(
+    @SerialName("id") var id: Int? = null,
+    @SerialName("rank") var rank: Int? = null,
+    @SerialName("type") var type: String? = null,
+    @SerialName("format") var format: MediaFormat? = null,
+    @SerialName("year") var year: Int? = null,
+    @SerialName("season") var season: MediaSeason? = null,
+    @SerialName("allTime") var allTime: Boolean? = null,
+    @SerialName("context") var context: String? = null,
+) : java.io.Serializable

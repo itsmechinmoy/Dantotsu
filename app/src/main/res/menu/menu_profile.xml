@@ -17,4 +17,9 @@
         android:title="@string/copy_user_id"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_block_user"
+        android:title="Block User"
+        app:showAsAction="never" />
+
 </menu>

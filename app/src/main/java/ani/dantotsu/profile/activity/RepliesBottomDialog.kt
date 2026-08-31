@@ -58,6 +58,23 @@ class RepliesBottomDialog : BottomSheetDialogFragment() {
             )
         }
         activityId = requireArguments().getInt("activityId")
+        var isSubscribed = false
+        binding.subscribeButton.isVisible = Anilist.token != null
+        binding.subscribeButton.setOnClickListener {
+            val newSub = !isSubscribed
+            lifecycleScope.launch(Dispatchers.IO) {
+                val success = Anilist.mutation.toggleActivitySubscription(activityId, newSub)
+                withContext(Dispatchers.Main) {
+                    if (success) {
+                        isSubscribed = newSub
+                        binding.subscribeButton.alpha = if (isSubscribed) 1.0f else 0.5f
+                        snackString(if (isSubscribed) "Subscribed to activity" else "Unsubscribed from activity")
+                    } else {
+                        snackString("Failed to update subscription")
+                    }
+                }
+            }
+        }
         loading(true)
         lifecycleScope.launch(Dispatchers.IO) {
             loadData()

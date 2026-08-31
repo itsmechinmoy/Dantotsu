@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:colorBackground">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorSurface">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
+            <ImageView
+                android:id="@+id/threadBack"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_round_arrow_back_ios_new_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/threadBarTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins_bold"
+                android:singleLine="true"
+                android:textColor="?attr/colorOnBackground"
+                android:textSize="18sp"
+                tools:text="Thread Title" />
+
+            <ImageView
+                android:id="@+id/threadSubscribe"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="12dp"
+                android:padding="2dp"
+                android:src="@drawable/ic_round_notifications_active_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription" />
+
+            <ImageView
+                android:id="@+id/threadDelete"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:padding="2dp"
+                android:src="@drawable/ic_round_delete_24"
+                android:visibility="gone"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription" />
+        </LinearLayout>
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="80dp"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/threadViewTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/poppins_bold"
+                    android:textColor="?attr/colorOnBackground"
+                    android:textSize="20sp"
+                    tools:text="Full Thread Title Here" />
+
+                <LinearLayout
+                    android:id="@+id/threadAuthorContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.imageview.ShapeableImageView
+                        android:id="@+id/threadAuthorAvatar"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        app:shapeAppearanceOverlay="@style/roundedImageView"
+                        tools:srcCompat="@drawable/ic_round_person_24" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/threadAuthorName"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/poppins_semi_bold"
+                            android:textColor="?attr/colorOnBackground"
+                            android:textSize="14sp"
+                            tools:text="Author Name" />
+
+                        <TextView
+                            android:id="@+id/threadTime"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:alpha="0.6"
+                            android:fontFamily="@font/poppins"
+                            android:textSize="12sp"
+                            tools:text="Posted 2 hours ago" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/threadLikeButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:padding="6dp">
+
+                        <ImageView
+                            android:id="@+id/threadLikeIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_round_favorite_24"
+                            app:tint="?attr/colorOnBackground"
+                            tools:ignore="ContentDescription" />
+
+                        <TextView
+                            android:id="@+id/threadLikeCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:fontFamily="@font/poppins_semi_bold"
+                            android:textSize="13sp"
+                            tools:text="42" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <WebView
+                    android:id="@+id/threadWebView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp" />
+
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:alpha="0.1"
+                android:background="?attr/colorOnBackground" />
+
+            <TextView
+                android:id="@+id/threadCommentsHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="16dp"
+                android:text="@string/replies"
+                android:textColor="?attr/colorOnBackground"
+                android:textSize="18sp" />
+
+            <ProgressBar
+                android:id="@+id/commentsProgressBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="16dp"
+                android:visibility="gone" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/commentsRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false"
+                android:paddingTop="8dp" />
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/threadReplyFab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:text="@string/reply"
+        app:backgroundTint="?attr/colorPrimary"
+        app:icon="@drawable/ic_round_reply_24"
+        app:iconTint="?attr/colorOnPrimary"
+        android:textColor="?attr/colorOnPrimary" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

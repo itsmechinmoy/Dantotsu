@@ -39,6 +39,7 @@ import ani.dantotsu.snackString
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.toast
+import ani.dantotsu.util.customAlertDialog
 import com.google.android.material.appbar.AppBarLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -165,6 +166,28 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
 
                                 R.id.action_copy_user_id -> {
                                     copyToClipboard(user.id.toString(), true)
+                                    true
+                                }
+
+                                R.id.action_block_user -> {
+                                    if (user.id == Anilist.userid) {
+                                        snackString("Cannot block yourself")
+                                        return@setOnMenuItemClickListener true
+                                    }
+                                    customAlertDialog().apply {
+                                        setTitle(R.string.warning)
+                                        setMessage("Toggle block status for ${user.name}?")
+                                        setPosButton(R.string.ok) {
+                                            lifecycleScope.launch(Dispatchers.IO) {
+                                                val success = Anilist.mutation.toggleBlock(user.id)
+                                                withContext(Dispatchers.Main) {
+                                                    snackString(if (success) "Updated block status" else "Failed to update block status")
+                                                }
+                                            }
+                                        }
+                                        setNegButton(R.string.cancel)
+                                        show()
+                                    }
                                     true
                                 }
 

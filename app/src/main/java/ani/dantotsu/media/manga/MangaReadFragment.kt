@@ -551,7 +551,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                                 // Create a download task
                                 val downloadTask = MangaDownloaderService.DownloadTask(
                                     title = media.mainName(),
-                                    chapter = chapter.title!!,
+                                    chapter = chapter.number,
                                     scanlator = chapter.scanlator ?: "Unknown",
                                     imageData = images,
                                     sourceMedia = media,
@@ -559,8 +559,8 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                                     simultaneousDownloads = 2
                                 )
 
-                                val isAlreadyQueued = MangaServiceDataSingleton.downloadQueue.any { it.title == media.mainName() && it.chapter == chapter.title } ||
-                                                      MangaServiceDataSingleton.currentTasks.any { it.title == media.mainName() && it.chapter == chapter.title }
+                                val isAlreadyQueued = MangaServiceDataSingleton.downloadQueue.any { it.title == media.mainName() && (it.chapter == chapter.number || it.chapter == chapter.title) } ||
+                                                      MangaServiceDataSingleton.currentTasks.any { it.title == media.mainName() && (it.chapter == chapter.number || it.chapter == chapter.title) }
                                 if (!isAlreadyQueued) {
                                     MangaServiceDataSingleton.downloadQueue.offer(downloadTask)
                                 }
@@ -612,7 +612,8 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
             DownloadedType(
                 media.mainName(),
                 i.number,
-                MediaType.MANGA
+                MediaType.MANGA,
+                scanlator = i.scanlator ?: "Unknown"
             )
         ) {
             chapterAdapter.deleteDownload(i)
@@ -636,10 +637,12 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
             DownloadedType(
                 media.mainName(),
                 i.number,
-                MediaType.MANGA
+                MediaType.MANGA,
+                scanlator = i.scanlator ?: "Unknown"
             )
         ) {
             chapterAdapter.purgeDownload(i.uniqueNumber())
+            chapterAdapter.purgeDownload(i.number)
         }
     }
 
@@ -710,6 +713,15 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         }
         chapterAdapter.arr = arr
         chapterAdapter.updateType(style ?: PrefManager.getVal(PrefName.MangaDefaultView))
+
+        // Synchronize downloaded chapters for the current media
+        for (download in downloadManager.mangaDownloadedTypes) {
+            if (media.compareName(download.titleName)) {
+                chapterAdapter.stopDownload(download.uniqueName)
+                chapterAdapter.stopDownload(download.chapterName)
+            }
+        }
+
         chapterAdapter.notifyItemRangeInserted(0, arr.size)
     }
 

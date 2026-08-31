@@ -52,13 +52,13 @@ data class Activity(
     @SerialName("isLocked")
     val isLocked: Boolean?,
     @SerialName("isSubscribed")
-    val isSubscribed: Boolean?,
+    var isSubscribed: Boolean?,
     @SerialName("likeCount")
     var likeCount: Int?,
     @SerialName("isLiked")
     var isLiked: Boolean?,
     @SerialName("isPinned")
-    val isPinned: Boolean?,
+    var isPinned: Boolean?,
     @SerialName("isPrivate")
     val isPrivate: Boolean?,
     @SerialName("createdAt")

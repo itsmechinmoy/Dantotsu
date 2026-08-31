@@ -149,6 +149,8 @@
             android:name=".settings.TorrentSettingsActivity"
             android:parentActivityName=".MainActivity" />
         <activity android:name=".settings.AnilistSettingsActivity"/>
+        <activity android:name=".forum.ForumActivity" />
+        <activity android:name=".forum.ThreadViewActivity" />
         <activity android:name=".settings.UserInterfaceSettingsActivity" />
         <activity android:name=".settings.PlayerSettingsActivity" />
         <activity android:name=".settings.ReaderSettingsActivity" />

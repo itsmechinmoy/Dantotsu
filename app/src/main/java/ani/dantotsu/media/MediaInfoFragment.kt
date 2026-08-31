@@ -745,6 +745,28 @@ class MediaInfoFragment : Fragment() {
                     parent.addView(bind.root)
                 }
 
+                if (!media.rankings.isNullOrEmpty() && !offline) {
+                    val bind = ItemTitleChipgroupBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    )
+                    bind.root.tag = "dynamic_view"
+                    bind.itemTitle.text = "Rankings"
+                    media.rankings?.forEach { rank ->
+                        val chip = ItemChipBinding.inflate(
+                            LayoutInflater.from(context),
+                            bind.itemChipGroup,
+                            false
+                        ).root
+                        val seasonYear = if (rank.year != null) "${rank.season ?: ""} ${rank.year}".trim() else ""
+                        val contextStr = rank.context ?: if (rank.allTime == true) "All Time" else seasonYear
+                        chip.text = "#${rank.rank} $contextStr"
+                        bind.itemChipGroup.addView(chip)
+                    }
+                    parent.addView(bind.root)
+                }
+
                 if (!media.externalLinks.isNullOrEmpty() && !offline) {
                     val bind = ItemTitleChipgroupBinding.inflate(
                         LayoutInflater.from(context),
@@ -895,6 +917,7 @@ class MediaInfoFragment : Fragment() {
                         parent.addView(root)
                     }
                 }
+
                 if (!media.recommendations.isNullOrEmpty() && !offline) {
                     ItemTitleRecyclerBinding.inflate(
                         LayoutInflater.from(context),

@@ -170,7 +170,7 @@ class AnilistQueries {
                         val fetchedMedia = response?.data?.media ?: return
                         val user = response?.data?.page
                         media.isFav = fetchedMedia.isFavourite ?: false
-                        media.source = fetchedMedia.source?.toString()
+                        media.source = fetchedMedia.source?.toString()?.replace("_", " ")?.lowercase()?.split(" ")?.joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
                         media.countryOfOrigin = fetchedMedia.countryOfOrigin
                         media.format = fetchedMedia.format?.toString()
                         media.cover = fetchedMedia.coverImage?.large ?: media.cover
@@ -292,7 +292,9 @@ class AnilistQueries {
                         }
                         if (fetchedMedia.recommendations != null) {
                             media.recommendations = arrayListOf()
+                            media.recommendationList = arrayListOf()
                             fetchedMedia.recommendations?.nodes?.forEach { i ->
+                                media.recommendationList?.add(i)
                                 i.mediaRecommendation?.apply {
                                     media.recommendations?.add(
                                         Media(this)
@@ -300,6 +302,8 @@ class AnilistQueries {
                                 }
                             }
                         }
+                        media.stats = fetchedMedia.stats
+                        media.rankings = fetchedMedia.rankings
                         if (fetchedMedia.reviews?.nodes != null) {
                             media.review = fetchedMedia.reviews!!.nodes as ArrayList<Query.Review>
                         }
@@ -356,7 +360,18 @@ class AnilistQueries {
 
                             fetchedMedia.studios?.nodes?.apply {
                                 if (isNotEmpty()) {
-                                    val studioNode = get(0)
+                                    val studioNode = firstOrNull { it.isAnimationStudio == true } ?: get(0)
+                                    media.anime.mainStudio = Studio(
+                                        studioNode.id.toString(),
+                                        studioNode.name ?: "N/A",
+                                        studioNode.isFavourite ?: false,
+                                        studioNode.favourites ?: 0,
+                                        null
+                                    )
+                                }
+                            }
+                            if (media.anime.mainStudio == null) {
+                                fetchedMedia.producers?.nodes?.firstOrNull { it.isAnimationStudio == true }?.let { studioNode ->
                                     media.anime.mainStudio = Studio(
                                         studioNode.id.toString(),
                                         studioNode.name ?: "N/A",
@@ -367,10 +382,11 @@ class AnilistQueries {
                                 }
                             }
 
-                            // Map non-main studios (isMain: false) as producers
+                            // Map non-main studios (isMain: false) as producers, excluding mainStudio
                             fetchedMedia.producers?.nodes?.apply {
-                                if (isNotEmpty()) {
-                                    media.anime.producers = map {
+                                val remaining = filter { it.id.toString() != media.anime.mainStudio?.id }
+                                if (remaining.isNotEmpty()) {
+                                    media.anime.producers = remaining.map {
                                         Studio(
                                             it.id.toString(),
                                             it.name ?: "N/A",
@@ -1915,5 +1931,63 @@ Page(page:$page,perPage:50) {
             AnilistMutations.FavType.STUDIO -> res?.data?.user?.favourites?.studios?.nodes?.any { it.id == id }
                 ?: false
         }
+    }
+
+    suspend fun getThreads(
+        categoryId: Int? = null,
+        mediaCategoryId: Int? = null,
+        search: String? = null,
+        sort: String = "ID_DESC",
+        page: Int = 1
+    ): ani.dantotsu.connections.anilist.api.ForumThreadsResponse? {
+        val categoryArg = if (categoryId != null) ", categoryId: $categoryId" else ""
+        val mediaCategoryArg = if (mediaCategoryId != null) ", mediaCategoryId: $mediaCategoryId" else ""
+        val searchArg = if (!search.isNullOrBlank()) ", search: \"$search\"" else ""
+        val query = """{Page(page:$page,perPage:25){pageInfo{hasNextPage currentPage}threads(sort:[$sort] $categoryArg $mediaCategoryArg $searchArg){id title body userId replyCount viewCount isLocked isSticky isSubscribed isLiked likeCount createdAt updatedAt siteUrl user{id name avatar{medium large}bannerImage}categories{id name}mediaCategories{id title{userPreferred}coverImage{medium}}}}}"""
+        return executeQuery(query, force = true)
+    }
+
+    suspend fun getThreadDetails(threadId: Int): ani.dantotsu.connections.anilist.api.ForumThreadsResponse? {
+        val query = """{Thread(id:$threadId){id title body userId replyCount viewCount isLocked isSticky isSubscribed isLiked likeCount createdAt updatedAt siteUrl user{id name avatar{medium large}bannerImage}categories{id name}mediaCategories{id title{userPreferred}coverImage{medium}}}}"""
+        return executeQuery(query, force = true)
+    }
+
+    suspend fun getThreadComments(threadId: Int, page: Int = 1): ani.dantotsu.connections.anilist.api.ThreadCommentsResponse? {
+        val query = """{Page(page:$page,perPage:25){pageInfo{hasNextPage currentPage}threadComments(threadId:$threadId){id userId threadId comment isLocked isLiked likeCount createdAt updatedAt siteUrl user{id name avatar{medium large}bannerImage}childComments}}}"""
+        return executeQuery(query, force = true)
+    }
+
+    suspend fun getMediaCharacters(mediaId: Int, page: Int = 1): Query.Media? {
+        val query = """{Media(id:$mediaId){characters(sort:[ROLE,FAVOURITES_DESC],page:$page,perPage:25){pageInfo{hasNextPage currentPage}edges{role voiceActors{id name{userPreferred}image{medium large}languageV2}node{id name{userPreferred}image{medium large}isFavourite}}}}}"""
+        return executeQuery(query, force = true)
+    }
+
+    suspend fun getMediaStaff(mediaId: Int, page: Int = 1): Query.Media? {
+        val query = """{Media(id:$mediaId){staff(sort:[RELEVANCE,ID],page:$page,perPage:25){pageInfo{hasNextPage currentPage}edges{role node{id name{userPreferred}image{medium large}}}}}}"""
+        return executeQuery(query, force = true)
+    }
+
+    suspend fun getUserRawBio(userId: Int): String? {
+        val query = """{User(id:$userId){about(asHtml:false)}}"""
+        val res = executeQuery<UserBioResponse>(query, force = true)
+        return res?.data?.user?.about
+    }
+}
+
+@kotlinx.serialization.Serializable
+data class UserBioResponse(
+    @kotlinx.serialization.SerialName("data")
+    val data: Data? = null
+) : java.io.Serializable {
+    @kotlinx.serialization.Serializable
+    data class Data(
+        @kotlinx.serialization.SerialName("User")
+        val user: BioUser? = null
+    ) : java.io.Serializable {
+        @kotlinx.serialization.Serializable
+        data class BioUser(
+            @kotlinx.serialization.SerialName("about")
+            val about: String? = null
+        ) : java.io.Serializable
     }
 }
