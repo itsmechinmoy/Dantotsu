@@ -13,7 +13,21 @@ class UrlMedia : Activity() {
         ThemeManager(this).applyTheme()
         val data: Uri? = intent?.data
         if (data == null) {
-            startMainActivity(this)
+            val extras = intent?.extras
+            val mediaId = extras?.getInt("mediaId", 0)?.takeIf { it != 0 }
+                ?: extras?.getInt("media", 0)?.takeIf { it != 0 }
+            if (mediaId != null && mediaId > 0) {
+                val mediaType = extras?.getString("mediaType") ?: "ANIME"
+                val isMAL = extras?.getBoolean("mal", false) ?: false
+                val continueMedia = extras?.getBoolean("continue", true) ?: true
+                loadMedia = mediaId
+                startMainActivity(
+                    this,
+                    createMediaBundle(mediaId, isMAL, continueMedia, mediaType)
+                )
+            } else {
+                startMainActivity(this)
+            }
             return
         }
 
@@ -49,7 +63,7 @@ class UrlMedia : Activity() {
         }
 
         val isMAL = uri.getBooleanQueryParameter("mal", false) || uri.getQueryParameter("source")?.equals("mal", ignoreCase = true) == true
-        val continueMedia = uri.getBooleanQueryParameter("continue", false)
+        val continueMedia = uri.getBooleanQueryParameter("continue", false) || action == "watch" || action == "read"
 
         when (action) {
             "anime", "watch" -> {
@@ -118,7 +132,8 @@ class UrlMedia : Activity() {
             return
         }
 
-        var id: Int? = intent?.extras?.getInt("media", 0) ?: 0
+        var id: Int? = intent?.extras?.getInt("mediaId", 0)?.takeIf { it != 0 }
+            ?: intent?.extras?.getInt("media", 0) ?: 0
         var isMAL = false
         var continueMedia = true
         if (id == 0) {
@@ -144,7 +159,9 @@ class UrlMedia : Activity() {
     private fun handleFallbackScheme(data: Uri) {
         val type = data.pathSegments?.getOrNull(0)
         if (type != "user") {
-            val id = data.pathSegments?.getOrNull(1)?.toIntOrNull() ?: intent?.extras?.getInt("media", 0) ?: 0
+            val id = data.pathSegments?.getOrNull(1)?.toIntOrNull()
+                ?: intent?.extras?.getInt("mediaId", 0)?.takeIf { it != 0 }
+                ?: intent?.extras?.getInt("media", 0) ?: 0
             val isMAL = data.host != "anilist.co"
             val mediaType = type?.uppercase()
             startMainActivity(

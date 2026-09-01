@@ -403,11 +403,12 @@ class MainActivity : AppCompatActivity() {
                 if (!load && !launched) {
                     scope.launch(Dispatchers.IO) {
                         model.loadMain(this@MainActivity)
-                        val id = intent.extras?.getInt("mediaId", 0)
+                        val id = intent.extras?.getInt("mediaId", 0)?.takeIf { it != 0 }
+                            ?: intent.extras?.getInt("media", 0) ?: 0
                         val isMAL = intent.extras?.getBoolean("mal") ?: false
                         val cont = intent.extras?.getBoolean("continue") ?: false
                         val mediaType = intent.extras?.getString("mediaType")
-                        if (id != null && id != 0) {
+                        if (id != 0) {
                             val media = withContext(Dispatchers.IO) {
                                 Anilist.query.getMedia(id, isMAL, mediaType)
                             }
@@ -687,7 +688,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            val id = extras.getInt("mediaId", 0)
+            val id = extras.getInt("mediaId", 0).takeIf { it != 0 }
+                ?: extras.getInt("media", 0)
             val isMAL = extras.getBoolean("mal", false)
             val cont = extras.getBoolean("continue", false)
             val mediaType = extras.getString("mediaType")

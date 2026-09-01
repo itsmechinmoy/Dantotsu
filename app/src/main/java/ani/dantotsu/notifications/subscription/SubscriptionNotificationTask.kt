@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import ani.dantotsu.App
 import ani.dantotsu.FileUrl
+import ani.dantotsu.MainActivity
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.UrlMedia
 import ani.dantotsu.hasNotificationPermission
@@ -177,7 +178,7 @@ class SubscriptionNotificationTask : Task {
         text: String,
         thumbnail: FileUrl?
     ): android.app.Notification {
-        val pendingIntent = getIntent(context, media.id)
+        val pendingIntent = getIntent(context, media)
         val icon =
             if (media.isAnime) R.drawable.ic_round_movie_filter_24 else R.drawable.ic_round_menu_book_24
 
@@ -223,19 +224,26 @@ class SubscriptionNotificationTask : Task {
     }
 
 
-    private fun getIntent(context: Context, mediaId: Int): PendingIntent {
-        val notifyIntent = Intent(context, UrlMedia::class.java)
-            .putExtra("media", mediaId)
-            .setAction(mediaId.toString())
-            .apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            }
+    private fun getIntent(
+        context: Context,
+        media: SubscriptionHelper.Companion.SubscribeMedia
+    ): PendingIntent {
+        val notifyIntent = Intent(context, MainActivity::class.java).apply {
+            putExtra("mediaId", media.id)
+            putExtra("media", media.id)
+            putExtra("mediaType", if (media.isAnime) "ANIME" else "MANGA")
+            putExtra("continue", true)
+            action = "SUBSCRIPTION_${media.id}"
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
         return PendingIntent.getActivity(
-            context, mediaId, notifyIntent,
+            context,
+            media.id,
+            notifyIntent,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             } else {
-                PendingIntent.FLAG_ONE_SHOT
+                PendingIntent.FLAG_UPDATE_CURRENT
             }
         )
     }
