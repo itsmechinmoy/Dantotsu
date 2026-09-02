@@ -205,6 +205,8 @@ class MangaReadAdapter(
             openSettings(fragment.requireContext(), CHANNEL_SUBSCRIPTION_CHECK)
         }
 
+        binding.mediaTorrentButton.visibility = View.GONE
+
         binding.mediaNestedButton.setOnClickListener {
             val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
             var refresh = false
