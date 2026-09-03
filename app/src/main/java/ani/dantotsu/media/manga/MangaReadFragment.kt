@@ -534,6 +534,10 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                 }
             }
             fun continueDownload() {
+                if (PrefManager.getVal<Boolean>(PrefName.DownloadWifiOnly) && !ani.dantotsu.isWifiConnected(requireContext())) {
+                    snackString(getString(R.string.download_wifi_only_warning))
+                    return
+                }
                 val uniqueNum = i.uniqueNumber()
                 if (chapterAdapter.isDownloading(uniqueNum) || chapterAdapter.isDownloaded(uniqueNum)) {
                     return

@@ -195,6 +195,16 @@ class SettingsCommonActivity : AppCompatActivity() {
                             },
                         ),
                         Settings(
+                            type = 2,
+                            name = getString(R.string.download_wifi_only),
+                            desc = getString(R.string.download_wifi_only_desc),
+                            icon = R.drawable.lan_24,
+                            isChecked = PrefManager.getVal(PrefName.DownloadWifiOnly),
+                            switch = { isChecked, _ ->
+                                PrefManager.setVal(PrefName.DownloadWifiOnly, isChecked)
+                            }
+                        ),
+                        Settings(
                             type = 1,
                             name = getString(R.string.app_lock),
                             desc = getString(R.string.app_lock_desc),

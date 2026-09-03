@@ -98,7 +98,8 @@ class TorrentServerManager(private val context: Context) {
             }
 
             // WiFi Only
-            val wifiOnly = PrefManager.getVal<Boolean>(PrefName.TorrentWifiOnly)
+            val wifiOnly = PrefManager.getVal<Boolean>(PrefName.TorrentWifiOnly) ||
+                PrefManager.getVal<Boolean>(PrefName.DownloadWifiOnly)
             if (wifiOnly) {
                 val wifiInterface = getActiveWifiInterface() ?: "wlan0"
                 settings.setString(org.libtorrent4j.swig.settings_pack.string_types.outgoing_interfaces.swigValue(), wifiInterface)

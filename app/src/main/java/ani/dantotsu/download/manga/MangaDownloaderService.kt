@@ -145,6 +145,13 @@ class MangaDownloaderService : Service() {
 
             while (MangaServiceDataSingleton.downloadQueue.isNotEmpty()) {
                 val task = MangaServiceDataSingleton.downloadQueue.poll() ?: continue
+                if (PrefManager.getVal<Boolean>(PrefName.DownloadWifiOnly) && !ani.dantotsu.isWifiConnected(this@MangaDownloaderService)) {
+                    broadcastDownloadFailed(task.chapter)
+                    withContext(Dispatchers.Main) {
+                        snackString(getString(R.string.download_wifi_only_warning))
+                    }
+                    continue
+                }
                 val taskKey = "${task.title}_${task.chapter}"
                 val job = launch {
                     semaphore.withPermit {
@@ -210,6 +217,13 @@ class MangaDownloaderService : Service() {
     }
 
     suspend fun download(task: DownloadTask) {
+        if (PrefManager.getVal<Boolean>(PrefName.DownloadWifiOnly) && !ani.dantotsu.isWifiConnected(this@MangaDownloaderService)) {
+            broadcastDownloadFailed(task.chapter)
+            withContext(Dispatchers.Main) {
+                snackString(getString(R.string.download_wifi_only_warning))
+            }
+            return
+        }
         try {
             withContext(Dispatchers.IO) {
                 val notifi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

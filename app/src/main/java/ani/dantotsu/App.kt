@@ -294,6 +294,7 @@ class App : Application(), GraphProvider<AppGraph> {
         override fun onActivityResumed(p0: Activity) {
             currentActivity = p0
             updateDiscordPresence(p0)
+            applySystemFont(p0)
         }
 
         override fun onActivityPaused(p0: Activity) {}

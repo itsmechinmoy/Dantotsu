@@ -63,6 +63,10 @@ class ThemeManager(private val context: Activity) {
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
         window.statusBarColor = 0x00000000
         context.setTheme(themeToApply)
+        val useSystemFont = PrefManager.getVal<Boolean>(PrefName.UseSystemFont)
+        if (useSystemFont) {
+            context.theme.applyStyle(R.style.ThemeOverlay_Dantotsu_SystemFont, true)
+        }
         window.decorView.layoutDirection = View.LAYOUT_DIRECTION_LTR
     }
 
@@ -99,6 +103,10 @@ class ThemeManager(private val context: Activity) {
         if (useOLED) {
             builder.setThemeOverlay(R.style.AppTheme_Amoled)
         }
+        val useSystemFont = PrefManager.getVal<Boolean>(PrefName.UseSystemFont)
+        if (useSystemFont) {
+            builder.setThemeOverlay(R.style.ThemeOverlay_Dantotsu_SystemFont)
+        }
         if (needMaterial && !useMaterialYou) return true
 
         // Build the options
@@ -113,6 +121,12 @@ class ThemeManager(private val context: Activity) {
                 .setThemeOverlay(R.style.AppTheme_Amoled)
                 .build()
             DynamicColors.applyToActivityIfAvailable(activity, options2)
+        }
+        if (useSystemFont) {
+            val optionsFont = DynamicColorsOptions.Builder()
+                .setThemeOverlay(R.style.ThemeOverlay_Dantotsu_SystemFont)
+                .build()
+            DynamicColors.applyToActivityIfAvailable(activity, optionsFont)
         }
 
         return false

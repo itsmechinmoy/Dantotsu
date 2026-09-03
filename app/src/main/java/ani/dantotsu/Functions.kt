@@ -19,6 +19,7 @@ import android.content.res.Configuration
 import android.content.res.Resources.getSystem
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.media.MediaScannerConnection
 import android.net.ConnectivityManager
@@ -256,6 +257,69 @@ fun initActivity(a: Activity) {
             }
         }
     if (a !is MainActivity) a.setNavigationTheme()
+    applySystemFont(a)
+}
+
+fun applySystemFont(activity: Activity) {
+    if (!PrefManager.getVal<Boolean>(PrefName.UseSystemFont)) return
+
+    val decorView = activity.window.decorView
+    applySystemFontToViewTree(decorView)
+
+    decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+        override fun onGlobalLayout() {
+            applySystemFontToViewTree(decorView)
+        }
+    })
+}
+
+fun applySystemFontToViewTree(view: View) {
+    if (view is TextView) {
+        applySystemFontToTextView(view)
+    } else if (view is ViewGroup) {
+        if (view is RecyclerView) {
+            if (view.getTag(R.id.tag_system_font_applied) != true) {
+                view.setTag(R.id.tag_system_font_applied, true)
+                view.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
+                    override fun onChildViewAttachedToWindow(child: View) {
+                        applySystemFontToViewTree(child)
+                    }
+                    override fun onChildViewDetachedFromWindow(child: View) {}
+                })
+            }
+        }
+        for (i in 0 until view.childCount) {
+            applySystemFontToViewTree(view.getChildAt(i))
+        }
+    }
+}
+
+private fun applySystemFontToTextView(textView: TextView) {
+    if (textView.getTag(R.id.tag_system_font_applied) == true) return
+    textView.setTag(R.id.tag_system_font_applied, true)
+
+    val currentTf = textView.typeface
+    val isBold = currentTf?.isBold == true
+    val isItalic = currentTf?.isItalic == true
+    val style = when {
+        isBold && isItalic -> Typeface.BOLD_ITALIC
+        isBold -> Typeface.BOLD
+        isItalic -> Typeface.ITALIC
+        else -> Typeface.NORMAL
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && currentTf != null && currentTf.weight > 0) {
+        val weight = when {
+            currentTf.weight >= 700 -> Typeface.BOLD
+            currentTf.weight >= 600 -> 600
+            currentTf.weight >= 500 -> 500
+            currentTf.weight <= 300 -> 300
+            else -> 400
+        }
+        textView.typeface = Typeface.create(Typeface.DEFAULT, weight, isItalic)
+    } else {
+        textView.setTypeface(Typeface.DEFAULT, style)
+    }
 }
 
 fun Activity.hideSystemBars() {
@@ -501,6 +565,23 @@ fun isOnline(context: Context): Boolean {
                         type == ConnectivityManager.TYPE_WIFI ||
                         type == ConnectivityManager.TYPE_WIMAX ||
                         type == ConnectivityManager.TYPE_VPN
+            } ?: false
+        }
+    } ?: false
+}
+
+fun isWifiConnected(context: Context): Boolean {
+    val connectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+    return tryWith {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = connectivityManager.activeNetwork ?: return@tryWith false
+            val cap = connectivityManager.getNetworkCapabilities(network) ?: return@tryWith false
+            cap.hasTransport(TRANSPORT_WIFI) || cap.hasTransport(TRANSPORT_ETHERNET) || cap.hasTransport(TRANSPORT_WIFI_AWARE)
+        } else {
+            @Suppress("DEPRECATION")
+            connectivityManager.activeNetworkInfo?.run {
+                isConnected && (type == ConnectivityManager.TYPE_WIFI || type == ConnectivityManager.TYPE_ETHERNET)
             } ?: false
         }
     } ?: false

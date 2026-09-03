@@ -37,6 +37,11 @@
 
     <style name="Theme.Dantotsu.PopupOverlay" parent="Theme.Dantotsu" />
 
+    <style name="ThemeOverlay.Dantotsu.SystemFont" parent="">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="fontFamily">sans-serif</item>
+    </style>
+
     <style name="Theme.Dantotsu.NeverCutout" parent="@style/Theme.Dantotsu.NoActionBar">
         <item name="android:navigationBarColor">?android:colorBackground</item>
     </style>
