@@ -21,39 +21,15 @@ class JikanQueries {
     }
 
     private suspend fun rateLimitedGet(url: String): com.lagradost.nicehttp.NiceResponse {
-        var lastResponse: com.lagradost.nicehttp.NiceResponse? = null
-        var lastException: Exception? = null
-        var delayMs = 1000L
-        val maxAttempts = 3
-
-        for (attempt in 1..maxAttempts) {
-            rateMutex.withLock {
-                val now = System.currentTimeMillis()
-                val elapsed = now - lastRequestTime
-                if (elapsed < MIN_INTERVAL_MS) {
-                    delay(MIN_INTERVAL_MS - elapsed)
-                }
-                lastRequestTime = System.currentTimeMillis()
+        rateMutex.withLock {
+            val now = System.currentTimeMillis()
+            val elapsed = now - lastRequestTime
+            if (elapsed < MIN_INTERVAL_MS) {
+                delay(MIN_INTERVAL_MS - elapsed)
             }
-
-            try {
-                val response = client.get(url)
-                lastResponse = response
-                if (response.code != 429) {
-                    return response
-                }
-            } catch (e: Exception) {
-                lastException = e
-            }
-
-            if (attempt < maxAttempts) {
-                val jitter = (0..200).random().toLong()
-                delay(delayMs + jitter)
-                delayMs *= 2
-            }
+            lastRequestTime = System.currentTimeMillis()
         }
-
-        return lastResponse ?: throw (lastException ?: Exception("Request failed after $maxAttempts attempts"))
+        return client.get(url)
     }
 
     private suspend inline fun <reified T : Any> fetchWithFallback(path: String): T? {

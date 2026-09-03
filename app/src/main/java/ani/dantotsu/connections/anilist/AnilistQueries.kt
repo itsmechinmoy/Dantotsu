@@ -456,6 +456,12 @@ class AnilistQueries {
                 }
             }
             val mal = async {
+                if (media.idMAL == null) {
+                    anilist.await()
+                }
+                if (media.idMAL == null && media.id != 0) {
+                    media.idMAL = ani.dantotsu.others.IdMappers.getMalId(media.id)
+                }
                 if (media.idMAL != null) {
                     MalScraper.loadMedia(media)
                 }
