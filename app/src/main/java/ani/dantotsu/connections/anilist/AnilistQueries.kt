@@ -624,6 +624,38 @@ class AnilistQueries {
         return """ Page(page: $page, perPage:$perPage) { $standardPageInformation recommendations(sort: $sort, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress progressVolumes private score(format:POINT_100) status } chapters volumes isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
     }
 
+    suspend fun getRecommendations(page: Int, perPage: Int = 50): Pair<ArrayList<Media>, Boolean> {
+        val query = """{
+            recRating: ${recommendationQuery("RATING_DESC", page, perPage)}
+            recNew: ${recommendationQuery("ID_DESC", page, perPage)}
+        }"""
+        val response = executeQuery<Query.RecommendationsResponse>(query, show = true)
+        val subMap = mutableMapOf<Int, Media>()
+
+        response?.data?.recRating?.recommendations?.forEach {
+            it.mediaRecommendation?.let { json ->
+                val media = Media(json)
+                if (media.userStatus == null) {
+                    media.relation = json.type?.toString()
+                    subMap[media.id] = media
+                }
+            }
+        }
+        response?.data?.recNew?.recommendations?.forEach {
+            it.mediaRecommendation?.let { json ->
+                val media = Media(json)
+                if (media.userStatus == null) {
+                    media.relation = json.type?.toString()
+                    subMap[media.id] = media
+                }
+            }
+        }
+        val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
+        val hasNext = response?.data?.recRating?.pageInfo?.hasNextPage == true ||
+                response?.data?.recNew?.pageInfo?.hasNextPage == true
+        return Pair(list, hasNext)
+    }
+
     private fun missingSequelsCompletedSourceQuery(): String {
         return """ MediaListCollection( userId: ${Anilist.userid}, type: ANIME, status: COMPLETED, sort: UPDATED_TIME_DESC ) { lists { entries { media { id relations { edges { relationType(version: 2) node { id } } } } } } } """.trimIndent()
     }
