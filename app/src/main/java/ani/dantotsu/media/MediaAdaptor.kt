@@ -393,14 +393,38 @@ class MediaAdaptor(
                         val availableHeight = (bottom - top) - v.paddingTop - v.paddingBottom
                         val lh = synopsisView.lineHeight
                         if (lh > 0) {
-                            val maxL = availableHeight / lh
-                            if (maxL >= 1) {
-                                if (synopsisView.maxLines != maxL) {
-                                    synopsisView.maxLines = maxL
+                            val maxL = (availableHeight / lh).coerceIn(1, 2)
+                            if (synopsisView.maxLines != maxL) {
+                                synopsisView.maxLines = maxL
+                            }
+                            synopsisView.alpha = 0.72f
+                        } else {
+                            synopsisView.alpha = 0f
+                        }
+                        v.post {
+                            if (!synopsisView.text.endsWith("...")) {
+                                val layout = synopsisView.layout ?: return@post
+                                val lineCount = layout.lineCount
+                                if (lineCount > 0) {
+                                    val lastLine = (lineCount - 1).coerceAtMost(synopsisView.maxLines - 1)
+                                    val lineEnd = layout.getLineEnd(lastLine)
+                                    if (lineEnd in 1 until cleanDesc.length) {
+                                        val ellipsisCount = layout.getEllipsisCount(lastLine)
+                                        if (ellipsisCount == 0) {
+                                            val currentText = synopsisView.text.toString()
+                                            val visible = if (lineEnd <= currentText.length) currentText.substring(0, lineEnd).trimEnd() else currentText.trimEnd()
+                                            val lastSpace = visible.lastIndexOf(' ')
+                                            val truncated = if (lastSpace > visible.length - 12 && lastSpace > 0) {
+                                                visible.substring(0, lastSpace).trimEnd() + "..."
+                                            } else if (visible.length > 3) {
+                                                visible.dropLast(3).trimEnd() + "..."
+                                            } else {
+                                                visible + "..."
+                                            }
+                                            synopsisView.text = truncated
+                                        }
+                                    }
                                 }
-                                synopsisView.alpha = 0.72f
-                            } else {
-                                synopsisView.alpha = 0f
                             }
                         }
                     }
