@@ -164,6 +164,9 @@ data class Media(
                 })
             }
         }
+        apiMedia.tags?.let { tagList ->
+            this.tags = ArrayList(tagList.mapNotNull { it.name })
+        }
     }
 
     constructor(mediaList: MediaList) : this(mediaList.media!!) {
@@ -177,6 +180,9 @@ data class Media(
         this.userCompletedAt = mediaList.completedAt ?: FuzzyDate()
         this.genres =
             mediaList.media?.genres?.toMutableList() as? ArrayList<String>? ?: arrayListOf()
+        mediaList.media?.tags?.let { tagList ->
+            this.tags = ArrayList(tagList.mapNotNull { it.name })
+        }
     }
 
     constructor(mediaEdge: MediaEdge) : this(mediaEdge.node!!) {
