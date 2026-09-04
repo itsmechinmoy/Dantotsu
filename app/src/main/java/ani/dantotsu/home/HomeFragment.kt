@@ -27,7 +27,7 @@ import ani.dantotsu.MainActivity
 import ani.dantotsu.R
 import ani.dantotsu.Refresh
 import ani.dantotsu.blurImage
-import ani.dantotsu.bottomBar
+import ani.dantotsu.bottomBarOrNull
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.connections.anilist.AnilistHomeViewModel
@@ -77,6 +77,9 @@ class HomeFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            _binding?.homeScroll?.setOnScrollChangeListener(null as View.OnScrollChangeListener?)
+        }
         super.onDestroyView()
         Refresh.activity.remove(this.hashCode())
         _binding = null
@@ -203,15 +206,16 @@ class HomeFragment : Fragment() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             binding.homeScroll.setOnScrollChangeListener { _, _, _, _, _ ->
+                val bar = bottomBarOrNull ?: return@setOnScrollChangeListener
                 if (!binding.homeScroll.canScrollVertically(1)) {
                     reached = true
-                    bottomBar.animate().translationZ(0f).setDuration(duration).start()
-                    ObjectAnimator.ofFloat(bottomBar, "elevation", 4f, 0f).setDuration(duration)
+                    bar.animate().translationZ(0f).setDuration(duration).start()
+                    ObjectAnimator.ofFloat(bar, "elevation", 4f, 0f).setDuration(duration)
                         .start()
                 } else {
                     if (reached) {
-                        bottomBar.animate().translationZ(12f).setDuration(duration).start()
-                        ObjectAnimator.ofFloat(bottomBar, "elevation", 0f, 4f).setDuration(duration)
+                        bar.animate().translationZ(12f).setDuration(duration).start()
+                        ObjectAnimator.ofFloat(bar, "elevation", 0f, 4f).setDuration(duration)
                             .start()
                     }
                 }
@@ -348,7 +352,7 @@ class HomeFragment : Fragment() {
             getString(R.string.continue_watching)
         )
         binding.homeWatchingBrowseButton.setOnClickListener {
-            bottomBar.selectTabAt(0)
+            bottomBarOrNull?.selectTabAt(0)
         }
 
         initRecyclerView(
@@ -373,7 +377,7 @@ class HomeFragment : Fragment() {
             getString(R.string.planned_anime)
         )
         binding.homePlannedAnimeBrowseButton.setOnClickListener {
-            bottomBar.selectTabAt(0)
+            bottomBarOrNull?.selectTabAt(0)
         }
 
         initRecyclerView(
@@ -398,7 +402,7 @@ class HomeFragment : Fragment() {
             getString(R.string.continue_reading)
         )
         binding.homeReadingBrowseButton.setOnClickListener {
-            bottomBar.selectTabAt(2)
+            bottomBarOrNull?.selectTabAt(2)
         }
 
         initRecyclerView(
@@ -423,7 +427,7 @@ class HomeFragment : Fragment() {
             getString(R.string.planned_manga)
         )
         binding.homePlannedMangaBrowseButton.setOnClickListener {
-            bottomBar.selectTabAt(2)
+            bottomBarOrNull?.selectTabAt(2)
         }
 
         initRecyclerView(
