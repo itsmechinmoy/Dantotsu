@@ -232,6 +232,10 @@ nextAiringEpisode {
 }
 type
 genres
+tags {
+  name
+  isMediaSpoiler
+}
 meanScore
 popularity
 favourites
