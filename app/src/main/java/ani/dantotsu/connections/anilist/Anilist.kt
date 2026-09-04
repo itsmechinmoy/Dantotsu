@@ -63,7 +63,9 @@ object Anilist {
         "START_DATE_DESC",
         "TITLE_ENGLISH",
         "TITLE_ENGLISH_DESC",
-        "SCORE"
+        "SCORE",
+        "FAVOURITES_DESC",
+        "UPDATED_AT_DESC"
     )
 
     val source = listOf(
