@@ -620,8 +620,8 @@ class AnilistQueries {
         return """User(id:${id}){id favourites{${if (anime) "anime" else "manga"}(page:$page){$standardPageInformation edges{favouriteOrder node{id idMal isAdult mediaListEntry{ progress private score(format:POINT_100) status } chapters isFavourite format episodes nextAiringEpisode{episode}meanScore isFavourite format startDate{year month day} title{english romaji userPreferred}type status(version:2)bannerImage coverImage{large}}}}}}"""
     }
 
-    private fun recommendationQuery(): String {
-        return """ Page(page: 1, perPage:30) { $standardPageInformation recommendations(sort: RATING_DESC, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress progressVolumes private score(format:POINT_100) status } chapters volumes isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
+    private fun recommendationQuery(sort: String = "RATING_DESC", page: Int = 1, perPage: Int = 50): String {
+        return """ Page(page: $page, perPage:$perPage) { $standardPageInformation recommendations(sort: $sort, onList: true) { rating userRating mediaRecommendation { id idMal isAdult mediaListEntry { progress progressVolumes private score(format:POINT_100) status } chapters volumes isFavourite format episodes nextAiringEpisode {episode} popularity meanScore isFavourite format title {english romaji userPreferred } type status(version: 2) bannerImage coverImage { large } } } } """
     }
 
     private fun missingSequelsCompletedSourceQuery(): String {
@@ -711,7 +711,8 @@ class AnilistQueries {
             }"""
         )
         if (toShow.getOrNull(6) == true) {
-            queries.add("""recommendationQuery: ${recommendationQuery()}""")
+            queries.add("""recommendationQuery: ${recommendationQuery("RATING_DESC", 1, 50)}""")
+            queries.add("""recommendationQueryNew: ${recommendationQuery("ID_DESC", 1, 50)}""")
         }
         if (toShow.getOrNull(8) == true) {
             queries.add("""missingSequelsCompletedQuery: ${missingSequelsCompletedSourceQuery()}""")
@@ -840,6 +841,15 @@ class AnilistQueries {
                     }
                 }
             }
+            response?.data?.recommendationQueryNew?.recommendations?.forEach {
+                it.mediaRecommendation?.let { json ->
+                    val media = Media(json)
+                    if (media.userStatus == null) {
+                        media.relation = json.type?.toString()
+                        subMap[media.id] = media
+                    }
+                }
+            }
             val list = ArrayList(subMap.values).apply { sortByDescending { it.meanScore } }
             returnMap["recommendations"] = list
         }
@@ -953,7 +963,7 @@ class AnilistQueries {
         sortOrder: String? = null
     ): MutableMap<String, ArrayList<Media>> {
         val response =
-            executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: $userId, type: ${if (anime) "ANIME" else "MANGA"}) { lists { name isCustomList entries { status progress progressVolumes private score(format:POINT_100) updatedAt startedAt{year month day} completedAt{year month day} media { id idMal isAdult type status chapters volumes episodes nextAiringEpisode {episode} bannerImage genres meanScore isFavourite format coverImage{large} startDate{year month day} title {english romaji userPreferred } } } } user { id mediaListOptions { rowOrder animeList { sectionOrder } mangaList { sectionOrder } } } } }""")
+            executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: $userId, type: ${if (anime) "ANIME" else "MANGA"}) { lists { name isCustomList entries { status progress progressVolumes private score(format:POINT_100) updatedAt startedAt{year month day} completedAt{year month day} media { id idMal isAdult type status chapters volumes episodes nextAiringEpisode {episode} bannerImage genres tags { name isMediaSpoiler } meanScore isFavourite format coverImage{large} startDate{year month day} title {english romaji userPreferred } } } } user { id mediaListOptions { rowOrder animeList { sectionOrder } mangaList { sectionOrder } } } } }""")
         val sorted = mutableMapOf<String, ArrayList<Media>>()
         val unsorted = mutableMapOf<String, ArrayList<Media>>()
         val all = arrayListOf<Media>()
