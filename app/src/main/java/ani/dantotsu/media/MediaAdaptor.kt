@@ -327,6 +327,10 @@ class MediaAdaptor(
                     )
                     if (media.genres.isNotEmpty()) {
                         b.itemCompactGenres.text = media.genres.joinToString(" • ")
+                    } else if (media.tags.isNotEmpty()) {
+                        b.itemCompactGenres.text = media.tags.take(3).joinToString(" • ")
+                    } else {
+                        b.itemCompactGenres.text = ""
                     }
                     b.itemCompactStatus.text = media.status ?: ""
                     if (media.anime != null) {
