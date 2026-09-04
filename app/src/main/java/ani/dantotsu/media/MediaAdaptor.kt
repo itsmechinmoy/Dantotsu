@@ -41,7 +41,7 @@ import java.io.Serializable
 
 class MediaAdaptor(
     var type: Int,
-    private val mediaList: MutableList<Media>?,
+    val mediaList: MutableList<Media>?,
     private val activity: FragmentActivity,
     private val matchParent: Boolean = false,
     private val viewPager: ViewPager2? = null,
@@ -311,7 +311,13 @@ class MediaAdaptor(
                     b.itemCompactOngoing.isVisible =
                         media.status == currActivity()!!.getString(R.string.status_releasing)
                     b.itemCompactTitle.text = media.userPreferredName
-                    bindCarouselLogo(media, b.itemCompactTitle, b.itemCompactLogo)
+                    bindCarouselLogo(
+                        media,
+                        b.itemCompactTitle,
+                        b.itemCompactLogo,
+                        b.itemCompactSynopsis,
+                        b.itemCompactLogoContainer
+                    )
                     b.itemCompactScore.text =
                         ((if (media.userScore == 0) (media.meanScore
                             ?: 0) else media.userScore) / 10.0).toString()
@@ -321,6 +327,10 @@ class MediaAdaptor(
                     )
                     if (media.genres.isNotEmpty()) {
                         b.itemCompactGenres.text = media.genres.joinToString(" • ")
+                    } else if (media.tags.isNotEmpty()) {
+                        b.itemCompactGenres.text = media.tags.take(3).joinToString(" • ")
+                    } else {
+                        b.itemCompactGenres.text = ""
                     }
                     b.itemCompactStatus.text = media.status ?: ""
                     if (media.anime != null) {
@@ -353,12 +363,16 @@ class MediaAdaptor(
     private fun bindCarouselLogo(
         media: Media,
         titleView: android.widget.TextView,
-        logoView: ImageView
+        logoView: ImageView,
+        synopsisView: android.widget.TextView? = null,
+        logoContainer: View? = null
     ) {
         val clearLogoEnabled: Boolean = PrefManager.getVal(PrefName.CarouselClearLogo)
         if (!clearLogoEnabled) {
             titleView.visibility = View.VISIBLE
             logoView.visibility = View.GONE
+            logoContainer?.visibility = View.GONE
+            synopsisView?.visibility = View.GONE
             return
         }
 
@@ -368,12 +382,76 @@ class MediaAdaptor(
         fun showLogo(url: String) {
             logoView.loadImage(url)
             logoView.visibility = View.VISIBLE
+            logoContainer?.visibility = View.VISIBLE
             titleView.visibility = View.GONE
+            if (synopsisView != null) {
+                val cleanDesc = media.description?.let { sanitizeDescription(it) }
+                if (!cleanDesc.isNullOrBlank()) {
+                    synopsisView.text = cleanDesc
+                    synopsisView.visibility = View.VISIBLE
+                    val oldListener = synopsisView.getTag(R.id.itemCompactSynopsis) as? View.OnLayoutChangeListener
+                    if (oldListener != null) {
+                        synopsisView.removeOnLayoutChangeListener(oldListener)
+                    }
+                    val newListener = View.OnLayoutChangeListener { v, _, top, _, bottom, _, _, _, _ ->
+                        val availableHeight = (bottom - top) - v.paddingTop - v.paddingBottom
+                        val lh = synopsisView.lineHeight
+                        if (lh > 0) {
+                            val maxL = (availableHeight / lh).coerceIn(1, 2)
+                            if (synopsisView.maxLines != maxL) {
+                                synopsisView.maxLines = maxL
+                            }
+                            synopsisView.alpha = 0.72f
+                        } else {
+                            synopsisView.alpha = 0f
+                        }
+                        v.post {
+                            if (!synopsisView.text.endsWith("...")) {
+                                val layout = synopsisView.layout ?: return@post
+                                val lineCount = layout.lineCount
+                                if (lineCount > 0) {
+                                    val lastLine = (lineCount - 1).coerceAtMost(synopsisView.maxLines - 1)
+                                    val lineEnd = layout.getLineEnd(lastLine)
+                                    if (lineEnd in 1 until cleanDesc.length) {
+                                        val ellipsisCount = layout.getEllipsisCount(lastLine)
+                                        if (ellipsisCount == 0) {
+                                            val currentText = synopsisView.text.toString()
+                                            val visible = if (lineEnd <= currentText.length) currentText.substring(0, lineEnd).trimEnd() else currentText.trimEnd()
+                                            val lastSpace = visible.lastIndexOf(' ')
+                                            val truncated = if (lastSpace > visible.length - 12 && lastSpace > 0) {
+                                                visible.substring(0, lastSpace).trimEnd() + "..."
+                                            } else if (visible.length > 3) {
+                                                visible.dropLast(3).trimEnd() + "..."
+                                            } else {
+                                                visible + "..."
+                                            }
+                                            synopsisView.text = truncated
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    synopsisView.setTag(R.id.itemCompactSynopsis, newListener)
+                    synopsisView.addOnLayoutChangeListener(newListener)
+                } else {
+                    synopsisView.visibility = View.GONE
+                }
+            }
         }
 
         fun showTitle() {
             titleView.visibility = View.VISIBLE
             logoView.visibility = View.GONE
+            logoContainer?.visibility = View.GONE
+            if (synopsisView != null) {
+                val oldListener = synopsisView.getTag(R.id.itemCompactSynopsis) as? View.OnLayoutChangeListener
+                if (oldListener != null) {
+                    synopsisView.removeOnLayoutChangeListener(oldListener)
+                    synopsisView.setTag(R.id.itemCompactSynopsis, null)
+                }
+                synopsisView.visibility = View.GONE
+            }
         }
 
         if (!media.clearLogo.isNullOrBlank()) {
@@ -392,6 +470,19 @@ class MediaAdaptor(
                 }
             }
         }
+    }
+
+    private fun sanitizeDescription(desc: String): String {
+        return desc
+            .replace(Regex("<[^>]*>"), " ")
+            .replace("&amp;", "&")
+            .replace("&quot;", "\"")
+            .replace("&#039;", "'")
+            .replace("&apos;", "'")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
 
     override fun getItemCount() = mediaList!!.size

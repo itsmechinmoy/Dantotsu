@@ -138,7 +138,12 @@ data class Media(
             totalVolumes = apiMedia.volumes
         ) else null,
         format = apiMedia.format?.toString(),
+        description = apiMedia.description,
+        genres = ArrayList(apiMedia.genres ?: emptyList()),
     ) {
+        apiMedia.genres?.let { genreList ->
+            this.genres = ArrayList(genreList)
+        }
         apiMedia.studios?.nodes?.let { nodes ->
             if (nodes.isNotEmpty()) {
                 val studioNode = nodes.firstOrNull { it.isAnimationStudio == true } ?: nodes[0]
@@ -164,6 +169,9 @@ data class Media(
                 })
             }
         }
+        apiMedia.tags?.let { tagList ->
+            this.tags = ArrayList(tagList.mapNotNull { it.name })
+        }
     }
 
     constructor(mediaList: MediaList) : this(mediaList.media!!) {
@@ -177,6 +185,9 @@ data class Media(
         this.userCompletedAt = mediaList.completedAt ?: FuzzyDate()
         this.genres =
             mediaList.media?.genres?.toMutableList() as? ArrayList<String>? ?: arrayListOf()
+        mediaList.media?.tags?.let { tagList ->
+            this.tags = ArrayList(tagList.mapNotNull { it.name })
+        }
     }
 
     constructor(mediaEdge: MediaEdge) : this(mediaEdge.node!!) {

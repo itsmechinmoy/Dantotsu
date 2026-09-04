@@ -599,7 +599,13 @@
         <item>A-Z</item>
         <item>Z-A</item>
         <item>Pure pain</item>
+        <item>Favourites</item>
+        <item>Recently Updated</item>
     </string-array>
+    <string name="filter_on_list">List Filter</string>
+    <string name="filter_on_list_all">All</string>
+    <string name="filter_on_list_in">In My List</string>
+    <string name="filter_on_list_not_in">Not In My List</string>
     <string name="main_role">MAIN</string>
     <string name="supporting_role">SUPPORTING</string>
 

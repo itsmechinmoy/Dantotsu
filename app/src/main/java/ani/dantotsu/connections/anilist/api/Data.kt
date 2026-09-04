@@ -148,6 +148,7 @@ class Query {
             @SerialName("favoriteManga") val favoriteManga: ani.dantotsu.connections.anilist.api.User?,
             @SerialName("plannedManga") val plannedManga: ani.dantotsu.connections.anilist.api.MediaListCollection?,
             @SerialName("recommendationQuery") val recommendationQuery: ani.dantotsu.connections.anilist.api.Page?,
+            @SerialName("recommendationQueryNew") val recommendationQueryNew: ani.dantotsu.connections.anilist.api.Page? = null,
             @SerialName("recommendationPlannedQueryAnime") val recommendationPlannedQueryAnime: ani.dantotsu.connections.anilist.api.MediaListCollection?,
             @SerialName("recommendationPlannedQueryManga") val recommendationPlannedQueryManga: ani.dantotsu.connections.anilist.api.MediaListCollection?,
             @SerialName("missingSequelsCompletedQuery") val missingSequelsCompletedQuery: ani.dantotsu.connections.anilist.api.MediaListCollection?,
@@ -155,6 +156,18 @@ class Query {
             @SerialName("Page1") val page1: ActivityPage?,
             @SerialName("Page2") val page2: ActivityPage?,
             @SerialName("MyActivities") val myActivities: ActivityPage? = null
+        )
+    }
+
+    @Serializable
+    data class RecommendationsResponse(
+        @SerialName("data")
+        val data: Data?
+    ) {
+        @Serializable
+        data class Data(
+            @SerialName("recRating") val recRating: ani.dantotsu.connections.anilist.api.Page?,
+            @SerialName("recNew") val recNew: ani.dantotsu.connections.anilist.api.Page? = null
         )
     }
 

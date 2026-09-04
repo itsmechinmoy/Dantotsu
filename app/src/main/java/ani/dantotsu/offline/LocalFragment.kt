@@ -26,7 +26,7 @@ import androidx.lifecycle.lifecycleScope
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.source.model.SManga
 import ani.dantotsu.R
-import ani.dantotsu.bottomBar
+import ani.dantotsu.bottomBarOrNull
 import ani.dantotsu.download.anime.OfflineAnimeAdapter
 import ani.dantotsu.download.anime.OfflineAnimeModel
 import ani.dantotsu.download.anime.OfflineAnimeSearchListener
@@ -305,7 +305,7 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                 val first = view.getChildAt(0)
                 val visibility = first != null && first.top < 0
                 scrollTop.translationY =
-                    -(navBarHeight + bottomBar.height + bottomBar.marginBottom).toFloat()
+                    -(navBarHeight + (bottomBarOrNull?.height ?: 0) + (bottomBarOrNull?.marginBottom ?: 0)).toFloat()
                 scrollTop.isVisible = visibility
             }
         })

@@ -21,4 +21,10 @@
     <item
         android:id="@+id/sort_by_pure_pain"
         android:title="Pure pain" />
+    <item
+        android:id="@+id/sort_by_favourites"
+        android:title="Favourites" />
+    <item
+        android:id="@+id/sort_by_updated"
+        android:title="Recently Updated" />
 </menu>

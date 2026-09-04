@@ -2,6 +2,8 @@ package ani.dantotsu.media
 
 import ani.dantotsu.client
 import ani.dantotsu.others.IdMappers
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -29,24 +31,39 @@ object CarouselLogoResolver {
         }
 
         var logo: String? = null
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        val isMalMode = rescueMode || (media.idMAL != null && media.idMAL == media.id)
 
-        // 1. Try AniZip mapping by Anilist ID
-        if (media.id > 0) {
-            logo = fromAniZip("anilist_id", media.id.toString())
-                ?: fromAniZip("anilistId", media.id.toString())
-        }
+        if (isMalMode) {
+            val malId = (media.idMAL ?: media.id).toString()
+            if (malId.isNotBlank() && malId != "0") {
+                logo = fromAniZip("mal_id", malId)
+                    ?: fromAniZip("malId", malId)
+            }
+            if (logo == null && !rescueMode && media.id > 0) {
+                logo = fromAniZip("anilist_id", media.id.toString())
+                    ?: fromAniZip("anilistId", media.id.toString())
+            }
+        } else {
+            // 1. Try AniZip mapping by Anilist ID
+            if (media.id > 0) {
+                logo = fromAniZip("anilist_id", media.id.toString())
+                    ?: fromAniZip("anilistId", media.id.toString())
+            }
 
-        // 2. Try AniZip mapping by MAL ID
-        if (logo == null && media.idMAL != null && media.idMAL!! > 0) {
-            logo = fromAniZip("mal_id", media.idMAL.toString())
-                ?: fromAniZip("malId", media.idMAL.toString())
-        }
+            // 2. Try AniZip mapping by MAL ID
+            if (logo == null && media.idMAL != null && media.idMAL!! > 0) {
+                logo = fromAniZip("mal_id", media.idMAL.toString())
+                    ?: fromAniZip("malId", media.idMAL.toString())
+            }
 
-        // 3. Fallback: try IdMappers to resolve MAL ID
-        if (logo == null && media.id > 0) {
-            val ids = runCatching { IdMappers.getIds(media.id) }.getOrNull()
-            if (ids?.malId != null && ids.malId != media.idMAL) {
-                logo = fromAniZip("mal_id", ids.malId.toString())
+            // 3. Fallback: try IdMappers to resolve MAL ID
+            if (logo == null && media.id > 0) {
+                val ids = runCatching { IdMappers.getIds(media.id) }.getOrNull()
+                if (ids?.malId != null && ids.malId != media.idMAL) {
+                    logo = fromAniZip("mal_id", ids.malId.toString())
+                        ?: fromAniZip("malId", ids.malId.toString())
+                }
             }
         }
 

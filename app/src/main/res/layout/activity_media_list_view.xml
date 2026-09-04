@@ -59,17 +59,33 @@
 
         </com.google.android.material.appbar.AppBarLayout>
 
-    <ani.dantotsu.FadingEdgeRecyclerView
-        android:id="@+id/mediaRecyclerView"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:requiresFadingEdge="horizontal"
-        android:nestedScrollingEnabled="false"
-        tools:itemCount="4"
-        tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        tools:listitem="@layout/item_media_compact"
-        tools:orientation="horizontal" />
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ani.dantotsu.FadingEdgeRecyclerView
+            android:id="@+id/mediaRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="20dp"
+            android:requiresFadingEdge="horizontal"
+            android:nestedScrollingEnabled="false"
+            tools:itemCount="4"
+            tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            tools:listitem="@layout/item_media_compact"
+            tools:orientation="horizontal" />
+
+        <ProgressBar
+            android:id="@+id/mediaListProgressBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone" />
+    </FrameLayout>
 
 </LinearLayout>

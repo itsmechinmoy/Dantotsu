@@ -27,7 +27,7 @@ import ani.dantotsu.MainActivity
 import ani.dantotsu.R
 import ani.dantotsu.Refresh
 import ani.dantotsu.blurImage
-import ani.dantotsu.bottomBar
+import ani.dantotsu.bottomBarOrNull
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.connections.anilist.AnilistHomeViewModel
@@ -77,6 +77,9 @@ class HomeFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            _binding?.homeScroll?.setOnScrollChangeListener(null as View.OnScrollChangeListener?)
+        }
         super.onDestroyView()
         Refresh.activity.remove(this.hashCode())
         _binding = null
@@ -203,15 +206,16 @@ class HomeFragment : Fragment() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             binding.homeScroll.setOnScrollChangeListener { _, _, _, _, _ ->
+                val bar = bottomBarOrNull ?: return@setOnScrollChangeListener
                 if (!binding.homeScroll.canScrollVertically(1)) {
                     reached = true
-                    bottomBar.animate().translationZ(0f).setDuration(duration).start()
-                    ObjectAnimator.ofFloat(bottomBar, "elevation", 4f, 0f).setDuration(duration)
+                    bar.animate().translationZ(0f).setDuration(duration).start()
+                    ObjectAnimator.ofFloat(bar, "elevation", 4f, 0f).setDuration(duration)
                         .start()
                 } else {
                     if (reached) {
-                        bottomBar.animate().translationZ(12f).setDuration(duration).start()
-                        ObjectAnimator.ofFloat(bottomBar, "elevation", 0f, 4f).setDuration(duration)
+                        bar.animate().translationZ(12f).setDuration(duration).start()
+                        ObjectAnimator.ofFloat(bar, "elevation", 0f, 4f).setDuration(duration)
                             .start()
                     }
                 }
@@ -299,24 +303,34 @@ class HomeFragment : Fragment() {
                 if (it != null) {
                     if (it.isNotEmpty()) {
                         empty.visibility = View.GONE
-                        recyclerView.adapter = MediaAdaptor(0, it, requireActivity())
-                        recyclerView.layoutManager = LinearLayoutManager(
-                            requireContext(),
-                            LinearLayoutManager.HORIZONTAL,
-                            false
-                        )
+                        val currentAdapter = recyclerView.adapter as? MediaAdaptor
+                        if (currentAdapter != null && currentAdapter.type == 0 && currentAdapter.mediaList === it && recyclerView.tag == "loaded") {
+                            currentAdapter.notifyDataSetChanged()
+                        } else {
+                            recyclerView.tag = "loaded"
+                            recyclerView.adapter = MediaAdaptor(0, it, requireActivity())
+                            recyclerView.layoutManager = LinearLayoutManager(
+                                requireContext(),
+                                LinearLayoutManager.HORIZONTAL,
+                                false
+                            )
+                            recyclerView.visibility = View.VISIBLE
+                            recyclerView.layoutAnimation =
+                                LayoutAnimationController(setSlideIn(), 0.25f)
+                        }
                         more.setOnClickListener { i ->
                             MediaListViewActivity.passedMedia = it
+                            val intent = Intent(i.context, MediaListViewActivity::class.java)
+                                .putExtra("title", string)
+                            if (string == getString(R.string.recommended)) {
+                                intent.putExtra("type", "RECOMMENDED")
+                                intent.putExtra("page", model.recommendationPage)
+                            }
                             ContextCompat.startActivity(
-                                i.context, Intent(i.context, MediaListViewActivity::class.java)
-                                    .putExtra("title", string),
+                                i.context, intent,
                                 null
                             )
                         }
-                        recyclerView.visibility = View.VISIBLE
-                        recyclerView.layoutAnimation =
-                            LayoutAnimationController(setSlideIn(), 0.25f)
-
                     } else {
                         recyclerView.visibility = View.GONE
                         empty.visibility = View.VISIBLE
@@ -338,7 +352,7 @@ class HomeFragment : Fragment() {
             getString(R.string.continue_watching)
         )
         binding.homeWatchingBrowseButton.setOnClickListener {
-            bottomBar.selectTabAt(0)
+            bottomBarOrNull?.selectTabAt(0)
         }
 
         initRecyclerView(
@@ -363,7 +377,7 @@ class HomeFragment : Fragment() {
             getString(R.string.planned_anime)
         )
         binding.homePlannedAnimeBrowseButton.setOnClickListener {
-            bottomBar.selectTabAt(0)
+            bottomBarOrNull?.selectTabAt(0)
         }
 
         initRecyclerView(
@@ -388,7 +402,7 @@ class HomeFragment : Fragment() {
             getString(R.string.continue_reading)
         )
         binding.homeReadingBrowseButton.setOnClickListener {
-            bottomBar.selectTabAt(2)
+            bottomBarOrNull?.selectTabAt(2)
         }
 
         initRecyclerView(
@@ -413,7 +427,7 @@ class HomeFragment : Fragment() {
             getString(R.string.planned_manga)
         )
         binding.homePlannedMangaBrowseButton.setOnClickListener {
-            bottomBar.selectTabAt(2)
+            bottomBarOrNull?.selectTabAt(2)
         }
 
         initRecyclerView(
@@ -426,6 +440,20 @@ class HomeFragment : Fragment() {
             binding.homeRecommendedMore,
             getString(R.string.recommended)
         )
+
+        binding.homeRecommendedRecyclerView.addOnScrollListener(object :
+            RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (!recyclerView.canScrollHorizontally(1)) {
+                    if (model.recommendationHasNextPage && !model.recommendationLoading) {
+                        scope.launch(Dispatchers.IO) {
+                            model.loadMoreRecommendations()
+                        }
+                    }
+                }
+                super.onScrolled(recyclerView, dx, dy)
+            }
+        })
         binding.homeUserStatusContainer.visibility = View.VISIBLE
         binding.homeUserStatusProgressBar.visibility = View.VISIBLE
         binding.homeUserStatusRecyclerView.visibility = View.GONE

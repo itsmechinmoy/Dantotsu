@@ -95,11 +95,17 @@ data class AniMangaSearchResults(
                 )
             )
         }
+        onList?.let {
+            val c = currContext()!!
+            val text = if (it) c.getString(R.string.filter_on_list_in) else c.getString(R.string.filter_on_list_not_in)
+            list.add(SearchChip("ON_LIST", text))
+        }
         return list
     }
 
     fun removeChip(chip: SearchChip) {
         when (chip.type) {
+            "ON_LIST" -> onList = null
             "SORT" -> sort = null
             "STATUS" -> status = null
             "SOURCE" -> source = null

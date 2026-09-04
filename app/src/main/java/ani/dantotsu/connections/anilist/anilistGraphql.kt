@@ -232,6 +232,10 @@ nextAiringEpisode {
 }
 type
 genres
+tags {
+  name
+  isMediaSpoiler
+}
 meanScore
 popularity
 favourites
@@ -248,6 +252,7 @@ title {
   romaji
   userPreferred
 }
+description
 mediaListEntry {
   progress
   progressVolumes

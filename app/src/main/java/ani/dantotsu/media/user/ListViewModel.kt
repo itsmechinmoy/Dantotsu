@@ -82,6 +82,32 @@ class ListViewModel : ViewModel() {
         lists.postValue(filteredLists)
     }
 
+    fun filterListsByTag(tag: String) {
+        if (tag == "All") {
+            lists.postValue(unfilteredLists.value)
+            return
+        }
+        val currentLists = unfilteredLists.value ?: return
+        val filteredLists = currentLists.mapValues { entry ->
+            entry.value.filter { media ->
+                tag in media.tags
+            } as ArrayList<Media>
+        }.toMutableMap()
+
+        lists.postValue(filteredLists)
+    }
+
+    fun getAllTags(): List<String> {
+        val allMedia = unfilteredLists.value?.values?.flatten() ?: return emptyList()
+        return allMedia.flatMap { it.tags }.distinct().sorted()
+    }
+
+    fun getAllGenres(): List<String> {
+        val allMedia = unfilteredLists.value?.values?.flatten() ?: return emptyList()
+        val listGenres = allMedia.flatMap { it.genres }.distinct().sorted()
+        return if (listGenres.isNotEmpty()) listGenres else PrefManager.getVal<Set<String>>(PrefName.GenresList).sorted()
+    }
+
     fun searchLists(search: String) {
         if (search.isEmpty()) {
             lists.postValue(unfilteredLists.value)

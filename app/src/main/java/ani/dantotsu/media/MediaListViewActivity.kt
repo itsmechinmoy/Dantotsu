@@ -7,8 +7,11 @@ import android.view.Window
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.updateLayoutParams
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.R
+import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.databinding.ActivityMediaListViewBinding
 import ani.dantotsu.getThemeColor
 import ani.dantotsu.hideSystemBarsExtendView
@@ -18,6 +21,10 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.themes.ThemeManager
+import ani.dantotsu.util.Logger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MediaListViewActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMediaListViewBinding
@@ -85,6 +92,59 @@ class MediaListViewActivity : AppCompatActivity() {
             this,
             if (view == 1) 1 else (screenWidth / 120f).toInt()
         )
+
+        val isRecommended = intent.getStringExtra("type") == "RECOMMENDED" ||
+                intent.getStringExtra("title") == getString(R.string.recommended)
+        if (isRecommended && !PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+            var page = intent.getIntExtra("page", 1)
+            var loading = false
+            var hasNextPage = true
+
+            binding.mediaRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(v: RecyclerView, dx: Int, dy: Int) {
+                    if (!v.canScrollVertically(1)) {
+                        if (hasNextPage && !loading) {
+                            loading = true
+                            binding.mediaListProgressBar.visibility = View.VISIBLE
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                var curPage = page
+                                val addedMedia = arrayListOf<Media>()
+                                var attempts = 0
+                                while (addedMedia.isEmpty() && hasNextPage && attempts < 3) {
+                                    attempts++
+                                    curPage++
+                                    try {
+                                        val (newMedia, hasNext) = Anilist.query.getRecommendations(curPage)
+                                        hasNextPage = hasNext
+                                        page = curPage
+                                        val existingIds = mediaList.map { it.id }.toSet()
+                                        val uniqueNew = newMedia.filter { it.id !in existingIds }
+                                        if (uniqueNew.isNotEmpty()) {
+                                            addedMedia.addAll(uniqueNew)
+                                        }
+                                    } catch (e: Exception) {
+                                        Logger.log("Failed to load more recommendations: ${e.message}")
+                                        break
+                                    }
+                                }
+                                withContext(Dispatchers.Main) {
+                                    if (addedMedia.isNotEmpty()) {
+                                        val startPos = mediaList.size
+                                        mediaList.addAll(addedMedia)
+                                        binding.mediaRecyclerView.adapter?.notifyItemRangeInserted(startPos, addedMedia.size)
+                                        val title = intent.getStringExtra("title") ?: getString(R.string.recommended)
+                                        binding.listTitle.text = "$title (${mediaList.size})"
+                                    }
+                                    loading = false
+                                    binding.mediaListProgressBar.visibility = View.GONE
+                                }
+                            }
+                        }
+                    }
+                    super.onScrolled(v, dx, dy)
+                }
+            })
+        }
     }
 
     companion object {
