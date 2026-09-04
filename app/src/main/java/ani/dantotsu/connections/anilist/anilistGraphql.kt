@@ -248,6 +248,7 @@ title {
   romaji
   userPreferred
 }
+description
 mediaListEntry {
   progress
   progressVolumes
