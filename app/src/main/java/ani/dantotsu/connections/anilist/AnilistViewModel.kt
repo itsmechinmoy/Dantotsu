@@ -509,6 +509,9 @@ class AnilistAnimeViewModel : ViewModel() {
 
     private suspend fun loadAllFromMAL() {
         tryWithSuspend {
+            loadTrending(1)
+        }
+        tryWithSuspend {
             MAL.query.getAnimeRanking("airing", 15)?.data?.let { entries ->
                 updated.postValue(entries.map { Media(it.node, true) }.toMutableList())
             }
@@ -713,6 +716,9 @@ class AnilistMangaViewModel : ViewModel() {
     }
 
     private suspend fun loadAllFromMAL() {
+        tryWithSuspend {
+            loadTrending()
+        }
         tryWithSuspend {
             MAL.query.getMangaRanking("manga", 15)?.data?.let { entries ->
                 popularManga.postValue(entries.map { Media(it.node, false) }.toMutableList())
