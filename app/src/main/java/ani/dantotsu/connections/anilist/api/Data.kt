@@ -160,6 +160,18 @@ class Query {
     }
 
     @Serializable
+    data class RecommendationsResponse(
+        @SerialName("data")
+        val data: Data?
+    ) {
+        @Serializable
+        data class Data(
+            @SerialName("recRating") val recRating: ani.dantotsu.connections.anilist.api.Page?,
+            @SerialName("recNew") val recNew: ani.dantotsu.connections.anilist.api.Page? = null
+        )
+    }
+
+    @Serializable
     data class ProfilePageMedia(
         @SerialName("data")
         val data: Data?
