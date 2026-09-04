@@ -139,7 +139,11 @@ data class Media(
         ) else null,
         format = apiMedia.format?.toString(),
         description = apiMedia.description,
+        genres = ArrayList(apiMedia.genres ?: emptyList()),
     ) {
+        apiMedia.genres?.let { genreList ->
+            this.genres = ArrayList(genreList)
+        }
         apiMedia.studios?.nodes?.let { nodes ->
             if (nodes.isNotEmpty()) {
                 val studioNode = nodes.firstOrNull { it.isAnimationStudio == true } ?: nodes[0]
