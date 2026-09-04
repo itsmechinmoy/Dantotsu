@@ -45,6 +45,13 @@ class ThreadViewActivity : AppCompatActivity() {
         setContentView(binding.root)
         initActivity(this)
 
+        binding.threadAppBar.updateLayoutParams<android.view.ViewGroup.MarginLayoutParams> {
+            topMargin += statusBarHeight
+        }
+        binding.threadReplyFab.updateLayoutParams<android.view.ViewGroup.MarginLayoutParams> {
+            bottomMargin += navBarHeight
+        }
+
         threadId = intent.getIntExtra("threadId", -1)
         if (threadId == -1) {
             finish()

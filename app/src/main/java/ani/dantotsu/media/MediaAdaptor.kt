@@ -397,7 +397,7 @@ class MediaAdaptor(
                         val availableHeight = (bottom - top) - v.paddingTop - v.paddingBottom
                         val lh = synopsisView.lineHeight
                         if (lh > 0) {
-                            val maxL = (availableHeight / lh).coerceIn(1, 2)
+                            val maxL = (availableHeight / lh).coerceIn(1, 3)
                             if (synopsisView.maxLines != maxL) {
                                 synopsisView.maxLines = maxL
                             }
