@@ -65,6 +65,8 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
             Anilist.sortBy[4] -> R.drawable.ic_round_filter_list_24
             Anilist.sortBy[5] -> R.drawable.ic_round_filter_list_24_reverse
             Anilist.sortBy[6] -> R.drawable.ic_round_assist_walker_24
+            Anilist.sortBy.getOrNull(7) -> R.drawable.ic_round_favorite_24
+            Anilist.sortBy.getOrNull(8) -> R.drawable.ic_round_history_24
             else -> R.drawable.ic_round_filter_alt_24
         }
         binding.sortByFilter.setImageResource(filterDrawable)
@@ -78,6 +80,8 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
         binding.countryFilter.setImageResource(R.drawable.ic_round_globe_search_googlefonts)
         startBounceZoomAnimation(binding.countryFilter)
 
+        activity.aniMangaResult.onList = null
+        binding.searchOnList.setText(getString(R.string.filter_on_list_all))
         selectedGenres.clear()
         exGenres.clear()
         selectedTags.clear()
@@ -107,6 +111,7 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
             (binding.searchTagsGrid.parent as? View)?.visibility = View.GONE
             binding.searchFilterTags.visibility = View.GONE
             binding.searchSeasonCont.visibility = View.GONE
+            (binding.searchOnList.parent as? View)?.visibility = View.GONE
         }
 
         selectedGenres = activity.aniMangaResult.genres ?: mutableListOf()
@@ -138,6 +143,7 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
 
                 CoroutineScope(Dispatchers.Main).launch {
                     activity.aniMangaResult.apply {
+                        onList = null
                         status =
                             binding.searchStatus.text.toString().replace(" ", "_").ifBlank { null }
                         source =
@@ -206,6 +212,18 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
                         binding.sortByFilter.setImageResource(R.drawable.ic_round_assist_walker_24)
                         startBounceZoomAnimation()
                     }
+
+                    R.id.sort_by_favourites -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy.getOrNull(7)
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_favorite_24)
+                        startBounceZoomAnimation()
+                    }
+
+                    R.id.sort_by_updated -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy.getOrNull(8)
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_history_24)
+                        startBounceZoomAnimation()
+                    }
                 }
                 true
             }
@@ -272,12 +290,18 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
                     countryOfOrigin = activity.aniMangaResult.countryOfOrigin
                     tags = selectedTags
                     excludedTags = exTags
+                    onList = when (binding.searchOnList.text.toString()) {
+                        getString(R.string.filter_on_list_in) -> true
+                        getString(R.string.filter_on_list_not_in) -> false
+                        else -> null
+                    }
                 } else {
                     source = null
                     season = null
                     countryOfOrigin = null
                     tags = mutableListOf()
                     excludedTags = mutableListOf()
+                    onList = null
                 }
             }
             activity.updateChips.invoke()
@@ -341,6 +365,25 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
                 )
             )
         }
+
+        val onListOptions = listOf(
+            getString(R.string.filter_on_list_all),
+            getString(R.string.filter_on_list_in),
+            getString(R.string.filter_on_list_not_in)
+        )
+        val currentOnList = when (activity.aniMangaResult.onList) {
+            true -> getString(R.string.filter_on_list_in)
+            false -> getString(R.string.filter_on_list_not_in)
+            null -> getString(R.string.filter_on_list_all)
+        }
+        binding.searchOnList.setText(currentOnList)
+        binding.searchOnList.setAdapter(
+            ArrayAdapter(
+                binding.root.context,
+                R.layout.item_dropdown,
+                onListOptions
+            )
+        )
 
         binding.searchFilterGenres.adapter = FilterChipAdapter(Anilist.genres ?: listOf()) { chip ->
             val genre = chip.text.toString()
