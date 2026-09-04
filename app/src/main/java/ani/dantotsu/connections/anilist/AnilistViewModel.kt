@@ -25,6 +25,7 @@ import ani.dantotsu.connections.syncPendingDeletions
 import ani.dantotsu.media.anime.Anime
 import ani.dantotsu.media.manga.Manga
 import ani.dantotsu.tryWithSuspend
+import ani.dantotsu.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -86,6 +87,45 @@ class AnilistHomeViewModel : ViewModel() {
 
     fun getRecommendation(): LiveData<ArrayList<Media>> = recommendation
 
+    var recommendationPage: Int = 1
+    var recommendationHasNextPage: Boolean = true
+    var recommendationLoading: Boolean = false
+
+    suspend fun loadMoreRecommendations(): ArrayList<Media>? {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) return null
+        if (!recommendationHasNextPage || recommendationLoading) return null
+        recommendationLoading = true
+        return try {
+            val currentList = recommendation.value ?: arrayListOf()
+            val existingIds = currentList.map { it.id }.toMutableSet()
+            val addedMedia = arrayListOf<Media>()
+            var attempts = 0
+            while (addedMedia.isEmpty() && recommendationHasNextPage && attempts < 3) {
+                attempts++
+                val nextPage = recommendationPage + 1
+                val (newMedia, hasNext) = Anilist.query.getRecommendations(nextPage)
+                recommendationPage = nextPage
+                recommendationHasNextPage = hasNext
+                val uniqueNew = newMedia.filter { it.id !in existingIds }
+                if (uniqueNew.isNotEmpty()) {
+                    addedMedia.addAll(uniqueNew)
+                    existingIds.addAll(uniqueNew.map { it.id })
+                }
+            }
+            if (addedMedia.isNotEmpty()) {
+                currentList.addAll(addedMedia)
+                recommendation.postValue(currentList)
+            }
+            addedMedia
+        } catch (e: Exception) {
+            Logger.log("Failed to load more recommendations: ${e.message}")
+            null
+        } finally {
+            recommendationLoading = false
+        }
+    }
+
     private val missingSequels: MutableLiveData<ArrayList<Media>> =
         MutableLiveData<ArrayList<Media>>(null)
 
@@ -106,6 +146,9 @@ class AnilistHomeViewModel : ViewModel() {
     fun getHidden(): LiveData<ArrayList<Media>> = hidden
 
     suspend fun initHomePage(forceRefresh: Boolean = false) {
+        recommendationPage = 1
+        recommendationHasNextPage = true
+        recommendationLoading = false
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         if (rescueMode) {
             initHomePageFromMAL()
