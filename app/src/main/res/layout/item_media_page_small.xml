@@ -169,7 +169,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:adjustViewBounds="true"
-                            android:maxHeight="76dp"
+                            android:maxHeight="105dp"
                             android:scaleType="fitStart"
                             tools:ignore="ContentDescription" />
 
@@ -182,6 +182,7 @@
                             android:alpha="0.72"
                             android:ellipsize="end"
                             android:fontFamily="@font/poppins_family"
+                            android:maxLines="2"
                             android:textColor="?attr/colorOnBackground"
                             android:textSize="10.5dp"
                             android:visibility="gone"
