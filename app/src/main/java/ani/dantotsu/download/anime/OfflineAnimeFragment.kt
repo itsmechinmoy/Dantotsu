@@ -26,7 +26,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import ani.dantotsu.R
-import ani.dantotsu.bottomBar
+import ani.dantotsu.bottomBarOrNull
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.currActivity
 import ani.dantotsu.currContext
@@ -263,7 +263,7 @@ class OfflineAnimeFragment : Fragment(), OfflineAnimeSearchListener {
                 val first = view.getChildAt(0)
                 val visibility = first != null && first.top < 0
                 scrollTop.translationY =
-                    -(navBarHeight + bottomBar.height + bottomBar.marginBottom).toFloat()
+                    -(navBarHeight + (bottomBarOrNull?.height ?: 0) + (bottomBarOrNull?.marginBottom ?: 0)).toFloat()
                 scrollTop.isVisible = visibility
             }
         })
