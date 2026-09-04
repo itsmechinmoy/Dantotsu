@@ -311,7 +311,13 @@ class MediaAdaptor(
                     b.itemCompactOngoing.isVisible =
                         media.status == currActivity()!!.getString(R.string.status_releasing)
                     b.itemCompactTitle.text = media.userPreferredName
-                    bindCarouselLogo(media, b.itemCompactTitle, b.itemCompactLogo)
+                    bindCarouselLogo(
+                        media,
+                        b.itemCompactTitle,
+                        b.itemCompactLogo,
+                        b.itemCompactSynopsis,
+                        b.itemCompactLogoContainer
+                    )
                     b.itemCompactScore.text =
                         ((if (media.userScore == 0) (media.meanScore
                             ?: 0) else media.userScore) / 10.0).toString()
@@ -353,12 +359,16 @@ class MediaAdaptor(
     private fun bindCarouselLogo(
         media: Media,
         titleView: android.widget.TextView,
-        logoView: ImageView
+        logoView: ImageView,
+        synopsisView: android.widget.TextView? = null,
+        logoContainer: View? = null
     ) {
         val clearLogoEnabled: Boolean = PrefManager.getVal(PrefName.CarouselClearLogo)
         if (!clearLogoEnabled) {
             titleView.visibility = View.VISIBLE
             logoView.visibility = View.GONE
+            logoContainer?.visibility = View.GONE
+            synopsisView?.visibility = View.GONE
             return
         }
 
@@ -368,12 +378,24 @@ class MediaAdaptor(
         fun showLogo(url: String) {
             logoView.loadImage(url)
             logoView.visibility = View.VISIBLE
+            logoContainer?.visibility = View.VISIBLE
             titleView.visibility = View.GONE
+            if (synopsisView != null) {
+                val cleanDesc = media.description?.let { sanitizeDescription(it) }
+                if (!cleanDesc.isNullOrBlank()) {
+                    synopsisView.text = cleanDesc
+                    synopsisView.visibility = View.VISIBLE
+                } else {
+                    synopsisView.visibility = View.GONE
+                }
+            }
         }
 
         fun showTitle() {
             titleView.visibility = View.VISIBLE
             logoView.visibility = View.GONE
+            logoContainer?.visibility = View.GONE
+            synopsisView?.visibility = View.GONE
         }
 
         if (!media.clearLogo.isNullOrBlank()) {
@@ -392,6 +414,21 @@ class MediaAdaptor(
                 }
             }
         }
+    }
+
+    private fun sanitizeDescription(desc: String): String {
+        return desc
+            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+            .replace(Regex("<[^>]*>"), "")
+            .replace("&amp;", "&")
+            .replace("&quot;", "\"")
+            .replace("&#039;", "'")
+            .replace("&apos;", "'")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace(Regex("\\n\\s*\\n"), "\n")
+            .replace(Regex("[ \\t]+"), " ")
+            .trim()
     }
 
     override fun getItemCount() = mediaList!!.size
