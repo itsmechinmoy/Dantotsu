@@ -138,6 +138,7 @@ data class Media(
             totalVolumes = apiMedia.volumes
         ) else null,
         format = apiMedia.format?.toString(),
+        description = apiMedia.description,
     ) {
         apiMedia.studios?.nodes?.let { nodes ->
             if (nodes.isNotEmpty()) {
