@@ -385,6 +385,27 @@ class MediaAdaptor(
                 if (!cleanDesc.isNullOrBlank()) {
                     synopsisView.text = cleanDesc
                     synopsisView.visibility = View.VISIBLE
+                    val oldListener = synopsisView.getTag(R.id.itemCompactSynopsis) as? View.OnLayoutChangeListener
+                    if (oldListener != null) {
+                        synopsisView.removeOnLayoutChangeListener(oldListener)
+                    }
+                    val newListener = View.OnLayoutChangeListener { v, _, top, _, bottom, _, _, _, _ ->
+                        val availableHeight = (bottom - top) - v.paddingTop - v.paddingBottom
+                        val lh = synopsisView.lineHeight
+                        if (lh > 0) {
+                            val maxL = availableHeight / lh
+                            if (maxL >= 1) {
+                                if (synopsisView.maxLines != maxL) {
+                                    synopsisView.maxLines = maxL
+                                }
+                                synopsisView.alpha = 0.72f
+                            } else {
+                                synopsisView.alpha = 0f
+                            }
+                        }
+                    }
+                    synopsisView.setTag(R.id.itemCompactSynopsis, newListener)
+                    synopsisView.addOnLayoutChangeListener(newListener)
                 } else {
                     synopsisView.visibility = View.GONE
                 }
@@ -395,7 +416,14 @@ class MediaAdaptor(
             titleView.visibility = View.VISIBLE
             logoView.visibility = View.GONE
             logoContainer?.visibility = View.GONE
-            synopsisView?.visibility = View.GONE
+            if (synopsisView != null) {
+                val oldListener = synopsisView.getTag(R.id.itemCompactSynopsis) as? View.OnLayoutChangeListener
+                if (oldListener != null) {
+                    synopsisView.removeOnLayoutChangeListener(oldListener)
+                    synopsisView.setTag(R.id.itemCompactSynopsis, null)
+                }
+                synopsisView.visibility = View.GONE
+            }
         }
 
         if (!media.clearLogo.isNullOrBlank()) {
@@ -418,16 +446,14 @@ class MediaAdaptor(
 
     private fun sanitizeDescription(desc: String): String {
         return desc
-            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("<[^>]*>"), "")
+            .replace(Regex("<[^>]*>"), " ")
             .replace("&amp;", "&")
             .replace("&quot;", "\"")
             .replace("&#039;", "'")
             .replace("&apos;", "'")
             .replace("&lt;", "<")
             .replace("&gt;", ">")
-            .replace(Regex("\\n\\s*\\n"), "\n")
-            .replace(Regex("[ \\t]+"), " ")
+            .replace(Regex("\\s+"), " ")
             .trim()
     }
 
