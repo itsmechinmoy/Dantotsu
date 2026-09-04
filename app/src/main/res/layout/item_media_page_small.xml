@@ -246,15 +246,16 @@
                 android:id="@+id/itemCompactGenres"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
                 android:layout_marginStart="16dp"
                 android:layout_weight="1"
                 android:alpha="0.66"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textAlignment="viewEnd"
-                android:textSize="14dp"
+                android:textSize="11dp"
                 android:transitionName="mediaTitle"
-                tools:ignore="SpUsage"
+                tools:ignore="SmallSp,SpUsage"
                 tools:text="@string/genres" />
         </LinearLayout>
 
