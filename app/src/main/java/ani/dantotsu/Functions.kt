@@ -173,6 +173,8 @@ val Float.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
 val Int.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
 val Double.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
 private var _bottomBarRef: java.lang.ref.WeakReference<AnimatedBottomBar>? = null
+val bottomBarOrNull: AnimatedBottomBar?
+    get() = _bottomBarRef?.get()
 var bottomBar: AnimatedBottomBar
     get() = _bottomBarRef?.get() ?: throw IllegalStateException("bottomBar is not attached or has been destroyed")
     set(value) {
