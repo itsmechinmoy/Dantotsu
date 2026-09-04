@@ -157,15 +157,38 @@
                         tools:ignore="SpUsage"
                         tools:text="@string/slogan" />
 
-                    <ImageView
-                        android:id="@+id/itemCompactLogo"
+                    <LinearLayout
+                        android:id="@+id/itemCompactLogoContainer"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:layout_gravity="bottom|start"
-                        android:adjustViewBounds="true"
-                        android:scaleType="fitStart"
-                        android:visibility="gone"
-                        tools:ignore="ContentDescription" />
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <ImageView
+                            android:id="@+id/itemCompactLogo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:adjustViewBounds="true"
+                            android:maxHeight="54dp"
+                            android:scaleType="fitStart"
+                            tools:ignore="ContentDescription" />
+
+                        <TextView
+                            android:id="@+id/itemCompactSynopsis"
+                            android:layout_width="match_parent"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:layout_marginTop="4dp"
+                            android:alpha="0.72"
+                            android:ellipsize="end"
+                            android:fontFamily="@font/poppins_family"
+                            android:maxLines="3"
+                            android:textColor="?attr/colorOnBackground"
+                            android:textSize="11dp"
+                            android:visibility="gone"
+                            tools:ignore="SmallSp,SpUsage"
+                            tools:text="Anime synopsis text here..." />
+                    </LinearLayout>
                 </FrameLayout>
 
                 <TextView
