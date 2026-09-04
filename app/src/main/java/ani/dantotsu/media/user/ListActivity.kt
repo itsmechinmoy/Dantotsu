@@ -1,6 +1,7 @@
 package ani.dantotsu.media.user
 
 import android.os.Bundle
+import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -162,16 +163,34 @@ class ListActivity : AppCompatActivity() {
         }
 
         binding.filter.setOnClickListener {
-            val genres =
-                PrefManager.getVal<Set<String>>(PrefName.GenresList).toMutableSet().sorted()
             val popup = PopupMenu(this, it)
-            popup.menu.add("All")
-            genres.forEach { genre ->
-                popup.menu.add(genre)
+            popup.menu.add(Menu.NONE, 0, Menu.NONE, "All")
+
+            val genres = model.getAllGenres()
+            if (genres.isNotEmpty()) {
+                val genreSubMenu = popup.menu.addSubMenu("Filter by Genre")
+                genres.forEachIndexed { index, genre ->
+                    genreSubMenu.add(1, index + 1, Menu.NONE, genre)
+                }
             }
+
+            val tags = model.getAllTags()
+            if (tags.isNotEmpty()) {
+                val tagSubMenu = popup.menu.addSubMenu("Filter by Tag")
+                tags.forEachIndexed { index, tag ->
+                    tagSubMenu.add(2, index + 10000, Menu.NONE, tag)
+                }
+            }
+
             popup.setOnMenuItemClickListener { menuItem ->
-                val selectedGenre = menuItem.title.toString()
-                model.filterLists(selectedGenre)
+                when (menuItem.groupId) {
+                    0 -> model.unfilterLists()
+                    1 -> model.filterLists(menuItem.title.toString())
+                    2 -> model.filterListsByTag(menuItem.title.toString())
+                    else -> {
+                        if (menuItem.title == "All") model.unfilterLists()
+                    }
+                }
                 true
             }
             popup.show()
