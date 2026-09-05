@@ -63,6 +63,17 @@ class AnimeWatchAdapter(
     var subscribe: MediaDetailsActivity.PopImageButton? = null
     private var _binding: ItemMediaSourceBinding? = null
 
+    fun clearBinding() {
+        _binding = null
+        subscribe = null
+    }
+
+    override fun onViewRecycled(holder: ViewHolder) {
+        super.onViewRecycled(holder)
+        _binding = null
+        subscribe = null
+    }
+
     var options: List<String> = listOf()
         set(value) {
             field = value

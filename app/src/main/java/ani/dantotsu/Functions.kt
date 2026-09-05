@@ -268,11 +268,21 @@ fun applySystemFont(activity: Activity) {
     val decorView = activity.window.decorView
     applySystemFontToViewTree(decorView)
 
-    decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+    if (decorView.getTag(R.id.tag_system_font_applied) == true) return
+    decorView.setTag(R.id.tag_system_font_applied, true)
+
+    val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
         override fun onGlobalLayout() {
+            if (activity.isFinishing || activity.isDestroyed) {
+                if (decorView.viewTreeObserver.isAlive) {
+                    decorView.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                }
+                return
+            }
             applySystemFontToViewTree(decorView)
         }
-    })
+    }
+    decorView.viewTreeObserver.addOnGlobalLayoutListener(listener)
 }
 
 fun applySystemFontToViewTree(view: View) {

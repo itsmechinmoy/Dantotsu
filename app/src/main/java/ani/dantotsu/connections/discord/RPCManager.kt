@@ -60,9 +60,10 @@ object RPCManager {
      * @param data    The presence data built by the calling screen
      */
     fun setPresence(context: Context, data: RPC.Companion.RPCData) {
+        val appContext = context.applicationContext
         if (!serviceStarted) {
             runCatching { 
-                context.startService(Intent(context, DiscordService::class.java))
+                appContext.startService(Intent(appContext, DiscordService::class.java))
                 serviceStarted = true
             }.onFailure { e ->
                 Logger.log("RPCManager: Failed to start DiscordService (missing manifest entry?): ${e.message}")
@@ -79,10 +80,10 @@ object RPCManager {
             val isPaused = data.state?.contains("Paused", ignoreCase = true) == true
 
             runCatching {
-                ensureHeadlessRpc(context)?.newActivity(activity)
+                ensureHeadlessRpc(appContext)?.newActivity(activity)
                 Logger.log("RPCManager: Headless RPC update succeeded.")
             }.onFailure { e ->
-                handleRpcFailure(context, e)
+                handleRpcFailure(appContext, e)
             }
 
             // Schedule heartbeat or auto-clear based on playback state
@@ -94,7 +95,7 @@ object RPCManager {
                 autoClearJob = scope.launch {
                     delay(AUTO_CLEAR_INTERVAL_MS)
                     Logger.log("RPCManager: Auto-clearing Headless RPC due to pause timeout.")
-                    clearPresence(context)
+                    clearPresence(appContext)
                 }
             } else {
                 // If playing continuously, schedule heartbeat
@@ -103,9 +104,9 @@ object RPCManager {
                         delay(HEARTBEAT_INTERVAL_MS)
                         Logger.log("RPCManager: Sending heartbeat for Headless RPC...")
                         runCatching {
-                            ensureHeadlessRpc(context)?.newActivity(activity)
+                            ensureHeadlessRpc(appContext)?.newActivity(activity)
                         }.onFailure { e ->
-                            handleRpcFailure(context, e)
+                            handleRpcFailure(appContext, e)
                         }
                     }
                 }
@@ -117,6 +118,7 @@ object RPCManager {
      * Clear / stop Discord Rich Presence.
      */
     fun clearPresence(context: Context) {
+        val appContext = context.applicationContext
         Logger.log("RPCManager: Clearing presence...")
         debounceJob?.cancel()
         heartbeatJob?.cancel()
@@ -128,7 +130,7 @@ object RPCManager {
         scope.launch {
             delay(2000)
             runCatching { 
-                context.stopService(Intent(context, DiscordService::class.java)) 
+                appContext.stopService(Intent(appContext, DiscordService::class.java)) 
                 serviceStarted = false
             }
         }

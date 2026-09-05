@@ -299,10 +299,8 @@ class AnimeFragment : Fragment() {
                                     load()
                                 }
                             } else {
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    getUserId(context) {
-                                        load()
-                                    }
+                                getUserId(context) {
+                                    load()
                                 }
                             }
                         }

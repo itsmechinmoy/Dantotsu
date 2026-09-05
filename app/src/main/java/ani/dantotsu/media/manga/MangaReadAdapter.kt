@@ -60,6 +60,17 @@ class MangaReadAdapter(
 
     var subscribe: MediaDetailsActivity.PopImageButton? = null
     private var _binding: ItemMediaSourceBinding? = null
+
+    fun clearBinding() {
+        _binding = null
+        subscribe = null
+    }
+
+    override fun onViewRecycled(holder: ViewHolder) {
+        super.onViewRecycled(holder)
+        _binding = null
+        subscribe = null
+    }
     val hiddenScanlators = mutableListOf<String>()
     var scanlatorSelectionListener: ScanlatorSelectionListener? = null
     var options = listOf<String>()

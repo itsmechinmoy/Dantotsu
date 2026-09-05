@@ -13,14 +13,20 @@ object AnimeSources : WatchSources() {
     var pinnedAnimeSources: List<String> = emptyList()
     var isInitialized = false
 
-    suspend fun init(fromExtensions: StateFlow<List<AnimeExtension.Installed>>) {
+    suspend fun init(
+        fromExtensions: StateFlow<List<AnimeExtension.Installed>>,
+        extensionManager: eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager? = null
+    ) {
+        extensionManager?.awaitInitialized()
         pinnedAnimeSources =
             PrefManager.getNullableVal<List<String>>(PrefName.AnimeSourcesOrder, null)
                 ?: emptyList()
 
-        // Initialize with the first value from StateFlow
-        val initialExtensions = fromExtensions.first()
-        list = createParsersFromExtensions(initialExtensions) + listOf(
+        val initialExtensions = fromExtensions.value
+        list = sortPinnedAnimeSources(
+            createParsersFromExtensions(initialExtensions),
+            pinnedAnimeSources
+        ) + listOf(
             Lazier({ TorrentAnimeParser() }, "Torrent"),
             Lazier({ LocalAnimeParser() }, "Local"),
             Lazier({ OfflineAnimeParser() }, "Downloaded")

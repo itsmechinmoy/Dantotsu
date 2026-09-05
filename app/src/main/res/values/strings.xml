@@ -1340,4 +1340,11 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="screenshot">Screenshot</string>
     <string name="screenshot_saved">Screenshot saved to Pictures/Dantotsu</string>
     <string name="video_not_ready">Video not ready</string>
+
+    <string name="news">News</string>
+    <string name="no_news_found">No News Found</string>
+    <string name="watch_order">Watch Order</string>
+    <string name="no_watch_order_found">No Watch Order Found</string>
+    <string name="read_article">Read Article</string>
+    <string name="current">Current</string>
 </resources>

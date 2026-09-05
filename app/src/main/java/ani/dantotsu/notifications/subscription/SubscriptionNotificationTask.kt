@@ -45,8 +45,8 @@ class SubscriptionNotificationTask : Task {
         }
         if (!currentlyPerforming) {
             try {
-                withContext(Dispatchers.IO) {
-                    currentlyPerforming = true
+                currentlyPerforming = true
+                return withContext(Dispatchers.IO) {
                     App.context = context
                     Logger.log("SubscriptionNotificationTask: execute")
                     var timeout = 15_000L
@@ -55,9 +55,9 @@ class SubscriptionNotificationTask : Task {
                         timeout -= 1000
                     } while (timeout > 0 && (!AnimeSources.isInitialized || !MangaSources.isInitialized))
                     Logger.log("SubscriptionNotificationTask: timeout: $timeout")
-                    if (timeout <= 0) {
-                        currentlyPerforming = false
-                        return@withContext
+                    if (timeout <= 0 && (!AnimeSources.isInitialized || !MangaSources.isInitialized)) {
+                        Logger.log("SubscriptionNotificationTask: timed out waiting for sources initialization")
+                        return@withContext false
                     }
                     val subscriptions = SubscriptionHelper.getSubscriptions()
                     var i = 0
@@ -158,13 +158,14 @@ class SubscriptionNotificationTask : Task {
                     if (progressNotification != null) notificationManager.cancel(
                         ID_SUBSCRIPTION_CHECK_PROGRESS
                     )
-                    currentlyPerforming = false
+                    true
                 }
-                return true
             } catch (e: Exception) {
                 Logger.log("SubscriptionNotificationTask: ${e.message}")
                 Logger.log(e)
                 return false
+            } finally {
+                currentlyPerforming = false
             }
         } else {
             return false

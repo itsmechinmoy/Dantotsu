@@ -13,14 +13,20 @@ object MangaSources : MangaReadSources() {
     var pinnedMangaSources: List<String> = emptyList()
     var isInitialized = false
 
-    suspend fun init(fromExtensions: StateFlow<List<MangaExtension.Installed>>) {
+    suspend fun init(
+        fromExtensions: StateFlow<List<MangaExtension.Installed>>,
+        extensionManager: eu.kanade.tachiyomi.extension.manga.MangaExtensionManager? = null
+    ) {
+        extensionManager?.awaitInitialized()
         pinnedMangaSources =
             PrefManager.getNullableVal<List<String>>(PrefName.MangaSourcesOrder, null)
                 ?: emptyList()
 
-        // Initialize with the first value from StateFlow
-        val initialExtensions = fromExtensions.first()
-        list = createParsersFromExtensions(initialExtensions) + listOf(
+        val initialExtensions = fromExtensions.value
+        list = sortPinnedMangaSources(
+            createParsersFromExtensions(initialExtensions),
+            pinnedMangaSources
+        ) + listOf(
             Lazier({ LocalMangaParser() }, "Local"),
             Lazier({ OfflineMangaParser() }, "Downloaded")
         )

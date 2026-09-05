@@ -70,6 +70,8 @@ class CommentsFragment : Fragment() {
     private var commentsLoaded = false
     private var isAutoFilterOn = false
     private var isSpoilerMode = false
+    private var markwonTextWatcher: TextWatcher? = null
+    private var limitTextWatcher: TextWatcher? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -85,6 +87,17 @@ class CommentsFragment : Fragment() {
         super.onDestroyView()
         _binding?.commentsList?.adapter = null
         _binding = null
+        (activity as? MediaDetailsActivity)?.binding?.let { actBinding ->
+            markwonTextWatcher?.let { actBinding.commentInput.removeTextChangedListener(it) }
+            limitTextWatcher?.let { actBinding.commentInput.removeTextChangedListener(it) }
+            actBinding.commentInput.onFocusChangeListener = null
+            actBinding.commentLabel.setOnClickListener(null)
+            actBinding.commentSpoiler.setOnClickListener(null)
+            actBinding.commentGif.setOnClickListener(null)
+            actBinding.commentSend.setOnClickListener(null)
+        }
+        markwonTextWatcher = null
+        limitTextWatcher = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -110,11 +123,9 @@ class CommentsFragment : Fragment() {
 
         activity.binding.commentUserAvatar.loadImage(Anilist.avatar)
         val markwonEditor = MarkwonEditor.create(markwon)
-        activity.binding.commentInput.addTextChangedListener(
-            MarkwonEditorTextWatcher.withProcess(
-                markwonEditor
-            )
-        )
+        val watcher = MarkwonEditorTextWatcher.withProcess(markwonEditor)
+        markwonTextWatcher = watcher
+        activity.binding.commentInput.addTextChangedListener(watcher)
 
         val isOfflineOrLocal = !ani.dantotsu.isOnline(activity)
 
@@ -370,7 +381,7 @@ class CommentsFragment : Fragment() {
                 }
             })
 
-        activity.binding.commentInput.addTextChangedListener(object : TextWatcher {
+        val limitWatcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
             }
 
@@ -386,7 +397,9 @@ class CommentsFragment : Fragment() {
                     snackString("Comment cannot be longer than 300 characters")
                 }
             }
-        })
+        }
+        limitTextWatcher = limitWatcher
+        activity.binding.commentInput.addTextChangedListener(limitWatcher)
 
         activity.binding.commentInput.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
@@ -508,6 +521,35 @@ class CommentsFragment : Fragment() {
 
     enum class InteractionState {
         NONE, EDIT, REPLY
+    }
+
+    fun onTimestampClicked(tag: String?, timestampMs: Long) {
+        val targetTag = tag ?: filterTag?.toString()
+        if (targetTag == null) {
+            snackString("No episode tagged in this comment")
+            return
+        }
+        val model: MediaDetailsViewModel by activityViewModels()
+        val currentMedia = model.getMedia().value ?: return
+
+        if (isAnime) {
+            val ep = currentMedia.anime?.episodes?.getEpisode(targetTag)
+            if (ep != null) {
+                val cleanEp = MediaNameAdapter.findEpisodeNumber(targetTag)?.let {
+                    if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                }
+                PrefManager.setCustomVal("${currentMedia.id}_$targetTag", timestampMs)
+                if (cleanEp != null) {
+                    PrefManager.setCustomVal("${currentMedia.id}_$cleanEp", timestampMs)
+                }
+                ani.dantotsu.media.anime.ExoplayerView.targetStartPosition = timestampMs
+                model.onEpisodeClick(currentMedia, targetTag, childFragmentManager, true)
+            } else {
+                snackString("Episode $targetTag not found for this provider")
+            }
+        } else {
+            onTagClicked(targetTag)
+        }
     }
 
     fun onTagClicked(tag: String) {

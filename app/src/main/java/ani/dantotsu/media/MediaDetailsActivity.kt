@@ -700,6 +700,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         Refresh.activity.remove(this.hashCode())
         mediaSingleton = null
         MediaSingleton.bitmap = null
+        MediaSingleton.media = null
         binding.mediaViewPager.adapter = null
     }
 

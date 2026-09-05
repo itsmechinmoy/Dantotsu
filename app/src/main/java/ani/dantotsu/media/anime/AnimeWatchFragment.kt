@@ -102,6 +102,7 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
 
     var continueEp: Boolean = false
     var loaded = false
+    private var isReceiverRegistered = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -121,12 +122,15 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
             addAction(ACTION_DOWNLOAD_PROGRESS)
         }
 
-        ContextCompat.registerReceiver(
-            requireContext(),
-            downloadStatusReceiver,
-            intentFilter,
-            ContextCompat.RECEIVER_EXPORTED
-        )
+        if (!isReceiverRegistered) {
+            ContextCompat.registerReceiver(
+                requireContext(),
+                downloadStatusReceiver,
+                intentFilter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
+            isReceiverRegistered = true
+        }
 
 
         binding.mediaSourceRecycler.updatePadding(bottom = binding.mediaSourceRecycler.paddingBottom + navBarHeight)
@@ -983,6 +987,15 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
     }
 
     override fun onDestroyView() {
+        if (isReceiverRegistered) {
+            try {
+                context?.unregisterReceiver(downloadStatusReceiver)
+            } catch (_: Exception) {}
+            isReceiverRegistered = false
+        }
+        if (::headerAdapter.isInitialized) {
+            headerAdapter.clearBinding()
+        }
         super.onDestroyView()
         _binding?.mediaSourceRecycler?.adapter = null
         _binding = null
@@ -990,11 +1003,13 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
 
     override fun onDestroy() {
         model.watchSources?.flushText()
-        super.onDestroy()
-        try {
-            requireContext().unregisterReceiver(downloadStatusReceiver)
-        } catch (_: IllegalArgumentException) {
+        if (isReceiverRegistered) {
+            try {
+                context?.unregisterReceiver(downloadStatusReceiver)
+            } catch (_: Exception) {}
+            isReceiverRegistered = false
         }
+        super.onDestroy()
     }
 
     var state: Parcelable? = null

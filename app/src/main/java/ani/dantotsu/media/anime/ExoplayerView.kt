@@ -266,6 +266,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
     companion object {
         var initialized = false
         lateinit var media: Media
+        var targetStartPosition: Long? = null
         private const val MAX_PLAYER_ERROR_RETRIES = 1
     }
 
@@ -707,7 +708,11 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                         if (it % 1 == 0f) it.toInt().toString() else it.toString()
                     }
                     val savedEpPos = PrefManager.getCustomVal("${media.id}_${epKey ?: ep.number}", 0L)
-                    playbackPosition = if (savedEpPos > 0L) savedEpPos else cleanEp?.let { PrefManager.getCustomVal("${media.id}_${it}", 0L) } ?: 0L
+                    val targetPos = targetStartPosition
+                    playbackPosition = if (targetPos != null && targetPos > 0L) {
+                        targetStartPosition = null
+                        targetPos
+                    } else if (savedEpPos > 0L) savedEpPos else cleanEp?.let { PrefManager.getCustomVal("${media.id}_${it}", 0L) } ?: 0L
                 }
                 aniSkipManager.resetForNewEpisode()
                 initPlayer()

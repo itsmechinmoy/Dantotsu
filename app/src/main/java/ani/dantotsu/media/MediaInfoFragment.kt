@@ -47,6 +47,7 @@ import ani.dantotsu.px
 import ani.dantotsu.setSafeOnClickListener
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.toast
 import ani.dantotsu.media.mangaupdates.MangaAnimeUtil
 import ani.dantotsu.util.Logger
 import com.xwray.groupie.GroupieAdapter
@@ -81,7 +82,10 @@ class MediaInfoFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        super.onDestroyView();_binding = null
+        timer?.cancel()
+        timer = null
+        super.onDestroyView()
+        _binding = null
     }
 
     // Method to display anime adaptation
@@ -759,9 +763,34 @@ class MediaInfoFragment : Fragment() {
                             bind.itemChipGroup,
                             false
                         ).root
-                        val seasonYear = if (rank.year != null) "${rank.season ?: ""} ${rank.year}".trim() else ""
-                        val contextStr = rank.context ?: if (rank.allTime == true) "All Time" else seasonYear
-                        chip.text = "#${rank.rank} $contextStr"
+                        val rawContext = rank.context?.takeIf { it.isNotBlank() }
+                            ?: when (rank.type) {
+                                "POPULAR" -> "most popular"
+                                "RATED" -> "highest rated"
+                                else -> ""
+                            }
+                        val formattedContext = rawContext.split(" ")
+                            .filter { it.isNotBlank() }
+                            .joinToString(" ") { word -> word.replaceFirstChar(Char::titlecase) }
+
+                        val isAllTime = rank.allTime == true || formattedContext.contains("All Time", ignoreCase = true)
+                        val seasonName = rank.season?.name?.lowercase()?.replaceFirstChar(Char::titlecase)
+
+                        val timePeriod = when {
+                            isAllTime -> if (formattedContext.contains("All Time", ignoreCase = true)) "" else "All Time"
+                            seasonName != null && rank.year != null -> "$seasonName ${rank.year}"
+                            rank.year != null -> "${rank.year}"
+                            seasonName != null -> seasonName
+                            else -> ""
+                        }
+
+                        val rankingText = if (timePeriod.isNotEmpty()) {
+                            "$formattedContext $timePeriod"
+                        } else {
+                            formattedContext
+                        }
+
+                        chip.text = "#${rank.rank} $rankingText"
                         bind.itemChipGroup.addView(chip)
                     }
                     parent.addView(bind.root)
@@ -840,36 +869,93 @@ class MediaInfoFragment : Fragment() {
                             parent.addView(root)
                         }
                     }
+                }
 
-                    if (!media.review.isNullOrEmpty()) {
-                        ItemTitleRecyclerBinding.inflate(
-                            LayoutInflater.from(context),
-                            parent,
-                            false
-                        ).apply {
-                            val adapter = GroupieAdapter()
-                            media.review!!.forEach { adapter.add(ReviewAdapter(it)) }
-                            itemTitle.setText(R.string.reviews)
-                            itemRecycler.adapter = adapter
-                            itemRecycler.layoutManager = LinearLayoutManager(requireContext())
-                            itemMore.visibility = View.VISIBLE
-                            itemMore.setSafeOnClickListener {
-                                startActivity(
-                                    Intent(requireContext(), ReviewActivity::class.java)
-                                        .putExtra("mediaId", media.id)
-                                )
+                if (!offline) {
+                    val isAnimeMedia = media.anime != null
+                    ItemQuelsBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    ).apply {
+                        if (isAnimeMedia) {
+                            val watchOrderImage = media.banner ?: media.cover
+                            val newsImage = media.relations?.firstOrNull { it.cover != null && it.cover != media.cover }?.cover
+                                ?: media.characters?.firstOrNull()?.image
+                                ?: media.relations?.firstOrNull { it.banner != null && it.banner != media.banner }?.banner
+                                ?: media.cover?.takeIf { it != watchOrderImage }
+                                ?: media.banner
+                                ?: media.cover
+
+                            mediaInfoPrequel.visibility = View.VISIBLE
+                            mediaInfoPrequelTitle.text = getString(R.string.watch_order)
+                            mediaInfoPrequelImage.loadImage(watchOrderImage)
+                            mediaInfoPrequel.setSafeOnClickListener {
+                                if (!isAdded || context == null) return@setSafeOnClickListener
+                                if (childFragmentManager.findFragmentByTag("watch_order") == null) {
+                                    MediaContentBottomSheet.newWatchOrderInstance(media)
+                                        .show(childFragmentManager, "watch_order")
+                                }
                             }
-                            root.tag = "dynamic_view"
-                            parent.addView(root)
-                        }
-                    }
 
+                            mediaInfoSequel.visibility = View.VISIBLE
+                            mediaInfoSequelTitle.text = getString(R.string.news)
+                            mediaInfoSequelImage.loadImage(newsImage)
+                            mediaInfoSequel.setSafeOnClickListener {
+                                if (!isAdded || context == null) return@setSafeOnClickListener
+                                if (childFragmentManager.findFragmentByTag("news") == null) {
+                                    MediaContentBottomSheet.newNewsInstance(media)
+                                        .show(childFragmentManager, "news")
+                                }
+                            }
+                        } else {
+                            val newsImage = media.banner ?: media.cover
+                            mediaInfoPrequel.visibility = View.VISIBLE
+                            mediaInfoPrequelTitle.text = getString(R.string.news)
+                            mediaInfoPrequelImage.loadImage(newsImage)
+                            mediaInfoPrequel.setSafeOnClickListener {
+                                if (!isAdded || context == null) return@setSafeOnClickListener
+                                if (childFragmentManager.findFragmentByTag("news") == null) {
+                                    MediaContentBottomSheet.newNewsInstance(media)
+                                        .show(childFragmentManager, "news")
+                                }
+                            }
+                        }
+
+                        root.tag = "dynamic_view"
+                        parent.addView(root)
+                    }
+                }
+
+                if (!media.review.isNullOrEmpty()) {
                     ItemTitleRecyclerBinding.inflate(
                         LayoutInflater.from(context),
                         parent,
                         false
                     ).apply {
+                        val adapter = GroupieAdapter()
+                        media.review!!.forEach { adapter.add(ReviewAdapter(it)) }
+                        itemTitle.setText(R.string.reviews)
+                        itemRecycler.adapter = adapter
+                        itemRecycler.layoutManager = LinearLayoutManager(requireContext())
+                        itemMore.visibility = View.VISIBLE
+                        itemMore.setSafeOnClickListener {
+                            startActivity(
+                                Intent(requireContext(), ReviewActivity::class.java)
+                                    .putExtra("mediaId", media.id)
+                            )
+                        }
+                        root.tag = "dynamic_view"
+                        parent.addView(root)
+                    }
+                }
 
+                if (!media.relations.isNullOrEmpty() && !offline) {
+                    ItemTitleRecyclerBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    ).apply {
                         itemRecycler.adapter =
                             MediaAdaptor(0, media.relations!!, requireActivity())
                         itemRecycler.layoutManager = LinearLayoutManager(

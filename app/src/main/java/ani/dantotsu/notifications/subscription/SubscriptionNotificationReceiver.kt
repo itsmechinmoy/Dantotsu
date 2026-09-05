@@ -19,15 +19,19 @@ class SubscriptionNotificationReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 SubscriptionNotificationTask().execute(context)
-                val subscriptionInterval =
-                    SubscriptionNotificationWorker.checkIntervals[PrefManager.getVal(PrefName.SubscriptionNotificationInterval)]
-                AlarmManagerScheduler(context).scheduleRepeatingTask(
-                    TaskScheduler.TaskType.SUBSCRIPTION_NOTIFICATION,
-                    subscriptionInterval
-                )
             } catch (e: Exception) {
                 Logger.log(e)
             } finally {
+                try {
+                    val subscriptionInterval =
+                        SubscriptionNotificationWorker.checkIntervals[PrefManager.getVal(PrefName.SubscriptionNotificationInterval)]
+                    AlarmManagerScheduler(context).scheduleRepeatingTask(
+                        TaskScheduler.TaskType.SUBSCRIPTION_NOTIFICATION,
+                        subscriptionInterval
+                    )
+                } catch (e: Exception) {
+                    Logger.log(e)
+                }
                 pendingResult.finish()
             }
         }

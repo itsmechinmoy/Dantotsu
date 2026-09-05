@@ -22,7 +22,7 @@ data class Recommendation(
 
     // The user that first created the recommendation
     @SerialName("user") var user: User?,
-)
+) : java.io.Serializable
 
 @Serializable
 data class RecommendationConnection(

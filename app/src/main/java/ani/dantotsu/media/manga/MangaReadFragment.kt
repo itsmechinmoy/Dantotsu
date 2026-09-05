@@ -99,6 +99,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
 
     var continueEp: Boolean = false
     var loaded = false
+    private var isReceiverRegistered = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -118,12 +119,15 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
             addAction(ACTION_DOWNLOAD_PROGRESS)
         }
 
-        ContextCompat.registerReceiver(
-            requireContext(),
-            downloadStatusReceiver,
-            intentFilter,
-            ContextCompat.RECEIVER_EXPORTED
-        )
+        if (!isReceiverRegistered) {
+            ContextCompat.registerReceiver(
+                requireContext(),
+                downloadStatusReceiver,
+                intentFilter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
+            isReceiverRegistered = true
+        }
 
         val baselineAnchor = (activity as MediaDetailsActivity).binding.mediaBottomBarContainer ?: (activity as MediaDetailsActivity).binding.commentMessageContainer
         baselineAnchor?.let {
@@ -730,6 +734,15 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
     }
 
     override fun onDestroyView() {
+        if (isReceiverRegistered) {
+            try {
+                context?.unregisterReceiver(downloadStatusReceiver)
+            } catch (_: Exception) {}
+            isReceiverRegistered = false
+        }
+        if (::headerAdapter.isInitialized) {
+            headerAdapter.clearBinding()
+        }
         super.onDestroyView()
         _binding?.mediaSourceRecycler?.adapter = null
         _binding = null
@@ -737,11 +750,13 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
 
     override fun onDestroy() {
         model.mangaReadSources?.flushText()
-        super.onDestroy()
-        try {
-            requireContext().unregisterReceiver(downloadStatusReceiver)
-        } catch (_: IllegalArgumentException) {
+        if (isReceiverRegistered) {
+            try {
+                context?.unregisterReceiver(downloadStatusReceiver)
+            } catch (_: Exception) {}
+            isReceiverRegistered = false
         }
+        super.onDestroy()
     }
 
     private var state: Parcelable? = null

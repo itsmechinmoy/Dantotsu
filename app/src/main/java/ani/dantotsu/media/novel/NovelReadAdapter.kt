@@ -33,6 +33,17 @@ class NovelReadAdapter(
     var progress: View? = null
     var _binding: ItemNovelHeaderBinding? = null
 
+    fun clearBinding() {
+        _binding = null
+        progress = null
+    }
+
+    override fun onViewRecycled(holder: ViewHolder) {
+        super.onViewRecycled(holder)
+        _binding = null
+        progress = null
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): NovelReadAdapter.ViewHolder {
         val binding =
             ItemNovelHeaderBinding.inflate(LayoutInflater.from(parent.context), parent, false)

@@ -78,10 +78,10 @@ object MangaAnimeUtil {
     suspend fun getSeriesFromMedia(media: Media): List<MangaBakaSeries>? =
         withContext(Dispatchers.IO) {
             val endpoints = buildList {
-                if (media.source == "anilist" || media.source == null) {
+                if (media.id != 0) {
                     add("$MANGABAKA_BASE/source/anilist/${media.id}")
                 }
-                if (media.idMAL != null) {
+                if (media.idMAL != null && media.idMAL != 0) {
                     add("$MANGABAKA_BASE/source/my-anime-list/${media.idMAL}")
                 }
             }
@@ -92,10 +92,8 @@ object MangaAnimeUtil {
                     runCatching {
                         val response = client.get(endpoint)
                         if (response.code == 200) {
-                            val body = response.body?.string()
-                            val result = json.decodeFromString<MangaBakaResponse>(
-                                body ?: return@async null
-                            )
+                            val body = response.text
+                            val result = json.decodeFromString<MangaBakaResponse>(body)
                             result.data?.series?.takeIf { it.isNotEmpty() }
                         } else null
                     }.getOrNull()

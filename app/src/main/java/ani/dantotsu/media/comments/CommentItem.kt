@@ -3,6 +3,15 @@ package ani.dantotsu.media.comments
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.TextPaint
+import android.text.method.LinkMovementMethod
+import android.text.style.ClickableSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.view.View
 import android.widget.PopupMenu
 import androidx.core.content.ContextCompat
@@ -13,6 +22,7 @@ import ani.dantotsu.connections.comments.CommentsAPI
 import ani.dantotsu.copyToClipboard
 import ani.dantotsu.databinding.ItemCommentsBinding
 import ani.dantotsu.getAppString
+import ani.dantotsu.getThemeColor
 import ani.dantotsu.loadImage
 import ani.dantotsu.openImage
 import ani.dantotsu.profile.ProfileActivity
@@ -69,6 +79,7 @@ class CommentItem(
             val isUserComment = CommentsAPI.userId == comment.userId
             val levelColor = getAvatarColor(comment.totalVotes, backgroundColor)
             markwon.setMarkdown(commentText, comment.content)
+            applyTimestampHighlighting(commentText)
             commentEdit.visibility = if (isUserComment) View.VISIBLE else View.GONE
             if (comment.tag == null) {
                 commentUserTagLayout.visibility = View.GONE
@@ -378,6 +389,68 @@ class CommentItem(
         }
 
         return Pair(color, level)
+    }
+
+    private fun extractEpisodeTag(text: String): String? {
+        val regex = Regex("""(?:\bep(?:isode)?|\be)\.?\s*(\d+)""", RegexOption.IGNORE_CASE)
+        return regex.find(text)?.groupValues?.getOrNull(1)
+    }
+
+    private fun applyTimestampHighlighting(textView: android.widget.TextView) {
+        val currentText = textView.text ?: return
+        val spannable = if (currentText is Spannable) currentText else SpannableStringBuilder(currentText)
+        val textStr = spannable.toString()
+
+        val timestampRegex = Regex("""\b(?:(?:([0-1]?[0-9]|2[0-3]):)?([0-5]?[0-9]):([0-5][0-9]))\b""")
+        val matches = timestampRegex.findAll(textStr).toList()
+        if (matches.isEmpty()) return
+
+        val primaryColor = textView.context.getThemeColor(androidx.appcompat.R.attr.colorPrimary)
+
+        for (match in matches) {
+            val start = match.range.first
+            val end = match.range.last + 1
+
+            val existingUrlSpans = spannable.getSpans(start, end, android.text.style.URLSpan::class.java)
+            if (existingUrlSpans.isNotEmpty()) continue
+
+            val hours = match.groups[1]?.value?.toLongOrNull() ?: 0L
+            val minutes = match.groups[2]?.value?.toLongOrNull() ?: 0L
+            val seconds = match.groups[3]?.value?.toLongOrNull() ?: 0L
+            val timestampMs = (hours * 3600 + minutes * 60 + seconds) * 1000L
+
+            val clickableSpan = object : ClickableSpan() {
+                override fun onClick(widget: View) {
+                    val spoiler = spannable.getSpans(start, end, ani.dantotsu.others.SpoilerPlugin.RedditSpoilerSpan::class.java).firstOrNull()
+                    if (spoiler != null && !spoiler.revealed) {
+                        spoiler.setRevealed(true)
+                        widget.postInvalidateOnAnimation()
+                    } else {
+                        val fallbackTag = extractEpisodeTag(comment.content)
+                        commentsFragment.onTimestampClicked(comment.tag?.toString() ?: fallbackTag, timestampMs)
+                    }
+                }
+
+                override fun updateDrawState(ds: TextPaint) {
+                    super.updateDrawState(ds)
+                    val spoiler = spannable.getSpans(start, end, ani.dantotsu.others.SpoilerPlugin.RedditSpoilerSpan::class.java).firstOrNull()
+                    if (spoiler != null && !spoiler.revealed) {
+                        ds.bgColor = Color.DKGRAY
+                        ds.color = Color.DKGRAY
+                        ds.isUnderlineText = false
+                    } else {
+                        ds.color = primaryColor
+                        ds.typeface = Typeface.create(ds.typeface, Typeface.BOLD)
+                        ds.isUnderlineText = true
+                    }
+                }
+            }
+
+            spannable.setSpan(clickableSpan, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
+        textView.text = spannable
+        textView.movementMethod = LinkMovementMethod.getInstance()
     }
 
     /**

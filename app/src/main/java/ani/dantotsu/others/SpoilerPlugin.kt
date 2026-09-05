@@ -21,8 +21,9 @@ class SpoilerPlugin(private val anilist: Boolean = false) : AbstractMarkwonPlugi
         }
     }
 
-    private class RedditSpoilerSpan : CharacterStyle() {
-        private var revealed = false
+    class RedditSpoilerSpan : CharacterStyle() {
+        var revealed = false
+            private set
         override fun updateDrawState(tp: TextPaint) {
             if (!revealed) {
                 // use the same text color
@@ -58,6 +59,9 @@ class SpoilerPlugin(private val anilist: Boolean = false) : AbstractMarkwonPlugi
                 val clickableSpan: ClickableSpan = object : ClickableSpan() {
                     override fun onClick(widget: View) {
                         spoilerSpan.setRevealed(true)
+                        if (widget is TextView && widget.text is Spannable) {
+                            (widget.text as Spannable).removeSpan(this)
+                        }
                         widget.postInvalidateOnAnimation()
                     }
 

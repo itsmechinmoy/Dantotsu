@@ -169,6 +169,7 @@ class AnilistQueries {
                     fun parse() {
                         val fetchedMedia = response?.data?.media ?: return
                         val user = response?.data?.page
+                        if (fetchedMedia.idMal != null) media.idMAL = fetchedMedia.idMal
                         media.isFav = fetchedMedia.isFavourite ?: false
                         media.source = fetchedMedia.source?.toString()?.replace("_", " ")?.lowercase()?.split(" ")?.joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
                         media.countryOfOrigin = fetchedMedia.countryOfOrigin

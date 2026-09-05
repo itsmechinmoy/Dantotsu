@@ -159,7 +159,7 @@ class App : Application(), GraphProvider<AppGraph> {
                 delay(1500)
                 animeExtensionManager.findAvailableExtensions()
             }
-            AnimeSources.init(animeExtensionManager.installedExtensionsFlow)
+            AnimeSources.init(animeExtensionManager.installedExtensionsFlow, animeExtensionManager)
         }
         applicationScope.launch(Dispatchers.IO) {
             mangaExtensionManager = Injekt.get()
@@ -167,7 +167,7 @@ class App : Application(), GraphProvider<AppGraph> {
                 delay(1500)
                 mangaExtensionManager.findAvailableExtensions()
             }
-            MangaSources.init(mangaExtensionManager.installedExtensionsFlow)
+            MangaSources.init(mangaExtensionManager.installedExtensionsFlow, mangaExtensionManager)
         }
         applicationScope.launch(Dispatchers.IO) {
             novelExtensionManager = Injekt.get()

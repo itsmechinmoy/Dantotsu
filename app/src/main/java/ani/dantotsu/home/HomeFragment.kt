@@ -88,7 +88,7 @@ class HomeFragment : Fragment() {
     val model: AnilistHomeViewModel by activityViewModels()
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        val scope = lifecycleScope
+        val scope = viewLifecycleOwner.lifecycleScope
         Logger.log("HomeFragment")
         fun load() {
             Logger.log("Loading HomeFragment")

@@ -45,6 +45,7 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/mediaInfoPrequelTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
@@ -67,7 +68,7 @@
         android:layout_width="0dp"
         android:layout_height="72dp"
         android:layout_margin="8dp"
-        android:layout_marginStart="161dp"
+        app:layout_goneMarginStart="161dp"
         android:layout_marginBottom="16dp"
         android:layout_weight="1"
         android:visibility="gone"
@@ -100,6 +101,7 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/mediaInfoSequelTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"

@@ -9,6 +9,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ani.dantotsu.R
+import ani.dantotsu.client
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.currContext
@@ -1119,5 +1120,348 @@ class MediaDetailsViewModel : ViewModel() {
                 Logger.log("MangaExtras error: $e")
             }
         }
+    }
+
+    // Watch Order and News integration
+    data class WatchOrderItem(
+        val id: String,
+        val anilistId: String,
+        val image: String,
+        val name: String,
+        val relationType: String,
+        val isCurrent: Boolean = false,
+        val airDate: String = "",
+        val mediaType: String = "",
+        val episodes: String = "",
+        val rating: String = ""
+    ) : java.io.Serializable
+
+    data class NewsItem(
+        val title: String,
+        val url: String,
+        val date: java.util.Date?
+    ) : java.io.Serializable
+
+    suspend fun getWatchOrder(media: Media): List<WatchOrderItem> {
+        return tryWithSuspend {
+            val headers = mapOf(
+                "Referer" to "https://chiaki.site/?/tools/watch_order",
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "X-Requested-With" to "XMLHttpRequest"
+            )
+
+            val malId = media.idMAL ?: ani.dantotsu.others.IdMappers.getMalId(media.id)
+            if (media.idMAL == null && malId != null) {
+                media.idMAL = malId
+            }
+            var targetId = malId?.toString()
+
+            if (targetId == null) {
+                val searchName = media.userPreferredName.ifEmpty { media.mainName() }
+                val encodedTerm = java.net.URLEncoder.encode(searchName, "UTF-8")
+                val searchUrl = "https://chiaki.site/?/tools/autocomplete_series&term=$encodedTerm"
+                val res = client.get(searchUrl, headers = headers).text
+                val json = org.json.JSONArray(res)
+                if (json.length() > 0) {
+                    targetId = json.getJSONObject(0).opt("id")?.toString()
+                }
+            }
+
+            if (targetId == null) return@tryWithSuspend emptyList()
+
+            val orderUrl = "https://chiaki.site/?/tools/watch_order/id/$targetId"
+            val html = client.get(orderUrl, headers = headers).text
+            val doc = org.jsoup.Jsoup.parse(html)
+
+            val rows = doc.select("tr[data-id]")
+            val relationsMap = media.relations?.associateBy { it.id.toString() } ?: emptyMap()
+
+            // Parse relations relative to targetId from data-related JSON attribute
+            val targetRow = rows.find { it.attr("data-id") == targetId }
+            val targetRelatedJson = targetRow?.attr("data-related") ?: "{}"
+            val relatedMap = try {
+                val jsonObj = org.json.JSONObject(targetRelatedJson)
+                val map = mutableMapOf<String, String>()
+                jsonObj.keys().forEach { key ->
+                    map[key] = jsonObj.getString(key)
+                }
+                map
+            } catch (_: Exception) {
+                emptyMap<String, String>()
+            }
+
+            rows.mapIndexedNotNull { index, row ->
+                val title = row.select("span.wo_title").text().trim()
+                    .ifEmpty { row.select(".wo_title").text().trim() }
+                if (title.isEmpty() || title.equals("Unknown title", ignoreCase = true)) return@mapIndexedNotNull null
+
+                val id = row.attr("data-id").ifEmpty { targetId }
+                val anilistId = row.attr("data-anilist-id")
+
+                // 1. Cover image from style background-image
+                val style = row.select("div.wo_avatar_big").attr("style")
+                val imgMatch = Regex("""url\(['"]?([^'")]+)['"]?\)""").find(style)
+                var imageUrl = imgMatch?.groupValues?.get(1)?.let { path ->
+                    when {
+                        path.startsWith("http") -> path
+                        path.startsWith("/") -> "https://chiaki.site$path"
+                        else -> "https://chiaki.site/$path"
+                    }
+                } ?: ""
+
+                if (imageUrl.isEmpty()) {
+                    if (anilistId == media.id.toString()) {
+                        imageUrl = media.cover ?: ""
+                    } else if (relationsMap.containsKey(anilistId)) {
+                        imageUrl = relationsMap[anilistId]?.cover ?: ""
+                    }
+                }
+
+                // 2. Metadata text: Air Date | Media Type | Episodes | Rating
+                val metaText = row.select("span.uk-text-muted.uk-text-small").text().trim()
+                    .ifEmpty { row.select(".wo_meta").text().trim() }
+                val parts = metaText.split('|').map { it.trim() }
+                val airDate = if (parts.isNotEmpty()) parts[0] else ""
+                val format = if (parts.size > 1) parts[1] else ""
+                val eps = if (parts.size > 2) parts[2].substringBefore("★").substringBefore("(").trim() else ""
+                val rating = ""
+
+                // 3. Is current anime
+                val cleanId = id.trim()
+                val cleanAnilistId = anilistId.trim()
+                val currentMalId = media.idMAL ?: malId
+                val isCurrent = (cleanAnilistId.isNotEmpty() && cleanAnilistId == media.id.toString()) ||
+                        (cleanId.isNotEmpty() && currentMalId != null && cleanId == currentMalId.toString()) ||
+                        (cleanId.isNotEmpty() && targetId != null && cleanId == targetId.trim() && (currentMalId == null || currentMalId.toString() == targetId.trim())) ||
+                        (title.isNotEmpty() && (title.equals(media.userPreferredName, ignoreCase = true) ||
+                                title.equals(media.mainName(), ignoreCase = true) ||
+                                title.equals(media.name, ignoreCase = true) ||
+                                title.equals(media.nameRomaji, ignoreCase = true)))
+
+                // 4. Relation type
+                val relationType = when {
+                    isCurrent -> "Selected"
+                    relatedMap.containsKey(id) -> relatedMap[id]!!
+                    relationsMap.containsKey(anilistId) -> {
+                        relationsMap[anilistId]?.relation?.replace("_", " ")?.lowercase()
+                            ?.split(" ")?.joinToString(" ") { it.replaceFirstChar(Char::titlecase) } ?: ""
+                    }
+                    index == 0 -> "Main Story"
+                    format.equals("TV", ignoreCase = true) -> "Sequel"
+                    format.equals("OVA", ignoreCase = true) || format.equals("Special", ignoreCase = true) -> "Side Story"
+                    format.equals("Movie", ignoreCase = true) -> "Movie"
+                    else -> format.ifEmpty { "Entry" }
+                }
+
+                WatchOrderItem(
+                    id = id,
+                    anilistId = anilistId,
+                    image = imageUrl,
+                    name = title,
+                    relationType = relationType,
+                    isCurrent = isCurrent,
+                    airDate = airDate,
+                    mediaType = format,
+                    episodes = eps,
+                    rating = rating
+                )
+            }
+        } ?: emptyList()
+    }
+
+
+    suspend fun getAnimeNews(media: Media): List<NewsItem> {
+        return tryWithSuspend {
+            var malId = media.idMAL
+            if (malId == null || malId == 0) {
+                malId = ani.dantotsu.others.IdMappers.getMalId(media.id)
+            }
+            if (malId == null || malId == 0) {
+                malId = runCatching {
+                    Anilist.query.getMedia(media.id)?.idMAL
+                }.getOrNull()
+                if (malId != null && malId != 0) {
+                    media.idMAL = malId
+                }
+            }
+            val targetId = malId?.takeIf { it != 0 } ?: return@tryWithSuspend emptyList()
+
+            val headers = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept" to "application/json, text/plain, */*"
+            )
+
+            suspend fun fetchKuroiruNews(id: Int): List<NewsItem> {
+                val jsonStr = runCatching {
+                    val res = client.get("https://kuroiru.co/api/anime/$id", headers = headers)
+                    if (res.isSuccessful) res.text else null
+                }.getOrNull() ?: return emptyList()
+
+                val root = runCatching { org.json.JSONObject(jsonStr) }.getOrNull()
+                    ?: return emptyList()
+                val newsArr = root.optJSONArray("news") ?: return emptyList()
+                val list = mutableListOf<NewsItem>()
+                for (i in 0 until newsArr.length()) {
+                    val itemObj = newsArr.getJSONObject(i)
+                    val timeMs = itemObj.optLong("time", 0L)
+                    val rawTitle = itemObj.optString("title", "")
+                    val title = org.jsoup.parser.Parser.unescapeEntities(rawTitle, false)
+                    val rawLink = itemObj.optString("link", "")
+                    val link = normalizeKuroiruLink(rawLink)
+                    if (title.isNotEmpty() && link.isNotEmpty()) {
+                        list.add(
+                            NewsItem(
+                                title = title,
+                                url = link,
+                                date = if (timeMs > 0) java.util.Date(timeMs * 1000L) else null
+                            )
+                        )
+                    }
+                }
+                return list
+            }
+
+            var result = fetchKuroiruNews(targetId)
+            if (result.isEmpty()) {
+                val candidateIds = mutableListOf<Int>()
+                media.prequel?.idMAL?.let { candidateIds.add(it) }
+                media.relations?.forEach { rel ->
+                    rel.idMAL?.let { candidateIds.add(it) }
+                }
+                for (candId in candidateIds) {
+                    if (candId != targetId && candId != 0) {
+                        result = fetchKuroiruNews(candId)
+                        if (result.isNotEmpty()) break
+                    }
+                }
+            }
+
+            result.sortedByDescending { it.date }
+        } ?: emptyList()
+    }
+
+    private fun normalizeKuroiruLink(rawLink: String): String {
+        val link = rawLink.trim()
+        if (link.isEmpty()) return ""
+        if (link.startsWith("http://", ignoreCase = true) ||
+            link.startsWith("https://", ignoreCase = true)
+        ) return link
+       
+        if (link.all { it.isDigit() }) {
+            return "https://www.animenewsnetwork.com/news/.$link"
+        }
+        return link
+    }
+
+    suspend fun getMangaNovelNews(media: Media): List<NewsItem> {
+        return tryWithSuspend {
+            val bakaBase = "https://api.mangabaka.org/v1"
+            val headers = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept" to "application/json, text/plain, */*"
+            )
+            suspend fun getBakaId(): Int? {
+                if (media.id != 0) {
+                    val id = runCatching {
+                        val res = client.get("$bakaBase/source/anilist/${media.id}", headers = headers)
+                        if (!res.isSuccessful) return@runCatching null
+                        val root = org.json.JSONObject(res.text)
+                        val seriesArr = root.optJSONObject("data")?.optJSONArray("series")
+                        if (seriesArr != null && seriesArr.length() > 0) {
+                            seriesArr.getJSONObject(0).optInt("id").takeIf { it != 0 }
+                        } else null
+                    }.getOrNull()
+                    if (id != null && id != 0) return id
+                }
+
+                if (media.idMAL != null && media.idMAL != 0) {
+                    val id = runCatching {
+                        val res = client.get("$bakaBase/source/my-anime-list/${media.idMAL}", headers = headers)
+                        if (!res.isSuccessful) return@runCatching null
+                        val root = org.json.JSONObject(res.text)
+                        val seriesArr = root.optJSONObject("data")?.optJSONArray("series")
+                        if (seriesArr != null && seriesArr.length() > 0) {
+                            seriesArr.getJSONObject(0).optInt("id").takeIf { it != 0 }
+                        } else null
+                    }.getOrNull()
+                    if (id != null && id != 0) return id
+                }
+
+                val titleToSearch = media.userPreferredName.ifEmpty { media.mainName() }
+                if (titleToSearch.isNotEmpty()) {
+                    val encodedTitle = java.net.URLEncoder.encode(titleToSearch, "UTF-8")
+                    val id = runCatching {
+                        val res = client.get("$bakaBase/series/search?q=$encodedTitle", headers = headers)
+                        if (!res.isSuccessful) return@runCatching null
+                        val root = org.json.JSONObject(res.text)
+                        val seriesArr = root.optJSONArray("data")
+                        if (seriesArr != null && seriesArr.length() > 0) {
+                            seriesArr.getJSONObject(0).optInt("id").takeIf { it != 0 }
+                        } else null
+                    }.getOrNull()
+                    if (id != null && id != 0) return id
+                }
+
+                return null
+            }
+
+            val bakaId = getBakaId() ?: return@tryWithSuspend emptyList()
+
+            val jsonStr = runCatching {
+                val res = client.get("$bakaBase/series/$bakaId/news", headers = headers)
+                if (res.isSuccessful) res.text else null
+            }.getOrNull() ?: return@tryWithSuspend emptyList()
+
+            val root = runCatching { org.json.JSONObject(jsonStr) }.getOrNull()
+                ?: return@tryWithSuspend emptyList()
+            val newsArr = root.optJSONArray("data") ?: return@tryWithSuspend emptyList()
+            val result = mutableListOf<NewsItem>()
+
+            fun parseDate(dateStr: String): java.util.Date? {
+                if (dateStr.isEmpty()) return null
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    val instantDate = runCatching {
+                        java.util.Date(java.time.Instant.parse(dateStr).toEpochMilli())
+                    }.getOrNull()
+                    if (instantDate != null) return instantDate
+                }
+                val formats = listOf(
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+                    "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                    "yyyy-MM-dd'T'HH:mm:ss",
+                    "yyyy-MM-dd"
+                )
+                for (fmt in formats) {
+                    val parsed = runCatching {
+                        val sdf = java.text.SimpleDateFormat(fmt, java.util.Locale.US).apply {
+                            timeZone = java.util.TimeZone.getTimeZone("UTC")
+                        }
+                        sdf.parse(dateStr)
+                    }.getOrNull()
+                    if (parsed != null) return parsed
+                }
+                return null
+            }
+
+            for (i in 0 until newsArr.length()) {
+                val itemObj = newsArr.getJSONObject(i)
+                val pubAt = itemObj.optString("published_at", "")
+                val date = parseDate(pubAt)
+                val rawTitle = itemObj.optString("title", "")
+                val title = org.jsoup.parser.Parser.unescapeEntities(rawTitle, false)
+                val url = itemObj.optString("url", "")
+                if (title.isNotEmpty() && url.isNotEmpty()) {
+                    result.add(
+                        NewsItem(
+                            title = title,
+                            url = url,
+                            date = date
+                        )
+                    )
+                }
+            }
+            result.sortByDescending { it.date }
+            result
+        } ?: emptyList()
     }
 }

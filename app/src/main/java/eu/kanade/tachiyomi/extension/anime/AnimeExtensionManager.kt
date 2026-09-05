@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import rx.Observable
 import tachiyomi.core.util.lang.launchNow
@@ -52,6 +53,14 @@ class AnimeExtensionManager(
 
     var isInitialized = false
         private set
+
+    private val _isInitializedFlow = MutableStateFlow(false)
+    val isInitializedFlow = _isInitializedFlow.asStateFlow()
+
+    suspend fun awaitInitialized() {
+        if (isInitialized) return
+        _isInitializedFlow.first { it }
+    }
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -123,6 +132,7 @@ class AnimeExtensionManager(
             .map { it.extension }
 
         isInitialized = true
+        _isInitializedFlow.value = true
     }
 
     /**
