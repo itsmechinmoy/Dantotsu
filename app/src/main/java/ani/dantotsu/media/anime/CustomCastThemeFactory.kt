@@ -2,14 +2,18 @@ package ani.dantotsu.media.anime
 
 import android.content.Context
 import android.os.Bundle
+import android.util.AttributeSet
 import android.view.View
 import androidx.mediarouter.app.MediaRouteActionProvider
+import androidx.mediarouter.app.MediaRouteButton
 import androidx.mediarouter.app.MediaRouteChooserDialog
 import androidx.mediarouter.app.MediaRouteChooserDialogFragment
 import androidx.mediarouter.app.MediaRouteControllerDialog
 import androidx.mediarouter.app.MediaRouteControllerDialogFragment
 import androidx.mediarouter.app.MediaRouteDialogFactory
 import ani.dantotsu.R
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 
 class CustomCastProvider(context: Context) : MediaRouteActionProvider(context) {
     init {
@@ -43,41 +47,28 @@ class CustomMediaRouteControllerDialogFragment : MediaRouteControllerDialogFragm
         MediaRouteControllerDialog(context, R.style.MyPopup)
 }
 
-class CustomCastButton @JvmOverloads constructor(
-    context: Context,
-    attrs: android.util.AttributeSet? = null,
-    defStyleAttr: Int = 0
-) : androidx.mediarouter.app.MediaRouteButton(context, attrs, defStyleAttr) {
-    private var callback: (() -> Unit)? = null
-    private var forceAlwaysVisible: Boolean = false
+class CustomCastButton : MediaRouteButton {
+    private var castCallback: (() -> Unit)? = null
 
-    override fun setAlwaysVisible(alwaysVisible: Boolean) {
-        this.forceAlwaysVisible = alwaysVisible
-        try {
-            super.setAlwaysVisible(alwaysVisible)
-        } catch (_: Throwable) {}
-        if (alwaysVisible) {
-            visibility = View.VISIBLE
+    fun setCastCallback(castCallback: () -> Unit) {
+        this.castCallback = castCallback
+    }
+
+    constructor(context: Context) : super(context)
+
+    constructor(context: Context, attrs: AttributeSet?) : super(context, attrs)
+
+    constructor(context: Context, attrs: AttributeSet?, defStyleAttr: Int) : super(
+        context,
+        attrs,
+        defStyleAttr,
+    )
+
+    override fun performClick(): Boolean =
+        if (PrefManager.getVal(PrefName.UseInternalCast)) {
+            super.performClick()
+        } else {
+            castCallback?.let { it() }
+            true
         }
-    }
-
-    fun setCastCallback(cb: () -> Unit) {
-        this.callback = cb
-    }
-
-    override fun setVisibility(visibility: Int) {
-        if (forceAlwaysVisible && visibility != View.VISIBLE) {
-            super.setVisibility(View.VISIBLE)
-            return
-        }
-        super.setVisibility(visibility)
-    }
-
-    override fun performClick(): Boolean {
-        callback?.let {
-            it.invoke()
-            return true
-        }
-        return super.performClick()
-    }
 }

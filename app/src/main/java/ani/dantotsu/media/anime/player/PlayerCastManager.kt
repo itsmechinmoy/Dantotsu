@@ -26,13 +26,13 @@ import ani.dantotsu.parsers.Subtitle
 import ani.dantotsu.parsers.Video
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
 import java.util.concurrent.Executors
-
 import androidx.mediarouter.media.MediaRouter
 import androidx.mediarouter.media.MediaRouterParams
 import ani.dantotsu.media.anime.cast.CastProxyServer
@@ -60,6 +60,8 @@ class PlayerCastManager(
     private var exoPlayer: Player? = null
 
     var castScreenView: CastScreenView? = null
+
+    private var customCastButton: CustomCastButton? = null
 
     var activeDeviceName: String? = null
         private set
@@ -137,18 +139,18 @@ class PlayerCastManager(
         }
     }
 
-    private var pendingCastButtonSetup: (() -> Unit)? = null
-
     init {
         initCastApi()
     }
 
     private fun initCastApi() {
         try {
-            MediaRouter.getInstance(activity).routerParams = MediaRouterParams.Builder()
-                .setDialogType(MediaRouterParams.DIALOG_TYPE_DYNAMIC_GROUP)
-                .setOutputSwitcherEnabled(true)
-                .build()
+            try {
+                MediaRouter.getInstance(activity).routerParams = MediaRouterParams.Builder()
+                    .setDialogType(MediaRouterParams.DIALOG_TYPE_DYNAMIC_GROUP)
+                    .setOutputSwitcherEnabled(true)
+                    .build()
+            } catch (_: Throwable) {}
 
             CastContext.getSharedInstance(activity, Executors.newSingleThreadExecutor())
                 .addOnCompleteListener { task ->
@@ -159,31 +161,26 @@ class PlayerCastManager(
                             castPlayer = castContext?.let { CastPlayer(it) }
                             castPlayer?.setSessionAvailabilityListener(this)
                             setupCastPlayerListener()
-                            activity.runOnUiThread {
-                                pendingCastButtonSetup?.invoke()
-                                pendingCastButtonSetup = null
+                            if (PrefManager.getVal(PrefName.UseInternalCast)) {
+                                activity.runOnUiThread {
+                                    customCastButton?.let { btn ->
+                                        try {
+                                            CastButtonFactory.setUpMediaRouteButton(activity, btn)
+                                            btn.dialogFactory = CustomCastThemeFactory()
+                                            btn.visibility = View.VISIBLE
+                                        } catch (_: Exception) {}
+                                    }
+                                }
                             }
                         } catch (e: Exception) {
                             isCastApiAvailable = false
-                            activity.runOnUiThread {
-                                pendingCastButtonSetup?.invoke()
-                                pendingCastButtonSetup = null
-                            }
                         }
                     } else {
                         isCastApiAvailable = false
-                        activity.runOnUiThread {
-                            pendingCastButtonSetup?.invoke()
-                            pendingCastButtonSetup = null
-                        }
                     }
                 }
         } catch (e: Exception) {
             isCastApiAvailable = false
-            activity.runOnUiThread {
-                pendingCastButtonSetup?.invoke()
-                pendingCastButtonSetup = null
-            }
         }
     }
 
@@ -230,41 +227,20 @@ class PlayerCastManager(
         hasExtSubtitles: Boolean,
         episodeTitle: String?
     ) {
+        this.customCastButton = castButton
         if (!PrefManager.getVal<Boolean>(PrefName.Cast)) {
             castButton.visibility = View.GONE
             return
         }
 
         castButton.visibility = View.VISIBLE
-        castButton.setAlwaysVisible(true)
 
         if (PrefManager.getVal(PrefName.UseInternalCast)) {
-            if (castContext == null && isCastApiAvailable) {
-                // CastContext is still initializing — try to set up the route button eagerly
-                // so MediaRouteButton has a selector and won't auto-hide the button.
-                try {
-                    CastButtonFactory.setUpMediaRouteButton(activity, castButton)
-                    castButton.dialogFactory = CustomCastThemeFactory()
-                    castButton.setAlwaysVisible(true)
-                } catch (_: Exception) {
-                    // Will be retried in pendingCastButtonSetup below
-                }
-                // Schedule full setup once CastContext is ready
-                pendingCastButtonSetup = {
-                    setupCastButton(castButton, media, video, subtitle, hasExtSubtitles, episodeTitle)
-                }
-            } else if (castContext != null) {
-                try {
-                    CastButtonFactory.setUpMediaRouteButton(activity, castButton)
-                    castButton.dialogFactory = CustomCastThemeFactory()
-                    castButton.setAlwaysVisible(true)
-                } catch (e: Exception) {
-                    isCastApiAvailable = false
-                    castButton.setCastCallback {
-                        castExternal(media, video, subtitle, hasExtSubtitles, episodeTitle)
-                    }
-                }
-            } else {
+            try {
+                CastButtonFactory.setUpMediaRouteButton(activity, castButton)
+                castButton.dialogFactory = CustomCastThemeFactory()
+            } catch (e: Exception) {
+                isCastApiAvailable = false
                 castButton.setCastCallback {
                     castExternal(media, video, subtitle, hasExtSubtitles, episodeTitle)
                 }
@@ -334,7 +310,10 @@ class PlayerCastManager(
         hasExtSubtitles: Boolean,
         episodeTitle: String?
     ) {
-        val videoURL = video?.file?.url ?: return
+        val videoURL = video?.file?.url ?: run {
+            toast(activity.getString(R.string.video_not_ready))
+            return
+        }
         val subtitleUrl = if (!hasExtSubtitles || subtitle == null) video.file.url else subtitle.file.url
         val shareVideo = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(videoURL.toUri(), "video/*")

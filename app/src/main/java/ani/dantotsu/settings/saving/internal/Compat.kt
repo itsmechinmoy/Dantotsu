@@ -31,11 +31,7 @@ class Compat {
                             newUrl = newUrl.replace("github.com", "raw.githubusercontent.com")
                                 .replace("/blob/", "/")
                         }
-                        if (newUrl.endsWith("/index.min.json")) {
-                            newUrl = newUrl.removeSuffix("/index.min.json") + "/repo.json"
-                        } else if (newUrl.endsWith("/index.json")) {
-                            newUrl = newUrl.removeSuffix("/index.json") + "/repo.json"
-                        }
+
                         newUrl
                     }.toSet()
                     PrefManager.setVal(prefName, migrated)

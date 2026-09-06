@@ -283,6 +283,17 @@ class CommentItem(
         return R.layout.item_comments
     }
 
+    fun showReplies() {
+        if (!repliesVisible) {
+            repliesVisible = true
+            if (::binding.isInitialized) {
+                binding.commentTotalReplies.setText(R.string.hide_replies)
+            }
+            repliesSection.clear()
+            commentsFragment.viewReplyCallback(this)
+        }
+    }
+
     fun containsGif(): Boolean {
         return comment.content.contains(".gif")
     }

@@ -25,6 +25,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
@@ -118,134 +119,174 @@ internal class ExtensionGithubApi {
         mediaType: MediaType,
         originalUrl: String = repoUrl
     ): List<ExtensionJsonObject> {
-        var targetUrl = repoUrl.trim()
-        if (!targetUrl.endsWith(".json") && !targetUrl.endsWith(".pb")) {
-            targetUrl = "${cleanRepoUrl(repoUrl)}/index.pb"
+        val cleanBase = cleanRepoUrl(repoUrl)
+        val candidateUrls = mutableListOf<String>()
+
+        val trimmed = repoUrl.trim()
+        if (trimmed.endsWith(".json") || trimmed.endsWith(".pb")) {
+            candidateUrls.add(trimmed)
         }
 
-        try {
-            val response = try {
-                networkService.client
-                    .newCall(GET(targetUrl))
-                    .awaitSuccess()
-            } catch (e: Throwable) {
-                if (targetUrl.endsWith("index.pb")) {
-                    val fallback = "${cleanRepoUrl(targetUrl)}/repo.json"
-                    try {
-                        networkService.client.newCall(GET(fallback)).awaitSuccess()
-                    } catch (_: Throwable) {
-                        val minFallback = "${cleanRepoUrl(targetUrl)}/index.min.json"
-                        networkService.client.newCall(GET(minFallback)).awaitSuccess()
-                    }
-                } else if (targetUrl.endsWith("repo.json")) {
-                    val fallback = "${cleanRepoUrl(targetUrl)}/index.min.json"
-                    try {
-                        networkService.client.newCall(GET(fallback)).awaitSuccess()
-                    } catch (_: Throwable) {
-                        val pbFallback = "${cleanRepoUrl(targetUrl)}/index.pb"
-                        networkService.client.newCall(GET(pbFallback)).awaitSuccess()
-                    }
-                } else if (targetUrl.endsWith("index.min.json")) {
-                    val fallback = "${cleanRepoUrl(targetUrl)}/index.pb"
-                    networkService.client.newCall(GET(fallback)).awaitSuccess()
-                } else {
-                    throw e
-                }
+        val defaultEndpoints = when (mediaType) {
+            MediaType.ANIME -> listOf(
+                "$cleanBase/index.min.json",
+                "$cleanBase/repo.json",
+                "$cleanBase/index.json",
+                "$cleanBase/index.pb"
+            )
+            MediaType.MANGA -> listOf(
+                "$cleanBase/index.pb",
+                "$cleanBase/repo.json",
+                "$cleanBase/index.min.json",
+                "$cleanBase/index.json"
+            )
+            MediaType.NOVEL -> listOf(
+                "$cleanBase/index.json",
+                "$cleanBase/index.min.json",
+                "$cleanBase/repo.json",
+                "$cleanBase/index.pb"
+            )
+        }
+
+        for (endpoint in defaultEndpoints) {
+            if (!candidateUrls.contains(endpoint)) {
+                candidateUrls.add(endpoint)
             }
+        }
 
-            val rawBytes = response.body.bytes()
-            if (rawBytes.isEmpty()) return emptyList()
-
-            val responseBytes = rawBytes.decompressIfGzipped()
-            if (responseBytes.isEmpty()) return emptyList()
-            val firstByte = responseBytes[0]
-
-            if (firstByte == 0x5B.toByte()) { // '['
-                val bodyString = responseBytes.toString(Charsets.UTF_8)
-                val list = json.decodeFromString<List<ExtensionJsonObject>>(bodyString)
-                val hasDeprecation = mediaType == MediaType.MANGA && list.any { 
-                    it.pkg.contains("keiyoushi") || it.name.contains("Outdated App", ignoreCase = true) || it.name.contains("Update to Mihon", ignoreCase = true)
+        for (targetUrl in candidateUrls) {
+            try {
+                val response = try {
+                    networkService.client
+                        .newCall(GET(targetUrl))
+                        .awaitSuccess()
+                } catch (_: Throwable) {
+                    continue
                 }
-                if (hasDeprecation && !targetUrl.endsWith("index.pb")) {
-                    val pbUrl = "${cleanRepoUrl(targetUrl)}/index.pb"
-                    return runCatching { fetchExtensions(pbUrl, mediaType, originalUrl) }.getOrElse { list }
-                }
-                return list
-            } else {
-                val store = if (firstByte == 0x7B.toByte()) { // '{'
+
+                val rawBytes = response.body.bytes()
+                if (rawBytes.isEmpty()) continue
+
+                val responseBytes = rawBytes.decompressIfGzipped()
+                if (responseBytes.isEmpty()) continue
+                val firstByte = responseBytes[0]
+
+                if (firstByte == 0x5B.toByte()) { // '[' - JSON array of extensions
                     val bodyString = responseBytes.toString(Charsets.UTF_8)
-                    if (bodyString.contains("\"index_v2\"") || bodyString.contains("\"indexV2\"")) {
-                        val legacyRepo = json.decodeFromString<NetworkLegacyExtensionRepo>(bodyString)
-                        val nextUrl = legacyRepo.indexV2
-                        if (nextUrl != null) {
-                            updateStoreUrl(originalUrl, nextUrl, mediaType)
-                            return fetchExtensions(nextUrl, mediaType, originalUrl)
-                        }
-                    }
-                    json.decodeFromString<NetworkExtensionStore>(bodyString)
-                } else { // Protobuf
-                    ProtoBuf.decodeFromByteArray<NetworkExtensionStore>(responseBytes)
-                }
+                    val list = runCatching {
+                        json.decodeFromString<List<ExtensionJsonObject>>(bodyString)
+                    }.getOrNull()
 
-                val resolvedList: NetworkExtensionStore.ExtensionList? = if (store.extensionListUrl != null) {
-                    val listUrl = if (store.extensionListUrl.startsWith("http")) {
-                        store.extensionListUrl
-                    } else {
-                        "${cleanRepoUrl(targetUrl)}/${store.extensionListUrl.removePrefix("/")}"
-                    }
-                    val listResponse = networkService.client.newCall(GET(listUrl)).awaitSuccess()
-                    val listBytes = listResponse.body.bytes().decompressIfGzipped()
-                    if (listBytes.isNotEmpty() && listBytes[0] == 0x7B.toByte()) { // '{'
-                        json.decodeFromString<NetworkExtensionStore.ExtensionList>(listBytes.toString(Charsets.UTF_8))
-                    } else if (listBytes.isNotEmpty()) {
-                        ProtoBuf.decodeFromByteArray<NetworkExtensionStore.ExtensionList>(listBytes)
-                    } else {
-                        null
+                    if (!list.isNullOrEmpty()) {
+                        val hasDeprecation = mediaType == MediaType.MANGA && list.any {
+                            it.pkg.contains("keiyoushi") || it.name.contains("Outdated App", ignoreCase = true) || it.name.contains("Update to Mihon", ignoreCase = true)
+                        }
+                        if (hasDeprecation && !targetUrl.endsWith("index.pb")) {
+                            val pbUrl = "$cleanBase/index.pb"
+                            return runCatching { fetchExtensions(pbUrl, mediaType, originalUrl) }.getOrElse { list }
+                        }
+                        return list
                     }
                 } else {
-                    store.extensionList
-                }
-
-                if (resolvedList != null) {
-                    val prefix = when (mediaType) {
-                        MediaType.ANIME -> "Aniyomi: "
-                        MediaType.MANGA -> "Tachiyomi: "
-                        else -> ""
-                    }
-                    return resolvedList.extensions.map { ext ->
-                        val sourcesMapped = ext.sources.map { src ->
-                            ExtensionSourceJsonObject(
-                                id = src.id,
-                                lang = src.language,
-                                name = src.name,
-                                baseUrl = src.homeUrl
-                            )
+                    // JSON Object '{' or Protobuf
+                    val store: NetworkExtensionStore? = if (firstByte == 0x7B.toByte()) { // '{'
+                        val bodyString = responseBytes.toString(Charsets.UTF_8)
+                        if (bodyString.contains("\"index_v2\"") || bodyString.contains("\"indexV2\"")) {
+                            val legacyRepo = runCatching {
+                                json.decodeFromString<NetworkLegacyExtensionRepo>(bodyString)
+                            }.getOrNull()
+                            val nextUrl = legacyRepo?.indexV2
+                            if (nextUrl != null) {
+                                updateStoreUrl(originalUrl, nextUrl, mediaType)
+                                return fetchExtensions(nextUrl, mediaType, originalUrl)
+                            }
                         }
-                        val primaryLang = ext.sources.firstOrNull()?.language ?: "all"
-                        val prefixName = if (ext.name.startsWith(prefix)) ext.name else "$prefix${ext.name}"
-                        ExtensionJsonObject(
-                            name = prefixName,
-                            pkg = ext.packageName,
-                            apk = ext.resources.apkUrl,
-                            lang = primaryLang,
-                            code = ext.versionCode,
-                            version = ext.versionName,
-                            nsfw = if (ext.contentWarning == NetworkExtensionStore.ContentWarning.NSFW || ext.contentWarning == NetworkExtensionStore.ContentWarning.MIXED) 1 else 0,
-                            hasReadme = 0,
-                            hasChangelog = 0,
-                            sources = sourcesMapped,
-                            iconUrl = ext.resources.iconUrl,
-                            extensionLib = ext.extensionLib,
-                        )
+
+                        // If it's a legacy repo.json with only metadata, continue to next candidate
+                        val isLegacyMetaOnly = bodyString.contains("\"meta\"") &&
+                                !bodyString.contains("\"extensionList\"") &&
+                                !bodyString.contains("\"extensions\"")
+
+                        if (isLegacyMetaOnly) {
+                            null
+                        } else {
+                            runCatching {
+                                json.decodeFromString<NetworkExtensionStore>(bodyString)
+                            }.getOrNull()
+                        }
+                    } else { // Protobuf
+                        runCatching {
+                            ProtoBuf.decodeFromByteArray<NetworkExtensionStore>(responseBytes)
+                        }.getOrNull()
                     }
-                } else if (targetUrl.endsWith("repo.json")) {
-                    val fallback = "${cleanRepoUrl(targetUrl)}/index.min.json"
-                    return fetchExtensions(fallback, mediaType, originalUrl)
+
+                    if (store != null) {
+                        val resolvedList: NetworkExtensionStore.ExtensionList? = if (store.extensionListUrl != null) {
+                            val listUrl = if (store.extensionListUrl.startsWith("http")) {
+                                store.extensionListUrl
+                            } else {
+                                "$cleanBase/${store.extensionListUrl.removePrefix("/")}"
+                            }
+                            val listResponse = runCatching {
+                                networkService.client.newCall(GET(listUrl)).awaitSuccess()
+                            }.getOrNull()
+
+                            val listBytes = listResponse?.body?.bytes()?.decompressIfGzipped()
+                            if (listBytes != null && listBytes.isNotEmpty() && listBytes[0] == 0x7B.toByte()) { // '{'
+                                runCatching {
+                                    json.decodeFromString<NetworkExtensionStore.ExtensionList>(listBytes.toString(Charsets.UTF_8))
+                                }.getOrNull()
+                            } else if (listBytes != null && listBytes.isNotEmpty()) {
+                                runCatching {
+                                    ProtoBuf.decodeFromByteArray<NetworkExtensionStore.ExtensionList>(listBytes)
+                                }.getOrNull()
+                            } else {
+                                null
+                            }
+                        } else {
+                            store.extensionList
+                        }
+
+                        if (resolvedList != null && resolvedList.extensions.isNotEmpty()) {
+                            val prefix = when (mediaType) {
+                                MediaType.ANIME -> "Aniyomi: "
+                                MediaType.MANGA -> "Tachiyomi: "
+                                else -> ""
+                            }
+                            return resolvedList.extensions.map { ext ->
+                                val sourcesMapped = ext.sources.map { src ->
+                                    ExtensionSourceJsonObject(
+                                        id = src.id,
+                                        lang = src.language,
+                                        name = src.name,
+                                        baseUrl = src.homeUrl
+                                    )
+                                }
+                                val primaryLang = ext.sources.firstOrNull()?.language ?: "all"
+                                val prefixName = if (ext.name.startsWith(prefix)) ext.name else "$prefix${ext.name}"
+                                ExtensionJsonObject(
+                                    name = prefixName,
+                                    pkg = ext.packageName,
+                                    apk = ext.resources.apkUrl,
+                                    lang = primaryLang,
+                                    code = ext.versionCode,
+                                    version = ext.versionName,
+                                    nsfw = if (ext.contentWarning == NetworkExtensionStore.ContentWarning.NSFW || ext.contentWarning == NetworkExtensionStore.ContentWarning.MIXED) 1 else 0,
+                                    hasReadme = 0,
+                                    hasChangelog = 0,
+                                    sources = sourcesMapped,
+                                    iconUrl = ext.resources.iconUrl,
+                                    extensionLib = ext.extensionLib,
+                                )
+                            }
+                        }
+                    }
                 }
+            } catch (e: Throwable) {
+                Logger.log("Failed candidate $targetUrl for $repoUrl: $e")
             }
-        } catch (e: Throwable) {
-            Logger.log("Failed to fetch extensions from $repoUrl: $e")
         }
+
         return emptyList()
     }
 
@@ -491,6 +532,7 @@ private data class ExtensionJsonObject(
     @Serializable(with = IntOrStringSerializer::class)
     val hasChangelog: Int = 0,
     val sources: List<ExtensionSourceJsonObject>? = null,
+    @JsonNames("icon", "iconUrl")
     val iconUrl: String? = null,
     val extensionLib: String? = null,
 )

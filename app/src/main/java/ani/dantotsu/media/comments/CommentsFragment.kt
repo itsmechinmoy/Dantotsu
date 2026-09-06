@@ -182,7 +182,7 @@ class CommentsFragment : Fragment() {
                         lifecycleScope.launch {
                             val commentId = arguments?.getInt("commentId")
                             if (commentId != null && commentId > 0) {
-                                loadSingleComment(commentId)
+                                loadCommentThread(commentId)
                             } else {
                                 loadAndDisplayComments()
                             }
@@ -804,27 +804,43 @@ class CommentsFragment : Fragment() {
         binding.commentsList.visibility = View.VISIBLE
     }
 
-    private suspend fun loadSingleComment(commentId: Int) {
+    private suspend fun loadCommentThread(commentId: Int) {
         binding.commentsProgressBar.visibility = View.VISIBLE
         binding.commentsList.visibility = View.GONE
         section.clear()
 
-        val comment = withContext(Dispatchers.IO) {
+        val targetComment = withContext(Dispatchers.IO) {
             CommentsAPI.getSingleComment(commentId)
         }
-        if (comment != null) {
-            withContext(Dispatchers.Main) {
-                section.add(
-                    CommentItem(
-                        comment,
-                        buildMarkwon(activity, fragment = this@CommentsFragment),
-                        section,
-                        this@CommentsFragment,
-                        backgroundColor,
-                        0
-                    )
-                )
-            }
+        if (targetComment == null) {
+            loadAndDisplayComments()
+            return
+        }
+
+        // Traverse up to root parent if this is a reply
+        var rootComment: Comment = targetComment
+        var currentParentId = targetComment.parentCommentId
+        var hops = 0
+        while (currentParentId != null && currentParentId > 0 && hops < 5) {
+            val parent = withContext(Dispatchers.IO) {
+                CommentsAPI.getSingleComment(currentParentId!!)
+            } ?: break
+            rootComment = parent
+            currentParentId = parent.parentCommentId
+            hops++
+        }
+
+        withContext(Dispatchers.Main) {
+            val rootItem = CommentItem(
+                rootComment,
+                buildMarkwon(activity, fragment = this@CommentsFragment),
+                section,
+                this@CommentsFragment,
+                backgroundColor,
+                0
+            )
+            section.add(rootItem)
+            rootItem.showReplies()
         }
 
         binding.commentsProgressBar.visibility = View.GONE
