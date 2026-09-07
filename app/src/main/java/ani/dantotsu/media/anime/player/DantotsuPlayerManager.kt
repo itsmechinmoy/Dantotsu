@@ -44,7 +44,9 @@ import ani.dantotsu.util.Logger
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import io.github.peerless2012.ass.media.kt.withAssSupport
 import okhttp3.OkHttpClient
+import java.io.ByteArrayInputStream
 import java.util.Calendar
+import java.util.zip.GZIPInputStream
 
 @UnstableApi
 class DantotsuPlayerManager(
@@ -105,16 +107,104 @@ class DantotsuPlayerManager(
         mediaMetadata: MediaMetadata? = null,
         audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
     ): Pair<MediaSource, MediaItem> {
+        val isLocalhost = runCatching {
+            val host = video.file.url.toUri().host
+            host == "127.0.0.1" || host == "localhost"
+        }.getOrDefault(false)
+
         val headers = mutableMapOf<String, String>()
         headers.putAll(defaultHeaders)
         video.file.headers?.let {
             headers.putAll(it)
+        }
+        if (isLocalhost) {
+            headers.remove("Accept-Encoding")
+            headers.remove("accept-encoding")
         }
 
         val httpClient = client.newBuilder().apply {
             connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            // Strip Accept-Encoding on the wire for localhost/127.0.0.1 NanoHTTPD server.
+            // When NanoHTTPD forwards requests upstream to CDNs (like imgnex/megaplay),
+            // having NO Accept-Encoding header allows NanoHTTPD's internal OkHttpClient
+            // to enable transparentGzip = true, which automatically decompresses
+            // gzipped M3U8 playlists. If Accept-Encoding is sent (even "identity" or "gzip"),
+            // transparentGzip is disabled in NanoHTTPD and it returns mangled binary gzip
+            // which causes ExoPlayer ParserException: Input does not start with #EXTM3U.
+            addNetworkInterceptor { chain ->
+                val request = chain.request()
+                val host = request.url.host
+                val isLocal = host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "[::1]"
+                val newRequest = if (isLocal) {
+                    request.newBuilder()
+                        .removeHeader("Accept-Encoding")
+                        .build()
+                } else {
+                    request
+                }
+                chain.proceed(newRequest)
+            }
+            addInterceptor { chain ->
+                val request = chain.request()
+                val host = request.url.host
+                val isLocal = host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "[::1]"
+                val newRequest = if (isLocal) {
+                    request.newBuilder()
+                        .removeHeader("Accept-Encoding")
+                        .build()
+                } else {
+                    request
+                }
+                val response = chain.proceed(newRequest)
+                if (isLocal && response.isSuccessful) {
+                    val isM3u8 = request.url.encodedPath.contains("m3u8") ||
+                        request.url.query?.contains(".m3u8") == true ||
+                        response.header("Content-Type")?.contains("mpegurl", ignoreCase = true) == true
+                    val hasGzipEncoding = response.header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true
+
+                    val body = response.body
+                    if (body != null && (isM3u8 || hasGzipEncoding)) {
+                        val rawBytes = body.bytes()
+                        val isGzip = (rawBytes.size >= 2 && rawBytes[0] == 0x1F.toByte() && rawBytes[1] == 0x8B.toByte()) || hasGzipEncoding
+                        val decompressedBytes = if (isGzip) {
+                            try {
+                                GZIPInputStream(ByteArrayInputStream(rawBytes)).use { it.readBytes() }
+                            } catch (_: Exception) {
+                                rawBytes
+                            }
+                        } else {
+                            rawBytes
+                        }
+
+                        val finalBytes = if (isM3u8) {
+                            var text = decompressedBytes.toString(Charsets.UTF_8)
+                            if (text.startsWith("\uFEFF")) {
+                                text = text.substring(1)
+                            }
+                            text.trimStart().toByteArray(Charsets.UTF_8)
+                        } else {
+                            decompressedBytes
+                        }
+
+                        val strippedHeaders = response.headers.newBuilder()
+                            .removeAll("Content-Encoding")
+                            .removeAll("Content-Length")
+                            .build()
+
+                        val newBody = okhttp3.ResponseBody.create(body.contentType(), finalBytes)
+                        response.newBuilder()
+                            .headers(strippedHeaders)
+                            .body(newBody)
+                            .build()
+                    } else {
+                        response
+                    }
+                } else {
+                    response
+                }
+            }
         }.build()
         val httpDataSourceFactory = OkHttpDataSource.Factory(httpClient).apply {
             setDefaultRequestProperties(headers)
