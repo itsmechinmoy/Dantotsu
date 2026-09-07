@@ -6,11 +6,11 @@ import ani.dantotsu.checkGenreTime
 import ani.dantotsu.checkId
 import ani.dantotsu.connections.anilist.Anilist.authorRoles
 import ani.dantotsu.connections.anilist.Anilist.executeQuery
+import ani.dantotsu.connections.anilist.api.Activity
 import ani.dantotsu.connections.anilist.api.FeedResponse
 import ani.dantotsu.connections.anilist.api.FuzzyDate
 import ani.dantotsu.connections.anilist.api.MediaEdge
 import ani.dantotsu.connections.anilist.api.MediaList
-import ani.dantotsu.connections.anilist.api.MediaListStatus
 import ani.dantotsu.connections.anilist.api.NotificationResponse
 import ani.dantotsu.connections.anilist.api.Page
 import ani.dantotsu.connections.anilist.api.Query
@@ -552,23 +552,45 @@ class AnilistQueries {
     suspend fun getUserStatus(forceRefresh: Boolean = false): ArrayList<User>? {
         val toShow: List<Boolean> =
             PrefManager.getVal(PrefName.HomeLayout)
-        if (toShow.getOrNull(7) != true) return null
+        if (toShow.getOrNull(7) != true) return arrayListOf()
         if (!forceRefresh) {
             loadUserStatusCache()?.let { return sortUserStatusList(it) }
         }
-        val myQuery = if (Anilist.userid != null) myStatus() else ""
-        val query = """{Page1:${status(1)}Page2:${status(2)}$myQuery}"""
-        val response = executeQuery<Query.HomePageMedia>(query, force = forceRefresh)
-        val list = mutableListOf<User>()
-        val threeDaysAgo = Calendar.getInstance().apply {
-            add(Calendar.DAY_OF_MONTH, -3)
-        }.timeInMillis
-        if (response?.data?.page1 != null && response.data.page2 != null) {
-            val allPages = mutableListOf(
-                response.data.page1.activities,
-                response.data.page2.activities
-            )
-            response.data.myActivities?.activities?.let { allPages.add(it) }
+
+        return coroutineScope {
+            val followingDeferred = async {
+                executeQuery<Query.HomePageMedia>(
+                    """{Page1:${status(1)}Page2:${status(2)}}""",
+                    force = forceRefresh
+                )
+            }
+            val myDeferred = if (Anilist.userid != null) {
+                async {
+                    executeQuery<Query.HomePageMedia>(
+                        """{${myStatus()}}""",
+                        force = forceRefresh
+                    )
+                }
+            } else null
+
+            val followingResponse = followingDeferred.await()
+            val myResponse = myDeferred?.await()
+
+            val allPages = mutableListOf<List<Activity>>()
+            followingResponse?.data?.page1?.activities?.let { allPages.add(it) }
+            followingResponse?.data?.page2?.activities?.let { allPages.add(it) }
+            myResponse?.data?.myActivities?.activities?.let { allPages.add(it) }
+                ?: followingResponse?.data?.myActivities?.activities?.let { allPages.add(it) }
+
+            if (allPages.isEmpty() && followingResponse == null && myResponse == null) {
+                snackString(currContext()?.getString(R.string.error_loading_data, "stories"))
+                return@coroutineScope emptyUserStatusFallback() ?: arrayListOf()
+            }
+
+            val threeDaysAgo = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_MONTH, -3)
+            }.timeInMillis
+            val list = mutableListOf<User>()
             val activities = allPages.asSequence().flatten()
                 .filter { it.typename != "MessageActivity" }
                 .filter { if (Anilist.adult) true else it.media?.isAdult != true }
@@ -585,36 +607,42 @@ class AnilistQueries {
                     val userToAdd = User(
                         user.id,
                         user.name ?: "",
-                        user.avatar?.medium,
+                        user.avatar?.large ?: user.avatar?.medium,
                         user.bannerImage,
                         activity = userActivities.sortedBy { it.createdAt }.toList()
                     )
                     if (user.id == Anilist.userid) {
                         anilistActivities.add(0, userToAdd)
-
                     } else {
                         list.add(userToAdd)
                     }
                 }
             }
 
-            if (anilistActivities.isEmpty() && Anilist.token != null) {
-                anilistActivities.add(
-                    0,
-                    User(
-                        Anilist.userid!!,
-                        Anilist.username ?: "",
-                        Anilist.avatar,
-                        Anilist.bg,
-                        activity = listOf()
-                    )
-                )
+            if (anilistActivities.isEmpty()) {
+                emptyUserStatusFallback()?.firstOrNull()?.let { anilistActivities.add(0, it) }
             }
             list.addAll(0, anilistActivities)
             val result = list.toCollection(ArrayList())
-            saveUserStatusCache(result)
-            return sortUserStatusList(result)
-        } else return null
+            if (result.isNotEmpty()) {
+                saveUserStatusCache(result)
+            }
+            sortUserStatusList(result)
+        }
+    }
+
+    private fun emptyUserStatusFallback(): ArrayList<User>? {
+        val uid = Anilist.userid ?: return null
+        if (Anilist.token == null) return null
+        return arrayListOf(
+            User(
+                uid,
+                Anilist.username ?: "",
+                Anilist.avatar,
+                Anilist.bg,
+                activity = listOf()
+            )
+        )
     }
 
     private fun favMediaQuery(anime: Boolean, page: Int, id: Int? = Anilist.userid): String {
@@ -1932,13 +1960,17 @@ Page(page:$page,perPage:50) {
         return executeQuery(query, force = true)
     }
 
+    private fun statusActivityFields(): String {
+        return """__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{large extraLarge}}}... on MessageActivity{id type createdAt}"""
+    }
+
     private fun status(page: Int = 1): String {
-        return """Page(page:$page,perPage:50){activities(isFollowing: true,type_in:[TEXT,ANIME_LIST,MANGA_LIST,MEDIA_LIST],sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed replyCount likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed replyCount likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{extraLarge medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id type createdAt}}}"""
+        return """Page(page:$page,perPage:25){activities(isFollowing: true,type_in:[TEXT,ANIME_LIST,MANGA_LIST,MEDIA_LIST],sort:ID_DESC){${statusActivityFields()}}}"""
     }
 
     private fun myStatus(): String {
         val uid = Anilist.userid ?: return ""
-        return """MyActivities:Page(page:1,perPage:25){activities(userId:$uid,type_in:[TEXT,ANIME_LIST,MANGA_LIST,MEDIA_LIST],sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed replyCount likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed replyCount likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{extraLarge medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id type createdAt}}}"""
+        return """MyActivities:Page(page:1,perPage:25){activities(userId:$uid,type_in:[TEXT,ANIME_LIST,MANGA_LIST,MEDIA_LIST],sort:ID_DESC){${statusActivityFields()}}}"""
     }
 
     suspend fun getUpcomingAnime(id: String): List<Media> {

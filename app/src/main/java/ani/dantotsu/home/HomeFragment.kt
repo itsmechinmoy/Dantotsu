@@ -43,6 +43,7 @@ import ani.dantotsu.media.user.ListActivity
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.profile.ProfileActivity
+import ani.dantotsu.profile.User
 import ani.dantotsu.setSafeOnClickListener
 import ani.dantotsu.setSlideIn
 import ani.dantotsu.setSlideUp
@@ -440,8 +441,7 @@ class HomeFragment : Fragment() {
             binding.homeRecommendedMore,
             getString(R.string.recommended)
         )
-
-        binding.homeRecommendedRecyclerView.addOnScrollListener(object :
+binding.homeRecommendedRecyclerView.addOnScrollListener(object :
             RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (!recyclerView.canScrollHorizontally(1)) {
@@ -454,35 +454,55 @@ class HomeFragment : Fragment() {
                 super.onScrolled(recyclerView, dx, dy)
             }
         })
-        binding.homeUserStatusContainer.visibility = View.VISIBLE
-        binding.homeUserStatusProgressBar.visibility = View.VISIBLE
+        val storiesEnabled = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout)
+            .getOrElse(7) { true } && !PrefManager.getVal<Boolean>(PrefName.RescueMode)
+        binding.homeUserStatusContainer.visibility =
+            if (storiesEnabled) View.VISIBLE else View.GONE
+        binding.homeUserStatusProgressBar.visibility =
+            if (storiesEnabled) View.VISIBLE else View.GONE
         binding.homeUserStatusRecyclerView.visibility = View.GONE
-        model.getUserStatus().observe(viewLifecycleOwner) {
-            binding.homeUserStatusRecyclerView.visibility = View.GONE
-            if (it != null) {
-                if (it.isNotEmpty()) {
-                    PrefManager.getLiveVal(PrefName.RefreshStatus, false).apply {
-                        asLiveBool()
-                        observe(viewLifecycleOwner) { _ ->
-                            binding.homeUserStatusRecyclerView.adapter = UserStatusAdapter(it)
-                        }
+        binding.homeUserStatusRecyclerView.layoutManager = LinearLayoutManager(
+            requireContext(),
+            LinearLayoutManager.HORIZONTAL,
+            false
+        )
+        var latestStatusUsers: ArrayList<User> = arrayListOf()
+        model.getUserStatus().observe(viewLifecycleOwner) { users ->
+            when {
+                users == null -> {
+                    val show = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout)
+                        .getOrElse(7) { true } &&
+                        !PrefManager.getVal<Boolean>(PrefName.RescueMode)
+                    if (show) {
+                        binding.homeUserStatusContainer.visibility = View.VISIBLE
+                        binding.homeUserStatusProgressBar.visibility = View.VISIBLE
+                        binding.homeUserStatusRecyclerView.visibility = View.GONE
                     }
-                    binding.homeUserStatusRecyclerView.layoutManager = LinearLayoutManager(
-                        requireContext(),
-                        LinearLayoutManager.HORIZONTAL,
-                        false
-                    )
+                }
+                users.isNotEmpty() -> {
+                    latestStatusUsers = users
+                    binding.homeUserStatusProgressBar.visibility = View.GONE
+                    binding.homeUserStatusContainer.visibility = View.VISIBLE
+                    binding.homeUserStatusRecyclerView.adapter = UserStatusAdapter(users)
                     binding.homeUserStatusRecyclerView.visibility = View.VISIBLE
                     binding.homeUserStatusRecyclerView.layoutAnimation =
                         LayoutAnimationController(setSlideIn(), 0.25f)
-
-                } else {
+                }
+                else -> {
+                    latestStatusUsers = arrayListOf()
+                    binding.homeUserStatusProgressBar.visibility = View.GONE
+                    binding.homeUserStatusRecyclerView.visibility = View.GONE
                     binding.homeUserStatusContainer.visibility = View.GONE
                 }
-                binding.homeUserStatusProgressBar.visibility = View.GONE
             }
-
         }
+        PrefManager.getLiveVal(PrefName.RefreshStatus, false).asLiveBool()
+            .observe(viewLifecycleOwner) {
+                if (latestStatusUsers.isNotEmpty()) {
+                    binding.homeUserStatusRecyclerView.adapter =
+                        UserStatusAdapter(latestStatusUsers)
+                }
+            }
         binding.homeHiddenItemsContainer.visibility = View.GONE
         model.getHidden().observe(viewLifecycleOwner) {
             if (it != null) {

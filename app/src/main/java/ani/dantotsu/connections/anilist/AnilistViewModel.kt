@@ -136,8 +136,15 @@ class AnilistHomeViewModel : ViewModel() {
 
     fun getUserStatus(): LiveData<ArrayList<User>> = userStatus
     suspend fun initUserStatus(forceRefresh: Boolean = false) {
-        val res = Anilist.query.getUserStatus(forceRefresh)
-        res?.let { userStatus.postValue(it) }
+        if (forceRefresh || userStatus.value == null) {
+            userStatus.postValue(null)
+        }
+        val res = try {
+            Anilist.query.getUserStatus(forceRefresh)
+        } catch (_: Exception) {
+            null
+        }
+        userStatus.postValue(res ?: arrayListOf())
     }
 
     private val hidden: MutableLiveData<ArrayList<Media>> =

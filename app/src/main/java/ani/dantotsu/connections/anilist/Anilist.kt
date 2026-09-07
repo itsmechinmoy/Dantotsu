@@ -391,12 +391,11 @@ object Anilist {
                 json.parsed()
             } else null
         } catch (e: Exception) {
+            // Timeouts are often transient; only treat host/connect failures as Anilist-down.
             if (e is java.net.UnknownHostException ||
                 e is java.net.ConnectException ||
-                e is java.net.SocketTimeoutException ||
                 e.cause is java.net.UnknownHostException ||
-                e.cause is java.net.ConnectException ||
-                e.cause is java.net.SocketTimeoutException) {
+                e.cause is java.net.ConnectException) {
                 anilistDisabledSignal = true
             }
             if (show) snackString("Error fetching Anilist data: ${e.message}")

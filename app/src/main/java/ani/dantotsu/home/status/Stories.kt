@@ -325,7 +325,9 @@ class Stories @JvmOverloads constructor(
             .mapNotNull { it.toIntOrNull() }.toSet().plus(story.id)
         val newList = set.sorted().takeLast(200).map { it.toString() }.toSet()
         PrefManager.setCustomVal(key, newList)
-        binding.statusUserAvatar.loadImage(story.user?.avatar?.large)
+        binding.statusUserAvatar.loadImage(
+            story.user?.avatar?.large ?: story.user?.avatar?.medium
+        )
         binding.statusUserName.text = story.user?.name
         binding.statusUserTime.text = ActivityItemBuilder.getDateTime(story.createdAt)
         binding.statusUserContainer.setOnClickListener {
@@ -380,11 +382,13 @@ class Stories @JvmOverloads constructor(
                         }
                 binding.infoText.text = text
                 val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
+                val cover =
+                    story.media?.coverImage?.extraLarge ?: story.media?.coverImage?.large
                 blurImage(
                     if (bannerAnimations) binding.contentImageViewKen else binding.contentImageView,
-                    story.media?.bannerImage ?: story.media?.coverImage?.extraLarge
+                    story.media?.bannerImage ?: cover
                 )
-                binding.coverImage.loadImage(story.media?.coverImage?.extraLarge)
+                binding.coverImage.loadImage(cover)
                 binding.coverImage.setOnClickListener {
                     context.startActivity(
                         Intent(context, MediaDetailsActivity::class.java).putExtra(
