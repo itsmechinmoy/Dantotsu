@@ -46,6 +46,13 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.contentOrNull
 
 class MediaDetailsViewModel : ViewModel() {
     val scrolledToTop = MutableLiveData(true)
@@ -1297,16 +1304,17 @@ class MediaDetailsViewModel : ViewModel() {
                     if (res.isSuccessful) res.text else null
                 }.getOrNull() ?: return emptyList()
 
-                val root = runCatching { org.json.JSONObject(jsonStr) }.getOrNull()
-                    ?: return emptyList()
-                val newsArr = root.optJSONArray("news") ?: return emptyList()
+                val root = runCatching {
+                    Json.parseToJsonElement(jsonStr).jsonObject
+                }.getOrNull() ?: return emptyList()
+                val newsArr = root["news"]?.jsonArray ?: return emptyList()
                 val list = mutableListOf<NewsItem>()
-                for (i in 0 until newsArr.length()) {
-                    val itemObj = newsArr.getJSONObject(i)
-                    val timeMs = itemObj.optLong("time", 0L)
-                    val rawTitle = itemObj.optString("title", "")
+                for (item in newsArr) {
+                    val itemObj = item.jsonObject
+                    val timeMs = itemObj["time"]?.jsonPrimitive?.longOrNull ?: 0L
+                    val rawTitle = itemObj["title"]?.jsonPrimitive?.contentOrNull ?: ""
                     val title = org.jsoup.parser.Parser.unescapeEntities(rawTitle, false)
-                    val rawLink = itemObj.optString("link", "")
+                    val rawLink = itemObj["link"]?.jsonPrimitive?.contentOrNull ?: ""
                     val link = normalizeKuroiruLink(rawLink)
                     if (title.isNotEmpty() && link.isNotEmpty()) {
                         list.add(
@@ -1347,8 +1355,9 @@ class MediaDetailsViewModel : ViewModel() {
             link.startsWith("https://", ignoreCase = true)
         ) return link
        
-        if (link.all { it.isDigit() }) {
-            return "https://www.animenewsnetwork.com/news/.$link"
+        val digitId = link.removePrefix(".")
+        if (digitId.isNotEmpty() && digitId.all { it.isDigit() }) {
+            return "https://www.animenewsnetwork.com/news/.$digitId"
         }
         return link
     }
@@ -1365,11 +1374,8 @@ class MediaDetailsViewModel : ViewModel() {
                     val id = runCatching {
                         val res = client.get("$bakaBase/source/anilist/${media.id}", headers = headers)
                         if (!res.isSuccessful) return@runCatching null
-                        val root = org.json.JSONObject(res.text)
-                        val seriesArr = root.optJSONObject("data")?.optJSONArray("series")
-                        if (seriesArr != null && seriesArr.length() > 0) {
-                            seriesArr.getJSONObject(0).optInt("id").takeIf { it != 0 }
-                        } else null
+                        val root = Json.parseToJsonElement(res.text).jsonObject
+                        root["data"]?.jsonObject?.get("series")?.jsonArray?.firstOrNull()?.jsonObject?.get("id")?.jsonPrimitive?.intOrNull?.takeIf { it != 0 }
                     }.getOrNull()
                     if (id != null && id != 0) return id
                 }
@@ -1378,11 +1384,8 @@ class MediaDetailsViewModel : ViewModel() {
                     val id = runCatching {
                         val res = client.get("$bakaBase/source/my-anime-list/${media.idMAL}", headers = headers)
                         if (!res.isSuccessful) return@runCatching null
-                        val root = org.json.JSONObject(res.text)
-                        val seriesArr = root.optJSONObject("data")?.optJSONArray("series")
-                        if (seriesArr != null && seriesArr.length() > 0) {
-                            seriesArr.getJSONObject(0).optInt("id").takeIf { it != 0 }
-                        } else null
+                        val root = Json.parseToJsonElement(res.text).jsonObject
+                        root["data"]?.jsonObject?.get("series")?.jsonArray?.firstOrNull()?.jsonObject?.get("id")?.jsonPrimitive?.intOrNull?.takeIf { it != 0 }
                     }.getOrNull()
                     if (id != null && id != 0) return id
                 }
@@ -1393,11 +1396,8 @@ class MediaDetailsViewModel : ViewModel() {
                     val id = runCatching {
                         val res = client.get("$bakaBase/series/search?q=$encodedTitle", headers = headers)
                         if (!res.isSuccessful) return@runCatching null
-                        val root = org.json.JSONObject(res.text)
-                        val seriesArr = root.optJSONArray("data")
-                        if (seriesArr != null && seriesArr.length() > 0) {
-                            seriesArr.getJSONObject(0).optInt("id").takeIf { it != 0 }
-                        } else null
+                        val root = Json.parseToJsonElement(res.text).jsonObject
+                        root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.get("id")?.jsonPrimitive?.intOrNull?.takeIf { it != 0 }
                     }.getOrNull()
                     if (id != null && id != 0) return id
                 }
@@ -1412,9 +1412,9 @@ class MediaDetailsViewModel : ViewModel() {
                 if (res.isSuccessful) res.text else null
             }.getOrNull() ?: return@tryWithSuspend emptyList()
 
-            val root = runCatching { org.json.JSONObject(jsonStr) }.getOrNull()
+            val root = runCatching { Json.parseToJsonElement(jsonStr).jsonObject }.getOrNull()
                 ?: return@tryWithSuspend emptyList()
-            val newsArr = root.optJSONArray("data") ?: return@tryWithSuspend emptyList()
+            val newsArr = root["data"]?.jsonArray ?: return@tryWithSuspend emptyList()
             val result = mutableListOf<NewsItem>()
 
             fun parseDate(dateStr: String): java.util.Date? {
@@ -1443,13 +1443,13 @@ class MediaDetailsViewModel : ViewModel() {
                 return null
             }
 
-            for (i in 0 until newsArr.length()) {
-                val itemObj = newsArr.getJSONObject(i)
-                val pubAt = itemObj.optString("published_at", "")
+            for (item in newsArr) {
+                val itemObj = item.jsonObject
+                val pubAt = itemObj["published_at"]?.jsonPrimitive?.contentOrNull ?: ""
                 val date = parseDate(pubAt)
-                val rawTitle = itemObj.optString("title", "")
+                val rawTitle = itemObj["title"]?.jsonPrimitive?.contentOrNull ?: ""
                 val title = org.jsoup.parser.Parser.unescapeEntities(rawTitle, false)
-                val url = itemObj.optString("url", "")
+                val url = itemObj["url"]?.jsonPrimitive?.contentOrNull ?: ""
                 if (title.isNotEmpty() && url.isNotEmpty()) {
                     result.add(
                         NewsItem(

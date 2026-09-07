@@ -241,7 +241,7 @@ data class AiringSchedule(
 
     // The associate media of the airing episode
     @SerialName("media") var media: Media?,
-)
+) : java.io.Serializable
 
 @Serializable
 data class MediaStreamingEpisode(
@@ -332,7 +332,7 @@ data class MediaList(
     @SerialName("media") var media: Media?,
 
     @SerialName("user") var user: User?
-)
+) : java.io.Serializable
 
 @Serializable
 enum class MediaListStatus {
@@ -371,7 +371,7 @@ data class MediaTrailer(
 
     // The url for the thumbnail image of the video
     @SerialName("thumbnail") var thumbnail: String?,
-)
+) : java.io.Serializable
 
 @Serializable
 data class MediaTagCollection(
@@ -406,7 +406,7 @@ data class MediaTag(
 
     // The user who submitted the tag
     @SerialName("userId") var userId: Int?,
-)
+) : java.io.Serializable
 
 @Serializable
 data class MediaConnection(

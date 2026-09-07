@@ -109,6 +109,9 @@
 -keep class org.jsoup.** { *; }
 -keepclassmembers class org.jsoup.nodes.Document { *; }
 
+-dontwarn org.json.**
+-keep class org.json.** { *; }
+
 
 #############################################
 # QuickJS / Native / Unsafe

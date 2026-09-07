@@ -85,6 +85,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
 
         super.onCreate(savedInstanceState)
         var media: Media = intent.getSerialized("media") ?: mediaSingleton ?: emptyMedia()
+        intent.removeExtra("media")
         val id = intent.getIntExtra("mediaId", -1)
         if (id != -1 && media.name == "No media found") {
             val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
@@ -693,6 +694,11 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             disabled = !enabled
             image.alpha = if (disabled) 0.33f else 1f
         }
+    }
+
+    override fun onProvideAssistContent(outContent: android.app.assist.AssistContent?) {
+        super.onProvideAssistContent(outContent)
+        outContent?.intent = null
     }
 
     override fun onDestroy() {

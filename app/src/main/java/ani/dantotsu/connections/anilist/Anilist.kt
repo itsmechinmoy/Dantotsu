@@ -14,7 +14,12 @@ import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.contentOrNull
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
@@ -305,9 +310,8 @@ object Anilist {
                 parts[1].replace('-', '+').replace('_', '/'),
                 android.util.Base64.NO_PADDING or android.util.Base64.URL_SAFE
             )
-            val json = JSONObject(String(payload))
-            if (!json.has("exp")) return null
-            val expSeconds = json.getLong("exp")
+            val json = Json.parseToJsonElement(String(payload)).jsonObject
+            val expSeconds = json["exp"]?.jsonPrimitive?.longOrNull ?: return null
             val nowSeconds = System.currentTimeMillis() / 1000
             (expSeconds - nowSeconds) / 86400
         } catch (e: Exception) {
@@ -362,15 +366,10 @@ object Anilist {
                 }
 
                 if (json.code == 403 || json.code == 400) {
-                    val obj = try {
-                        JSONObject(json.text)
-                    } catch (_: Exception) {
-                        null
-                    }
-                    val message = obj?.optJSONArray("errors")?.let { errors ->
-                        if (errors.length() > 0) errors.getJSONObject(0)
-                            .getString("message") else "Forbidden (error ${json.code})"
-                    } ?: "Forbidden (error ${json.code})"
+                    val message = runCatching {
+                        val root = Json.parseToJsonElement(json.text).jsonObject
+                        root["errors"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
+                    }.getOrNull() ?: "Forbidden (error ${json.code})"
 
                     if (message.contains("disabled", ignoreCase = true)) {
                         anilistDisabledSignal = true
