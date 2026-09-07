@@ -131,10 +131,10 @@ class AnilistHomeViewModel : ViewModel() {
 
     fun getMissingSequels(): LiveData<ArrayList<Media>> = missingSequels
 
-    private val userStatus: MutableLiveData<ArrayList<User>> =
-        MutableLiveData<ArrayList<User>>(null)
+    private val userStatus: MutableLiveData<ArrayList<User>?> =
+        MutableLiveData(null)
 
-    fun getUserStatus(): LiveData<ArrayList<User>> = userStatus
+    fun getUserStatus(): LiveData<ArrayList<User>?> = userStatus
     suspend fun initUserStatus(forceRefresh: Boolean = false) {
         if (forceRefresh || userStatus.value == null) {
             userStatus.postValue(null)
