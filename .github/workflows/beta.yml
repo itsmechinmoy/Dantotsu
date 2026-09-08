@@ -66,7 +66,10 @@ jobs:
 
     - name: Set variables
       run: |
-        VER=$(grep -E -o "versionName \".*\"" app/build.gradle | sed -e 's/versionName //g' | tr -d '"')
+        VER=$(grep -E -o 'baseVersion = ".*"' app/build.gradle.kts 2>/dev/null | sed -e 's/baseVersion = //g' | tr -d '"')
+        if [ -z "$VER" ]; then
+          VER=$(grep -E -o 'versionName = ".*"' app/build.gradle.kts 2>/dev/null | sed -e 's/versionName = //g' | tr -d '"')
+        fi
         SHA=${{ github.sha }}
         VERSION="$VER+${SHA:0:7}"
         echo "Version $VERSION"

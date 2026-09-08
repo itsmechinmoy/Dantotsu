@@ -18,7 +18,9 @@ import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.BuildConfig
+import ani.dantotsu.Mapper
 import ani.dantotsu.R
+import ani.dantotsu.client
 import ani.dantotsu.copyToClipboard
 import ani.dantotsu.databinding.ActivitySettingsBinding
 import ani.dantotsu.initActivity
@@ -35,9 +37,14 @@ import ani.dantotsu.startMainActivity
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.toast
+import ani.dantotsu.util.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.random.Random
 
 
@@ -64,6 +71,7 @@ class SettingsActivity : AppCompatActivity() {
                     return@setOnLongClickListener true
                 }
             }
+            checkIfOutdated()
             settingsContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 topMargin = statusBarHeight
                 bottomMargin = navBarHeight
@@ -310,6 +318,59 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun checkIfOutdated() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val res = client.get("https://api.github.com/repos/itsmechinmoy/dantotsu-updater/releases/latest")
+                if (res.code == 200) {
+                    val json = Mapper.json.parseToJsonElement(res.text).jsonObject
+                    val tagName = json["tag_name"]?.jsonPrimitive?.contentOrNull
+                    if (tagName != null && isOutdated(tagName, BuildConfig.VERSION_NAME)) {
+                        withContext(Dispatchers.Main) {
+                            binding.settingsVersion.text = getString(
+                                R.string.version_current_outdated,
+                                BuildConfig.VERSION_NAME
+                            )
+                            binding.settingsVersion.setOnClickListener {
+                                openLinkInBrowser("https://github.com/itsmechinmoy/dantotsu-updater/releases/latest")
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Logger.log("Failed to check dantotsu-updater releases: ${e.message}")
+            }
+        }
+    }
+
+    private fun isOutdated(latestTag: String, currentVersion: String): Boolean {
+        val latest = latestTag.removePrefix("v").trim()
+        val current = currentVersion.removePrefix("v").trim()
+        if (latest == current) return false
+
+        val latestBase = latest.substringBefore("+").substringBefore("-")
+        val currentBase = current.substringBefore("+").substringBefore("-")
+
+        val lParts = latestBase.split(".").mapNotNull { it.toIntOrNull() }
+        val cParts = currentBase.split(".").mapNotNull { it.toIntOrNull() }
+        val maxLen = maxOf(lParts.size, cParts.size)
+        for (i in 0 until maxLen) {
+            val l = lParts.getOrElse(i) { 0 }
+            val c = cParts.getOrElse(i) { 0 }
+            if (l > c) return true
+            if (l < c) return false
+        }
+
+        val latestHash = if ("+" in latest) latest.substringAfter("+").substringBefore("-") else ""
+        val currentHash = if ("+" in current) current.substringAfter("+").substringBefore("-") else ""
+
+        if (latestHash.isNotEmpty() && currentHash.isNotEmpty()) {
+            return !(latestHash.startsWith(currentHash) || currentHash.startsWith(latestHash))
+        }
+
+        return latestHash.isNotEmpty() && currentHash.isEmpty()
     }
 
     companion object {

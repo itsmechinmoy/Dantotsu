@@ -194,8 +194,10 @@ object AppUpdater {
                         }
                     }.sum()
                 }
-                val new = toDoubleSafe(version.split("."))
-                val curr = toDoubleSafe(BuildConfig.VERSION_NAME.split("."))
+                val cleanNew = version.substringBefore("+").substringBefore("-")
+                val cleanCurr = BuildConfig.VERSION_NAME.substringBefore("+").substringBefore("-")
+                val new = toDoubleSafe(cleanNew.split("."))
+                val curr = toDoubleSafe(cleanCurr.split("."))
                 new > curr
             }
         }

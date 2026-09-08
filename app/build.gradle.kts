@@ -10,17 +10,29 @@ if (gradle.startParameter.taskNames.any { it.contains("google", true) }) {
     apply(plugin = "com.google.firebase.crashlytics")
 }
 
-val gitCommitHash = if (rootProject.file(".git").exists()) {
-    try {
-        providers.exec {
-            commandLine("git", "rev-parse", "--verify", "--short", "HEAD")
-        }.standardOutput.asText.get().trim()
-    } catch (e: Exception) {
-        "nogit"
+val baseVersion = "3.2.2"
+
+fun computeGitCommitHash(): String {
+    val envHash = System.getenv("COMMIT_HASH") ?: System.getenv("GITHUB_SHA")
+    if (!envHash.isNullOrBlank()) {
+        return envHash.take(7)
     }
-} else {
-    "nogit"
+    return try {
+        providers.exec {
+            commandLine("git", "rev-parse", "HEAD")
+        }.standardOutput.asText.get().trim().take(7)
+    } catch (e: Exception) {
+        try {
+            providers.exec {
+                commandLine("git", "rev-parse", "--verify", "--short=7", "HEAD")
+            }.standardOutput.asText.get().trim()
+        } catch (e2: Exception) {
+            ""
+        }
+    }
 }
+
+val gitCommitHash = computeGitCommitHash()
 
 android {
     namespace = "ani.dantotsu"
@@ -31,8 +43,8 @@ android {
         minSdk = 26
         targetSdk = 36
 
-        versionName = "3.2.2"
-        versionCode = (versionName ?: "1.0.0").split(".")
+        versionName = if (gitCommitHash.isNotEmpty()) "$baseVersion+$gitCommitHash" else baseVersion
+        versionCode = baseVersion.split(".")
             //noinspection WrongGradleMethod
             .map { it.toInt() * 100 }
             .joinToString("")
@@ -66,7 +78,7 @@ android {
     buildTypes {
         create("alpha") {
             applicationIdSuffix = ".beta"
-            versionNameSuffix = "-alpha01-$gitCommitHash"
+            versionNameSuffix = "-alpha01"
             manifestPlaceholders["icon_placeholder"] = "@mipmap/ic_launcher_alpha"
             manifestPlaceholders["icon_placeholder_round"] = "@mipmap/ic_launcher_alpha_round"
             isDebuggable = true
