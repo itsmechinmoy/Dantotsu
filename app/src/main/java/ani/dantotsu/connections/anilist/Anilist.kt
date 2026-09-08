@@ -24,6 +24,9 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
 import androidx.core.net.toUri
+import kotlinx.serialization.encodeToString
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 object Anilist {
     val query: AnilistQueries = AnilistQueries()
@@ -60,6 +63,7 @@ object Anilist {
     /** Set to true when the AniList API reports a "disabled" error. Reset on next successful call. */
     @Volatile
     var anilistDisabledSignal: Boolean = false
+    var lastError: String? = null
 
     val sortBy = listOf(
         "SCORE_DESC",
@@ -328,16 +332,15 @@ object Anilist {
         show: Boolean = false,
         cache: Int? = null
     ): T? {
+        lastError = null
         return try {
             if (show) Logger.log("Anilist Query: $query")
             if (rateLimitReset > System.currentTimeMillis() / 1000) {
-                toast("Rate limited. Try after ${rateLimitReset - (System.currentTimeMillis() / 1000)} seconds")
-                throw Exception("Rate limited after ${rateLimitReset - (System.currentTimeMillis() / 1000)} seconds")
+                val rateMsg = "Rate limited. Try after ${rateLimitReset - (System.currentTimeMillis() / 1000)} seconds"
+                toast(rateMsg)
+                lastError = rateMsg
+                throw Exception(rateMsg)
             }
-            val data = mapOf(
-                "query" to query,
-                "variables" to variables
-            )
             val headers = mutableMapOf(
                 "Content-Type" to "application/json; charset=utf-8",
                 "Accept" to "application/json"
@@ -346,10 +349,21 @@ object Anilist {
             if (token != null || force) {
                 if (token != null && useToken) headers["Authorization"] = "Bearer $token"
 
+                val jsonPayload = buildString {
+                    append("{\"query\":")
+                    append(Json.encodeToString(query))
+                    if (variables.isNotBlank() && variables.trim().startsWith("{")) {
+                        append(",\"variables\":")
+                        append(variables.trim())
+                    }
+                    append("}")
+                }
+                val requestBody = jsonPayload.toRequestBody("application/json; charset=utf-8".toMediaType())
+
                 val json = client.post(
                     "https://graphql.anilist.co/",
                     headers,
-                    data = data,
+                    requestBody = requestBody,
                     cacheTime = if (force) 0 else (cache ?: 10)
                 )
                 val remaining = json.headers["X-RateLimit-Remaining"]?.toIntOrNull() ?: -1
@@ -361,16 +375,34 @@ object Anilist {
                         rateLimitReset = passedLimitReset
                     }
 
-                    toast("Rate limited. Try after $retry seconds")
-                    throw Exception("Rate limited after $retry seconds")
+                    val rateMsg = "Rate limited. Try after $retry seconds"
+                    toast(rateMsg)
+                    lastError = rateMsg
+                    throw Exception(rateMsg)
                 }
 
                 if (json.code == 403 || json.code == 400) {
                     val message = runCatching {
                         val root = Json.parseToJsonElement(json.text).jsonObject
-                        root["errors"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
+                        val firstError = root["errors"]?.jsonArray?.firstOrNull()?.jsonObject
+                        val validationObj = firstError?.get("validation")?.jsonObject
+                        if (validationObj != null) {
+                            val validationMessages = validationObj.values.flatMap { elem ->
+                                (elem as? kotlinx.serialization.json.JsonArray)?.mapNotNull {
+                                    it.jsonPrimitive.contentOrNull
+                                } ?: emptyList()
+                            }
+                            if (validationMessages.isNotEmpty()) {
+                                validationMessages.joinToString("\n")
+                            } else {
+                                firstError["message"]?.jsonPrimitive?.contentOrNull
+                            }
+                        } else {
+                            firstError?.get("message")?.jsonPrimitive?.contentOrNull
+                        }
                     }.getOrNull() ?: "Forbidden (error ${json.code})"
 
+                    lastError = message
                     if (message.contains("disabled", ignoreCase = true)) {
                         anilistDisabledSignal = true
                     } else if (message.contains("Invalid token")) {
@@ -383,7 +415,9 @@ object Anilist {
                 }
                 if (!json.text.startsWith("{")) {
                     anilistDisabledSignal = true
-                    throw Exception(currContext()?.getString(R.string.anilist_down) + " (error: ${json.code})")
+                    val downMsg = (currContext()?.getString(R.string.anilist_down) ?: "AniList is down") + " (error: ${json.code})"
+                    lastError = downMsg
+                    throw Exception(downMsg)
                 }
 
                 anilistDisabledSignal = false
@@ -396,6 +430,9 @@ object Anilist {
                 e.cause is java.net.UnknownHostException ||
                 e.cause is java.net.ConnectException) {
                 anilistDisabledSignal = true
+            }
+            if (lastError == null) {
+                lastError = e.message
             }
             if (show) snackString("Error fetching Anilist data: ${e.message}")
             Logger.log("Anilist Query Error: ${e.message}")

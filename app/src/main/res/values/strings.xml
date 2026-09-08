@@ -1131,8 +1131,11 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="subscribed">Subscribed</string>
     <string name="unsubscribed">Unsubscribed</string>
     <string name="thread_title">Thread Title</string>
+    <string name="thread_title_length_error">Thread title must be at least 6 characters</string>
     <string name="create_thread">Create Thread</string>
     <string name="forum">Forum</string>
+    <string name="forum_category">Category</string>
+    <string name="review_body_min_length_error">Review body must be at least 2200 characters (current: %1$d)</string>
     <string name="recommend">Recommend</string>
     <string name="recommend_media">Recommend Similar Anime / Manga</string>
     <string name="edit_bio">Edit Profile Bio</string>

@@ -10,6 +10,7 @@ import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Lifecycle
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import ani.dantotsu.R
+import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.databinding.ActivityNotificationBinding
 import ani.dantotsu.initActivity
 import ani.dantotsu.navBarHeight
@@ -95,10 +96,11 @@ class FeedActivity : AppCompatActivity() {
             return when (position) {
                 0 -> ActivityFragment.newInstance(
                     if (activityId != -1) ActivityType.ONE else ActivityType.USER,
+                    userId = if (activityId != -1) null else Anilist.userid,
                     activityId = activityId
                 )
 
-                else -> ActivityFragment.newInstance(ActivityType.GLOBAL)
+                else -> ActivityFragment.newInstance(ActivityType.GLOBAL, userId = Anilist.userid)
             }
         }
     }

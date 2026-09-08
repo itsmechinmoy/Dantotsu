@@ -108,6 +108,10 @@ class ForumActivity : AppCompatActivity() {
             startActivity(
                 Intent(this, ActivityMarkdownCreator::class.java).apply {
                     putExtra("type", "thread")
+                    putIntegerArrayListExtra(
+                        "categories",
+                        arrayListOf(selectedCategoryId ?: 1)
+                    )
                 }
             )
         }

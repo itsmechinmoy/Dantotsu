@@ -8,6 +8,9 @@ import ani.dantotsu.currContext
 import com.google.gson.Gson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 class AnilistMutations {
 
@@ -457,6 +460,27 @@ class AnilistMutations {
             ?: "Success")
     }
 
+    private fun JsonObject.extractErrorMessage(): String? {
+        val errors = this["errors"]?.let { it as? JsonArray } ?: return null
+        val messages = errors.mapNotNull { elem ->
+            val obj = elem.jsonObject
+            val validationObj = obj["validation"]?.let { it as? JsonObject }
+            if (validationObj != null) {
+                val validationMessages = validationObj.values.flatMap { v ->
+                    (v as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+                }
+                if (validationMessages.isNotEmpty()) {
+                    validationMessages.joinToString("\n")
+                } else {
+                    obj["message"]?.jsonPrimitive?.contentOrNull
+                }
+            } else {
+                obj["message"]?.jsonPrimitive?.contentOrNull
+            }
+        }
+        return if (messages.isNotEmpty()) messages.joinToString("\n") else null
+    }
+
     suspend fun postReview(
         summary: String,
         body: String,
@@ -483,9 +507,12 @@ class AnilistMutations {
             }
         """.trimIndent()
         val result = executeQuery<JsonObject>(query)
-        val errors = result?.get("errors")
-        return errors?.toString() ?: (currContext()?.getString(ani.dantotsu.R.string.success)
-            ?: "Success")
+        val errorMessage = result?.extractErrorMessage() ?: Anilist.lastError
+        return if (result == null || errorMessage != null) {
+            errorMessage ?: "Failed to post review"
+        } else {
+            currContext()?.getString(ani.dantotsu.R.string.success) ?: "Success"
+        }
     }
 
     suspend fun deleteReview(reviewId: Int): Boolean {
@@ -532,9 +559,10 @@ class AnilistMutations {
         mediaCategories: List<Int>? = null,
         edit: Int? = null
     ): String {
+        val finalCategories = if (categories.isNullOrEmpty() && edit == null) listOf(1) else categories
         val encodedTitle = title.stringSanitizer()
         val encodedBody = body.stringSanitizer()
-        val categoriesArg = if (!categories.isNullOrEmpty()) ", categories: [${categories.joinToString(",")}]" else ""
+        val categoriesArg = if (!finalCategories.isNullOrEmpty()) ", categories: [${finalCategories.joinToString(",")}]" else ""
         val mediaCategoriesArg = if (!mediaCategories.isNullOrEmpty()) ", mediaCategories: [${mediaCategories.joinToString(",")}]" else ""
         val query = """
             mutation {
@@ -551,9 +579,12 @@ class AnilistMutations {
             }
         """.trimIndent()
         val result = executeQuery<JsonObject>(query)
-        val errors = result?.get("errors")
-        return errors?.toString() ?: (currContext()?.getString(ani.dantotsu.R.string.success)
-            ?: "Success")
+        val errorMessage = result?.extractErrorMessage() ?: Anilist.lastError
+        return if (result == null || errorMessage != null) {
+            errorMessage ?: "Failed to save thread"
+        } else {
+            currContext()?.getString(ani.dantotsu.R.string.success) ?: "Success"
+        }
     }
 
     suspend fun deleteThread(threadId: Int): Boolean {
@@ -591,9 +622,12 @@ class AnilistMutations {
             }
         """.trimIndent()
         val result = executeQuery<JsonObject>(query)
-        val errors = result?.get("errors")
-        return errors?.toString() ?: (currContext()?.getString(ani.dantotsu.R.string.success)
-            ?: "Success")
+        val errorMessage = result?.extractErrorMessage() ?: Anilist.lastError
+        return if (result == null || errorMessage != null) {
+            errorMessage ?: "Failed to post comment"
+        } else {
+            currContext()?.getString(ani.dantotsu.R.string.success) ?: "Success"
+        }
     }
 
     suspend fun deleteThreadComment(commentId: Int): Boolean {

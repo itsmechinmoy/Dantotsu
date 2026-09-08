@@ -61,11 +61,30 @@ class CommentItem(
     val repliesSection = Section()
     private var isEditing = false
     var isReplying = false
-    private var repliesVisible = false
+    var repliesVisible = false
     var MAX_DEPTH = 3
 
     init {
         adapter.add(repliesSection)
+    }
+
+    fun updateRepliesVisibility(visible: Boolean) {
+        repliesVisible = visible
+        if (::binding.isInitialized) {
+            if ((comment.replyCount ?: 0) > 0 || repliesVisible) {
+                binding.commentTotalReplies.visibility = View.VISIBLE
+                binding.commentRepliesDivider.visibility = View.VISIBLE
+            }
+            if (visible) {
+                binding.commentTotalReplies.setText(R.string.hide_replies)
+            } else {
+                val replyCount = comment.replyCount ?: 1
+                binding.commentTotalReplies.text = if (replyCount == 1)
+                    binding.commentTotalReplies.context.getString(R.string.view_reply)
+                else
+                    binding.commentTotalReplies.context.getString(R.string.view_replies_count, replyCount)
+            }
+        }
     }
 
     override fun bind(viewBinding: ItemCommentsBinding, position: Int) {
@@ -92,17 +111,19 @@ class CommentItem(
             }
             replying(isReplying) //sets default text
             editing(isEditing)
-            if ((comment.replyCount ?: 0) > 0) {
+            if ((comment.replyCount ?: 0) > 0 || repliesVisible) {
                 commentTotalReplies.visibility = View.VISIBLE
                 commentRepliesDivider.visibility = View.VISIBLE
                 commentTotalReplies.context.run {
                     commentTotalReplies.text = if (repliesVisible)
                         getString(R.string.hide_replies)
-                    else
-                        if (comment.replyCount == 1)
+                    else {
+                        val replyCount = comment.replyCount ?: 1
+                        if (replyCount == 1)
                             getString(R.string.view_reply)
                         else
-                            getString(R.string.view_replies_count, comment.replyCount)
+                            getString(R.string.view_replies_count, replyCount)
+                    }
                 }
             } else {
                 commentTotalReplies.visibility = View.GONE
@@ -114,10 +135,11 @@ class CommentItem(
                     repliesSection.clear()
                     removeSubCommentIds()
                     commentTotalReplies.context.run {
-                        commentTotalReplies.text = if (comment.replyCount == 1)
+                        val replyCount = comment.replyCount ?: 1
+                        commentTotalReplies.text = if (replyCount == 1)
                             getString(R.string.view_reply)
                         else
-                            getString(R.string.view_replies_count, comment.replyCount)
+                            getString(R.string.view_replies_count, replyCount)
                     }
                     repliesVisible = false
                 } else {

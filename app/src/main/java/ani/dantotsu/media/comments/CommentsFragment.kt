@@ -31,6 +31,7 @@ import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.media.anime.getEpisode
 import ani.dantotsu.media.MediaDetailsActivity
 import ani.dantotsu.media.MediaDetailsViewModel
+import ani.dantotsu.notifications.comment.MediaNameFetch
 import ani.dantotsu.setBaseline
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -117,6 +118,9 @@ class CommentsFragment : Fragment() {
             return
         }
         this.mediaId = mediaId
+        if (mediaName.isNotBlank() && !mediaName.equals("unknown", ignoreCase = true)) {
+            MediaNameFetch.cacheMedia(mediaId, mediaName)
+        }
         backgroundColor = (binding.root.background as? ColorDrawable)?.color ?: 0
 
         val markwon = buildMarkwon(activity, fragment = this@CommentsFragment)
@@ -818,29 +822,73 @@ class CommentsFragment : Fragment() {
         }
 
         // Traverse up to root parent if this is a reply
-        var rootComment: Comment = targetComment
+        val commentChain = mutableListOf<Comment>()
+        commentChain.add(targetComment)
+
         var currentParentId = targetComment.parentCommentId
         var hops = 0
-        while (currentParentId != null && currentParentId > 0 && hops < 5) {
+        while (currentParentId != null && currentParentId > 0 && hops < 10) {
             val parent = withContext(Dispatchers.IO) {
                 CommentsAPI.getSingleComment(currentParentId!!)
             } ?: break
-            rootComment = parent
+            commentChain.add(parent)
             currentParentId = parent.parentCommentId
             hops++
         }
 
+        // threadList is ordered from root down to targetComment:
+        // [rootComment, ..., parentComment, targetComment]
+        val threadList = commentChain.reversed()
+
         withContext(Dispatchers.Main) {
-            val rootItem = CommentItem(
-                rootComment,
-                buildMarkwon(activity, fragment = this@CommentsFragment),
-                section,
-                this@CommentsFragment,
-                backgroundColor,
-                0
-            )
-            section.add(rootItem)
-            rootItem.showReplies()
+            val markwon = buildMarkwon(activity, fragment = this@CommentsFragment)
+            var currentParentItem: CommentItem? = null
+
+            threadList.forEachIndexed { index, comment ->
+                if (index == 0) {
+                    val rootItem = CommentItem(
+                        comment,
+                        markwon,
+                        section,
+                        this@CommentsFragment,
+                        backgroundColor,
+                        0
+                    )
+                    if (threadList.size > 1) {
+                        rootItem.updateRepliesVisibility(true)
+                    }
+                    section.add(rootItem)
+                    currentParentItem = rootItem
+                } else {
+                    val parent = currentParentItem!!
+                    val depth =
+                        if (parent.commentDepth + 1 > parent.MAX_DEPTH) parent.commentDepth else parent.commentDepth + 1
+                    val targetSection =
+                        if (parent.commentDepth + 1 > parent.MAX_DEPTH) parent.parentSection else parent.repliesSection
+                    if (depth >= parent.MAX_DEPTH) {
+                        parent.registerSubComment(comment.commentId)
+                    }
+                    val childItem = CommentItem(
+                        comment,
+                        markwon,
+                        targetSection,
+                        this@CommentsFragment,
+                        backgroundColor,
+                        depth
+                    )
+                    // Expand this child's replies if there are subsequent replies in the chain leading to targetComment
+                    if (index < threadList.size - 1) {
+                        childItem.updateRepliesVisibility(true)
+                    }
+                    targetSection.add(childItem)
+                    currentParentItem = childItem
+                }
+            }
+
+            // If target is the root comment and has replies, show its replies
+            if (threadList.size == 1 && (targetComment.replyCount ?: 0) > 0) {
+                currentParentItem?.showReplies()
+            }
         }
 
         binding.commentsProgressBar.visibility = View.GONE

@@ -43,6 +43,7 @@ import ani.dantotsu.initActivity
 import ani.dantotsu.loadImage
 import ani.dantotsu.media.anime.AnimeWatchFragment
 import ani.dantotsu.media.comments.CommentsFragment
+import ani.dantotsu.notifications.comment.MediaNameFetch
 import ani.dantotsu.media.manga.MangaReadFragment
 import ani.dantotsu.media.novel.NovelReadFragment
 import ani.dantotsu.navBarHeight
@@ -225,6 +226,12 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             copyToClipboard(media.userPreferredName)
             true
         }
+        MediaNameFetch.cacheMedia(
+            media.id,
+            media.userPreferredName,
+            media.cover ?: "",
+            "#222222"
+        )
         binding.mediaStatus.text = media.status ?: ""
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
 

@@ -35,6 +35,7 @@ class ActivityFragment : Fragment() {
     private var allActivities: MutableList<Activity> = mutableListOf()
     private var currentFilter: ActivityFilterType = ActivityFilterType.ALL
     private var hasMoreActivities: Boolean = true
+    private var shouldRefreshOnResume: Boolean = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -55,20 +56,20 @@ class ActivityFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         arguments?.let {
             type = it.getSerializableCompat<ActivityType>("type") as ActivityType
-            userId = it.getInt("userId")
-            activityId = it.getInt("activityId")
+            userId = if (it.containsKey("userId")) it.getInt("userId").takeIf { id -> id != 0 } else null
+            activityId = if (it.containsKey("activityId")) it.getInt("activityId").takeIf { id -> id != 0 } else null
         }
+        val isUserActivity = type == ActivityType.USER || type == ActivityType.GLOBAL || userId == null || userId == Anilist.userid
         binding.titleBar.visibility =
             if (type != ActivityType.ONE) View.VISIBLE else View.GONE
         binding.titleText.text = when (type) {
-            ActivityType.OTHER_USER -> if (userId == Anilist.userid) getString(R.string.create_new_activity) else getString(R.string.write_a_message)
-            ActivityType.USER -> getString(R.string.create_new_activity)
-            ActivityType.GLOBAL -> getString(R.string.filter_activity)
+            ActivityType.OTHER_USER -> if (userId == null || userId == Anilist.userid) getString(R.string.create_new_activity) else getString(R.string.write_a_message)
+            ActivityType.USER, ActivityType.GLOBAL -> getString(R.string.create_new_activity)
             ActivityType.ONE -> ""
         }
         binding.titleImage.visibility = when (type) {
             ActivityType.OTHER_USER -> View.VISIBLE
-            ActivityType.USER -> if (Anilist.token != null) View.VISIBLE else View.GONE
+            ActivityType.USER, ActivityType.GLOBAL -> if (Anilist.token != null) View.VISIBLE else View.GONE
             else -> View.GONE
         }
         
@@ -96,14 +97,7 @@ class ActivityFragment : Fragment() {
             currentBinding.listProgressBar.isVisible = false
         }
         binding.feedSwipeRefresh.setOnRefreshListener {
-            viewLifecycleOwner.lifecycleScope.launch {
-                adapter.clear()
-                allActivities.clear()
-                page = 1
-                hasMoreActivities = true
-                getList()
-                _binding?.feedSwipeRefresh?.isRefreshing = false
-            }
+            refreshFeed()
         }
         binding.listRecyclerView.addOnScrollListener(object :
             RecyclerView.OnScrollListener() {
@@ -155,11 +149,32 @@ class ActivityFragment : Fragment() {
     }
 
     private fun handleTitleImageClick() {
+        shouldRefreshOnResume = true
+        val isUserActivity = type == ActivityType.USER || type == ActivityType.GLOBAL || userId == null || userId == Anilist.userid
+        val targetUserId = if (isUserActivity) Anilist.userid else userId
         val intent = Intent(context, ActivityMarkdownCreator::class.java).apply {
-            putExtra("type", if (userId == null || userId == Anilist.userid) "activity" else "message")
-            putExtra("userId", userId ?: Anilist.userid)
+            putExtra("type", if (isUserActivity) "activity" else "message")
+            if (targetUserId != null) {
+                putExtra("userId", targetUserId)
+            }
         }
         ContextCompat.startActivity(requireContext(), intent, null)
+    }
+
+    private fun refreshFeed() {
+        if (!isAdded || _binding == null) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            adapter.clear()
+            allActivities.clear()
+            page = 1
+            hasMoreActivities = true
+            _binding?.listProgressBar?.isVisible = true
+            getList()
+            val currentBinding = _binding ?: return@launch
+            currentBinding.emptyTextView.isVisible = adapter.itemCount == 0
+            currentBinding.listProgressBar.isVisible = false
+            currentBinding.feedSwipeRefresh.isRefreshing = false
+        }
     }
 
     private suspend fun getList() {
@@ -257,8 +272,12 @@ class ActivityFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (_binding != null) {
+        if (isAdded && _binding != null) {
             binding.root.requestLayout()
+            if (shouldRefreshOnResume) {
+                shouldRefreshOnResume = false
+                refreshFeed()
+            }
         }
     }
 
