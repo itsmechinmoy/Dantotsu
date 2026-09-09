@@ -104,6 +104,8 @@ class CommentsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // The host can be mid-bail after a process death; it has no views to anchor to.
+        if (!activity.bindingReady) return
         val baselineAnchor = activity.binding.mediaBottomBarContainer ?: activity.binding.commentMessageContainer
         baselineAnchor?.let {
             // If it's the unified container, it already has navBarHeight padding, so don't include it again.

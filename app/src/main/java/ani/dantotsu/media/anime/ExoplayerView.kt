@@ -967,7 +967,10 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                 it.language.contains("en", true)
             } ?: ext.subtitles.firstOrNull()
         }
-        subtitleManager.initialSubtitleLabel = subtitle?.language ?: lang
+        // Falling back to a language name here would make the track-change handler
+        // pick an English track back up after the user chose "None".
+        subtitleManager.initialSubtitleLabel =
+            if (savedSubLang == "None") null else subtitle?.language ?: lang
         if (subtitle != null) {
             PrefManager.setCustomVal("subLang_${media.id}", subtitle!!.language)
             subtitleManager.setActiveServerSubtitle(subtitle)
@@ -1024,11 +1027,20 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
             else -> null
         }
 
+        var offlineAudioUri: Uri? = null
         val downloadedMediaItem = if (ext.server.offline) {
             val titleName = ext.server.name.split("/").first()
             val episodeName = ext.server.name.split("/").last()
             val directory = ani.dantotsu.download.DownloadsManager.getSubDirectory(this, ani.dantotsu.media.MediaType.ANIME, false, titleName, episodeName)
-            if (directory != null) {
+            // An encrypted download plays from its own item, keyed by the license
+            // the CDM kept when it was downloaded.
+            val encrypted = directory?.let {
+                ani.dantotsu.download.video.DrmDownloader.offlineMediaItem(this, it)
+            }
+            if (encrypted != null) {
+                offlineAudioUri = encrypted.second
+                encrypted.first
+            } else if (directory != null) {
                 val file = directory.listFiles()?.firstOrNull {
                     it.isFile && !it.name.orEmpty().contains("subtitle", ignoreCase = true) && !it.name.orEmpty().startsWith(".") &&
                     (it.name?.endsWith(".mp4", ignoreCase = true) == true ||
@@ -1070,8 +1082,30 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
             }
             .build()
 
+        // Playing online is the only moment a live token and an existing download
+        // coexist, so it is where a stale offline license gets topped up.
+        val drmInfo = video?.drm
+        if (drmInfo?.offline != null) {
+            val title = media.mainName()
+            val epNumber = episode.number
+            lifecycleScope.launch(Dispatchers.IO) {
+                runCatching {
+                    val dir = ani.dantotsu.download.DownloadsManager.findSubDirectory(
+                        this@ExoplayerView, ani.dantotsu.media.MediaType.ANIME, title, epNumber
+                    ) ?: return@runCatching
+                    ani.dantotsu.download.video.DrmDownloader.refreshIfStale(
+                        this@ExoplayerView, drmInfo.offline, drmInfo.scheme, dir
+                    )
+                }.onFailure { Logger.log("DRM refresh failed: ${it.message}") }
+            }
+        }
+
+        val playbackAudioTracks = offlineAudioUri?.let {
+            listOf(eu.kanade.tachiyomi.animesource.model.Track(it.toString(), "Audio"))
+        } ?: ext.audioTracks
+
         playerManager.buildMediaSource(
-            video!!, subConfigs, mimeType, downloadedMediaItem, mediaMetadata, ext.audioTracks
+            video!!, subConfigs, mimeType, downloadedMediaItem, mediaMetadata, playbackAudioTracks
         )
 
         castManager.setupCastButton(

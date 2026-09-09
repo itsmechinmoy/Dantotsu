@@ -26,6 +26,7 @@ import ani.dantotsu.defaultHeaders
 import ani.dantotsu.download.DownloadedType
 import ani.dantotsu.download.DownloadsManager
 import ani.dantotsu.download.DownloadsManager.Companion.getSubDirectory
+import ani.dantotsu.download.video.DrmDownloader
 import ani.dantotsu.download.anime.AnimeDownloaderService.AnimeDownloadTask.Companion.getTaskName
 import ani.dantotsu.download.findValidName
 import ani.dantotsu.media.Media
@@ -297,6 +298,37 @@ class AnimeDownloaderService : Service() {
                     task.episode
                 ) ?: throw Exception("Failed to create output directory")
 
+                // FFmpeg would need the content key to make anything playable out of an
+                // encrypted stream, so those are stored as-is next to a persistent license.
+                val drm = task.video.drm
+                val offlineDrm = drm?.offline
+                if (offlineDrm != null) {
+                    saveMediaInfo(task, baseOutputDir)
+                    val lastPercent = java.util.concurrent.atomic.AtomicInteger(-1)
+                    val result = DrmDownloader.download(
+                        context = this@AnimeDownloaderService,
+                        drm = offlineDrm,
+                        scheme = drm.scheme,
+                        outputDir = outputDir,
+                    ) { percent ->
+                        // Fires once per segment, and an episode has hundreds of them.
+                        if (task.cancelled || lastPercent.getAndSet(percent) == percent) {
+                            return@download
+                        }
+                        AnimeServiceDataSingleton.progress[task.getTaskName()] = percent
+                        builder.setProgress(100, percent, false)
+                        if (notifi) notificationManager.notify(NOTIFICATION_ID, builder.build())
+                        broadcastDownloadProgress(task.episode, percent, task.sourceMedia?.id, 0L, 0L)
+                    }
+                    if (task.cancelled) return@withContext
+                    Logger.log(
+                        "DRM download finished; license valid for " +
+                            "${result.licenseSeconds}s, playback window ${result.playbackSeconds}s"
+                    )
+                    completeDownload(task, notifi)
+                    return@withContext
+                }
+
                 val extension = ffExtension!!.getFileExtension()
                 outputDir.findFile("${task.getTaskName().findValidName()}.${extension.first}")
                     ?.delete()
@@ -476,37 +508,8 @@ class AnimeDownloaderService : Service() {
                         broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
                         return@withContext
                     }
-                    Logger.log("Download completed")
-                    builder.setContentText(
-                        "${
-                            getTaskName(
-                                task.title,
-                                task.episode
-                            )
-                        } Download completed"
-                    )
-                    if (notifi) {
-                        withContext(Dispatchers.Main) {
-                            notificationManager.notify(NOTIFICATION_ID, builder.build())
-                        }
-                    }
-                    snackString("${getTaskName(task.title, task.episode)} Download completed")
-                    PrefManager.getAnimeDownloadPreferences().edit {
-                        putString(
-                            task.getTaskName(),
-                            task.video.file.url
-                        )
-                    }
-                    val downloadType = DownloadedType(
-                        task.title,
-                        task.episode,
-                        MediaType.ANIME,
-                    )
                     if (task.cancelled) return@withContext
-                    downloadsManager.addDownload(downloadType)
-                    val size = downloadsManager.getSize(downloadType)
-                    currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
-                    broadcastDownloadFinished(task.episode, task.sourceMedia?.id, size)
+                    completeDownload(task, notifi)
                 } else throw Exception("Download failed")
 
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -538,6 +541,25 @@ class AnimeDownloaderService : Service() {
                 AnimeServiceDataSingleton.progress.remove(task.getTaskName())
             }
         }
+    }
+
+    private suspend fun completeDownload(task: AnimeDownloadTask, notifi: Boolean) {
+        Logger.log("Download completed")
+        builder.setContentText("${getTaskName(task.title, task.episode)} Download completed")
+        if (notifi) {
+            withContext(Dispatchers.Main) {
+                notificationManager.notify(NOTIFICATION_ID, builder.build())
+            }
+        }
+        snackString("${getTaskName(task.title, task.episode)} Download completed")
+        PrefManager.getAnimeDownloadPreferences().edit {
+            putString(task.getTaskName(), task.video.file.url)
+        }
+        val downloadType = DownloadedType(task.title, task.episode, MediaType.ANIME)
+        downloadsManager.addDownload(downloadType)
+        val size = downloadsManager.getSize(downloadType)
+        currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
+        broadcastDownloadFinished(task.episode, task.sourceMedia?.id, size)
     }
 
     private fun CoroutineScope.saveMediaInfo(task: AnimeDownloadTask, directory: DocumentFile) {

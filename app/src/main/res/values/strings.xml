@@ -1006,6 +1006,10 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="dir_access_msg">Please choose a directory to save your downloads</string>
     <string name="change_download_location">Change Download Location</string>
     <string name="download_location_msg">Are you sure you want to change the download location?\nOld downloads may no longer be accessible.</string>
+    <string name="rebuild_download_index">Rebuild Download Index</string>
+    <string name="rebuild_download_index_desc">Restore downloads that exist on disk but are missing from the list</string>
+    <string name="rebuild_download_index_msg">Scan the downloads folder and re-add anything missing from the list.\n\nUse this after reinstalling or switching builds, when your files are still on disk but no longer show up. Nothing is deleted.</string>
+    <string name="rebuild_download_index_done">Recovered %1$d download(s)</string>
     <string name="report">Report</string>
     <string name="ban">Ban</string>
     <string name="voice_actors">Voice Actors</string>

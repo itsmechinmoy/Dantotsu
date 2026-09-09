@@ -73,6 +73,9 @@ import kotlin.time.Duration.Companion.milliseconds
 class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener {
     lateinit var launcher: LauncherWrapper
     lateinit var binding: ActivityMediaBinding
+
+    /** False while the activity is bailing out of [onCreate] without any media. */
+    val bindingReady get() = ::binding.isInitialized
     private val scope = lifecycleScope
     private val model: MediaDetailsViewModel by viewModels()
     var selected = 0
@@ -84,7 +87,13 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
 
-        super.onCreate(savedInstanceState)
+        // A recreated activity has neither the intent extra (it is removed below on
+        // first run) nor the singleton, so it cannot rebuild its views and bails out
+        // before `binding` is set. Dropping the saved state keeps the framework from
+        // restoring fragments that would then touch that uninitialised binding.
+        val restorable = intent.hasExtra("media") || mediaSingleton != null ||
+            intent.getIntExtra("mediaId", -1) != -1
+        super.onCreate(if (restorable) savedInstanceState else null)
         var media: Media = intent.getSerialized("media") ?: mediaSingleton ?: emptyMedia()
         intent.removeExtra("media")
         val id = intent.getIntExtra("mediaId", -1)
