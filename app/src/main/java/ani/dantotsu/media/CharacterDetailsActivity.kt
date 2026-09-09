@@ -208,7 +208,9 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
     override fun onDestroy() {
         super.onDestroy()
         Refresh.activity.remove(this.hashCode())
-        binding.characterRecyclerView.adapter = null
-        binding.authorCharactersRecycler.adapter = null
+        if (::binding.isInitialized) {
+            binding.characterRecyclerView.adapter = null
+            binding.authorCharactersRecycler.adapter = null
+        }
     }
 }

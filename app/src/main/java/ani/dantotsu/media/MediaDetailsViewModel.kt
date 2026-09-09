@@ -20,8 +20,12 @@ import ani.dantotsu.media.manga.MangaChapter
 import ani.dantotsu.media.mangaupdates.MangaAnimeUtil
 import ani.dantotsu.others.AniSkip
 import ani.dantotsu.others.Anify
+import ani.dantotsu.others.AniskipCsvFallback
+import ani.dantotsu.others.IdMappers
+import ani.dantotsu.others.IntroDbService
 import ani.dantotsu.others.Jikan
 import ani.dantotsu.others.Kitsu
+import ani.dantotsu.others.TmdbService
 import ani.dantotsu.parsers.AnimeSources
 import ani.dantotsu.parsers.Book
 import ani.dantotsu.parsers.MangaImage
@@ -677,7 +681,18 @@ class MediaDetailsViewModel : ViewModel() {
             if (anifyEpisodes.value == null || force) {
                 val anilistId = s.id.takeIf { it != 0 }
                 val malId = s.idMAL
-                anifyEpisodes.postValue(Anify.fetchAndParseMetadata(anilistId = anilistId, malId = malId))
+                var episodes = Anify.fetchAndParseMetadata(anilistId = anilistId, malId = malId)
+                if (episodes.isEmpty()) {
+                    val tmdbId = s.idTMDB?.toIntOrNull()
+                        ?: runCatching { IdMappers.getIds(s.id)?.tmdbId }.getOrNull()
+                    if (tmdbId != null && tmdbId > 0) {
+                        val tmdbEpisodes = TmdbService.getEpisodeDetails(tmdbId)
+                        if (!tmdbEpisodes.isNullOrEmpty()) {
+                            episodes = tmdbEpisodes
+                        }
+                    }
+                }
+                anifyEpisodes.postValue(episodes)
             }
         }
     }
@@ -791,10 +806,27 @@ class MediaDetailsViewModel : ViewModel() {
         // Extension timestamps take priority; fall back to AniSkip when the extension has none
         val result: List<AniSkip.Stamp>? = if (extensionTimestamps.isNotEmpty()) {
             extensionTimestamps.map { it.toAniSkipStamp() }
-        } else if (malId != null) {
-            AniSkip.getResult(malId, episodeNum, duration, useProxyForTimeStamps)
         } else {
-            null
+            var stamps: List<AniSkip.Stamp>? = null
+            // 1. Try Live AniSkip API
+            if (malId != null) {
+                stamps = AniSkip.getResult(malId, episodeNum, duration, useProxyForTimeStamps)
+            }
+            // 2. Try Offline AniSkip CSV Dump DB
+            if (stamps.isNullOrEmpty() && malId != null) {
+                val ctx = currContext()
+                if (ctx != null) {
+                    stamps = AniskipCsvFallback.getInstance(ctx).lookup(malId, episodeNum)
+                }
+            }
+            // 3. Try IntroDB API Fallback
+            if (stamps.isNullOrEmpty()) {
+                val mediaVal = media.value
+                val imdbId = mediaVal?.idIMDB ?: mediaVal?.id?.let { runCatching { IdMappers.getImdbId(it) }.getOrNull() }
+                val tmdbId = mediaVal?.idTMDB?.toIntOrNull() ?: mediaVal?.id?.let { runCatching { IdMappers.getIds(it)?.tmdbId }.getOrNull() }
+                stamps = IntroDbService.getSkipTimes(imdbId = imdbId, tmdbId = tmdbId, episode = episodeNum.toString())
+            }
+            stamps
         }
         if (result != null || duration > 0) {
             timeStampsMap[episodeNum] = result

@@ -107,14 +107,11 @@ class NovelReadFragment : Fragment(),
                 )
                 NovelServiceDataSingleton.downloadQueue.offer(downloadTask)
                 CoroutineScope(Dispatchers.IO).launch {
-
-                    if (!NovelServiceDataSingleton.isServiceRunning) {
-                        val intent = Intent(context, NovelDownloaderService::class.java)
-                        withContext(Dispatchers.Main) {
-                            ContextCompat.startForegroundService(requireContext(), intent)
-                        }
-                        NovelServiceDataSingleton.isServiceRunning = true
+                    val intent = Intent(context, NovelDownloaderService::class.java)
+                    withContext(Dispatchers.Main) {
+                        ContextCompat.startForegroundService(requireContext(), intent)
                     }
+                    NovelServiceDataSingleton.isServiceRunning = true
                 }
             }
             if (!StoragePermissions.hasDirAccess(it)) {

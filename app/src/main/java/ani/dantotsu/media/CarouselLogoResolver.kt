@@ -2,6 +2,7 @@ package ani.dantotsu.media
 
 import ani.dantotsu.client
 import ani.dantotsu.others.IdMappers
+import ani.dantotsu.others.TmdbService
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
@@ -64,6 +65,16 @@ object CarouselLogoResolver {
                     logo = fromAniZip("mal_id", ids.malId.toString())
                         ?: fromAniZip("malId", ids.malId.toString())
                 }
+            }
+        }
+
+        // 4. TMDB Fallback
+        if (logo == null && media.id > 0) {
+            val tmdbId = media.idTMDB?.toIntOrNull()
+                ?: runCatching { IdMappers.getIds(media.id)?.tmdbId }.getOrNull()
+            if (tmdbId != null && tmdbId > 0) {
+                val isMovie = media.anime?.totalEpisodes == 1 || media.typeMAL?.equals("Movie", ignoreCase = true) == true
+                logo = TmdbService.getClearLogo(tmdbId, isMovie)
             }
         }
 

@@ -573,14 +573,11 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                                     MangaServiceDataSingleton.downloadQueue.offer(downloadTask)
                                 }
 
-                                // If the service is not already running, start it
-                                if (!MangaServiceDataSingleton.isServiceRunning) {
-                                    val intent = Intent(context, MangaDownloaderService::class.java)
-                                    withContext(Dispatchers.Main) {
-                                        ContextCompat.startForegroundService(requireContext(), intent)
-                                    }
-                                    MangaServiceDataSingleton.isServiceRunning = true
+                                val intent = Intent(context, MangaDownloaderService::class.java)
+                                withContext(Dispatchers.Main) {
+                                    ContextCompat.startForegroundService(requireContext(), intent)
                                 }
+                                MangaServiceDataSingleton.isServiceRunning = true
                             } catch (e: Exception) {
                                 withContext(Dispatchers.Main) {
                                     chapterAdapter.purgeDownload(uniqueNum)

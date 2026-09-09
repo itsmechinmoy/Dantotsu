@@ -87,9 +87,11 @@ class MangaChapterAdapter(
 
     fun startDownload(chapterNumber: String) {
         activeDownloads.add(chapterNumber)
-        // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber || it.number == chapterNumber }
         if (position != -1) {
+            val chapter = arr[position]
+            activeDownloads.add(chapter.uniqueNumber())
+            activeDownloads.add(chapter.number)
             notifyItemChanged(position)
         }
     }
@@ -97,10 +99,14 @@ class MangaChapterAdapter(
     fun stopDownload(chapterNumber: String) {
         activeDownloads.remove(chapterNumber)
         downloadedChapters.add(chapterNumber)
-        // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber || it.number == chapterNumber }
         if (position != -1) {
-            arr[position].progress = "Downloaded"
+            val chapter = arr[position]
+            activeDownloads.remove(chapter.uniqueNumber())
+            activeDownloads.remove(chapter.number)
+            downloadedChapters.add(chapter.uniqueNumber())
+            downloadedChapters.add(chapter.number)
+            chapter.progress = "Downloaded"
             notifyItemChanged(position)
         }
     }
@@ -108,8 +114,9 @@ class MangaChapterAdapter(
     fun deleteDownload(chapterNumber: MangaChapter) {
         downloadedChapters.remove(chapterNumber.uniqueNumber())
         downloadedChapters.remove(chapterNumber.number)
+        activeDownloads.remove(chapterNumber.uniqueNumber())
+        activeDownloads.remove(chapterNumber.number)
         chapterNumber.title?.let { downloadedChapters.remove(it) }
-        // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber.uniqueNumber() }
         if (position != -1) {
             arr[position].progress = ""
@@ -120,10 +127,14 @@ class MangaChapterAdapter(
     fun purgeDownload(chapterNumber: String) {
         activeDownloads.remove(chapterNumber)
         downloadedChapters.remove(chapterNumber)
-        // Find the position of the chapter and notify only that item
         val position = arr.indexOfFirst { it.uniqueNumber() == chapterNumber || it.number == chapterNumber }
         if (position != -1) {
-            arr[position].progress = ""
+            val chapter = arr[position]
+            activeDownloads.remove(chapter.uniqueNumber())
+            activeDownloads.remove(chapter.number)
+            downloadedChapters.remove(chapter.uniqueNumber())
+            downloadedChapters.remove(chapter.number)
+            chapter.progress = ""
             notifyItemChanged(position)
         }
     }
@@ -226,7 +237,7 @@ class MangaChapterAdapter(
             if (activeDownloads.contains(chapterNumber) || activeDownloads.contains(chapter.number)) {
                 // Show spinner
                 binding.itemDownload.setImageResource(R.drawable.ic_sync)
-                startOrContinueRotation(chapterNumber) {
+                startOrContinueRotation(chapter) {
                     binding.itemDownload.rotation = 0f
                 }
             } else if (isDownloaded(chapter)) {
@@ -241,21 +252,20 @@ class MangaChapterAdapter(
 
         }
 
-        private fun startOrContinueRotation(chapterNumber: String, resetRotation: () -> Unit) {
-            if (!isRotationCoroutineRunningFor(chapterNumber)) {
+        private fun startOrContinueRotation(chapter: MangaChapter, resetRotation: () -> Unit) {
+            val key = chapter.uniqueNumber()
+            if (!isRotationCoroutineRunningFor(key)) {
                 val scope = fragment.lifecycle.coroutineScope
                 scope.launch {
-                    // Add chapter number to active coroutines set
-                    activeCoroutines.add(chapterNumber)
-                    while (activeDownloads.contains(chapterNumber)) {
+                    activeCoroutines.add(key)
+                    while (activeDownloads.contains(chapter.uniqueNumber()) || activeDownloads.contains(chapter.number)) {
                         binding.itemDownload.animate().rotationBy(360f).setDuration(1000)
                             .setInterpolator(
                                 LinearInterpolator()
                             ).start()
                         delay(1000)
                     }
-                    // Remove chapter number from active coroutines set
-                    activeCoroutines.remove(chapterNumber)
+                    activeCoroutines.remove(key)
                     resetRotation()
                 }
             }

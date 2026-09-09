@@ -150,7 +150,9 @@ class StudioActivity : AppCompatActivity() {
     }
 
     override fun onResume() {
-        binding.studioProgressBar.isGone = loaded
+        if (::binding.isInitialized) {
+            binding.studioProgressBar.isGone = loaded
+        }
         super.onResume()
     }
 }

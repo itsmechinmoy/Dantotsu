@@ -57,6 +57,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -75,9 +78,11 @@ class MangaDownloaderService : Service() {
     private lateinit var builder: NotificationCompat.Builder
     private val downloadsManager: DownloadsManager = Injekt.get<DownloadsManager>()
 
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val downloadJobs = mutableMapOf<String, Job>()
     private val mutex = Mutex()
-    private var isCurrentlyProcessing = false
+    private var queueJob: Job? = null
+    private val queueMutex = Mutex()
 
     override fun onBind(intent: Intent?): IBinder? {
         // This is only required for bound services.
@@ -94,6 +99,16 @@ class MangaDownloaderService : Service() {
             setOnlyAlertOnce(true)
             setProgress(0, 0, false)
         }
+        startForegroundNotification()
+        ContextCompat.registerReceiver(
+            this,
+            cancelReceiver,
+            IntentFilter(ACTION_CANCEL_DOWNLOAD),
+            ContextCompat.RECEIVER_EXPORTED
+        )
+    }
+
+    private fun startForegroundNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -103,49 +118,51 @@ class MangaDownloaderService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, builder.build())
         }
-        ContextCompat.registerReceiver(
-            this,
-            cancelReceiver,
-            IntentFilter(ACTION_CANCEL_DOWNLOAD),
-            ContextCompat.RECEIVER_EXPORTED
-        )
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel()
         MangaServiceDataSingleton.downloadQueue.clear()
         MangaServiceDataSingleton.currentTasks.clear()
         MangaServiceDataSingleton.progress.clear()
         downloadJobs.clear()
         MangaServiceDataSingleton.isServiceRunning = false
-        unregisterReceiver(cancelReceiver)
+        notificationManager.cancel(NOTIFICATION_ID)
+        runCatching { unregisterReceiver(cancelReceiver) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         snackString("Download started")
-        val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        serviceScope.launch {
-            mutex.withLock {
-                if (!isCurrentlyProcessing) {
-                    isCurrentlyProcessing = true
-                    processQueue()
-                    isCurrentlyProcessing = false
-                }
-            }
-        }
+        startForegroundNotification()
+        MangaServiceDataSingleton.isServiceRunning = true
+        startQueueProcessing()
         return START_NOT_STICKY
     }
 
-    private fun processQueue() {
-        CoroutineScope(Dispatchers.Default).launch {
-            val maxParallel = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
-            val concurrency = if (maxParallel > 0) maxParallel else 1
-            val semaphore = Semaphore(concurrency)
-            val activeJobs = mutableListOf<Job>()
+    private fun startQueueProcessing() {
+        serviceScope.launch {
+            queueMutex.withLock {
+                if (queueJob == null || queueJob?.isActive == false) {
+                    queueJob = serviceScope.launch {
+                        processQueueLoop()
+                    }
+                }
+            }
+        }
+    }
 
-            while (MangaServiceDataSingleton.downloadQueue.isNotEmpty()) {
-                val task = MangaServiceDataSingleton.downloadQueue.poll() ?: continue
+    private suspend fun processQueueLoop() {
+        val maxParallel = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
+        val concurrency = if (maxParallel > 0) maxParallel else 1
+        val semaphore = Semaphore(concurrency)
+        val activeJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+
+        while (serviceScope.isActive) {
+            val task = MangaServiceDataSingleton.downloadQueue.poll()
+            if (task != null) {
                 if (PrefManager.getVal<Boolean>(PrefName.DownloadWifiOnly) && !ani.dantotsu.isWifiConnected(this@MangaDownloaderService)) {
+                    broadcastDownloadFailed(task.uniqueName)
                     broadcastDownloadFailed(task.chapter)
                     withContext(Dispatchers.Main) {
                         snackString(getString(R.string.download_wifi_only_warning))
@@ -153,9 +170,10 @@ class MangaDownloaderService : Service() {
                     continue
                 }
                 val taskKey = "${task.title}_${task.chapter}"
-                val job = launch {
+                val job = serviceScope.launch {
                     semaphore.withPermit {
                         MangaServiceDataSingleton.currentTasks.add(task)
+                        updateNotification()
                         try {
                             download(task)
                         } finally {
@@ -164,6 +182,7 @@ class MangaDownloaderService : Service() {
                                 MangaServiceDataSingleton.currentTasks.remove(task)
                                 MangaServiceDataSingleton.progress.remove(taskKey)
                             }
+                            activeJobs.remove(taskKey)
                             updateNotification()
                         }
                     }
@@ -171,35 +190,59 @@ class MangaDownloaderService : Service() {
                 mutex.withLock {
                     downloadJobs[taskKey] = job
                 }
-                activeJobs.add(job)
+                activeJobs[taskKey] = job
+            } else {
+                if (activeJobs.isEmpty()) {
+                    if (MangaServiceDataSingleton.downloadQueue.isEmpty()) {
+                        break
+                    }
+                } else {
+                    delay(500)
+                }
             }
-            activeJobs.joinAll()
-            if (MangaServiceDataSingleton.downloadQueue.isEmpty()) {
+        }
+
+        activeJobs.values.joinAll()
+
+        queueMutex.withLock {
+            if (MangaServiceDataSingleton.downloadQueue.isEmpty() && MangaServiceDataSingleton.currentTasks.isEmpty()) {
                 withContext(Dispatchers.Main) {
+                    notificationManager.cancel(NOTIFICATION_ID)
                     stopSelf()
+                }
+            } else {
+                queueJob = serviceScope.launch {
+                    processQueueLoop()
                 }
             }
         }
     }
 
     fun cancelDownload(chapter: String) {
-        val tasks = MangaServiceDataSingleton.downloadQueue.filter { it.chapter == chapter }
+        val tasks = MangaServiceDataSingleton.downloadQueue.filter { it.chapter == chapter || it.uniqueName == chapter }
         tasks.forEach { task ->
             broadcastDownloadFailed(task.uniqueName)
+            broadcastDownloadFailed(task.chapter)
         }
-        CoroutineScope(Dispatchers.Default).launch {
+        serviceScope.launch {
             mutex.withLock {
-                downloadJobs[chapter]?.cancel()
-                downloadJobs.remove(chapter)
-                MangaServiceDataSingleton.downloadQueue.removeAll { it.chapter == chapter }
-                updateNotification() // Update the notification after cancellation
+                val toCancel = downloadJobs.filter { it.key == chapter || it.key.endsWith("_$chapter") }
+                toCancel.forEach { (k, j) ->
+                    j.cancel()
+                    downloadJobs.remove(k)
+                }
+                MangaServiceDataSingleton.downloadQueue.removeAll { it.chapter == chapter || it.uniqueName == chapter }
+                updateNotification()
             }
         }
     }
 
     private fun updateNotification() {
-        // Update the notification to reflect the current state of the queue
-        val pendingDownloads = MangaServiceDataSingleton.downloadQueue.size
+        val pendingDownloads = MangaServiceDataSingleton.downloadQueue.size + MangaServiceDataSingleton.currentTasks.size
+        if (pendingDownloads <= 0 && downloadJobs.isEmpty()) {
+            notificationManager.cancel(NOTIFICATION_ID)
+            return
+        }
         val text = if (pendingDownloads > 0) {
             "Pending downloads: $pendingDownloads"
         } else {
@@ -218,6 +261,7 @@ class MangaDownloaderService : Service() {
 
     suspend fun download(task: DownloadTask) {
         if (PrefManager.getVal<Boolean>(PrefName.DownloadWifiOnly) && !ani.dantotsu.isWifiConnected(this@MangaDownloaderService)) {
+            broadcastDownloadFailed(task.uniqueName)
             broadcastDownloadFailed(task.chapter)
             withContext(Dispatchers.Main) {
                 snackString(getString(R.string.download_wifi_only_warning))
@@ -306,6 +350,12 @@ class MangaDownloaderService : Service() {
                             downloadedBytes,
                             estimatedTotalBytes
                         )
+                        broadcastDownloadProgress(
+                            task.chapter,
+                            progressPercent,
+                            downloadedBytes,
+                            estimatedTotalBytes
+                        )
                         if (notifi) {
                             withContext(Dispatchers.Main) {
                                 notificationManager.notify(NOTIFICATION_ID, builder.build())
@@ -335,6 +385,7 @@ class MangaDownloaderService : Service() {
                     )
                 )
                 broadcastDownloadFinished(task.uniqueName)
+                broadcastDownloadFinished(task.chapter)
                 snackString("${task.title} - ${task.chapter} Download finished")
             }
         } catch (e: Exception) {
@@ -342,6 +393,7 @@ class MangaDownloaderService : Service() {
             snackString("Exception while downloading file: ${e.message}")
             Injekt.get<CrashlyticsInterface>().logException(e)
             broadcastDownloadFailed(task.uniqueName)
+            broadcastDownloadFailed(task.chapter)
         }
     }
 

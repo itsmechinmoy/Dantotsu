@@ -239,7 +239,9 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
     }
 
     override fun onResume() {
-        binding.characterProgress.visibility = if (!loaded) View.VISIBLE else View.GONE
+        if (::binding.isInitialized) {
+            binding.characterProgress.visibility = if (!loaded) View.VISIBLE else View.GONE
+        }
         super.onResume()
     }
 

@@ -723,7 +723,9 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         mediaSingleton = null
         MediaSingleton.bitmap = null
         MediaSingleton.media = null
-        binding.mediaViewPager.adapter = null
+        if (::binding.isInitialized) {
+            binding.mediaViewPager.adapter = null
+        }
     }
 
     companion object {

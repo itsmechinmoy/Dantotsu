@@ -197,6 +197,10 @@ class App : Application(), GraphProvider<AppGraph> {
                 Logger.log(e)
             }
         }
+        applicationScope.launch(Dispatchers.IO) {
+            delay(10000)
+            ani.dantotsu.others.AniskipCsvFallback.getInstance(this@App).syncIfNeeded()
+        }
     }
 
     private fun setupNotificationChannels() {

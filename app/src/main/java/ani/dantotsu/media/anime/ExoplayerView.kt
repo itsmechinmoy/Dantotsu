@@ -190,7 +190,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
     var currentSubTracks: MutableList<Pair<String, String>> = mutableListOf()
         private set
 
-    private lateinit var episode: Episode
+    lateinit var episode: Episode
     private lateinit var episodes: MutableMap<String, Episode>
     private lateinit var episodeArr: List<String>
     private lateinit var episodeTitleArr: ArrayList<String>
@@ -895,7 +895,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                         PrefManager.setCustomVal("${media.id}_${cleanEp}", p.currentPosition)
                     }
                 }
-                subtitleManager.clearTransientSubtitleCache("${media.id}-$prevEpKey")
+                subtitleManager.clearTransientSubtitleCache("${media.id}-$prevEpKey", media.id)
             }
             playerManager.exoPlayer?.pause()
             aniSkipManager.resetForNewEpisode()
@@ -937,43 +937,54 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
             "Turkish", "Ukrainian", "Urdu", "Vietnamese"
         )
         val lang = subLanguages.getOrNull(PrefManager.getVal<Int>(PrefName.SubLanguage)) ?: "English"
-        val savedSubLang: String? = PrefManager.getNullableCustomVal("subLang_${media.id}", null, String::class.java)
-        subtitle = intent.getSerialized("subtitle")
-            ?: when {
-                savedSubLang == null -> when (episode.selectedSubtitle) {
-                    null, -1 -> ext.subtitles.find {
-                        it.language.contains(lang, true) ||
-                        it.language.contains("English", true) ||
-                        it.language.contains("en", true)
-                    } ?: ext.subtitles.firstOrNull()
-                    else -> ext.subtitles.getOrNull(episode.selectedSubtitle!!)
-                }
-                savedSubLang == "None" -> null
-                savedSubLang.startsWith("Online:") -> null
-                savedSubLang.startsWith("[Local]") -> null
-                savedSubLang.startsWith("Embedded:") -> null
-                else -> ext.subtitles.find { it.language == savedSubLang }
-            }
-
-        hasExtSubtitles = ext.subtitles.isNotEmpty()
-        if (subtitle == null && hasExtSubtitles && savedSubLang != "None" &&
-            savedSubLang?.startsWith("Online:") != true &&
-            savedSubLang?.startsWith("[Local]") != true &&
-            savedSubLang?.startsWith("Embedded:") != true
-        ) {
-            subtitle = ext.subtitles.find {
-                it.language.contains(lang, true) ||
-                it.language.contains("English", true) ||
-                it.language.contains("en", true)
-            } ?: ext.subtitles.firstOrNull()
+        var savedSubLang: String? = PrefManager.getNullableCustomVal("subLang_${media.id}", null, String::class.java)
+        if (savedSubLang?.startsWith("Online:") == true) {
+            PrefManager.setCustomVal("subLang_${media.id}", null)
+            savedSubLang = null
         }
-        // Falling back to a language name here would make the track-change handler
-        // pick an English track back up after the user chose "None".
-        subtitleManager.initialSubtitleLabel =
-            if (savedSubLang == "None") null else subtitle?.language ?: lang
-        if (subtitle != null) {
-            PrefManager.setCustomVal("subLang_${media.id}", subtitle!!.language)
-            subtitleManager.setActiveServerSubtitle(subtitle)
+        val hasSavedOnlineSub = subtitleManager.restoreSavedOnlineSubtitle(media.id, episode.number)
+        if (hasSavedOnlineSub) {
+            subtitle = null
+            hasExtSubtitles = ext.subtitles.isNotEmpty()
+            subtitleManager.initialSubtitleLabel = null
+        } else {
+            subtitle = intent.getSerialized("subtitle")
+                ?: when {
+                    savedSubLang == null -> when (episode.selectedSubtitle) {
+                        null, -1 -> ext.subtitles.find {
+                            it.language.contains(lang, true) ||
+                            it.language.contains("English", true) ||
+                            it.language.contains("en", true)
+                        } ?: ext.subtitles.firstOrNull()
+                        else -> ext.subtitles.getOrNull(episode.selectedSubtitle!!)
+                    }
+                    savedSubLang == "None" -> null
+                    savedSubLang.startsWith("Online:") -> null
+                    savedSubLang.startsWith("[Local]") -> null
+                    savedSubLang.startsWith("Embedded:") -> null
+                    else -> ext.subtitles.find { it.language == savedSubLang }
+                }
+
+            hasExtSubtitles = ext.subtitles.isNotEmpty()
+            if (subtitle == null && hasExtSubtitles && savedSubLang != "None" &&
+                savedSubLang?.startsWith("Online:") != true &&
+                savedSubLang?.startsWith("[Local]") != true &&
+                savedSubLang?.startsWith("Embedded:") != true
+            ) {
+                subtitle = ext.subtitles.find {
+                    it.language.contains(lang, true) ||
+                    it.language.contains("English", true) ||
+                    it.language.contains("en", true)
+                } ?: ext.subtitles.firstOrNull()
+            }
+            // Falling back to a language name here would make the track-change handler
+            // pick an English track back up after the user chose "None".
+            subtitleManager.initialSubtitleLabel =
+                if (savedSubLang == "None") null else subtitle?.language ?: lang
+            if (subtitle != null) {
+                PrefManager.setCustomVal("subLang_${media.id}", subtitle!!.language)
+                subtitleManager.setActiveServerSubtitle(subtitle)
+            }
         }
 
         exoSource.setOnClickListener { sourceClick() }
@@ -1835,7 +1846,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
             if (playerManager.isInitialized) {
                 progressManager.updateAniProgress()
                 val episodeId = "${media.id}-${media.anime?.selectedEpisode ?: ""}"
-                subtitleManager.clearTransientSubtitleCache(episodeId)
+                subtitleManager.clearTransientSubtitleCache(episodeId, media.id)
                 releasePlayer()
             } else {
                 playerView.player = null

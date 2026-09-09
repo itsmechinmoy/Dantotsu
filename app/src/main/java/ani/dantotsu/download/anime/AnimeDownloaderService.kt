@@ -58,6 +58,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -78,9 +81,11 @@ class AnimeDownloaderService : Service() {
     private lateinit var builder: NotificationCompat.Builder
     private val downloadsManager: DownloadsManager = Injekt.get<DownloadsManager>()
 
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val downloadJobs = mutableMapOf<String, Job>()
     private val mutex = Mutex()
-    private var isCurrentlyProcessing = false
+    private var queueJob: Job? = null
+    private val queueMutex = Mutex()
     private val currentTasks get() = AnimeServiceDataSingleton.currentTasks
     private val ffExtension = Injekt.get<DownloadAddonManager>().extension?.extension
 
@@ -105,6 +110,16 @@ class AnimeDownloaderService : Service() {
                 setOnlyAlertOnce(true)
                 setProgress(100, 0, false)
             }
+        startForegroundNotification()
+        ContextCompat.registerReceiver(
+            this,
+            cancelReceiver,
+            IntentFilter(ACTION_CANCEL_DOWNLOAD),
+            ContextCompat.RECEIVER_EXPORTED
+        )
+    }
+
+    private fun startForegroundNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -114,46 +129,47 @@ class AnimeDownloaderService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, builder.build())
         }
-        ContextCompat.registerReceiver(
-            this,
-            cancelReceiver,
-            IntentFilter(ACTION_CANCEL_DOWNLOAD),
-            ContextCompat.RECEIVER_EXPORTED
-        )
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel()
         AnimeServiceDataSingleton.downloadQueue.clear()
         downloadJobs.clear()
         AnimeServiceDataSingleton.isServiceRunning = false
-        unregisterReceiver(cancelReceiver)
+        notificationManager.cancel(NOTIFICATION_ID)
+        runCatching { unregisterReceiver(cancelReceiver) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         snackString("Download started")
-        val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        serviceScope.launch {
-            mutex.withLock {
-                if (!isCurrentlyProcessing) {
-                    isCurrentlyProcessing = true
-                    processQueue()
-                    isCurrentlyProcessing = false
-                }
-            }
-        }
+        startForegroundNotification()
+        AnimeServiceDataSingleton.isServiceRunning = true
+        startQueueProcessing()
         return START_NOT_STICKY
     }
 
-    private fun processQueue() {
-        CoroutineScope(Dispatchers.Default).launch {
-            val maxParallel = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
-            val concurrency = if (maxParallel > 0) maxParallel else 1
-            val semaphore = Semaphore(concurrency)
-            val activeJobs = mutableListOf<Job>()
+    private fun startQueueProcessing() {
+        serviceScope.launch {
+            queueMutex.withLock {
+                if (queueJob == null || queueJob?.isActive == false) {
+                    queueJob = serviceScope.launch {
+                        processQueueLoop()
+                    }
+                }
+            }
+        }
+    }
 
-            while (AnimeServiceDataSingleton.downloadQueue.isNotEmpty()) {
-                val task = AnimeServiceDataSingleton.downloadQueue.poll() ?: continue
+    private suspend fun processQueueLoop() {
+        val maxParallel = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
+        val concurrency = if (maxParallel > 0) maxParallel else 1
+        val semaphore = Semaphore(concurrency)
+        val activeJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+
+        while (serviceScope.isActive) {
+            val task = AnimeServiceDataSingleton.downloadQueue.poll()
+            if (task != null) {
                 if (PrefManager.getVal<Boolean>(PrefName.DownloadWifiOnly) && !ani.dantotsu.isWifiConnected(this@AnimeDownloaderService)) {
                     broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
                     withContext(Dispatchers.Main) {
@@ -161,29 +177,49 @@ class AnimeDownloaderService : Service() {
                     }
                     continue
                 }
-                val job = launch {
+                val taskName = task.getTaskName()
+                val job = serviceScope.launch {
                     semaphore.withPermit {
                         currentTasks.add(task)
+                        updateNotification()
                         try {
                             download(task)
                         } finally {
                             mutex.withLock {
-                                downloadJobs.remove(task.getTaskName())
+                                downloadJobs.remove(taskName)
                             }
                             currentTasks.remove(task)
+                            activeJobs.remove(taskName)
                             updateNotification()
                         }
                     }
                 }
                 mutex.withLock {
-                    downloadJobs[task.getTaskName()] = job
+                    downloadJobs[taskName] = job
                 }
-                activeJobs.add(job)
+                activeJobs[taskName] = job
+            } else {
+                if (activeJobs.isEmpty()) {
+                    if (AnimeServiceDataSingleton.downloadQueue.isEmpty()) {
+                        break
+                    }
+                } else {
+                    delay(500)
+                }
             }
-            activeJobs.joinAll()
-            if (AnimeServiceDataSingleton.downloadQueue.isEmpty()) {
+        }
+
+        activeJobs.values.joinAll()
+
+        queueMutex.withLock {
+            if (AnimeServiceDataSingleton.downloadQueue.isEmpty() && currentTasks.isEmpty()) {
                 withContext(Dispatchers.Main) {
+                    notificationManager.cancel(NOTIFICATION_ID)
                     stopSelf()
+                }
+            } else {
+                queueJob = serviceScope.launch {
+                    processQueueLoop()
                 }
             }
         }

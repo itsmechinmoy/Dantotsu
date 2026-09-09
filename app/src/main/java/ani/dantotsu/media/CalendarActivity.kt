@@ -131,6 +131,8 @@ class CalendarActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Refresh.activity.remove(this.hashCode())
-        binding.listViewPager.adapter = null
+        if (::binding.isInitialized) {
+            binding.listViewPager.adapter = null
+        }
     }
 }
