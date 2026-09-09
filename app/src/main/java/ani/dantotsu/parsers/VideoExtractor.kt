@@ -128,6 +128,15 @@ data class Video(
      * Ex: "Backup" which could be used if the site provides some
      * **/
     val extraNote: String? = null,
+
+    /**
+     * DRM parameters for encrypted streams (Widevine / PlayReady).
+     *
+     * When set, the player hands these to ExoPlayer's [androidx.media3.common.MediaItem.DrmConfiguration]
+     * so Android's own CDM performs the license exchange and decryption. Null for
+     * clear streams, which is the overwhelming majority.
+     * **/
+    val drm: DrmInfo? = null,
 ) : Serializable {
 
     constructor(
@@ -145,6 +154,37 @@ data class Video(
     constructor(quality: Int? = null, videoType: VideoType, url: String)
             : this(quality, videoType, FileUrl(url))
 }
+
+/**
+ * DRM parameters for an encrypted stream.
+ *
+ * Decryption is performed by the device's own Widevine/PlayReady CDM via
+ * ExoPlayer's MediaDrm integration - no keys are handled here.
+ *
+ * @param scheme "widevine", "playready" or "clearkey"
+ * @param licenseUrl the license server endpoint
+ * @param licenseHeaders headers required by the license server, typically auth
+ * **/
+data class DrmInfo(
+    val scheme: String,
+    val licenseUrl: String,
+    val licenseHeaders: Map<String, String> = mapOf(),
+    /** Present when the source can also mint a persistent license for offline use. */
+    val offline: OfflineDrmInfo? = null,
+) : Serializable
+
+/**
+ * The download counterpart of [DrmInfo]. Sources often serve downloads from a
+ * different manifest and a different license endpoint than playback, so both
+ * are carried separately rather than reusing the streaming ones.
+ * **/
+data class OfflineDrmInfo(
+    val manifestUrl: String,
+    val licenseUrl: String,
+    val licenseHeaders: Map<String, String> = mapOf(),
+    /** Sent with manifest and segment requests; these are usually auth headers. */
+    val headers: Map<String, String> = mapOf(),
+) : Serializable
 
 /**
  * The Class which contains the link to a subtitle file of a specific language

@@ -981,6 +981,13 @@ class PlayerSubtitleManager(
     }
 
     fun checkTracksForPendingSubtitles(tracks: Tracks) {
+        // Tracks change whenever a new text track shows up (a DASH manifest can
+        // carry its own), and re-selecting one here would silently re-enable the
+        // text renderer that the user turned off.
+        val disabled = getPlayer()?.trackSelectionParameters
+            ?.disabledTrackTypes?.contains(TRACK_TYPE_TEXT) == true
+        if (disabled) return
+
         val targetTrackId = pendingTrackId
         val userLabel = pendingSubtitleLabel
         val pendingLabel = userLabel ?: initialSubtitleLabel

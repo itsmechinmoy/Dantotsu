@@ -44,6 +44,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.Request
+import org.json.JSONObject
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.UnsupportedEncodingException
@@ -73,6 +74,7 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         get() = userSelectDub ?: getDub()
         set(value) {
             userSelectDub = value
+            setDub(value)
         }
 
     private fun getDub(): Boolean {
@@ -99,10 +101,26 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         return false
     }
 
+    // Sources that publish dubs as separate entries are handled by remapping which
+    // entry backs the title; ones that keep every dub inside a single entry can only
+    // be steered through their own preference. setSubDub is anchored, so only whole
+    // "sub"/"dub" values match and every other preference is left alone.
     private fun setDub(setDub: Boolean) {
-        // Do not mutate extension SharedPreferences automatically.
-        // Extension preferences (e.g. preferred quality, server, sub/dub) configured by the user
-        // in extension settings are preserved intact for sortVideos() to process.
+        val configurableSource = extension.sources.getOrNull(sourceLanguage) as? ConfigurableAnimeSource
+            ?: return
+        val context = currContext() ?: return
+        val target = if (setDub) MediaNameAdapter.SubDubType.DUB else MediaNameAdapter.SubDubType.SUB
+        val preferences = context.getSharedPreferences(
+            configurableSource.getPreferenceKey(),
+            Context.MODE_PRIVATE
+        )
+        preferences.all.forEach { (key, value) ->
+            if (value !is String) return@forEach
+            val replacement = MediaNameAdapter.setSubDub(value, target) ?: return@forEach
+            if (replacement == value) return@forEach
+            preferences.edit().putString(key, replacement).apply()
+            Logger.log("setDub: $key -> $replacement")
+        }
     }
 
     override fun isDubAvailableSeparately(sourceLang: Int?): Boolean {
@@ -743,8 +761,60 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
             number,
             format!!,
             FileUrl(videoUrl, headersMap),
-            null
+            null,
+            null,
+            parseDrmInfo(aniVideo.internalData)
         )
+    }
+
+    /**
+     * Extract DRM parameters an extension passed through [Video.internalData].
+     *
+     * Expected shape (all fields optional except licenseUrl):
+     * ```json
+     * {
+     *   "drmScheme": "widevine",
+     *   "licenseUrl": "https://example.com/license",
+     *   "licenseHeaders": { "Authorization": "Bearer ..." }
+     * }
+     * ```
+     * Returns null for anything absent or malformed, so a clear stream - or an
+     * extension using internalData for its own unrelated purposes - is unaffected.
+     */
+    private fun parseDrmInfo(internalData: String): DrmInfo? {
+        if (internalData.isBlank()) return null
+        return runCatching {
+            val obj = JSONObject(internalData)
+            val licenseUrl = obj.optString("licenseUrl")
+            if (licenseUrl.isBlank()) return null
+
+            fun headersOf(source: JSONObject?, name: String) =
+                source?.optJSONObject(name)?.let { json ->
+                    json.keys().asSequence().associateWith { key -> json.optString(key) }
+                } ?: mapOf()
+
+            val offline = obj.optJSONObject("offline")?.let { off ->
+                val manifest = off.optString("manifestUrl")
+                val offlineLicense = off.optString("licenseUrl")
+                if (manifest.isBlank() || offlineLicense.isBlank()) {
+                    null
+                } else {
+                    OfflineDrmInfo(
+                        manifestUrl = manifest,
+                        licenseUrl = offlineLicense,
+                        licenseHeaders = headersOf(off, "licenseHeaders"),
+                        headers = headersOf(off, "headers"),
+                    )
+                }
+            }
+
+            DrmInfo(
+                scheme = obj.optString("drmScheme").ifBlank { "widevine" },
+                licenseUrl = licenseUrl,
+                licenseHeaders = headersOf(obj, "licenseHeaders"),
+                offline = offline,
+            )
+        }.getOrNull()
     }
 
     private fun getVideoType(fileName: String): VideoType? {
