@@ -279,7 +279,7 @@ object DrmDownloader {
                 currentCoroutineContext().ensureActive()
                 copySegment(factory, representation, index.getSegmentUrl(i), out)
                 done++
-                onProgress(((done * 100) / totalSegments).toInt().coerceIn(0, 99))
+                onProgress((done * 100 / totalSegments).toInt().coerceIn(0, 99))
             }
             out.flush()
         } ?: throw IllegalStateException("could not open $fileName for writing")
