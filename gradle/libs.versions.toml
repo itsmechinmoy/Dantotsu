@@ -23,7 +23,7 @@ coil = "3.5.0"
 kotlinx-datetime = "0.8.0-0.6.x-compat"
 sqldelight = "2.3.2"
 sqldelight-androidx-driver = "0637a964a1"
-androidx-baselineProfile = "1.5.0-rc02"
+androidx-baselineProfile = "1.5.0"
 androidx-profileInstaller = "1.4.1"
 leakcanary = "2.14"
 
