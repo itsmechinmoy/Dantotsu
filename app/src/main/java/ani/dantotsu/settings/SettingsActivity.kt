@@ -268,9 +268,11 @@ class SettingsActivity : AppCompatActivity() {
             loginGithub.setOnClickListener {
                 openLinkInBrowser(getString(R.string.github))
             }
+            /*
             loginTelegram.setOnClickListener {
                 openLinkInBrowser(getString(R.string.telegram))
             }
+            */
 
 
             (settingsLogo.drawable as Animatable).start()

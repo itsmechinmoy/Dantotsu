@@ -24,7 +24,7 @@ class Contributors {
                     "rebelonion" -> "Owner & Maintainer"
                     "sneazy-ibo" -> "Contributor & Comment Moderator"
                     "WaiWhat" -> "Icon Designer"
-                    "itsmechinmoy" -> "Discord & Telegram Admin/Helper, Comment Moderator & Translator"
+                    "itsmechinmoy" -> "Discord Admin/Helper, Comment Moderator & Translator"
                     else -> "Contributor"
                 }
 
@@ -61,7 +61,7 @@ class Contributors {
                 Developer(
                     "Zaxx69",
                     "https://s4.anilist.co/file/anilistcdn/user/avatar/large/b6342562-kxE8m4i7KUMK.png",
-                    "Telegram Admin",
+                    "Community Admin",
                     "https://anilist.co/user/6342562"
                 ),
                 Developer(

@@ -535,22 +535,25 @@ class DynamicMangaParser(extension: MangaExtension.Installed) : MangaParser() {
                 val reIndexedPages =
                     res.mapIndexed { index, page -> Page(index, page.url, page.imageUrl, page.uri) }
 
+                val semaphore = Semaphore(5)
                 val deferreds = reIndexedPages.map { page ->
                     async(Dispatchers.IO) {
-                        val imageUrl = if (page.imageUrl.isNullOrBlank()) {
-                            runCatching { source.getImageUrl(page) }.getOrNull() ?: page.imageUrl
-                        } else {
-                            page.imageUrl
+                        semaphore.withPermit {
+                            val imageUrl = if (page.imageUrl.isNullOrBlank()) {
+                                runCatching { source.getImageUrl(page) }.getOrNull() ?: page.imageUrl
+                            } else {
+                                page.imageUrl
+                            }
+                            val resolvedPage = if (imageUrl != page.imageUrl) {
+                                Page(page.index, page.url, imageUrl, page.uri)
+                            } else {
+                                page
+                            }
+                            mangaCache.put(resolvedPage.imageUrl ?: "", ImageData(resolvedPage, source))
+                            imageDataList += ImageData(resolvedPage, source)
+                            Logger.log("put page: ${resolvedPage.imageUrl}")
+                            pageToMangaImage(resolvedPage)
                         }
-                        val resolvedPage = if (imageUrl != page.imageUrl) {
-                            Page(page.index, page.url, imageUrl, page.uri)
-                        } else {
-                            page
-                        }
-                        mangaCache.put(resolvedPage.imageUrl ?: "", ImageData(resolvedPage, source))
-                        imageDataList += ImageData(resolvedPage, source)
-                        Logger.log("put page: ${resolvedPage.imageUrl}")
-                        pageToMangaImage(resolvedPage)
                     }
                 }
 

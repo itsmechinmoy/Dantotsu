@@ -159,13 +159,16 @@ class DantotsuPlayerManager(
                 }
                 val response = chain.proceed(newRequest)
                 if (isLocal && response.isSuccessful) {
+                    val isSegment = request.url.encodedPath.contains("/segment") ||
+                        request.url.encodedPath.endsWith(".ts") ||
+                        request.url.encodedPath.endsWith(".m4s")
                     val isM3u8 = request.url.encodedPath.contains("m3u8") ||
                         request.url.query?.contains(".m3u8") == true ||
                         response.header("Content-Type")?.contains("mpegurl", ignoreCase = true) == true
                     val hasGzipEncoding = response.header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true
 
                     val body = response.body
-                    if (body != null && (isM3u8 || hasGzipEncoding)) {
+                    if (body != null && !isSegment && (isM3u8 || hasGzipEncoding)) {
                         val rawBytes = body.bytes()
                         val isGzip = (rawBytes.size >= 2 && rawBytes[0] == 0x1F.toByte() && rawBytes[1] == 0x8B.toByte()) || hasGzipEncoding
                         val decompressedBytes = if (isGzip) {
@@ -343,13 +346,15 @@ class DantotsuPlayerManager(
     ): ExoPlayer {
         releaseExoPlayer()
 
-        val isTorrentStream = mediaSource?.let {
-            currentMediaItem?.localConfiguration?.uri?.host == "127.0.0.1"
-        } == true
-        val targetBufferBytes = if (isTorrentStream) 96 * 1024 * 1024 else 32 * 1024 * 1024
-        val maxBufferMs = if (isTorrentStream) 90_000 else DEFAULT_MAX_BUFFER_MS
+        val uri = currentMediaItem?.localConfiguration?.uri
+        val isTorrentStream = uri != null && (uri.host == "127.0.0.1" || uri.host == "localhost") &&
+            (uri.path?.contains("torrent", ignoreCase = true) == true ||
+             uri.query?.contains("torrent", ignoreCase = true) == true ||
+             uri.query?.contains("infohash", ignoreCase = true) == true)
+        val targetBufferBytes = if (isTorrentStream) 48 * 1024 * 1024 else androidx.media3.common.C.LENGTH_UNSET
+        val maxBufferMs = if (isTorrentStream) 60_000 else DEFAULT_MAX_BUFFER_MS
         val loadControl = DefaultLoadControl.Builder()
-            .setBackBuffer(BACK_BUFFER_DURATION_MS, true)
+            .setBackBuffer(BACK_BUFFER_DURATION_MS, false)
             .setBufferDurationsMs(
                 DEFAULT_MIN_BUFFER_MS,
                 maxBufferMs,

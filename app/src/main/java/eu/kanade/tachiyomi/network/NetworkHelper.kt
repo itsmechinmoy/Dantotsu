@@ -10,6 +10,7 @@ import com.lagradost.nicehttp.Requests
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import eu.kanade.tachiyomi.network.interceptor.AnilistInterceptor
 import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
@@ -78,8 +79,36 @@ private fun setupSocks5Proxy() {
                     maxSize = 5L * 1024 * 1024, // 5 MiB
                 ),
             )
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val path = request.url.encodedPath.lowercase()
+                val isMediaSegment = path.endsWith(".ts") ||
+                    path.endsWith(".m4s") ||
+                    path.endsWith(".m3u8") ||
+                    path.endsWith(".mp4") ||
+                    path.endsWith(".mkv") ||
+                    path.contains("/segment") ||
+                    request.header("Range") != null
+                val isNoStore = isMediaSegment ||
+                    path.endsWith(".jpg") ||
+                    path.endsWith(".jpeg") ||
+                    path.endsWith(".png") ||
+                    path.endsWith(".webp") ||
+                    path.endsWith(".avif") ||
+                    path.endsWith(".gif")
+                if (isNoStore) {
+                    chain.proceed(
+                        request.newBuilder()
+                            .cacheControl(okhttp3.CacheControl.Builder().noStore().build())
+                            .build()
+                    )
+                } else {
+                    chain.proceed(request)
+                }
+            }
             .addInterceptor(UncaughtExceptionInterceptor())
             .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
+            .addInterceptor(AnilistInterceptor())
 
         class ConsoleLogger : HttpLoggingInterceptor.Logger {
             override fun log(message: String) {
@@ -118,6 +147,7 @@ private fun setupSocks5Proxy() {
 
     // Tuned for HLS segment fan-out (~16 workers/host) without oversized pools/radio tail.
     val downloadClient = client.newBuilder()
+        .cache(null)
         .dispatcher(
             okhttp3.Dispatcher().apply {
                 maxRequests = 96

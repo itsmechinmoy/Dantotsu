@@ -418,11 +418,15 @@ class NovelReadFragment : Fragment(),
             isReceiverRegistered = true
         }
 
-        val baselineAnchor = (activity as MediaDetailsActivity).binding.mediaBottomBarContainer ?: (activity as MediaDetailsActivity).binding.commentMessageContainer
-        baselineAnchor?.let {
-            val includeSystemPaddings = it != (activity as MediaDetailsActivity).binding.mediaBottomBarContainer
-            binding.mediaSourceRecycler.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
-            binding.mediaSourceRecycler.clipToPadding = false
+        val mediaDetailsActivity = activity as? MediaDetailsActivity
+        if (mediaDetailsActivity?.bindingReady == true) {
+            val actBinding = mediaDetailsActivity.binding
+            val baselineAnchor = actBinding.mediaBottomBarContainer ?: actBinding.commentMessageContainer
+            baselineAnchor?.let {
+                val includeSystemPaddings = it != actBinding.mediaBottomBarContainer
+                binding.mediaSourceRecycler.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
+                binding.mediaSourceRecycler.clipToPadding = false
+            }
         }
 
         val screenWidth = resources.displayMetrics.widthPixels.dp

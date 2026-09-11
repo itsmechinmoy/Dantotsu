@@ -76,6 +76,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
 
     /** False while the activity is bailing out of [onCreate] without any media. */
     val bindingReady get() = ::binding.isInitialized
+    val safeBinding get() = if (::binding.isInitialized) binding else null
     private val scope = lifecycleScope
     private val model: MediaDetailsViewModel by viewModels()
     var selected = 0
@@ -84,19 +85,24 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     private var adult = false
     lateinit var media: Media
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        if (::media.isInitialized && media.name != "No media found") {
+            outState.putInt("saved_media_id", media.id)
+            outState.putSerializable("saved_media", media as java.io.Serializable)
+        }
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
-
-        // A recreated activity has neither the intent extra (it is removed below on
-        // first run) nor the singleton, so it cannot rebuild its views and bails out
-        // before `binding` is set. Dropping the saved state keeps the framework from
-        // restoring fragments that would then touch that uninitialised binding.
-        val restorable = intent.hasExtra("media") || mediaSingleton != null ||
-            intent.getIntExtra("mediaId", -1) != -1
-        super.onCreate(if (restorable) savedInstanceState else null)
-        var media: Media = intent.getSerialized("media") ?: mediaSingleton ?: emptyMedia()
-        intent.removeExtra("media")
-        val id = intent.getIntExtra("mediaId", -1)
+        super.onCreate(savedInstanceState)
+        var media: Media = intent.getSerialized("media")
+            ?: savedInstanceState?.getSerialized("saved_media")
+            ?: mediaSingleton
+            ?: emptyMedia()
+        val id = intent.getIntExtra("mediaId", -1).takeIf { it != -1 }
+            ?: savedInstanceState?.getInt("saved_media_id", -1)?.takeIf { it != -1 }
+            ?: -1
         if (id != -1 && media.name == "No media found") {
             val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
             runBlocking(Dispatchers.IO) {
@@ -117,9 +123,11 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         this.media = media
         if (media.name == "No media found") {
             snackString(media.name)
-            onBackPressedDispatcher.onBackPressed()
+            finish()
             return
         }
+        intent.putExtra("media", media as java.io.Serializable)
+        intent.putExtra("mediaId", media.id)
         val contract = ActivityResultContracts.OpenDocumentTree()
         launcher = LauncherWrapper(this, contract)
 

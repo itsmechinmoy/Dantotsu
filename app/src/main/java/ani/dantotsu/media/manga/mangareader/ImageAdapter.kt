@@ -19,6 +19,7 @@ import ani.dantotsu.settings.saving.PrefName
 import com.bumptech.glide.load.resource.bitmap.BitmapTransformation
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import kotlinx.coroutines.delay
 
 open class ImageAdapter(
     activity: MangaReaderActivity,
@@ -52,10 +53,26 @@ open class ImageAdapter(
         val imageView = parent.findViewById<SubsamplingScaleImageView>(R.id.imgProgImageNoGestures)
             ?: return false
         val progress = parent.findViewById<View>(R.id.imgProgProgress) ?: return false
+
+        val previousBitmap = parent.getTag(R.id.imgProgImageNoGestures) as? Bitmap
+        parent.setTag(R.id.imgProgImageNoGestures, null)
         imageView.recycle()
         imageView.visibility = View.GONE
+        progress.visibility = View.VISIBLE
+        if (previousBitmap != null && !previousBitmap.isRecycled) {
+            previousBitmap.recycle()
+        }
 
-        val bitmap = loadBitmap(position, parent) ?: return false
+        var bitmap = loadBitmap(position, parent)
+        if (bitmap == null) {
+            delay(350)
+            bitmap = loadBitmap(position, parent)
+        }
+        if (bitmap == null) {
+            return false
+        }
+
+        parent.setTag(R.id.imgProgImageNoGestures, bitmap)
 
         var sWidth = getSystem().displayMetrics.widthPixels
         var sHeight = getSystem().displayMetrics.heightPixels

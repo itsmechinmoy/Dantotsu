@@ -13,11 +13,11 @@ if (gradle.startParameter.taskNames.any { it.contains("google", true) }) {
 val baseVersion = "3.2.2"
 
 fun computeGitCommitHash(): String {
-    val envHash = System.getenv("COMMIT_HASH") ?: System.getenv("GITHUB_SHA")
+    val envHash = System.getenv("COMMIT_HASH")
     if (!envHash.isNullOrBlank()) {
         return envHash.take(7)
     }
-    return try {
+    val gitHash = try {
         providers.exec {
             commandLine("git", "rev-parse", "HEAD")
         }.standardOutput.asText.get().trim().take(7)
@@ -30,6 +30,14 @@ fun computeGitCommitHash(): String {
             ""
         }
     }
+    if (gitHash.isNotEmpty()) {
+        return gitHash
+    }
+    val fallbackHash = System.getenv("GITHUB_SHA")
+    if (!fallbackHash.isNullOrBlank()) {
+        return fallbackHash.take(7)
+    }
+    return ""
 }
 
 val gitCommitHash = computeGitCommitHash()

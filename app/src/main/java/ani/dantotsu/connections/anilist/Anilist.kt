@@ -343,7 +343,9 @@ object Anilist {
             }
             val headers = mutableMapOf(
                 "Content-Type" to "application/json; charset=utf-8",
-                "Accept" to "application/json"
+                "Accept" to "application/json",
+                "Referer" to "https://anilist.co/",
+                "Origin" to "https://anilist.co"
             )
 
             if (token != null || force) {

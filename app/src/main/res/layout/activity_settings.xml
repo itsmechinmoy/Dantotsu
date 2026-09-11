@@ -243,6 +243,7 @@
                     app:tint="?attr/colorOnBackground"
                     tools:ignore="ContentDescription" />
 
+                <!--
                 <ImageView
                     android:id="@+id/loginTelegram"
                     android:layout_width="48dp"
@@ -252,6 +253,7 @@
                     android:src="@drawable/ic_telegram"
                     app:tint="?attr/colorOnBackground"
                     tools:ignore="ContentDescription" />
+                -->
 
             </LinearLayout>
 
