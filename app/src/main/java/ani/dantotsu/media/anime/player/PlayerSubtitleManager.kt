@@ -897,8 +897,8 @@ class PlayerSubtitleManager(
             val uriStr = uri.toString().lowercase(Locale.ROOT)
             val finalMimeType = when {
                 rawMime == "application/octet-stream" || rawMime == null -> when {
-                    uriStr.contains(".vtt") -> MimeTypes.TEXT_VTT
-                    uriStr.contains(".ssa") || uriStr.contains(".ass") -> MimeTypes.TEXT_SSA
+                    uriStr.contains(".vtt") || uriStr.contains("format=vtt") -> MimeTypes.TEXT_VTT
+                    uriStr.contains(".ssa") || uriStr.contains(".ass") || uriStr.contains("format=ass") -> MimeTypes.TEXT_SSA
                     uriStr.contains(".ttml") || uriStr.contains(".xml") -> MimeTypes.APPLICATION_TTML
                     else -> MimeTypes.APPLICATION_SUBRIP
                 }

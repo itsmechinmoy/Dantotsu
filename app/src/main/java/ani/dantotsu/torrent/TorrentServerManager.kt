@@ -367,7 +367,7 @@ class TorrentServerManager(private val context: Context) {
 
             // 3. Quick check for initial readiness without freezing the player launch
             var waitCount = 0
-            while (!handle.havePiece(firstPiece) && waitCount < 30) {
+            while (!handle.havePiece(firstPiece) && waitCount < 80) {
                 if (!sessionManager.isRunning || !handle.isValid) break
                 Thread.sleep(100)
                 waitCount++
@@ -382,11 +382,23 @@ class TorrentServerManager(private val context: Context) {
     }
 
     fun getLink(torrent: Torrent, fileIndex: Int): String {
-        return "http://127.0.0.1:$serverPort/stream?hash=${torrent.hash}&index=$fileIndex"
+        val fileName = try {
+            val sha1 = Sha1Hash.parseHex(torrent.hash)
+            val handle = sessionManager.find(sha1)
+            handle?.torrentFile()?.files()?.filePath(fileIndex)?.substringAfterLast("/") ?: "video.mkv"
+        } catch (_: Exception) { "video.mkv" }
+        val encodedName = runCatching { java.net.URLEncoder.encode(fileName, "UTF-8") }.getOrDefault("video.mkv")
+        return "http://127.0.0.1:$serverPort/stream/$encodedName?hash=${torrent.hash}&index=$fileIndex"
     }
 
     fun getLink(torrentHash: String, fileIndex: Int): String {
-        return "http://127.0.0.1:$serverPort/stream?hash=$torrentHash&index=$fileIndex"
+        val fileName = try {
+            val sha1 = Sha1Hash.parseHex(torrentHash)
+            val handle = sessionManager.find(sha1)
+            handle?.torrentFile()?.files()?.filePath(fileIndex)?.substringAfterLast("/") ?: "video.mkv"
+        } catch (_: Exception) { "video.mkv" }
+        val encodedName = runCatching { java.net.URLEncoder.encode(fileName, "UTF-8") }.getOrDefault("video.mkv")
+        return "http://127.0.0.1:$serverPort/stream/$encodedName?hash=$torrentHash&index=$fileIndex"
     }
 
     fun removeTorrent(torrentHash: String) {

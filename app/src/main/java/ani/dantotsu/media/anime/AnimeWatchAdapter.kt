@@ -134,7 +134,7 @@ class AnimeWatchAdapter(
         }
         binding.animeSourceDubbed.isChecked = media.selected!!.preferDub
         binding.animeSourceDubbedText.text =
-            if (media.selected!!.preferDub) currActivity()!!.getString(R.string.dubbed) else currActivity()!!.getString(
+            if (media.selected!!.preferDub) binding.root.context.getString(R.string.dubbed) else binding.root.context.getString(
                 R.string.subbed
             )
 
@@ -142,7 +142,7 @@ class AnimeWatchAdapter(
         var changing = false
         binding.animeSourceDubbed.setOnCheckedChangeListener { _, isChecked ->
             binding.animeSourceDubbedText.text =
-                if (isChecked) currActivity()!!.getString(R.string.dubbed) else currActivity()!!.getString(
+                if (isChecked) binding.root.context.getString(R.string.dubbed) else binding.root.context.getString(
                     R.string.subbed
                 )
             if (!changing) fragment.onDubClicked(isChecked)
@@ -613,9 +613,9 @@ class AnimeWatchAdapter(
                         if (ep.filler) binding.itemEpisodeFillerView.visibility = View.VISIBLE
 
                         binding.mediaSourceContinueText.text =
-                            currActivity()!!.getString(
+                            binding.root.context.getString(
                                 R.string.continue_episode, ep.number, if (ep.filler)
-                                    currActivity()!!.getString(R.string.filler_tag)
+                                    binding.root.context.getString(R.string.filler_tag)
                                 else
                                     "", cleanedTitle
                             )
@@ -646,13 +646,13 @@ class AnimeWatchAdapter(
 
                 if (isDownloadedSource) {
                     binding.sourceNotFound.text = if (sourceFound) {
-                        currActivity()!!.getString(R.string.source_not_found)
+                        binding.root.context.getString(R.string.source_not_found)
                     } else {
-                        currActivity()!!.getString(R.string.download_not_found)
+                        binding.root.context.getString(R.string.download_not_found)
                     }
                 } else {
                     binding.sourceNotFound.text =
-                        currActivity()!!.getString(R.string.source_not_found)
+                        binding.root.context.getString(R.string.source_not_found)
                 }
 
                 binding.sourceNotFound.isGone = sourceFound

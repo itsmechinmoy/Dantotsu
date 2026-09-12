@@ -24,16 +24,16 @@ class CharacterDetailsAdapter(private val character: Character, private val acti
         val desc =
             (if (character.id == 4004)
                 "![za wardo](https://media1.tenor.com/m/_z1tmCJnL2wAAAAd/za-warudo.gif) \n" else "") +
-                    (if (character.age != null && character.age != "null") "**${currActivity()!!.getString(R.string.age)}** ${character.age}  \n" else "") +
+                    (if (character.age != null && character.age != "null") "**${binding.root.context.getString(R.string.age)}** ${character.age}  \n" else "") +
                     (if (character.dateOfBirth != null && character.dateOfBirth.toString() != "??" && character.dateOfBirth.toString().isNotEmpty())
-                        "**${currActivity()!!.getString(R.string.birthday)}** ${character.dateOfBirth.toString()}  \n" else "") +
+                        "**${binding.root.context.getString(R.string.birthday)}** ${character.dateOfBirth.toString()}  \n" else "") +
                     (if (character.gender != null && character.gender != "null")
-                        "**${currActivity()!!.getString(R.string.gender)}** " + when (character.gender) {
-                            currActivity()!!.getString(R.string.male) -> currActivity()!!.getString(
+                        "**${binding.root.context.getString(R.string.gender)}** " + when (character.gender) {
+                            binding.root.context.getString(R.string.male) -> binding.root.context.getString(
                                 R.string.male
                             )
 
-                            currActivity()!!.getString(R.string.female) -> currActivity()!!.getString(
+                            binding.root.context.getString(R.string.female) -> binding.root.context.getString(
                                 R.string.female
                             )
 

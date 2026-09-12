@@ -920,7 +920,7 @@ class MediaDetailsViewModel : ViewModel() {
         episodes: ArrayList<String> = arrayListOf() // used for handling an array of episodes to download or to view a single episode
     ) {
         Handler(Looper.getMainLooper()).post {
-            if (manager.findFragmentByTag("dialog") == null && !manager.isDestroyed) {
+            if (manager.findFragmentByTag("dialog") == null && !manager.isDestroyed && !manager.isStateSaved) {
                 if(episodes.isEmpty()){
                     episodes.add(i)
                 }
@@ -939,7 +939,13 @@ class MediaDetailsViewModel : ViewModel() {
                         isDownload,
                         episodes
                     )
-                selector.show(manager, "dialog")
+                try {
+                    val ft = manager.beginTransaction()
+                    ft.add(selector, "dialog")
+                    ft.commitAllowingStateLoss()
+                } catch (e: Exception) {
+                    Logger.log(e)
+                }
             }
         }
     }

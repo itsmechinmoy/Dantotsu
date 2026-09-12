@@ -447,7 +447,7 @@ class MangaReadAdapter(
                         binding.sourceContinue.visibility = View.VISIBLE
                         binding.itemMediaImage.loadImage(media.banner ?: media.cover)
                         binding.mediaSourceContinueText.text =
-                            currActivity()!!.getString(
+                            binding.root.context.getString(
                                 R.string.continue_chapter,
                                 continueChap.number,
                                 if (!continueChap.title.isNullOrEmpty()) continueChap.title else ""
@@ -476,13 +476,13 @@ class MangaReadAdapter(
 
                 if (isDownloadedSource) {
                     binding.sourceNotFound.text = if (sourceFound) {
-                        currActivity()!!.getString(R.string.source_not_found)
+                        binding.root.context.getString(R.string.source_not_found)
                     } else {
-                        currActivity()!!.getString(R.string.download_not_found)
+                        binding.root.context.getString(R.string.download_not_found)
                     }
                 } else {
                     binding.sourceNotFound.text =
-                        currActivity()!!.getString(R.string.source_not_found)
+                        binding.root.context.getString(R.string.source_not_found)
                 }
 
                 binding.sourceNotFound.isGone = sourceFound

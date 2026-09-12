@@ -97,7 +97,7 @@ class DownloadCompat {
                 val score = ((if (mediaModel.userScore == 0) (mediaModel.meanScore
                     ?: 0) else mediaModel.userScore) / 10.0).toString()
                 val isOngoing =
-                    mediaModel.status == currActivity()!!.getString(R.string.status_releasing)
+                    mediaModel.status == currContext()?.getString(R.string.status_releasing)
                 val isUserScored = mediaModel.userScore != 0
                 val watchedEpisodes = (mediaModel.userProgress ?: "~").toString()
                 val totalEpisode =
@@ -166,7 +166,7 @@ class DownloadCompat {
                 val score = ((if (mediaModel.userScore == 0) (mediaModel.meanScore
                     ?: 0) else mediaModel.userScore) / 10.0).toString()
                 val isOngoing =
-                    mediaModel.status == currActivity()!!.getString(R.string.status_releasing)
+                    mediaModel.status == currContext()?.getString(R.string.status_releasing)
                 val isUserScored = mediaModel.userScore != 0
                 val readchapter = (mediaModel.userProgress ?: "~").toString()
                 val totalchapter = "${mediaModel.manga?.totalChapters ?: "??"}"

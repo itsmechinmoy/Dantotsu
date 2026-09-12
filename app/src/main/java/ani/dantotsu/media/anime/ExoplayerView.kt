@@ -1228,6 +1228,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
     }
 
     private fun sourceClick() {
+        if (isFinishing || isDestroyed || supportFragmentManager.isStateSaved) return
         changingServer = true
 
         media.selected?.server = null
@@ -1844,7 +1845,11 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                 if (torrentManager.isRunning()) {
                     torrentManager.pauseActiveTorrent()
                     torrentManager.pruneCache()
+                    torrentManager.stop()
                 }
+            } catch (_: Exception) {}
+            try {
+                ani.dantotsu.addons.torrent.TorrentServerService.stop()
             } catch (_: Exception) {}
         }
         aniSkipManager.stopTracking()

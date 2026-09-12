@@ -25,7 +25,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ani.dantotsu.R
 import ani.dantotsu.blurImage
-import ani.dantotsu.currActivity
 import ani.dantotsu.databinding.ItemMediaCompactBinding
 import ani.dantotsu.databinding.ItemMediaLargeBinding
 import ani.dantotsu.databinding.ItemMediaPageBinding
@@ -137,7 +136,7 @@ class MediaAdaptor(
                         b.itemCompactScoreBG.isVisible = true
                         b.itemCompactImage.loadImage(media.cover)
                         b.itemCompactOngoing.isVisible =
-                            media.status == currActivity()!!.getString(R.string.status_releasing)
+                            media.status == b.root.context.getString(R.string.status_releasing)
                         b.itemCompactTitle.text = media.userPreferredName
                         b.itemCompactScore.text =
                             ((if (media.userScore == 0) (media.meanScore
@@ -199,7 +198,7 @@ class MediaAdaptor(
                     b.itemCompactImage.loadImage(media.cover)
                     blurImage(b.itemCompactBanner, media.banner ?: media.cover)
                     b.itemCompactOngoing.isVisible =
-                        media.status == currActivity()!!.getString(R.string.status_releasing)
+                        media.status == b.root.context.getString(R.string.status_releasing)
                     b.itemCompactTitle.text = media.userPreferredName
                     b.itemCompactScore.text =
                         ((if (media.userScore == 0) (media.meanScore
@@ -211,7 +210,7 @@ class MediaAdaptor(
                     if (media.anime != null) {
                         val itemTotal = " " + if ((media.anime.totalEpisodes
                                 ?: 0) != 1
-                        ) currActivity()!!.getString(R.string.episode_plural) else currActivity()!!.getString(
+                        ) b.root.context.getString(R.string.episode_plural) else b.root.context.getString(
                             R.string.episode_singular
                         )
                         b.itemTotal.text = itemTotal
@@ -222,7 +221,7 @@ class MediaAdaptor(
                     } else if (media.manga != null) {
                         val itemTotal = " " + if ((media.manga.totalChapters
                                 ?: 0) != 1
-                        ) currActivity()!!.getString(R.string.chapter_plural) else currActivity()!!.getString(
+                        ) b.root.context.getString(R.string.chapter_plural) else b.root.context.getString(
                             R.string.chapter_singular
                         )
                         b.itemTotal.text = itemTotal
@@ -256,7 +255,7 @@ class MediaAdaptor(
                         media.banner ?: media.cover
                     )
                     b.itemCompactOngoing.isVisible =
-                        media.status == currActivity()!!.getString(R.string.status_releasing)
+                        media.status == b.root.context.getString(R.string.status_releasing)
                     b.itemCompactTitle.text = media.userPreferredName
                     bindCarouselLogo(media, b.itemCompactTitle, b.itemCompactLogo)
                     b.itemCompactScore.text =
@@ -269,8 +268,8 @@ class MediaAdaptor(
                     if (media.anime != null) {
                         b.itemTotal.text = " " + if ((media.anime.totalEpisodes
                                 ?: 0) != 1
-                        ) currActivity()!!.getString(R.string.episode_plural)
-                        else currActivity()!!.getString(R.string.episode_singular)
+                        ) b.root.context.getString(R.string.episode_plural)
+                        else b.root.context.getString(R.string.episode_singular)
                         b.itemCompactTotal.text =
                             if (media.anime.nextAiringEpisode != null) (media.anime.nextAiringEpisode.toString() + " / " + (media.anime.totalEpisodes
                                 ?: "??").toString()) else (media.anime.totalEpisodes
@@ -278,8 +277,8 @@ class MediaAdaptor(
                     } else if (media.manga != null) {
                         b.itemTotal.text = " " + if ((media.manga.totalChapters
                                 ?: 0) != 1
-                        ) currActivity()!!.getString(R.string.chapter_plural)
-                        else currActivity()!!.getString(R.string.chapter_singular)
+                        ) b.root.context.getString(R.string.chapter_plural)
+                        else b.root.context.getString(R.string.chapter_singular)
                         b.itemCompactTotal.text = "${media.manga.totalChapters ?: "??"}"
                     }
                     @SuppressLint("NotifyDataSetChanged")
@@ -309,7 +308,7 @@ class MediaAdaptor(
                         media.banner ?: media.cover
                     )
                     b.itemCompactOngoing.isVisible =
-                        media.status == currActivity()!!.getString(R.string.status_releasing)
+                        media.status == b.root.context.getString(R.string.status_releasing)
                     b.itemCompactTitle.text = media.userPreferredName
                     bindCarouselLogo(
                         media,
@@ -336,8 +335,8 @@ class MediaAdaptor(
                     if (media.anime != null) {
                         b.itemTotal.text = " " + if ((media.anime.totalEpisodes
                                 ?: 0) != 1
-                        ) currActivity()!!.getString(R.string.episode_plural)
-                        else currActivity()!!.getString(R.string.episode_singular)
+                        ) b.root.context.getString(R.string.episode_plural)
+                        else b.root.context.getString(R.string.episode_singular)
                         b.itemCompactTotal.text =
                             if (media.anime.nextAiringEpisode != null) (media.anime.nextAiringEpisode.toString() + " / " + (media.anime.totalEpisodes
                                 ?: "??").toString()) else (media.anime.totalEpisodes
@@ -345,8 +344,8 @@ class MediaAdaptor(
                     } else if (media.manga != null) {
                         b.itemTotal.text = " " + if ((media.manga.totalChapters
                                 ?: 0) != 1
-                        ) currActivity()!!.getString(R.string.chapter_plural)
-                        else currActivity()!!.getString(R.string.chapter_singular)
+                        ) b.root.context.getString(R.string.chapter_plural)
+                        else b.root.context.getString(R.string.chapter_singular)
                         b.itemCompactTotal.text = "${media.manga.totalChapters ?: "??"}"
                     }
                     @SuppressLint("NotifyDataSetChanged")

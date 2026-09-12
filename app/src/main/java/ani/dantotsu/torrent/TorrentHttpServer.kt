@@ -71,10 +71,14 @@ class TorrentHttpServer(
                     return
                 }
 
-                // URI format: /stream?hash=xxx&index=yyy
                 val queryStartIndex = uri.indexOf('?')
                 if (queryStartIndex == -1) {
                     sendError(client.getOutputStream(), 400, "Bad Request")
+                    return
+                }
+                val path = uri.substring(0, queryStartIndex)
+                if (!path.startsWith("/stream")) {
+                    sendError(client.getOutputStream(), 404, "Not Found")
                     return
                 }
                 val query = uri.substring(queryStartIndex + 1)
@@ -260,7 +264,7 @@ class TorrentHttpServer(
                         // 3. Read directly from targetFile on disk
                         var bytesRead = -1
                         var readAttempts = 0
-                        while (readAttempts < 100) {
+                        while (readAttempts < 200) {
                             if (!isRunning || !torrentHandle.isValid) break
                             try {
                                 if (targetFile.exists()) {
@@ -271,10 +275,14 @@ class TorrentHttpServer(
                                         fileChannel.seek(currentPosition)
                                         bytesRead = fileChannel.read(buffer, 0, toRead)
                                         if (bytesRead > 0) break
+                                    } else {
+                                        fileChannel?.close()
+                                        fileChannel = null
                                     }
                                 }
                             } catch (e: Exception) {
-                                // Ignore and retry
+                                fileChannel?.close()
+                                fileChannel = null
                             }
                             Thread.sleep(50)
                             readAttempts++
