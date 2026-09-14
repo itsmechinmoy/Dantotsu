@@ -11,6 +11,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
@@ -103,13 +105,13 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
-import java.util.Timer
-import java.util.TimerTask
 import kotlin.math.min
 import kotlin.properties.Delegates
 
 class MangaReaderActivity : AppCompatActivity() {
     private val mangaCache = Injekt.get<MangaCache>()
+    private val pageSliderHandler = Handler(Looper.getMainLooper())
+    private var pageSliderRunnable: Runnable? = null
 
     private lateinit var binding: ActivityMangaReaderBinding
     private val model: MediaDetailsViewModel by viewModels()
@@ -196,6 +198,8 @@ class MangaReaderActivity : AppCompatActivity() {
     override fun onDestroy() {
         autoScrollHelper.destroy()
         mangaCache.clear()
+        goneHandler.removeCallbacksAndMessages(null)
+        pageSliderHandler.removeCallbacksAndMessages(null)
         RPCManager.clearPresence(this)
         ani.dantotsu.widgets.continue_widget.ContinueWidget.updateReadingState(this, null, null, null, isExiting = true)
         if (::binding.isInitialized) {
@@ -266,20 +270,14 @@ class MangaReaderActivity : AppCompatActivity() {
 
         hideSystemBars()
 
-        var pageSliderTimer = Timer()
+        val pageSliderRunnable = Runnable {
+            sliding = false
+            handleController(false)
+        }
+        this.pageSliderRunnable = pageSliderRunnable
         fun pageSliderHide() {
-            pageSliderTimer.cancel()
-            pageSliderTimer.purge()
-            val timerTask: TimerTask = object : TimerTask() {
-                override fun run() {
-                    binding.mangaReaderCont.post {
-                        sliding = false
-                        handleController(false)
-                    }
-                }
-            }
-            pageSliderTimer = Timer()
-            pageSliderTimer.schedule(timerTask, 3000)
+            pageSliderHandler.removeCallbacks(pageSliderRunnable)
+            pageSliderHandler.postDelayed(pageSliderRunnable, 3000)
         }
 
         binding.mangaReaderSlider.addOnChangeListener { _, value, fromUser ->
@@ -1097,20 +1095,16 @@ class MangaReaderActivity : AppCompatActivity() {
 
     private val overshoot = OvershootInterpolator(1.4f)
     private var controllerDuration by Delegates.notNull<Long>()
-    private var goneTimer = Timer()
-    fun gone() {
-        goneTimer.cancel()
-        goneTimer.purge()
-        val timerTask: TimerTask = object : TimerTask() {
-            override fun run() {
-                if (!isContVisible) binding.mangaReaderCont.post {
-                    binding.mangaReaderCont.visibility = View.GONE
-                    isAnimating = false
-                }
-            }
+    private val goneHandler = Handler(Looper.getMainLooper())
+    private val goneRunnable = Runnable {
+        if (!isContVisible && ::binding.isInitialized) {
+            binding.mangaReaderCont.visibility = View.GONE
+            isAnimating = false
         }
-        goneTimer = Timer()
-        goneTimer.schedule(timerTask, controllerDuration)
+    }
+    fun gone() {
+        goneHandler.removeCallbacks(goneRunnable)
+        goneHandler.postDelayed(goneRunnable, controllerDuration)
     }
 
     enum class PressPos {

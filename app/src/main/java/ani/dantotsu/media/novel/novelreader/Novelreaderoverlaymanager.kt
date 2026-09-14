@@ -12,11 +12,11 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.os.Handler
+import android.os.Looper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.Timer
-import java.util.TimerTask
 
 class NovelReaderOverlayManager(private val root: FrameLayout) {
 
@@ -78,23 +78,25 @@ class NovelReaderOverlayManager(private val root: FrameLayout) {
             progressView.text = "${(value * 100).toInt()}%"
         }
 
-    private var clockTimer: Timer? = null
+    private val clockHandler = Handler(Looper.getMainLooper())
+    private var clockRunnable: Runnable? = null
     private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     private fun startClock() {
         stopClock()
-        clockTimer = Timer()
-        clockTimer?.scheduleAtFixedRate(object : TimerTask() {
+        val runnable = object : Runnable {
             override fun run() {
-                root.post { timeView.text = timeFmt.format(Date()) }
+                timeView.text = timeFmt.format(Date())
+                clockHandler.postDelayed(this, 30_000L)
             }
-        }, 0L, 30_000L)
+        }
+        clockRunnable = runnable
+        clockHandler.post(runnable)
     }
 
     private fun stopClock() {
-        clockTimer?.cancel()
-        clockTimer?.purge()
-        clockTimer = null
+        clockRunnable?.let { clockHandler.removeCallbacks(it) }
+        clockRunnable = null
     }
 
     private val batteryReceiver = object : BroadcastReceiver() {

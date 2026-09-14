@@ -1,8 +1,8 @@
 package ani.dantotsu.media.novel.novelreader
 
+import android.os.Handler
+import android.os.Looper
 import android.webkit.WebView
-import java.util.Timer
-import java.util.TimerTask
 
 class NovelReaderAutoScroll {
 
@@ -10,7 +10,8 @@ class NovelReaderAutoScroll {
     var isRunning: Boolean = false
         private set
 
-    private var timer: Timer? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var scrollRunnable: Runnable? = null
     private var webView: WebView? = null
 
     fun attach(wv: WebView) {
@@ -25,19 +26,21 @@ class NovelReaderAutoScroll {
         val pxPerTick = (wv.context.resources.displayMetrics.heightPixels /
                 speedSeconds.coerceAtLeast(0.5f) * tickMs / 1000f).toInt().coerceAtLeast(1)
 
-        timer = Timer()
-        timer?.scheduleAtFixedRate(object : TimerTask() {
+        val runnable = object : Runnable {
             override fun run() {
-                wv.post { wv.scrollBy(0, pxPerTick) }
+                if (!isRunning) return
+                wv.scrollBy(0, pxPerTick)
+                handler.postDelayed(this, tickMs)
             }
-        }, tickMs, tickMs)
+        }
+        scrollRunnable = runnable
+        handler.postDelayed(runnable, tickMs)
     }
 
     fun stop() {
         isRunning = false
-        timer?.cancel()
-        timer?.purge()
-        timer = null
+        scrollRunnable?.let { handler.removeCallbacks(it) }
+        scrollRunnable = null
     }
 
     fun toggle(): Boolean {

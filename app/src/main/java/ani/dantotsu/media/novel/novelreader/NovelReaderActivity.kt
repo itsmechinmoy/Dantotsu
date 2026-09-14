@@ -62,13 +62,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
-import java.util.Timer
-import java.util.TimerTask
 import kotlin.math.min
 import kotlin.properties.Delegates
 
@@ -533,23 +533,19 @@ class NovelReaderActivity : AppCompatActivity(), EbookReaderEventListener {
     // region Handle Controls
     private var isContVisible = false
     private var isAnimating = false
-    private var goneTimer = Timer()
+    private val goneHandler = Handler(Looper.getMainLooper())
+    private val goneRunnable = Runnable {
+        if (!isContVisible && ::binding.isInitialized) {
+            binding.novelReaderCont.visibility = View.GONE
+            isAnimating = false
+        }
+    }
     private var controllerDuration by Delegates.notNull<Long>()
     private val overshoot = OvershootInterpolator(1.4f)
 
     fun gone() {
-        goneTimer.cancel()
-        goneTimer.purge()
-        val timerTask: TimerTask = object : TimerTask() {
-            override fun run() {
-                if (!isContVisible) binding.novelReaderCont.post {
-                    binding.novelReaderCont.visibility = View.GONE
-                    isAnimating = false
-                }
-            }
-        }
-        goneTimer = Timer()
-        goneTimer.schedule(timerTask, controllerDuration)
+        goneHandler.removeCallbacks(goneRunnable)
+        goneHandler.postDelayed(goneRunnable, controllerDuration)
     }
 
     fun handleController(shouldShow: Boolean? = null) {
@@ -588,6 +584,7 @@ class NovelReaderActivity : AppCompatActivity(), EbookReaderEventListener {
 
 
     override fun onDestroy() {
+        goneHandler.removeCallbacksAndMessages(null)
         ani.dantotsu.media.novel.NovelReaderSession.clear()
         autoScroll.destroy()
         readerOverlay.destroy()

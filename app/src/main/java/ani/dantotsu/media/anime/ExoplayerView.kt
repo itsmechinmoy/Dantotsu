@@ -120,8 +120,6 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.util.Timer
-import java.util.TimerTask
 import kotlin.math.max
 import kotlin.math.min
 
@@ -825,15 +823,12 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
 
         // AutoPlay Interacted Tracking
         if (PrefManager.getVal(PrefName.AutoPlay)) {
-            var touchTimer = Timer()
+            val touchHandler = Handler(Looper.getMainLooper())
+            val touchResetRunnable = Runnable { interacted = false }
             fun touched() {
                 interacted = true
-                touchTimer.cancel()
-                touchTimer.purge()
-                touchTimer = Timer()
-                touchTimer.schedule(object : TimerTask() {
-                    override fun run() { interacted = false }
-                }, 1000 * 60 * 60)
+                touchHandler.removeCallbacks(touchResetRunnable)
+                touchHandler.postDelayed(touchResetRunnable, 1000L * 60 * 60)
             }
             playerView.findViewById<View>(R.id.exo_touch_view).setOnTouchListener { _, _ ->
                 touched()

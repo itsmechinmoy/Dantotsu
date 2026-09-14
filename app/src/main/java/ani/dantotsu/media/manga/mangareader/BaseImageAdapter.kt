@@ -470,15 +470,16 @@ abstract class BaseImageAdapter(
          */
         fun decodeWithLibvips(inputStream: InputStream): Bitmap? {
             return try {
-                val decoder = ImageDecoder.new(inputStream)
-                if (decoder != null && decoder.pages > 0) {
-                    val res = decoder.decode()
-                    val bitmap = Bitmap.createBitmap(res.width, res.height, Bitmap.Config.ARGB_8888)
-                    res.image.rewind()
-                    bitmap.copyPixelsFromBuffer(res.image)
-                    bitmap
-                } else {
-                    null
+                ImageDecoder.new(inputStream)?.use { decoder ->
+                    if (decoder.pages > 0) {
+                        val res = decoder.decode()
+                        val bitmap = Bitmap.createBitmap(res.width, res.height, Bitmap.Config.ARGB_8888)
+                        res.image.rewind()
+                        bitmap.copyPixelsFromBuffer(res.image)
+                        bitmap
+                    } else {
+                        null
+                    }
                 }
             } catch (_: Throwable) {
                 null
@@ -555,14 +556,15 @@ abstract class BaseImageAdapter(
             val scaleX = srcW.toDouble() / dstW
             val scaleY = srcH.toDouble() / dstH
 
-            // Horizontal pass into intermediate float buffer (RGBA)
-            val intermediate = Array(dstW) { FloatArray(srcH * 4) }
+            // Horizontal pass into intermediate 1D float buffer (RGBA)
+            val intermediate = FloatArray(dstW * srcH * 4)
             for (x in 0 until dstW) {
                 val srcXf = (x + 0.5) * scaleX - 0.5
                 val start = (floor(srcXf).toInt() - LANCZOS_A + 1).coerceAtLeast(0)
                 val end   = (floor(srcXf).toInt() + LANCZOS_A).coerceAtMost(srcW - 1)
                 val weights = DoubleArray(end - start + 1) { lanczosKernel(srcXf - (start + it)) }
                 val weightSum = weights.sum().coerceAtLeast(1e-9)
+                val xOffset = x * srcH * 4
                 for (y in 0 until srcH) {
                     var r = 0.0; var g = 0.0; var b = 0.0; var a = 0.0
                     for ((i, sx) in (start..end).withIndex()) {
@@ -573,11 +575,11 @@ abstract class BaseImageAdapter(
                         g += Color.green(px) * w
                         b += Color.blue(px) * w
                     }
-                    val base = y * 4
-                    intermediate[x][base    ] = (r / weightSum).toFloat()
-                    intermediate[x][base + 1] = (g / weightSum).toFloat()
-                    intermediate[x][base + 2] = (b / weightSum).toFloat()
-                    intermediate[x][base + 3] = (a / weightSum).toFloat()
+                    val base = xOffset + y * 4
+                    intermediate[base    ] = (r / weightSum).toFloat()
+                    intermediate[base + 1] = (g / weightSum).toFloat()
+                    intermediate[base + 2] = (b / weightSum).toFloat()
+                    intermediate[base + 3] = (a / weightSum).toFloat()
                 }
             }
 
@@ -588,17 +590,19 @@ abstract class BaseImageAdapter(
                 val end   = (floor(srcYf).toInt() + LANCZOS_A).coerceAtMost(srcH - 1)
                 val weights = DoubleArray(end - start + 1) { lanczosKernel(srcYf - (start + it)) }
                 val weightSum = weights.sum().coerceAtLeast(1e-9)
+                val yDstOffset = y * dstW
                 for (x in 0 until dstW) {
                     var r = 0.0; var g = 0.0; var b = 0.0; var a = 0.0
+                    val xOffset = x * srcH * 4
                     for ((i, sy) in (start..end).withIndex()) {
-                        val base = sy * 4
+                        val base = xOffset + sy * 4
                         val w = weights[i]
-                        r += intermediate[x][base    ] * w
-                        g += intermediate[x][base + 1] * w
-                        b += intermediate[x][base + 2] * w
-                        a += intermediate[x][base + 3] * w
+                        r += intermediate[base    ] * w
+                        g += intermediate[base + 1] * w
+                        b += intermediate[base + 2] * w
+                        a += intermediate[base + 3] * w
                     }
-                    dstPixels[y * dstW + x] = Color.argb(
+                    dstPixels[yDstOffset + x] = Color.argb(
                         (a / weightSum).roundToInt().coerceIn(0, 255),
                         (r / weightSum).roundToInt().coerceIn(0, 255),
                         (g / weightSum).roundToInt().coerceIn(0, 255),

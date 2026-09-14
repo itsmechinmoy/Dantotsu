@@ -37,8 +37,6 @@ import ani.dantotsu.startMainActivity
 import ani.dantotsu.openLinkInCustomTab
 import ani.dantotsu.util.customAlertDialog
 import eu.kanade.tachiyomi.util.system.getSerializableCompat
-import java.util.Timer
-import kotlin.concurrent.schedule
 
 class SettingsDialogFragment : BottomSheetDialogFragment() {
     private var _binding: BottomSheetSettingsBinding? = null
@@ -178,7 +176,7 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
         }
         binding.settingsDownloads.isChecked = PrefManager.getVal(PrefName.OfflineMode)
         binding.settingsDownloads.setOnCheckedChangeListener { _, isChecked ->
-            Timer().schedule(300) {
+            binding.root.postDelayed({
                 val currentActivity = activity
                 // Ensure fragment is added and activity is not null
                 if (currentActivity != null && isAdded) {
@@ -232,7 +230,7 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
                     dismiss()
                     PrefManager.setVal(PrefName.OfflineMode, isChecked)
                 }
-            }
+            }, 300)
         }
     }
 

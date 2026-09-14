@@ -1,28 +1,22 @@
 package ani.dantotsu.others
 
-import java.util.Timer
-import java.util.TimerTask
-import java.util.concurrent.atomic.AtomicBoolean
+import android.os.Handler
+import android.os.Looper
 
-class ResettableTimer {
-    var resetLock = AtomicBoolean(false)
-    var timer = Timer()
-    fun reset(timerTask: TimerTask, delay: Long) {
-        if (!resetLock.getAndSet(true)) {
-            timer.cancel()
-            timer.purge()
-            timer = Timer()
-            timer.schedule(object : TimerTask() {
-                override fun run() {
-                    if (!resetLock.getAndSet(true)) {
-                        timerTask.run()
-                        timer.cancel()
-                        timer.purge()
-                        resetLock.set(false)
-                    }
-                }
-            }, delay)
-            resetLock.set(false)
+class ResettableTimer(private val handler: Handler = Handler(Looper.getMainLooper())) {
+    private var pendingRunnable: Runnable? = null
+
+    fun reset(action: Runnable, delay: Long) {
+        cancel()
+        val runnable = Runnable {
+            action.run()
         }
+        pendingRunnable = runnable
+        handler.postDelayed(runnable, delay)
+    }
+
+    fun cancel() {
+        pendingRunnable?.let { handler.removeCallbacks(it) }
+        pendingRunnable = null
     }
 }

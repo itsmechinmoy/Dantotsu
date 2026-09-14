@@ -39,8 +39,6 @@ import com.google.android.material.slider.Slider
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
-import java.util.Timer
-import java.util.TimerTask
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -67,9 +65,6 @@ class PlayerGestureManager(
     private var seekTimesR = 0
     private val seekTimerF = ResettableTimer()
     private val seekTimerR = ResettableTimer()
-
-    private var brightnessTimer = Timer()
-    private var volumeTimer = Timer()
 
     private var fastForwardStartX = 0f
     private var fastForwardInitialSpeed = 1f
@@ -212,23 +207,19 @@ class PlayerGestureManager(
 
         if (forward) {
             seekTimerR.reset(
-                object : TimerTask() {
-                    override fun run() {
-                        isSeeking = false
-                        stopAnim()
-                        seekTimesF = 0
-                    }
+                {
+                    isSeeking = false
+                    stopAnim()
+                    seekTimesF = 0
                 },
                 850
             )
         } else {
             seekTimerF.reset(
-                object : TimerTask() {
-                    override fun run() {
-                        isSeeking = false
-                        stopAnim()
-                        seekTimesR = 0
-                    }
+                {
+                    isSeeking = false
+                    stopAnim()
+                    seekTimesR = 0
                 },
                 850
             )
@@ -285,31 +276,13 @@ class PlayerGestureManager(
         }
 
         fun brightnessHide() {
-            brightnessTimer.cancel()
-            brightnessTimer.purge()
-            brightnessTimer = Timer()
-            brightnessTimer.schedule(
-                object : TimerTask() {
-                    override fun run() {
-                        handler.post(brightnessRunnable)
-                    }
-                },
-                3000
-            )
+            handler.removeCallbacks(brightnessRunnable)
+            handler.postDelayed(brightnessRunnable, 3000)
         }
 
         fun volumeHide() {
-            volumeTimer.cancel()
-            volumeTimer.purge()
-            volumeTimer = Timer()
-            volumeTimer.schedule(
-                object : TimerTask() {
-                    override fun run() {
-                        handler.post(volumeRunnable)
-                    }
-                },
-                3000
-            )
+            handler.removeCallbacks(volumeRunnable)
+            handler.postDelayed(volumeRunnable, 3000)
         }
 
         exoBrightnessCont.visibility = View.GONE
