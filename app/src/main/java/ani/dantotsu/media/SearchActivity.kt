@@ -355,6 +355,7 @@ class SearchActivity : AppCompatActivity() {
 
     fun emptyMediaAdapter() {
         searchJob?.cancel()
+        loading = false
         when (searchType) {
             SearchType.ANIME, SearchType.MANGA -> {
                 mediaAdaptor.notifyItemRangeRemoved(0, model.aniMangaSearchResults.results.size)
@@ -388,6 +389,7 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private var searchJob: Job? = null
+    @Volatile
     private var loading = false
     fun search() {
         headerAdaptor.setHistoryVisibility(false)
@@ -422,9 +424,12 @@ class SearchActivity : AppCompatActivity() {
         searchJob?.cancel()
         searchJob = scope.launch(Dispatchers.IO) {
             delay(500)
-            loading = true
-            model.loadSearch(searchType)
-            loading = false
+            try {
+                loading = true
+                model.loadSearch(searchType)
+            } finally {
+                loading = false
+            }
         }
     }
 
