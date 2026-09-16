@@ -105,13 +105,15 @@ class Login : AppCompatActivity() {
                     .header("Authorization", token)
                     .build()
 
-                val userResponse = client.newCall(request).execute()
-                if (!userResponse.isSuccessful) {
-                    throw IllegalStateException("Failed to fetch user: ${userResponse.code}")
+                val jsonString = client.newCall(request).execute().use { userResponse ->
+                    if (!userResponse.isSuccessful) {
+                        throw IllegalStateException("Failed to fetch user: ${userResponse.code}")
+                    }
+                    userResponse.body.string()
                 }
 
-                userResponse.body.string().let { jsonString ->
-                    val json = JSONObject(jsonString)
+                jsonString.let {
+                    val json = JSONObject(it)
                     PrefManager.setVal(PrefName.DiscordId, json.optString("id"))
                     PrefManager.setVal(PrefName.DiscordUserName, json.optString("username"))
                     PrefManager.setVal(PrefName.DiscordAvatar, json.optString("avatar"))

@@ -105,6 +105,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 import kotlin.properties.Delegates
 
@@ -410,8 +411,19 @@ class MangaReaderActivity : AppCompatActivity() {
                                 return
                             }
                         }
-                        val isForward = if (directionRLBT) position < currentChapterIndex else position > currentChapterIndex
-                        progress(isForward) { change(position) }
+                        val currentNum = MediaNameAdapter.findChapterNumber(chapter.number)
+                        val targetChap = chapters[chaptersArr.getOrNull(position)]
+                        val targetNum = targetChap?.number?.let { MediaNameAdapter.findChapterNumber(it) }
+                        val isForward = if (targetNum != null && currentNum != null && targetNum != currentNum) {
+                            targetNum > currentNum
+                        } else {
+                            position > currentChapterIndex
+                        }
+                        if (isForward) {
+                            progress(true) { change(position) }
+                        } else {
+                            change(position)
+                        }
                     }
                 }
 
@@ -480,16 +492,12 @@ class MangaReaderActivity : AppCompatActivity() {
             binding.mangaReaderNextChapter.performClick()
         }
         binding.mangaReaderNextChapter.setOnClickListener {
-            if (directionRLBT) {
-                if (currentChapterIndex > 0) progress { change(currentChapterIndex - 1) }
-                else snackString(getString(R.string.first_chapter))
-            } else {
-                if (chaptersArr.size > currentChapterIndex + 1) progress(true) {
-                    change(
-                        currentChapterIndex + 1
-                    )
+            if (chaptersArr.size > currentChapterIndex + 1) {
+                progress(true) {
+                    change(currentChapterIndex + 1)
                 }
-                else snackString(getString(R.string.next_chapter_not_found))
+            } else {
+                snackString(getString(R.string.next_chapter_not_found))
             }
         }
         //Prev Chapter
@@ -497,14 +505,10 @@ class MangaReaderActivity : AppCompatActivity() {
             binding.mangaReaderPreviousChapter.performClick()
         }
         binding.mangaReaderPreviousChapter.setOnClickListener {
-            if (directionRLBT) {
-                if (chaptersArr.size > currentChapterIndex + 1) progress(true) {
-                    change(currentChapterIndex + 1)
-                }
-                else snackString(getString(R.string.next_chapter_not_found))
+            if (currentChapterIndex > 0) {
+                change(currentChapterIndex - 1)
             } else {
-                if (currentChapterIndex > 0) progress { change(currentChapterIndex - 1) }
-                else snackString(getString(R.string.first_chapter))
+                snackString(getString(R.string.first_chapter))
             }
         }
 
@@ -519,17 +523,10 @@ class MangaReaderActivity : AppCompatActivity() {
                 cleanChapNum?.let { PrefManager.setCustomVal("${media.id}_current_chp_num", it) }
                 currentChapterIndex = chaptersArr.indexOf(chap.uniqueNumber())
                 binding.mangaReaderChapterSelect.setSelection(currentChapterIndex)
-                if (directionRLBT) {
-                    binding.mangaReaderNextChap.text =
-                        chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
-                    binding.mangaReaderPrevChap.text =
-                        chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
-                } else {
-                    binding.mangaReaderNextChap.text =
-                        chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
-                    binding.mangaReaderPrevChap.text =
-                        chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
-                }
+                binding.mangaReaderNextChap.text =
+                    chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
+                binding.mangaReaderPrevChap.text =
+                    chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
                 applySettings()
                 val context = this
                 val offline: Boolean = PrefManager.getVal(PrefName.OfflineMode)
@@ -623,12 +620,12 @@ class MangaReaderActivity : AppCompatActivity() {
             }
             cleanChapNum?.let { PrefManager.setCustomVal("${media.id}_${it}_max", maxChapterPage) }
 
-            val nextIndex = if (directionRLBT) currentChapterIndex - 1 else currentChapterIndex + 1
+            val nextIndex = currentChapterIndex + 1
             val nextChapter = if (defaultSettings.layout != PAGED) {
                 chaptersArr.getOrNull(nextIndex)?.let { chapters[it] }
             } else null
 
-            val prevIndex = if (directionRLBT) currentChapterIndex + 1 else currentChapterIndex - 1
+            val prevIndex = currentChapterIndex - 1
             val prevChapter = if (defaultSettings.layout != PAGED) {
                 chaptersArr.getOrNull(prevIndex)?.let { chapters[it] }
             } else null
@@ -701,18 +698,18 @@ class MangaReaderActivity : AppCompatActivity() {
                 }
             } else {
                 binding.mangaReaderNextChap.text =
-                    chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
-                binding.mangaReaderPrevChap.text =
                     chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
+                binding.mangaReaderPrevChap.text =
+                    chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
                 binding.BottomSwipeText.text = chaptersTitleArr.getOrNull(currentChapterIndex - 1)
                     ?: getString(R.string.no_chapter)
                 binding.TopSwipeText.text = chaptersTitleArr.getOrNull(currentChapterIndex + 1)
                     ?: getString(R.string.no_chapter)
                 binding.mangaReaderSwipy.onTopSwiped = {
-                    binding.mangaReaderPreviousChapter.performClick()
+                    binding.mangaReaderNextChapter.performClick()
                 }
                 binding.mangaReaderSwipy.onBottomSwiped = {
-                    binding.mangaReaderNextChapter.performClick()
+                    binding.mangaReaderPreviousChapter.performClick()
                 }
             }
             binding.mangaReaderSwipy.topBeingSwiped = { value ->
@@ -729,36 +726,38 @@ class MangaReaderActivity : AppCompatActivity() {
             }
         } else {
             binding.mangaReaderSwipy.vertical = false
+            binding.mangaReaderNextChap.text =
+                chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
+            binding.mangaReaderPrevChap.text =
+                chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
             if (defaultSettings.direction == RIGHT_TO_LEFT) {
-                binding.mangaReaderNextChap.text =
-                    chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
-                binding.mangaReaderPrevChap.text =
-                    chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
                 binding.LeftSwipeText.text = chaptersTitleArr.getOrNull(currentChapterIndex + 1)
                     ?: getString(R.string.no_chapter)
                 binding.RightSwipeText.text = chaptersTitleArr.getOrNull(currentChapterIndex - 1)
                     ?: getString(R.string.no_chapter)
+                binding.mangaReaderSwipy.onLeftSwiped = {
+                    binding.mangaReaderNextChapter.performClick()
+                }
+                binding.mangaReaderSwipy.onRightSwiped = {
+                    binding.mangaReaderPreviousChapter.performClick()
+                }
             } else {
-                binding.mangaReaderNextChap.text =
-                    chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
-                binding.mangaReaderPrevChap.text =
-                    chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
                 binding.LeftSwipeText.text = chaptersTitleArr.getOrNull(currentChapterIndex - 1)
                     ?: getString(R.string.no_chapter)
                 binding.RightSwipeText.text = chaptersTitleArr.getOrNull(currentChapterIndex + 1)
                     ?: getString(R.string.no_chapter)
-            }
-            binding.mangaReaderSwipy.onLeftSwiped = {
-                binding.mangaReaderPreviousChapter.performClick()
+                binding.mangaReaderSwipy.onLeftSwiped = {
+                    binding.mangaReaderPreviousChapter.performClick()
+                }
+                binding.mangaReaderSwipy.onRightSwiped = {
+                    binding.mangaReaderNextChapter.performClick()
+                }
             }
             binding.mangaReaderSwipy.leftBeingSwiped = { value ->
                 binding.LeftSwipeContainer.apply {
                     alpha = value
                     translationX = -width.dp * (1 - min(value, 1f))
                 }
-            }
-            binding.mangaReaderSwipy.onRightSwiped = {
-                binding.mangaReaderNextChapter.performClick()
             }
             binding.mangaReaderSwipy.rightBeingSwiped = { value ->
                 binding.RightSwipeContainer.apply {
@@ -869,14 +868,14 @@ class MangaReaderActivity : AppCompatActivity() {
                                 is ReaderItem.Page -> {
                                     onChapterScrolledTo(item.chapter, item.pageNumber, item.totalPages)
                                     if (item.totalPages - item.pageNumber <= 5) {
-                                        val nextIdx = if (directionRLBT) currentChapterIndex - 1 else currentChapterIndex + 1
+                                        val nextIdx = currentChapterIndex + 1
                                         val nextChap = chaptersArr.getOrNull(nextIdx)?.let { chapters[it] }
                                         if (nextChap != null) {
                                             preloadChapterAndAppend(nextChap)
                                         }
                                     }
                                     if (item.pageNumber <= 5) {
-                                        val prevIdx = if (directionRLBT) currentChapterIndex + 1 else currentChapterIndex - 1
+                                        val prevIdx = currentChapterIndex - 1
                                         val prevChap = chaptersArr.getOrNull(prevIdx)?.let { chapters[it] }
                                         if (prevChap != null) {
                                             preloadChapterAndPrepend(prevChap)
@@ -886,14 +885,14 @@ class MangaReaderActivity : AppCompatActivity() {
                                 is ReaderItem.DualPage -> {
                                     onChapterScrolledTo(item.chapter, item.pageNumber, item.totalPages)
                                     if (item.totalPages - item.pageNumber <= 3) {
-                                        val nextIdx = if (directionRLBT) currentChapterIndex - 1 else currentChapterIndex + 1
+                                        val nextIdx = currentChapterIndex + 1
                                         val nextChap = chaptersArr.getOrNull(nextIdx)?.let { chapters[it] }
                                         if (nextChap != null) {
                                             preloadChapterAndAppend(nextChap)
                                         }
                                     }
                                     if (item.pageNumber <= 3) {
-                                        val prevIdx = if (directionRLBT) currentChapterIndex + 1 else currentChapterIndex - 1
+                                        val prevIdx = currentChapterIndex - 1
                                         val prevChap = chaptersArr.getOrNull(prevIdx)?.let { chapters[it] }
                                         if (prevChap != null) {
                                             preloadChapterAndPrepend(prevChap)
@@ -1260,7 +1259,9 @@ class MangaReaderActivity : AppCompatActivity() {
         }
     }
 
-    private var loading = false
+    private val loading = AtomicBoolean(false)
+    private val pagePersistLock = Any()
+    private var pagePersistSeq = 0L
     fun updatePageNumber(pageNumber: Long) {
         var page = pageNumber
         if (directionPagedBT) {
@@ -1272,26 +1273,34 @@ class MangaReaderActivity : AppCompatActivity() {
         if (currentChapterPage != page) {
             currentChapterPage = page
             triggerEInkFlash()
-            PrefManager.setCustomVal("${media.id}_${chapter.number}", page)
-            val cleanChapNum = MediaNameAdapter.findChapterNumber(chapter.number)?.let {
-                if (it % 1 == 0f) it.toInt().toString() else it.toString()
+            val chapNum = chapter.number
+            val seq = synchronized(pagePersistLock) { ++pagePersistSeq }
+            scope.launch(Dispatchers.IO) {
+                // Drop stale writes so rapid page turns persist in order (last-writer-wins)
+                if (seq != synchronized(pagePersistLock) { pagePersistSeq }) return@launch
+                PrefManager.setCustomVal("${media.id}_$chapNum", page)
+                val cleanChapNum = MediaNameAdapter.findChapterNumber(chapNum)?.let {
+                    if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                }
+                cleanChapNum?.let { PrefManager.setCustomVal("${media.id}_$it", page) }
             }
-            cleanChapNum?.let { PrefManager.setCustomVal("${media.id}_$it", page) }
             binding.mangaReaderPageNumber.text =
                 if (defaultSettings.hidePageNumbers) "" else "${currentChapterPage}/$maxChapterPage"
             if (!sliding) binding.mangaReaderSlider.apply {
                 value = clamp(currentChapterPage.toFloat(), 1f, valueTo)
             }
         }
-        if (maxChapterPage - currentChapterPage <= 1 && !loading)
+        if (maxChapterPage - currentChapterPage <= 1 && loading.compareAndSet(false, true))
             scope.launch(Dispatchers.IO) {
-                loading = true
-                model.loadMangaChapterImages(
-                    chapters[chaptersArr.getOrNull(currentChapterIndex + 1) ?: return@launch]!!,
-                    media.selected!!,
-                    false
-                )
-                loading = false
+                try {
+                    model.loadMangaChapterImages(
+                        chapters[chaptersArr.getOrNull(currentChapterIndex + 1) ?: return@launch]!!,
+                        media.selected!!,
+                        false
+                    )
+                } finally {
+                    loading.set(false)
+                }
             }
     }
 
@@ -1599,7 +1608,7 @@ class MangaReaderActivity : AppCompatActivity() {
     }
 
     fun getNextChapterTitle(): String? {
-        val nextIndex = if (directionRLBT) currentChapterIndex - 1 else currentChapterIndex + 1
+        val nextIndex = currentChapterIndex + 1
         return chaptersArr.getOrNull(nextIndex)?.let { chapters[it] }?.let { getChapterDisplayTitle(it) }
     }
 
@@ -1610,7 +1619,7 @@ class MangaReaderActivity : AppCompatActivity() {
         if (loadingChapters.contains(chapterKey)) return
 
         val targetIndex = chaptersArr.indexOf(chapterKey)
-        val afterNextIndex = if (directionRLBT) targetIndex - 1 else targetIndex + 1
+        val afterNextIndex = targetIndex + 1
         val afterNextChapter = chaptersArr.getOrNull(afterNextIndex)?.let { chapters[it] }
 
         if (targetChapter.images().isNotEmpty()) {
@@ -1640,7 +1649,7 @@ class MangaReaderActivity : AppCompatActivity() {
         if (loadingChapters.contains(chapterKey)) return
 
         val targetIndex = chaptersArr.indexOf(chapterKey)
-        val beforePrevIndex = if (directionRLBT) targetIndex + 1 else targetIndex - 1
+        val beforePrevIndex = targetIndex - 1
         val beforePrevChapter = chaptersArr.getOrNull(beforePrevIndex)?.let { chapters[it] }
 
         val applyPrepend = {
@@ -1684,21 +1693,32 @@ class MangaReaderActivity : AppCompatActivity() {
     private fun onChapterScrolledTo(newChapter: MangaChapter, pageNum: Int, totalPages: Int) {
         if (newChapter.uniqueNumber() != chapter.uniqueNumber()) {
             val oldChapter = chapter
-            // Mark previous chapter as read (100% completed)
-            PrefManager.setCustomVal("${media.id}_${oldChapter.number}", maxChapterPage)
-            val cleanOldChapNum = MediaNameAdapter.findChapterNumber(oldChapter.number)?.let {
-                if (it % 1 == 0f) it.toInt().toString() else it.toString()
+            val oldChapNum = MediaNameAdapter.findChapterNumber(oldChapter.number)
+            val newChapNum = MediaNameAdapter.findChapterNumber(newChapter.number)
+            val oldIdx = chaptersArr.indexOf(oldChapter.uniqueNumber())
+            val newIdx = chaptersArr.indexOf(newChapter.uniqueNumber())
+            val isMovingForward = if (oldChapNum != null && newChapNum != null && oldChapNum != newChapNum) {
+                newChapNum > oldChapNum
+            } else {
+                newIdx > oldIdx
             }
-            cleanOldChapNum?.let { PrefManager.setCustomVal("${media.id}_$it", maxChapterPage) }
 
-            // Sync progress if allowed
-            val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
-            if (!incognito && PrefManager.getCustomVal("${media.id}_save_progress", true)
-                && if (media.isAdult) PrefManager.getVal(PrefName.UpdateForHReader) else true
-            ) {
-                val oldChapNumStr = cleanOldChapNum ?: oldChapter.number
-                if (oldChapNumStr.isNotEmpty()) {
-                    updateProgress(media, oldChapNumStr)
+            // Only mark previous chapter as read and sync progress if actually moving forward
+            if (isMovingForward) {
+                PrefManager.setCustomVal("${media.id}_${oldChapter.number}", maxChapterPage)
+                val cleanOldChapNum = oldChapNum?.let {
+                    if (it % 1 == 0f) it.toInt().toString() else it.toString()
+                }
+                cleanOldChapNum?.let { PrefManager.setCustomVal("${media.id}_$it", maxChapterPage) }
+
+                val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
+                if (!incognito && PrefManager.getCustomVal("${media.id}_save_progress", true)
+                    && if (media.isAdult) PrefManager.getVal(PrefName.UpdateForHReader) else true
+                ) {
+                    val oldChapNumStr = cleanOldChapNum ?: oldChapter.number
+                    if (oldChapNumStr.isNotEmpty()) {
+                        updateProgress(media, oldChapNumStr)
+                    }
                 }
             }
 
@@ -1715,17 +1735,10 @@ class MangaReaderActivity : AppCompatActivity() {
                 binding.mangaReaderChapterSelect.setSelection(currentChapterIndex)
             }
 
-            if (directionRLBT) {
-                binding.mangaReaderNextChap.text =
-                    chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
-                binding.mangaReaderPrevChap.text =
-                    chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
-            } else {
-                binding.mangaReaderNextChap.text =
-                    chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
-                binding.mangaReaderPrevChap.text =
-                    chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
-            }
+            binding.mangaReaderNextChap.text =
+                chaptersTitleArr.getOrNull(currentChapterIndex + 1) ?: ""
+            binding.mangaReaderPrevChap.text =
+                chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
 
             maxChapterPage = totalPages.toLong()
             PrefManager.setCustomVal("${media.id}_${chapter.number}_max", maxChapterPage)

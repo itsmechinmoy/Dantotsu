@@ -30,21 +30,13 @@ class SubtitleDownloader {
                             .url(url)
                             .build()
 
-                        val response = networkHelper.client.newCall(request).execute()
-
-                        // Check if response is successful
-                        if (response.isSuccessful) {
-                            val responseBody = response.peekBody(8192).string()
-
-
-                            val subtitleType = getType(responseBody)
-
-                            response.close()
-                            subtitleType
-                        } else {
-                            response.close()
-                            SubtitleType.UNKNOWN
+                        val responseBody = networkHelper.client.newCall(request).execute().use { response ->
+                            // Check if response is successful
+                            if (!response.isSuccessful) return@withContext SubtitleType.UNKNOWN
+                            response.peekBody(8192).string()
                         }
+
+                        getType(responseBody)
                     } else {
                         val uri = url.toUri()
                         val file = uri.toFile()
@@ -93,17 +85,17 @@ class SubtitleDownloader {
 
                 val client = Injekt.get<NetworkHelper>().client
                 val request = Request.Builder().url(url).build()
-                val response = client.newCall(request).execute()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        snackString("Failed to download subtitle")
+                        return
+                    }
 
-                if (!response.isSuccessful) {
-                    snackString("Failed to download subtitle")
-                    return
-                }
-
-                response.body.byteStream().use { input ->
-                    subtitleFile.openOutputStream(context, false).use { output ->
-                        if (output == null) throw Exception("Could not open output stream")
-                        input.copyTo(output)
+                    response.body.byteStream().use { input ->
+                        subtitleFile.openOutputStream(context, false).use { output ->
+                            if (output == null) throw Exception("Could not open output stream")
+                            input.copyTo(output)
+                        }
                     }
                 }
             } catch (e: Exception) {

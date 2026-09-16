@@ -415,10 +415,11 @@ abstract class BaseImageAdapter(
                                         val okHttpClient = uy.kohesive.injekt.Injekt.get<OkHttpClient>()
                                         val requestBuilder = Request.Builder().url(link.url)
                                         link.headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
-                                        val response = okHttpClient.newCall(requestBuilder.build()).execute()
-                                        if (response.isSuccessful) {
-                                            response.body?.byteStream()?.use { decodeWithLibvips(it) }
-                                        } else null
+                                        okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+                                            if (response.isSuccessful) {
+                                                response.body?.byteStream()?.use { decodeWithLibvips(it) }
+                                            } else null
+                                        }
                                     } catch (_: Exception) {
                                         null
                                     }

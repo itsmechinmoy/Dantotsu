@@ -387,25 +387,27 @@ object LnReaderJsEngine {
             }
 
             val builtReq = reqBuilder.build()
-            val response = httpClient.newCall(builtReq).execute()
-            val responseBody = response.body.string()
-            val finalUrl = response.request.url.toString()
-            val responseHeaders = response.headers.toMultimap()
-                .entries.associate { it.key to it.value.firstOrNull().orEmpty() }
+            val resultJson = httpClient.newCall(builtReq).execute().use { response ->
+                val responseBody = response.body.string()
+                val finalUrl = response.request.url.toString()
+                val responseHeaders = response.headers.toMultimap()
+                    .entries.associate { it.key to it.value.firstOrNull().orEmpty() }
 
-            Json.encodeToString(
-                kotlinx.serialization.json.JsonObject.serializer(),
-                buildJsonObject {
-                    put("statusCode", response.code)
-                    put("reasonPhrase", response.message)
-                    put("body", responseBody)
-                    put("url", finalUrl)
-                    put("isRedirect", false)
-                    put("headers", buildJsonObject {
-                        responseHeaders.forEach { (k, v) -> put(k, v) }
-                    })
-                }
-            )
+                Json.encodeToString(
+                    kotlinx.serialization.json.JsonObject.serializer(),
+                    buildJsonObject {
+                        put("statusCode", response.code)
+                        put("reasonPhrase", response.message)
+                        put("body", responseBody)
+                        put("url", finalUrl)
+                        put("isRedirect", false)
+                        put("headers", buildJsonObject {
+                            responseHeaders.forEach { (k, v) -> put(k, v) }
+                        })
+                    }
+                )
+            }
+            resultJson
         } catch (e: Exception) {
             Logger.log("LnReaderJsEngine fetch error ($url): ${e.message}")
             Json.encodeToString(

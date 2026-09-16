@@ -99,123 +99,125 @@ class AniskipCsvFallback(context: Context) {
         if (!isSyncing.compareAndSet(false, true)) return@withContext
 
         Logger.log("$TAG: Starting background sync of AniSkip CSV dump...")
+        var okClient: okhttp3.OkHttpClient? = null
         try {
-            val okClient = okhttp3.OkHttpClient.Builder()
+            val httpClient = okhttp3.OkHttpClient.Builder()
                 .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
                 .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                .build()
+                .build().also { okClient = it }
             val request = Request.Builder().url(CSV_URL).build()
-            val response = okClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                Logger.log("$TAG: Failed to download CSV, HTTP ${response.code}")
-                response.close()
-                return@withContext
-            }
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Logger.log("$TAG: Failed to download CSV, HTTP ${response.code}")
+                    return@withContext
+                }
 
-            val body = response.body ?: run {
-                Logger.log("$TAG: Empty response body")
-                response.close()
-                return@withContext
-            }
+                val body = response.body ?: run {
+                    Logger.log("$TAG: Empty response body")
+                    return@withContext
+                }
 
-            val helper = DatabaseHelper()
-            try {
-                val db = helper.writableDatabase
-                db.execSQL("DROP TABLE IF EXISTS $TABLE_STAGING")
-                db.execSQL(
-                    """
-                    CREATE TABLE $TABLE_STAGING (
-                        $COL_ANIME_ID INTEGER NOT NULL,
-                        $COL_EPISODE  INTEGER NOT NULL,
-                        $COL_TYPE     TEXT    NOT NULL,
-                        $COL_START    REAL    NOT NULL,
-                        $COL_END      REAL    NOT NULL
-                    )
-                    """.trimIndent()
-                )
-
-                var totalRows = 0
-                var isFirstLine = true
-
-                val reader = java.io.BufferedReader(java.io.InputStreamReader(body.byteStream()))
+                val helper = DatabaseHelper()
                 try {
-                    val insertSql =
-                        "INSERT INTO $TABLE_STAGING ($COL_ANIME_ID, $COL_EPISODE, $COL_TYPE, $COL_START, $COL_END) VALUES (?, ?, ?, ?, ?)"
-                    val statement = db.compileStatement(insertSql)
-                    var rowsInBatch = 0
-                    var line: String?
+                    val db = helper.writableDatabase
+                    db.execSQL("DROP TABLE IF EXISTS $TABLE_STAGING")
+                    db.execSQL(
+                        """
+                        CREATE TABLE $TABLE_STAGING (
+                            $COL_ANIME_ID INTEGER NOT NULL,
+                            $COL_EPISODE  INTEGER NOT NULL,
+                            $COL_TYPE     TEXT    NOT NULL,
+                            $COL_START    REAL    NOT NULL,
+                            $COL_END      REAL    NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+
+                    var totalRows = 0
+                    var isFirstLine = true
+
+                    val reader = java.io.BufferedReader(java.io.InputStreamReader(body.byteStream()))
+                    try {
+                        val insertSql =
+                            "INSERT INTO $TABLE_STAGING ($COL_ANIME_ID, $COL_EPISODE, $COL_TYPE, $COL_START, $COL_END) VALUES (?, ?, ?, ?, ?)"
+                        val statement = db.compileStatement(insertSql)
+                        var rowsInBatch = 0
+                        var line: String?
+
+                        db.beginTransaction()
+                        try {
+                            while (true) {
+                                line = reader.readLine() ?: break
+                                if (isFirstLine) {
+                                    isFirstLine = false
+                                    continue
+                                }
+                                if (line.isNullOrBlank()) continue
+
+                                val cols = line.split(",")
+                                if (cols.size < 7) continue
+
+                                val animeId = cols[0].toLongOrNull() ?: continue
+                                val episode = cols[1].toIntOrNull() ?: continue
+                                val skipType = cols[3].trim()
+                                val startTime = cols[5].toDoubleOrNull() ?: continue
+                                val endTime = cols[6].toDoubleOrNull() ?: continue
+
+                                if (skipType !in VALID_TYPES) continue
+
+                                statement.clearBindings()
+                                statement.bindLong(1, animeId)
+                                statement.bindLong(2, episode.toLong())
+                                statement.bindString(3, skipType)
+                                statement.bindDouble(4, startTime)
+                                statement.bindDouble(5, endTime)
+                                statement.executeInsert()
+
+                                totalRows++
+                                rowsInBatch++
+
+                                if (rowsInBatch >= BATCH_SIZE) {
+                                    db.setTransactionSuccessful()
+                                    db.endTransaction()
+                                    db.beginTransaction()
+                                    rowsInBatch = 0
+                                }
+                            }
+                            db.setTransactionSuccessful()
+                        } finally {
+                            if (db.inTransaction()) db.endTransaction()
+                            statement.close()
+                        }
+                    } finally {
+                        reader.close()
+                    }
 
                     db.beginTransaction()
                     try {
-                        while (true) {
-                            line = reader.readLine() ?: break
-                            if (isFirstLine) {
-                                isFirstLine = false
-                                continue
-                            }
-                            if (line.isNullOrBlank()) continue
-
-                            val cols = line.split(",")
-                            if (cols.size < 7) continue
-
-                            val animeId = cols[0].toLongOrNull() ?: continue
-                            val episode = cols[1].toIntOrNull() ?: continue
-                            val skipType = cols[3].trim()
-                            val startTime = cols[5].toDoubleOrNull() ?: continue
-                            val endTime = cols[6].toDoubleOrNull() ?: continue
-
-                            if (skipType !in VALID_TYPES) continue
-
-                            statement.clearBindings()
-                            statement.bindLong(1, animeId)
-                            statement.bindLong(2, episode.toLong())
-                            statement.bindString(3, skipType)
-                            statement.bindDouble(4, startTime)
-                            statement.bindDouble(5, endTime)
-                            statement.executeInsert()
-
-                            totalRows++
-                            rowsInBatch++
-
-                            if (rowsInBatch >= BATCH_SIZE) {
-                                db.setTransactionSuccessful()
-                                db.endTransaction()
-                                db.beginTransaction()
-                                rowsInBatch = 0
-                            }
-                        }
+                        db.execSQL("DROP TABLE IF EXISTS $TABLE_LIVE")
+                        db.execSQL("ALTER TABLE $TABLE_STAGING RENAME TO $TABLE_LIVE")
                         db.setTransactionSuccessful()
                     } finally {
-                        if (db.inTransaction()) db.endTransaction()
-                        statement.close()
+                        db.endTransaction()
                     }
+
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS idx_${TABLE_LIVE}_lookup " +
+                                "ON $TABLE_LIVE ($COL_ANIME_ID, $COL_EPISODE)"
+                    )
+
+                    PrefManager.setCustomVal(PREF_LAST_UPDATED, System.currentTimeMillis())
+                    Logger.log("$TAG: Successfully imported $totalRows AniSkip timestamps into local database.")
                 } finally {
-                    reader.close()
+                    helper.close()
                 }
-
-                db.beginTransaction()
-                try {
-                    db.execSQL("DROP TABLE IF EXISTS $TABLE_LIVE")
-                    db.execSQL("ALTER TABLE $TABLE_STAGING RENAME TO $TABLE_LIVE")
-                    db.setTransactionSuccessful()
-                } finally {
-                    db.endTransaction()
-                }
-
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS idx_${TABLE_LIVE}_lookup " +
-                            "ON $TABLE_LIVE ($COL_ANIME_ID, $COL_EPISODE)"
-                )
-
-                PrefManager.setCustomVal(PREF_LAST_UPDATED, System.currentTimeMillis())
-                Logger.log("$TAG: Successfully imported $totalRows AniSkip timestamps into local database.")
-            } finally {
-                helper.close()
-                response.close()
             }
         } catch (e: Exception) {
             Logger.log("$TAG: Sync failed: ${e.message}")
         } finally {
+            okClient?.dispatcher?.executorService?.shutdown()
+            okClient?.connectionPool?.evictAll()
+            okClient = null
             isSyncing.set(false)
         }
     }

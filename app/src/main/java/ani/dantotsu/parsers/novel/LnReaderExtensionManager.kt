@@ -90,9 +90,15 @@ class LnReaderExtensionManager(private val context: Context) {
         (defaultRepoUrls + extraRepoUrls).distinct().forEach { repoUrl ->
             try {
                 val safeRepo = safeUrlString(repoUrl)
-                val response = http.newCall(Request.Builder().url(safeRepo).build()).execute()
-                val body = response.body.string()
-                val items = json.decodeFromString<List<LnReaderPluginItem>>(body)
+                val items = http.newCall(Request.Builder().url(safeRepo).build()).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        Logger.log("LnReaderExtensionManager: HTTP ${response.code} for $repoUrl")
+                        emptyList()
+                    } else {
+                        val body = response.body.string()
+                        json.decodeFromString<List<LnReaderPluginItem>>(body)
+                    }
+                }
                 items.forEach { item ->
                     if (seen.add(item.id)) all.add(item)
                 }
@@ -116,20 +122,19 @@ class LnReaderExtensionManager(private val context: Context) {
     suspend fun installPlugin(item: LnReaderPluginItem): Boolean = withContext(Dispatchers.IO) {
         try {
             val safeUrl = safeUrlString(item.url)
-            val response = http.newCall(
+            val jsCode = http.newCall(
                 Request.Builder()
                     .url(safeUrl)
                     .header("pragma", "no-cache")
                     .header("cache-control", "no-cache")
                     .build()
-            ).execute()
-
-            if (!response.isSuccessful) {
-                Logger.log("LnReaderExtensionManager: HTTP ${response.code} for ${item.url}")
-                return@withContext false
+            ).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Logger.log("LnReaderExtensionManager: HTTP ${response.code} for ${item.url}")
+                    return@withContext false
+                }
+                response.body.string()
             }
-
-            val jsCode = response.body.string()
 
             val dir = safePluginDir(item.id).also { it.mkdirs() }
             File(dir, "index.js").writeText(jsCode)

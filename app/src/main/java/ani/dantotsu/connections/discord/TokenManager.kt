@@ -148,30 +148,30 @@ class TokenManager(
             put("authorize", true)
         }.toString().toRequestBody("application/json".toMediaType())
 
-        val authorizeResp = client.newCall(
+        val code = client.newCall(
             Request.Builder()
                 .url(httpUrl)
                 .header("Authorization", authToken)
                 .post(payloadJson)
                 .build()
-        ).execute()
+        ).execute().use { authorizeResp ->
+            val bodyString = authorizeResp.body.string()
+            if (!authorizeResp.isSuccessful) {
+                Logger.log("TokenManager: OAuth2 authorize failed: ${authorizeResp.code} $bodyString")
+                throw ifUnauthorized
+                    ?: IllegalStateException("OAuth2 authorize failed: ${authorizeResp.code} $bodyString")
+            }
 
-        if (!authorizeResp.isSuccessful) {
-            val errorBody = authorizeResp.body.string()
-            Logger.log("TokenManager: OAuth2 authorize failed: ${authorizeResp.code} $errorBody")
-            throw ifUnauthorized
-                ?: IllegalStateException("OAuth2 authorize failed: ${authorizeResp.code} $errorBody")
+            val locationJson = Mapper.json.decodeFromString<JsonObject>(bodyString)
+            val location = locationJson["location"]?.jsonPrimitive?.content
+                ?: throw IllegalStateException("No location in OAuth2 response")
+            location.toHttpUrl().queryParameter("code")
+                ?: throw IllegalStateException("No code in OAuth2 redirect")
         }
-
-        val locationJson = Mapper.json.decodeFromString<JsonObject>(authorizeResp.body.string())
-        val location = locationJson["location"]?.jsonPrimitive?.content
-            ?: throw IllegalStateException("No location in OAuth2 response")
-        val code = location.toHttpUrl().queryParameter("code")
-            ?: throw IllegalStateException("No code in OAuth2 redirect")
 
         Logger.log("TokenManager: Got OAuth2 code, exchanging for Bearer token...")
 
-        val tokenResp = client.newCall(
+        val response = client.newCall(
             Request.Builder()
                 .url("https://discord.com/api/v10/oauth2/token")
                 .post(
@@ -184,22 +184,23 @@ class TokenManager(
                         .build()
                 )
                 .build()
-        ).execute()
+        ).execute().use { tokenResp ->
+            val tokenBody = tokenResp.body.string()
+            if (!tokenResp.isSuccessful) {
+                Logger.log("TokenManager: Token exchange failed: ${tokenResp.code} $tokenBody")
+                throw IllegalStateException("Token exchange failed: ${tokenResp.code} $tokenBody")
+            }
 
-        val tokenBody = tokenResp.body.string()
-        if (!tokenResp.isSuccessful) {
-            Logger.log("TokenManager: Token exchange failed: ${tokenResp.code} $tokenBody")
-            throw IllegalStateException("Token exchange failed: ${tokenResp.code} $tokenBody")
+            val res = Mapper.json.decodeFromString<TokenResponse>(tokenBody)
+            Logger.log("TokenManager: Successfully obtained Discord Bearer token!")
+            res.accessToken ?: throw IllegalStateException("No access_token in response: $tokenBody")
+            res
         }
-            
-        val response = Mapper.json.decodeFromString<TokenResponse>(tokenBody)
-        Logger.log("TokenManager: Successfully obtained Discord Bearer token!")
-        response.accessToken ?: throw IllegalStateException("No access_token in response: $tokenBody")
         response
     }
 
     private suspend fun refreshOAuthToken(refreshToken: String): TokenResponse = withContext(Dispatchers.IO) {
-        val tokenResp = client.newCall(
+        val response = client.newCall(
             Request.Builder()
                 .url("https://discord.com/api/v10/oauth2/token")
                 .post(
@@ -210,15 +211,16 @@ class TokenManager(
                         .build()
                 )
                 .build()
-        ).execute()
+        ).execute().use { tokenResp ->
+            val tokenBody = tokenResp.body.string()
+            if (!tokenResp.isSuccessful) {
+                throw IllegalStateException("Refresh failed: ${tokenResp.code} $tokenBody")
+            }
 
-        val tokenBody = tokenResp.body.string()
-        if (!tokenResp.isSuccessful) {
-            throw IllegalStateException("Refresh failed: ${tokenResp.code} $tokenBody")
+            val res = Mapper.json.decodeFromString<TokenResponse>(tokenBody)
+            res.accessToken ?: throw IllegalStateException("No access_token in refresh response: $tokenBody")
+            res
         }
-            
-        val response = Mapper.json.decodeFromString<TokenResponse>(tokenBody)
-        response.accessToken ?: throw IllegalStateException("No access_token in refresh response: $tokenBody")
         response
     }
 

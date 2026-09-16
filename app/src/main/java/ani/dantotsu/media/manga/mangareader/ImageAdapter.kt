@@ -22,7 +22,9 @@ import com.bumptech.glide.load.resource.bitmap.BitmapTransformation
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 open class ImageAdapter(
@@ -117,6 +119,11 @@ open class ImageAdapter(
             return false
         }
 
+        if (!currentCoroutineContext().isActive) {
+            if (!bitmap.isRecycled) bitmap.recycle()
+            return false
+        }
+
         parent.setTag(R.id.imgProgImageNoGestures, bitmap)
 
         var sWidth = getSystem().displayMetrics.widthPixels
@@ -157,6 +164,10 @@ open class ImageAdapter(
             }
             if (scaled !== bitmap && !bitmap.isRecycled) bitmap.recycle()
             bitmap = scaled
+            if (!currentCoroutineContext().isActive) {
+                if (!bitmap.isRecycled) bitmap.recycle()
+                return false
+            }
             parent.setTag(R.id.imgProgImageNoGestures, bitmap)
         }
 

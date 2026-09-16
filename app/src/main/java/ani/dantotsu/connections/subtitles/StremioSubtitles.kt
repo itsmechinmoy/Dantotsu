@@ -68,15 +68,16 @@ object StremioSubtitles {
                         for (url in urlsToTry) {
                             try {
                                 val request = Request.Builder().url(url).build()
-                                val response = okHttpClient.newCall(request).execute()
-                                if (response.isSuccessful) {
-                                    val text = response.body.string()
-                                    val data = Mapper.json.decodeFromString<StremioResponse>(text)
-                                    val existingUrls = allSubs.map { it.url }.toSet()
-                                    val newSubs = data.subtitles.filter { sub ->
-                                        sub.url !in existingUrls && (!sub.id.contains(":1:1") || episode == 1)
+                                okHttpClient.newCall(request).execute().use { response ->
+                                    if (response.isSuccessful) {
+                                        val text = response.body.string()
+                                        val data = Mapper.json.decodeFromString<StremioResponse>(text)
+                                        val existingUrls = allSubs.map { it.url }.toSet()
+                                        val newSubs = data.subtitles.filter { sub ->
+                                            sub.url !in existingUrls && (!sub.id.contains(":1:1") || episode == 1)
+                                        }
+                                        allSubs.addAll(newSubs)
                                     }
-                                    allSubs.addAll(newSubs)
                                 }
                             } catch (_: Exception) {}
                         }

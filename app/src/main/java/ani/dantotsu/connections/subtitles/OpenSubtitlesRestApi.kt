@@ -40,27 +40,28 @@ object OpenSubtitlesRestApi {
                             .addHeader("User-Agent", USER_AGENT)
                             .addHeader("Accept", "application/json")
                             .build()
-                        val resp = okHttpClient.newCall(req).execute()
-                        if (resp.isSuccessful) {
-                            val json = resp.body.string()
-                            val parsed = Mapper.json.decodeFromString<OpenSubRestResponse>(json)
-                            parsed.data.forEach { item ->
-                                val file = item.attributes.files.firstOrNull() ?: return@forEach
-                                val fileId = file.fileId ?: return@forEach
-                                val fileName = file.fileName ?: item.attributes.release ?: "OpenSubtitles Subtitle"
-                                val lang = item.attributes.language ?: "English"
-                                val isHi = item.attributes.hearingImpaired == true
-                                results.add(
-                                    OpenSubRestItem(
-                                        fileId = fileId,
-                                        fileName = fileName,
-                                        language = lang,
-                                        hearingImpaired = isHi
+                        okHttpClient.newCall(req).execute().use { resp ->
+                            if (resp.isSuccessful) {
+                                val json = resp.body.string()
+                                val parsed = Mapper.json.decodeFromString<OpenSubRestResponse>(json)
+                                parsed.data.forEach { item ->
+                                    val file = item.attributes.files.firstOrNull() ?: return@forEach
+                                    val fileId = file.fileId ?: return@forEach
+                                    val fileName = file.fileName ?: item.attributes.release ?: "OpenSubtitles Subtitle"
+                                    val lang = item.attributes.language ?: "English"
+                                    val isHi = item.attributes.hearingImpaired == true
+                                    results.add(
+                                        OpenSubRestItem(
+                                            fileId = fileId,
+                                            fileName = fileName,
+                                            language = lang,
+                                            hearingImpaired = isHi
+                                        )
                                     )
-                                )
+                                }
                             }
-                            if (results.isNotEmpty()) break
                         }
+                        if (results.isNotEmpty()) break
                     } catch (_: Exception) {}
                 }
                 results
@@ -83,12 +84,13 @@ object OpenSubtitlesRestApi {
                     .addHeader("Accept", "application/json")
                     .post(bodyStr.toRequestBody(JSON_MEDIA_TYPE))
                     .build()
-                val resp = okHttpClient.newCall(req).execute()
-                if (resp.isSuccessful) {
-                    val json = resp.body.string()
-                    val parsed = Mapper.json.decodeFromString<OpenSubDownloadResponse>(json)
-                    parsed.link
-                } else null
+                okHttpClient.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val json = resp.body.string()
+                        val parsed = Mapper.json.decodeFromString<OpenSubDownloadResponse>(json)
+                        parsed.link
+                    } else null
+                }
             } catch (e: Exception) {
                 Logger.log("OpenSubtitles download error: ${e.message}")
                 null

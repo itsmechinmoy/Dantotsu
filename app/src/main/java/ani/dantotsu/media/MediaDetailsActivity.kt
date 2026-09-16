@@ -89,19 +89,21 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         super.onSaveInstanceState(outState)
         if (::media.isInitialized && media.name != "No media found") {
             outState.putInt("saved_media_id", media.id)
-            outState.putSerializable("saved_media", media as java.io.Serializable)
+            mediaCache.put(media.id, media)
         }
     }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val savedId = savedInstanceState?.getInt("saved_media_id", -1)?.takeIf { it != -1 }
         var media: Media = intent.getSerialized("media")
+            ?: savedId?.let { mediaCache.get(it) }
             ?: savedInstanceState?.getSerialized("saved_media")
             ?: mediaSingleton
             ?: emptyMedia()
         val id = intent.getIntExtra("mediaId", -1).takeIf { it != -1 }
-            ?: savedInstanceState?.getInt("saved_media_id", -1)?.takeIf { it != -1 }
+            ?: savedId
             ?: -1
         if (id != -1 && media.name == "No media found") {
             val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
@@ -738,5 +740,6 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
 
     companion object {
         var mediaSingleton: Media? = null
+        private val mediaCache = android.util.LruCache<Int, Media>(10)
     }
 }

@@ -36,9 +36,11 @@ object SubSourceSubtitles {
                     reqBuilder.addHeader("X-API-Key", apiKey)
                 }
 
-                val resp = okHttpClient.newCall(reqBuilder.build()).execute()
-                val json = resp.body.string()
-                if (!resp.isSuccessful || json.isBlank()) return@withContext emptyList()
+                val json = okHttpClient.newCall(reqBuilder.build()).execute().use { resp ->
+                    if (!resp.isSuccessful) return@withContext emptyList()
+                    resp.body.string()
+                }
+                if (json.isBlank()) return@withContext emptyList()
                 val searchResult = Mapper.json.decodeFromString<SubSourceSearchResponseV1>(json)
                 val movie = searchResult.data.firstOrNull() ?: return@withContext emptyList()
                 val movieId = movie.movieId
@@ -59,9 +61,11 @@ object SubSourceSubtitles {
                     subReqBuilder.addHeader("X-API-Key", apiKey)
                 }
 
-                val subResp = okHttpClient.newCall(subReqBuilder.build()).execute()
-                val subJson = subResp.body.string()
-                if (!subResp.isSuccessful || subJson.isBlank()) return@withContext emptyList()
+                val subJson = okHttpClient.newCall(subReqBuilder.build()).execute().use { subResp ->
+                    if (!subResp.isSuccessful) return@withContext emptyList()
+                    subResp.body.string()
+                }
+                if (subJson.isBlank()) return@withContext emptyList()
                 val subResult = Mapper.json.decodeFromString<SubSourceListResponseV1>(subJson)
 
                 val epStr = episode.toString()
@@ -114,19 +118,22 @@ object SubSourceSubtitles {
                     reqBuilder.addHeader("X-API-Key", apiKey)
                 }
 
-                val resp = okHttpClient.newCall(reqBuilder.build()).execute()
-                val bytes = resp.body.bytes()
-                if (!resp.isSuccessful || bytes.isEmpty()) return@withContext null
+                val bytes = okHttpClient.newCall(reqBuilder.build()).execute().use { resp ->
+                    if (!resp.isSuccessful) return@withContext null
+                    resp.body.bytes()
+                }
+                if (bytes.isEmpty()) return@withContext null
                 // Parse ZIP stream
-                val zipIn = ZipInputStream(ByteArrayInputStream(bytes))
-                var entry = zipIn.nextEntry
-                while (entry != null) {
-                    val name = entry.name.lowercase(Locale.ROOT)
-                    if (!entry.isDirectory && (name.endsWith(".srt") || name.endsWith(".ass") || name.endsWith(".vtt") || name.endsWith(".ssa"))) {
-                        val content = zipIn.readBytes().toString(Charsets.UTF_8)
-                        return@withContext Pair(entry.name, content)
+                ZipInputStream(ByteArrayInputStream(bytes)).use { zipIn ->
+                    var entry = zipIn.nextEntry
+                    while (entry != null) {
+                        val name = entry.name.lowercase(Locale.ROOT)
+                        if (!entry.isDirectory && (name.endsWith(".srt") || name.endsWith(".ass") || name.endsWith(".vtt") || name.endsWith(".ssa"))) {
+                            val content = zipIn.readBytes().toString(Charsets.UTF_8)
+                            return@withContext Pair(entry.name, content)
+                        }
+                        entry = zipIn.nextEntry
                     }
-                    entry = zipIn.nextEntry
                 }
                 // Fallback for non-zip plain text
                 val rawText = bytes.toString(Charsets.UTF_8)
