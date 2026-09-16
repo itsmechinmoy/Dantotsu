@@ -3,6 +3,7 @@ package ani.dantotsu.parsers
 import ani.dantotsu.Lazier
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.anime.Episode
+import ani.dantotsu.media.anime.EpisodeStorage
 import ani.dantotsu.media.manga.MangaChapter
 import ani.dantotsu.tryWithSuspend
 import ani.dantotsu.util.Logger
@@ -20,10 +21,34 @@ abstract class WatchSources : BaseSources() {
         return get(i) is OfflineAnimeParser
     }
 
-    suspend fun loadEpisodesFromMedia(i: Int, media: Media): MutableMap<String, Episode> {
+    suspend fun loadEpisodesFromMedia(i: Int, media: Media, invalidate: Boolean = false): MutableMap<String, Episode> {
         return tryWithSuspend(true) {
-            val res = get(i).autoSearch(media) ?: return@tryWithSuspend mutableMapOf()
-            loadEpisodes(i, res.link, res.extra, res.sAnime)
+            val parser = get(i)
+            val sourceKey = parser.saveName.ifBlank { parser.name }
+
+            if (!invalidate && parser !is OfflineAnimeParser) {
+                val savedResponse = parser.loadSavedShowResponse(media.id)
+                if (savedResponse != null && savedResponse.link.isNotBlank()) {
+                    val cached = EpisodeStorage.loadEpisodes(sourceKey, savedResponse.link)
+                    if (!cached.isNullOrEmpty()) {
+                        return@tryWithSuspend cached
+                    }
+                }
+            }
+
+            val res = parser.autoSearch(media) ?: return@tryWithSuspend mutableMapOf()
+            if (!invalidate && parser !is OfflineAnimeParser) {
+                val cached = EpisodeStorage.loadEpisodes(sourceKey, res.link)
+                if (!cached.isNullOrEmpty()) {
+                    return@tryWithSuspend cached
+                }
+            }
+
+            val loaded = loadEpisodes(i, res.link, res.extra, res.sAnime)
+            if (loaded.isNotEmpty() && parser !is OfflineAnimeParser) {
+                EpisodeStorage.saveEpisodes(sourceKey, res.link, loaded)
+            }
+            loaded
         } ?: mutableMapOf()
     }
 
@@ -54,9 +79,12 @@ abstract class WatchSources : BaseSources() {
                 )
             }
         }
+        if (map.isNotEmpty() && parser !is OfflineAnimeParser) {
+            val sourceKey = parser.saveName.ifBlank { parser.name }
+            EpisodeStorage.saveEpisodes(sourceKey, showLink, map)
+        }
         return map
     }
-
 }
 
 abstract class MangaReadSources : BaseSources() {

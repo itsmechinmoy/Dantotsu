@@ -77,6 +77,8 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             setDub(value)
         }
 
+    private val isDubAvailableCache = mutableMapOf<Int, Boolean>()
+
     private fun getDub(): Boolean {
         if (sourceLanguage >= extension.sources.size) {
             sourceLanguage = extension.sources.size - 1
@@ -114,6 +116,7 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             configurableSource.getPreferenceKey(),
             Context.MODE_PRIVATE
         )
+        isDubAvailableCache.clear()
         preferences.all.forEach { (key, value) ->
             if (value !is String) return@forEach
             val replacement = MediaNameAdapter.setSubDub(value, target) ?: return@forEach
@@ -124,25 +127,28 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     }
 
     override fun isDubAvailableSeparately(sourceLang: Int?): Boolean {
-        val configurableSource = extension.sources[sourceLanguage] as? ConfigurableAnimeSource
+        val targetLang = sourceLang ?: sourceLanguage
+        isDubAvailableCache[targetLang]?.let { return it }
+        val configurableSource = extension.sources.getOrNull(targetLang) as? ConfigurableAnimeSource
             ?: return false
         currContext()?.let { context ->
-            Logger.log("isDubAvailableSeparately: ${configurableSource.getPreferenceKey()}")
             val sharedPreferences =
                 context.getSharedPreferences(
                     configurableSource.getPreferenceKey(),
                     Context.MODE_PRIVATE
                 )
-            sharedPreferences.all.filterValues {
+            val available = sharedPreferences.all.any { (_, value) ->
                 MediaNameAdapter.setSubDub(
-                    it.toString(),
+                    value.toString(),
                     MediaNameAdapter.SubDubType.NULL
                 ) != null
             }
-                .forEach { _ -> return true }
+            isDubAvailableCache[targetLang] = available
+            return available
         }
         return false
     }
+
 
     override suspend fun loadEpisodes(
         animeLink: String,
@@ -187,6 +193,8 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             } else {
                 source.getEpisodeListCompat(sAnime)
             }
+
+
 
             if (res.isEmpty()) return@withContext emptyList()
 
@@ -288,21 +296,34 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         source: AnimeSource,
         episode: SEpisode
     ): List<Video> = withContext(Dispatchers.IO) {
-        val directVideos = runCatching {
-            source.getVideoList(episode)
-        }.getOrElse { emptyList() }
-
         val hosters = runCatching {
             source.getHosterList(episode)
         }.getOrElse { emptyList() }
+
+        // If hosters exist (lib 16), don't call deprecated getVideoList(episode) which throws
+        val directVideos = if (hosters.isEmpty()) {
+            runCatching {
+                source.getVideoList(episode)
+            }.getOrElse { emptyList() }
+        } else {
+            emptyList()
+        }
 
         val sortedHosters = runCatching {
             if (source is AnimeHttpSource) source.run { hosters.sortHosters() } else hosters
         }.getOrElse { hosters }
 
-        val hosterVideos = if (sortedHosters.isNotEmpty()) {
+        // Filter out lazy hosters from initial extraction; if all are lazy, prioritize the first (preferred) hoster
+        val activeHosters = sortedHosters.filterNot { it.lazy }
+        val hostersToFetch = if (activeHosters.isEmpty() && sortedHosters.isNotEmpty()) {
+            listOf(sortedHosters.first())
+        } else {
+            activeHosters
+        }
+
+        val hosterVideos = if (hostersToFetch.isNotEmpty()) {
             coroutineScope {
-                sortedHosters.map { hoster ->
+                hostersToFetch.map { hoster ->
                     async(Dispatchers.IO) {
                         val videos = when {
                             !hoster.videoList.isNullOrEmpty() -> hoster.videoList
@@ -334,12 +355,16 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             emptyList()
         }
 
-        val resolvedDirect = coroutineScope {
-            directVideos.map {
-                async(Dispatchers.IO) {
-                    resolveVideo(source, it)
-                }
-            }.awaitAll()
+        val resolvedDirect = if (directVideos.isNotEmpty()) {
+            coroutineScope {
+                directVideos.map {
+                    async(Dispatchers.IO) {
+                        resolveVideo(source, it)
+                    }
+                }.awaitAll()
+            }
+        } else {
+            emptyList()
         }
 
         val allVideos = (resolvedDirect + hosterVideos)
@@ -363,6 +388,16 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             return@withContext video
         }
 
+        // 1. Modern lib 16 API: call resolveVideo directly (avoids throwing UnsupportedOperationException from getVideoUrl)
+        val resolved = runCatching {
+            if (source is AnimeHttpSource) source.resolveVideo(video) else null
+        }.getOrNull()
+
+        if (resolved != null && resolved.videoUrl.isNotBlank() && resolved.videoUrl != "null") {
+            return@withContext resolved
+        }
+
+        // 2. Legacy fallback for old sources: only call getVideoUrl if resolveVideo returned null and url is blank
         if (video.videoUrl == "null" || video.videoUrl.isEmpty()) {
             val newUrl = runCatching {
                 if (source is AnimeHttpSource) source.getVideoUrl(video) else null
@@ -373,14 +408,9 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             }
         }
 
-        val resolved = runCatching {
-            if (source is AnimeHttpSource) source.resolveVideo(video) else null
-        }.getOrNull()
-
-        if (resolved != null) return@withContext resolved
-
         return@withContext video
     }
+
 
     override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor {
         return VideoServerPassthrough(server)
@@ -393,9 +423,12 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         return try {
             val res = try {
                 source.getSearchAnime(1, query, source.getFilterList())
-            } catch (e: Throwable) {
+            } catch (e: UnsupportedOperationException) {
+                source.fetchSearchAnime(1, query, source.getFilterList()).awaitSingle()
+            } catch (e: NoSuchMethodError) {
                 source.fetchSearchAnime(1, query, source.getFilterList()).awaitSingle()
             }
+
             Logger.log("query: $query")
             convertAnimesPageToShowResponse(res)
         } catch (e: CloudflareBypassException) {
@@ -951,23 +984,21 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
 private suspend fun AnimeSource.getEpisodeListCompat(anime: SAnime): List<SEpisode> {
     return try {
         getAnimeEpisodeUpdate(anime, emptyList(), fetchDetails = false, fetchEpisodes = true).episodes
+    } catch (e: UnsupportedOperationException) {
+        runCatching { getEpisodeList(anime) }.getOrDefault(emptyList())
+    } catch (e: NoSuchMethodError) {
+        runCatching { getEpisodeList(anime) }.getOrDefault(emptyList())
+    } catch (e: NotImplementedError) {
+        runCatching { getEpisodeList(anime) }.getOrDefault(emptyList())
     } catch (_: Throwable) {
-        try {
-            getEpisodeList(anime)
-        } catch (_: Throwable) {
-            emptyList()
-        }
+        emptyList()
     }
 }
 
 private suspend fun AnimeSource.getSeasonListCompat(anime: SAnime): List<SAnime> {
     return try {
-        getAnimeSeasonUpdate(anime, emptyList(), fetchDetails = false, fetchSeasons = true).seasons
+        getSeasonList(anime)
     } catch (_: Throwable) {
-        try {
-            getSeasonList(anime)
-        } catch (_: Throwable) {
-            emptyList()
-        }
+        emptyList()
     }
 }

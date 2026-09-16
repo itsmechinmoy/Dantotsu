@@ -46,6 +46,8 @@ class CloudflareInterceptor(
         return isCloudflareContent
     }
 
+
+
     override fun intercept(
         chain: Interceptor.Chain,
         request: Request,

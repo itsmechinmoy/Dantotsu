@@ -727,14 +727,21 @@ class MediaDetailsViewModel : ViewModel() {
 
     suspend fun loadEpisodes(media: Media, i: Int, invalidate: Boolean = false) {
         val isOffline = watchSources?.get(i) is OfflineAnimeParser
-        if (!epsLoaded.containsKey(i) || invalidate || isOffline) {
-            epsLoaded[i] = watchSources?.loadEpisodesFromMedia(i, media) ?: mutableMapOf()
+        val current = epsLoaded[i]
+        if (current.isNullOrEmpty() || invalidate || isOffline) {
+            val loaded = watchSources?.loadEpisodesFromMedia(i, media, invalidate) ?: mutableMapOf()
+            if (loaded.isNotEmpty() || invalidate) {
+                epsLoaded[i] = loaded
+            }
         }
         episodes.postValue(epsLoaded)
     }
 
     suspend fun forceLoadEpisode(media: Media, i: Int) {
-        epsLoaded[i] = watchSources?.loadEpisodesFromMedia(i, media) ?: mutableMapOf()
+        val loaded = watchSources?.loadEpisodesFromMedia(i, media, true) ?: mutableMapOf()
+        if (loaded.isNotEmpty()) {
+            epsLoaded[i] = loaded
+        }
         episodes.postValue(epsLoaded)
     }
 
@@ -966,9 +973,12 @@ class MediaDetailsViewModel : ViewModel() {
     suspend fun loadMangaChapters(media: Media, i: Int, invalidate: Boolean = false) {
         Logger.log("Loading Manga Chapters : $mangaLoaded")
         val isOffline = mangaReadSources?.get(i) is OfflineMangaParser
-        if (!mangaLoaded.containsKey(i) || invalidate || isOffline) tryWithSuspend {
-            mangaLoaded[i] =
-                mangaReadSources?.loadChaptersFromMedia(i, media) ?: mutableMapOf()
+        val current = mangaLoaded[i]
+        if (current.isNullOrEmpty() || invalidate || isOffline) tryWithSuspend {
+            val loaded = mangaReadSources?.loadChaptersFromMedia(i, media) ?: mutableMapOf()
+            if (loaded.isNotEmpty() || invalidate) {
+                mangaLoaded[i] = loaded
+            }
         }
         mangaChapters.postValue(mangaLoaded)
     }
