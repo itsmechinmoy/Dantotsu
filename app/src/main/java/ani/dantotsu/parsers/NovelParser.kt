@@ -2,6 +2,7 @@ package ani.dantotsu.parsers
 
 import ani.dantotsu.FileUrl
 import ani.dantotsu.media.Media
+import java.io.Serializable
 
 abstract class NovelParser : BaseParser() {
 
@@ -53,7 +54,7 @@ data class Book(
     val img: FileUrl,
     val description: String? = null,
     val links: List<FileUrl>
-) {
+) : Serializable {
     constructor (
         name: String,
         img: String,

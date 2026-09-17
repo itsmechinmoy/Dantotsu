@@ -145,21 +145,24 @@ data class Media(
         apiMedia.genres?.let { genreList ->
             this.genres = ArrayList(genreList)
         }
-        apiMedia.studios?.nodes?.let { nodes ->
-            if (nodes.isNotEmpty()) {
-                val studioNode = nodes.firstOrNull { it.isAnimationStudio == true } ?: nodes[0]
+        val studioEdges = apiMedia.studios?.edges
+        if (!studioEdges.isNullOrEmpty()) {
+            val mainNode = studioEdges.firstOrNull { it.isMain == true }?.node
+                ?: studioEdges.firstOrNull { it.node?.isAnimationStudio == true }?.node
+                ?: studioEdges.firstOrNull()?.node
+            if (mainNode != null) {
                 this.anime?.mainStudio = Studio(
-                    id = studioNode.id.toString(),
-                    name = studioNode.name ?: "N/A",
-                    isFavourite = studioNode.isFavourite ?: false,
-                    favourites = studioNode.favourites ?: 0,
+                    id = mainNode.id.toString(),
+                    name = mainNode.name ?: "N/A",
+                    isFavourite = mainNode.isFavourite ?: false,
+                    favourites = mainNode.favourites ?: 0,
                     imageUrl = null
                 )
             }
-        }
-        apiMedia.producers?.nodes?.let { nodes ->
-            if (nodes.isNotEmpty()) {
-                this.anime?.producers = ArrayList(nodes.map {
+            val producerNodes = studioEdges.filter { it.isMain != true }.mapNotNull { it.node }
+                .filter { it.id.toString() != this.anime?.mainStudio?.id }
+            if (producerNodes.isNotEmpty()) {
+                this.anime?.producers = ArrayList(producerNodes.map {
                     Studio(
                         id = it.id.toString(),
                         name = it.name ?: "N/A",
@@ -168,6 +171,32 @@ data class Media(
                         imageUrl = null
                     )
                 })
+            }
+        } else {
+            apiMedia.studios?.nodes?.let { nodes ->
+                if (nodes.isNotEmpty()) {
+                    val studioNode = nodes.firstOrNull { it.isAnimationStudio == true } ?: nodes[0]
+                    this.anime?.mainStudio = Studio(
+                        id = studioNode.id.toString(),
+                        name = studioNode.name ?: "N/A",
+                        isFavourite = studioNode.isFavourite ?: false,
+                        favourites = studioNode.favourites ?: 0,
+                        imageUrl = null
+                    )
+                }
+            }
+            apiMedia.producers?.nodes?.let { nodes ->
+                if (nodes.isNotEmpty()) {
+                    this.anime?.producers = ArrayList(nodes.map {
+                        Studio(
+                            id = it.id.toString(),
+                            name = it.name ?: "N/A",
+                            isFavourite = it.isFavourite ?: false,
+                            favourites = it.favourites ?: 0,
+                            imageUrl = null
+                        )
+                    })
+                }
             }
         }
         apiMedia.tags?.let { tagList ->

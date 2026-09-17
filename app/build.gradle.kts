@@ -202,6 +202,7 @@ dependencies {
     implementation(libs.image.decoder)
     implementation(libs.mlkit.text.japanese)
     implementation(libs.mlkit.text)
+    implementation(libs.play.services.base)
     implementation(libs.ebook)
     implementation(libs.dialogs)
     implementation(libs.charts)

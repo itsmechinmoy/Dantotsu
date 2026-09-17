@@ -334,24 +334,17 @@ fun fullMediaInformation(id: Int) = """
       month
       day
     }
-    studios(isMain: true) {
-      nodes {
-        id
-        name
-        isAnimationStudio
-        siteUrl
-        isFavourite
-        favourites
-      }
-    }
-    producers: studios(isMain: false) {
-      nodes {
-        id
-        name
-        isAnimationStudio
-        siteUrl
-        isFavourite
-        favourites
+    studios {
+      edges {
+        isMain
+        node {
+          id
+          name
+          isAnimationStudio
+          siteUrl
+          isFavourite
+          favourites
+        }
       }
     }
     description

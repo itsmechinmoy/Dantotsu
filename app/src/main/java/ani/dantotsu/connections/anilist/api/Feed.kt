@@ -74,7 +74,7 @@ data class Activity(
     @SerialName("replies")
     val replies: List<ActivityReply>?,
     @SerialName("likes")
-    val likes: List<User>?,
+    var likes: List<User>?,
 ) : java.io.Serializable
 
 @Serializable

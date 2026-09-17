@@ -26,6 +26,7 @@ import ani.dantotsu.others.IntroDbService
 import ani.dantotsu.others.Jikan
 import ani.dantotsu.others.Kitsu
 import ani.dantotsu.others.TmdbService
+import ani.dantotsu.media.novel.NovelStorage
 import ani.dantotsu.parsers.AnimeSources
 import ani.dantotsu.parsers.Book
 import ani.dantotsu.parsers.MangaImage
@@ -34,6 +35,7 @@ import ani.dantotsu.parsers.MangaSources
 import ani.dantotsu.parsers.NovelSources
 import ani.dantotsu.parsers.OfflineAnimeParser
 import ani.dantotsu.parsers.OfflineMangaParser
+import ani.dantotsu.parsers.OfflineNovelParser
 import ani.dantotsu.parsers.ShowResponse
 import ani.dantotsu.parsers.VideoExtractor
 import ani.dantotsu.parsers.WatchSources
@@ -975,7 +977,7 @@ class MediaDetailsViewModel : ViewModel() {
         val isOffline = mangaReadSources?.get(i) is OfflineMangaParser
         val current = mangaLoaded[i]
         if (current.isNullOrEmpty() || invalidate || isOffline) tryWithSuspend {
-            val loaded = mangaReadSources?.loadChaptersFromMedia(i, media) ?: mutableMapOf()
+            val loaded = mangaReadSources?.loadChaptersFromMedia(i, media, invalidate) ?: mutableMapOf()
             if (loaded.isNotEmpty() || invalidate) {
                 mangaLoaded[i] = loaded
             }
@@ -1048,19 +1050,49 @@ class MediaDetailsViewModel : ViewModel() {
     }
 
     suspend fun loadNovelChapters(media: Media, i: Int, invalidate: Boolean = false) {
-        if (!novelLoaded.containsKey(i) || invalidate) {
+        val isOffline = novelSources[i] is OfflineNovelParser
+        val current = novelLoaded[i]
+        if (current.isNullOrEmpty() || invalidate || isOffline) {
             tryWithSuspend {
                 val source = novelSources[i]
                 if (source == null) {
                     novelLoaded[i] = emptyList()
                     return@tryWithSuspend
                 }
-                val novelResponse = source.autoSearch(media)
-                if (novelResponse == null) {
-                    novelLoaded[i] = emptyList()
-                    return@tryWithSuspend
+                val sourceKey = source.saveName.ifBlank { source.name }
+
+                var book: Book? = null
+                var novelCover = media.cover?.let { ani.dantotsu.FileUrl(it) } ?: ani.dantotsu.FileUrl("")
+
+                if (!invalidate && !isOffline) {
+                    val savedResponse = source.loadSavedShowResponse(media.id)
+                    if (savedResponse != null && savedResponse.link.isNotBlank()) {
+                        novelCover = savedResponse.coverUrl
+                        book = NovelStorage.loadBook(sourceKey, savedResponse.link)
+                    }
                 }
-                val book = source.loadBook(novelResponse.link, novelResponse.extra)
+
+                if (book == null || book.links.isEmpty()) {
+                    val novelResponse = source.autoSearch(media)
+                    if (novelResponse == null) {
+                        novelLoaded[i] = emptyList()
+                        return@tryWithSuspend
+                    }
+                    novelCover = novelResponse.coverUrl
+
+                    if (!invalidate && !isOffline) {
+                        book = NovelStorage.loadBook(sourceKey, novelResponse.link)
+                    }
+
+                    if (book == null || book.links.isEmpty()) {
+                        val fetchedBook = source.loadBook(novelResponse.link, novelResponse.extra)
+                        if (fetchedBook != null && fetchedBook.links.isNotEmpty() && !isOffline) {
+                            NovelStorage.saveBook(sourceKey, novelResponse.link, fetchedBook)
+                        }
+                        book = fetchedBook
+                    }
+                }
+
                 if (book == null || book.links.isEmpty()) {
                     novelLoaded[i] = emptyList()
                     return@tryWithSuspend
@@ -1072,7 +1104,7 @@ class MediaDetailsViewModel : ViewModel() {
                     ShowResponse(
                         name = chapterName,
                         link = fileUrl.url,
-                        coverUrl = novelResponse.coverUrl,
+                        coverUrl = novelCover,
                         extra = mutableMapOf<String, String>().apply {
                             releaseTime?.let { put("releaseTime", it) }
                             chapterNumber?.let { put("chapterNumber", it) }
@@ -1094,9 +1126,21 @@ class MediaDetailsViewModel : ViewModel() {
     val book: MutableLiveData<Book> = MutableLiveData(null)
     suspend fun loadBook(novel: ShowResponse, i: Int) {
         tryWithSuspend {
-            book.postValue(
-                novelSources[i]?.loadBook(novel.link, novel.extra) ?: return@tryWithSuspend
-            )
+            val source = novelSources[i] ?: return@tryWithSuspend
+            val sourceKey = source.saveName.ifBlank { source.name }
+            val isOffline = source is OfflineNovelParser
+            if (!isOffline) {
+                val cached = NovelStorage.loadBook(sourceKey, novel.link)
+                if (cached != null && cached.links.isNotEmpty()) {
+                    book.postValue(cached)
+                    return@tryWithSuspend
+                }
+            }
+            val loaded = source.loadBook(novel.link, novel.extra) ?: return@tryWithSuspend
+            if (loaded.links.isNotEmpty() && !isOffline) {
+                NovelStorage.saveBook(sourceKey, novel.link, loaded)
+            }
+            book.postValue(loaded)
         }
     }
 

@@ -4,6 +4,7 @@ import ani.dantotsu.Lazier
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.anime.Episode
 import ani.dantotsu.media.anime.EpisodeStorage
+import ani.dantotsu.media.manga.ChapterStorage
 import ani.dantotsu.media.manga.MangaChapter
 import ani.dantotsu.tryWithSuspend
 import ani.dantotsu.util.Logger
@@ -94,10 +95,38 @@ abstract class MangaReadSources : BaseSources() {
             ?: EmptyMangaParser()
     }
 
-    suspend fun loadChaptersFromMedia(i: Int, media: Media): MutableMap<String, MangaChapter> {
+    fun isDownloadedSource(i: Int): Boolean {
+        return get(i) is OfflineMangaParser
+    }
+
+    suspend fun loadChaptersFromMedia(i: Int, media: Media, invalidate: Boolean = false): MutableMap<String, MangaChapter> {
         return tryWithSuspend(true) {
-            val res = get(i).autoSearch(media) ?: return@tryWithSuspend mutableMapOf()
-            loadChapters(i, res)
+            val parser = get(i)
+            val sourceKey = parser.saveName.ifBlank { parser.name }
+
+            if (!invalidate && parser !is OfflineMangaParser) {
+                val savedResponse = parser.loadSavedShowResponse(media.id)
+                if (savedResponse != null && savedResponse.link.isNotBlank()) {
+                    val cached = ChapterStorage.loadChapters(sourceKey, savedResponse.link)
+                    if (!cached.isNullOrEmpty()) {
+                        return@tryWithSuspend cached
+                    }
+                }
+            }
+
+            val res = parser.autoSearch(media) ?: return@tryWithSuspend mutableMapOf()
+            if (!invalidate && parser !is OfflineMangaParser) {
+                val cached = ChapterStorage.loadChapters(sourceKey, res.link)
+                if (!cached.isNullOrEmpty()) {
+                    return@tryWithSuspend cached
+                }
+            }
+
+            val loaded = loadChapters(i, res)
+            if (loaded.isNotEmpty() && parser !is OfflineMangaParser) {
+                ChapterStorage.saveChapters(sourceKey, res.link, loaded)
+            }
+            loaded
         } ?: mutableMapOf()
     }
 
@@ -114,6 +143,10 @@ abstract class MangaReadSources : BaseSources() {
             parser.loadChapters(show.link, show.extra, sManga).forEach {
                 map["${it.number}-${it.scanlator}"] = MangaChapter(it)
             }
+        }
+        if (map.isNotEmpty() && parser !is OfflineMangaParser) {
+            val sourceKey = parser.saveName.ifBlank { parser.name }
+            ChapterStorage.saveChapters(sourceKey, show.link, map)
         }
         return map
     }

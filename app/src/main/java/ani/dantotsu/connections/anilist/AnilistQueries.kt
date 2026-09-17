@@ -359,35 +359,24 @@ class AnilistQueries {
                             media.anime.season = fetchedMedia.season?.toString()
                             media.anime.seasonYear = fetchedMedia.seasonYear
 
-                            fetchedMedia.studios?.nodes?.apply {
-                                if (isNotEmpty()) {
-                                    val studioNode = firstOrNull { it.isAnimationStudio == true } ?: get(0)
+                            val studioEdges = fetchedMedia.studios?.edges
+                            if (!studioEdges.isNullOrEmpty()) {
+                                val mainNode = studioEdges.firstOrNull { it.isMain == true }?.node
+                                    ?: studioEdges.firstOrNull { it.node?.isAnimationStudio == true }?.node
+                                    ?: studioEdges.firstOrNull()?.node
+                                if (mainNode != null) {
                                     media.anime.mainStudio = Studio(
-                                        studioNode.id.toString(),
-                                        studioNode.name ?: "N/A",
-                                        studioNode.isFavourite ?: false,
-                                        studioNode.favourites ?: 0,
+                                        mainNode.id.toString(),
+                                        mainNode.name ?: "N/A",
+                                        mainNode.isFavourite ?: false,
+                                        mainNode.favourites ?: 0,
                                         null
                                     )
                                 }
-                            }
-                            if (media.anime.mainStudio == null) {
-                                fetchedMedia.producers?.nodes?.firstOrNull { it.isAnimationStudio == true }?.let { studioNode ->
-                                    media.anime.mainStudio = Studio(
-                                        studioNode.id.toString(),
-                                        studioNode.name ?: "N/A",
-                                        studioNode.isFavourite ?: false,
-                                        studioNode.favourites ?: 0,
-                                        null
-                                    )
-                                }
-                            }
-
-                            // Map non-main studios (isMain: false) as producers, excluding mainStudio
-                            fetchedMedia.producers?.nodes?.apply {
-                                val remaining = filter { it.id.toString() != media.anime.mainStudio?.id }
-                                if (remaining.isNotEmpty()) {
-                                    media.anime.producers = remaining.map {
+                                val producerNodes = studioEdges.filter { it.isMain != true }.mapNotNull { it.node }
+                                    .filter { it.id.toString() != media.anime.mainStudio?.id }
+                                if (producerNodes.isNotEmpty()) {
+                                    media.anime.producers = ArrayList(producerNodes.map {
                                         Studio(
                                             it.id.toString(),
                                             it.name ?: "N/A",
@@ -395,7 +384,45 @@ class AnilistQueries {
                                             it.favourites ?: 0,
                                             null
                                         )
-                                    } as ArrayList<Studio>
+                                    })
+                                }
+                            } else {
+                                fetchedMedia.studios?.nodes?.apply {
+                                    if (isNotEmpty()) {
+                                        val studioNode = firstOrNull { it.isAnimationStudio == true } ?: get(0)
+                                        media.anime.mainStudio = Studio(
+                                            studioNode.id.toString(),
+                                            studioNode.name ?: "N/A",
+                                            studioNode.isFavourite ?: false,
+                                            studioNode.favourites ?: 0,
+                                            null
+                                        )
+                                    }
+                                }
+                                if (media.anime.mainStudio == null) {
+                                    fetchedMedia.producers?.nodes?.firstOrNull { it.isAnimationStudio == true }?.let { studioNode ->
+                                        media.anime.mainStudio = Studio(
+                                            studioNode.id.toString(),
+                                            studioNode.name ?: "N/A",
+                                            studioNode.isFavourite ?: false,
+                                            studioNode.favourites ?: 0,
+                                            null
+                                        )
+                                    }
+                                }
+                                fetchedMedia.producers?.nodes?.apply {
+                                    val remaining = filter { it.id.toString() != media.anime.mainStudio?.id }
+                                    if (remaining.isNotEmpty()) {
+                                        media.anime.producers = ArrayList(remaining.map {
+                                            Studio(
+                                                it.id.toString(),
+                                                it.name ?: "N/A",
+                                                it.isFavourite ?: false,
+                                                it.favourites ?: 0,
+                                                null
+                                            )
+                                        })
+                                    }
                                 }
                             }
 
@@ -1961,7 +1988,7 @@ Page(page:$page,perPage:50) {
     }
 
     private fun statusActivityFields(): String {
-        return """__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{large extraLarge}}}... on MessageActivity{id type createdAt}"""
+        return """__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{large extraLarge}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id type createdAt likes{id name isFollowing isFollower bannerImage avatar{medium large}}}"""
     }
 
     private fun status(page: Int = 1): String {

@@ -29,10 +29,17 @@ data class Studio(
 )
 
 @Serializable
-data class StudioConnection(
-    //@SerialName("edges") var edges: List<StudioEdge>?,
+data class StudioEdge(
+    @SerialName("node") var node: Studio? = null,
+    @SerialName("id") var id: Int? = null,
+    @SerialName("isMain") var isMain: Boolean? = false
+)
 
-    @SerialName("nodes") var nodes: List<Studio>?,
+@Serializable
+data class StudioConnection(
+    @SerialName("edges") var edges: List<StudioEdge>? = null,
+
+    @SerialName("nodes") var nodes: List<Studio>? = null,
 
     // The pagination information
     //@SerialName("pageInfo") var pageInfo: PageInfo?,

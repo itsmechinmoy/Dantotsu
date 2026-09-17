@@ -13,6 +13,8 @@ import ani.dantotsu.R
 import ani.dantotsu.themes.ThemeManager
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.util.system.getSerializableExtraCompat
+import eu.kanade.tachiyomi.util.system.setDefaultSettings
+import eu.kanade.tachiyomi.util.system.setUserAgent
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -38,17 +40,28 @@ class CookieCatcher : AppCompatActivity() {
         val cookies: CookieManager? = Injekt.get<NetworkHelper>().cookieJar.manager
         cookies?.setAcceptThirdPartyCookies(webView, true)
 
-        webView.apply {
-            settings.javaScriptEnabled = true
-            settings.databaseEnabled = true
-            settings.domStorageEnabled = true
-        }
+        webView.setDefaultSettings()
+        val ua = headers["User-Agent"] ?: NetworkHelper.defaultUserAgentProvider()
+        webView.setUserAgent(ua)
+
         WebView.setWebContentsDebuggingEnabled(true)
         webView.webViewClient = object : WebViewClient() {
-
+            override fun onPageFinished(view: WebView?, finishedUrl: String?) {
+                super.onPageFinished(view, finishedUrl)
+                cookies?.flush()
+            }
         }
 
         webView.loadUrl(url, headers)
     }
 
+    override fun onPause() {
+        super.onPause()
+        Injekt.get<NetworkHelper>().cookieJar.flush()
+    }
+
+    override fun onDestroy() {
+        Injekt.get<NetworkHelper>().cookieJar.flush()
+        super.onDestroy()
+    }
 }

@@ -22,6 +22,7 @@ import ani.dantotsu.statusBarHeight
 import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.util.ActivityMarkdownCreator
 import ani.dantotsu.util.AniMarkdown
+import ani.dantotsu.openLinkInCustomTab
 import ani.dantotsu.util.customAlertDialog
 import com.xwray.groupie.GroupieAdapter
 import kotlinx.coroutines.Dispatchers
@@ -174,7 +175,12 @@ class ThreadViewActivity : AppCompatActivity() {
         binding.threadWebView.settings.apply {
             loadWithOverviewMode = true
             useWideViewPort = true
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            mediaPlaybackRequiresUserGesture = false
+            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
+        binding.threadWebView.webChromeClient = android.webkit.WebChromeClient()
         binding.threadWebView.setInitialScale(1)
         binding.threadWebView.setBackgroundColor(
             ContextCompat.getColor(
@@ -193,12 +199,27 @@ class ThreadViewActivity : AppCompatActivity() {
                     )
                 )
             }
+
+            override fun shouldOverrideUrlLoading(
+                view: android.webkit.WebView?,
+                request: android.webkit.WebResourceRequest?
+            ): Boolean {
+                val url = request?.url?.toString() ?: return false
+                if (url.startsWith("https://www.youtube.com/embed") ||
+                    url.startsWith("https://www.youtube-nocookie.com/embed") ||
+                    url.startsWith("about:blank")
+                ) {
+                    return false
+                }
+                openLinkInCustomTab(url)
+                return true
+            }
         }
         val styledHtml = AniMarkdown.getFullAniHTML(
             t.body ?: "",
             ContextCompat.getColor(this, R.color.bg_opp)
         )
-        binding.threadWebView.loadDataWithBaseURL(null, styledHtml, "text/html", "UTF-8", null)
+        binding.threadWebView.loadDataWithBaseURL("https://www.youtube-nocookie.com", styledHtml, "text/html", "UTF-8", null)
     }
 
     private fun loadComments(refresh: Boolean) {
