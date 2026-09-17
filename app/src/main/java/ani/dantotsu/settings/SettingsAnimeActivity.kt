@@ -72,6 +72,37 @@ class SettingsAnimeActivity : AppCompatActivity() {
 
                     ),
                     Settings(
+                        type = 1,
+                        name = getString(R.string.preferred_download_resolutions),
+                        desc = (PrefManager.getVal<List<String>>(PrefName.PreferredDownloadResolutions)).joinToString(", "),
+                        icon = R.drawable.ic_round_high_quality_24,
+                        onClick = {
+                            ResolutionPriorityDialog.show(context, null) {
+                                (settingsRecyclerView.adapter as? SettingsAdapter)?.notifyDataSetChanged()
+                            }
+                        }
+                    ),
+                    Settings(
+                        type = 2,
+                        name = getString(R.string.auto_select_server_title),
+                        desc = getString(R.string.auto_select_server_desc),
+                        icon = R.drawable.ic_round_auto_awesome_24,
+                        isChecked = PrefManager.getVal(PrefName.AutoSelectServer),
+                        switch = { isChecked, _ ->
+                            PrefManager.setVal(PrefName.AutoSelectServer, isChecked)
+                        }
+                    ),
+                    Settings(
+                        type = 2,
+                        name = getString(R.string.smart_download_anime),
+                        desc = getString(R.string.smart_download_anime_desc),
+                        icon = R.drawable.ic_download_24,
+                        isChecked = PrefManager.getVal(PrefName.SmartDownloadAnime),
+                        switch = { isChecked, _ ->
+                            PrefManager.setVal(PrefName.SmartDownloadAnime, isChecked)
+                        }
+                    ),
+                    Settings(
                         type = 2,
                         name = getString(R.string.prefer_dub),
                         desc = getString(R.string.prefer_dub_desc),
@@ -136,6 +167,43 @@ class SettingsAnimeActivity : AppCompatActivity() {
                 uiEp(2, it)
             }
 
+        }
+    }
+}
+
+object ResolutionPriorityDialog {
+    val ALL_RESOLUTIONS = listOf("1080p", "720p", "480p", "360p", "240p", "144p")
+
+    fun show(
+        context: android.content.Context,
+        extensionName: String? = null,
+        onUpdated: ((List<String>) -> Unit)? = null
+    ) {
+        val currentResolutions = PrefManager.getPreferredDownloadResolutions(extensionName).toMutableList()
+        val fullList = currentResolutions + ALL_RESOLUTIONS.filter { it !in currentResolutions }
+        val checkedItems = fullList.map { it in currentResolutions }.toBooleanArray()
+
+        context.customAlertDialog().apply {
+            setTitle(R.string.preferred_download_resolutions)
+            multiChoiceItems(fullList.toTypedArray(), checkedItems) { updatedSelection ->
+                currentResolutions.clear()
+                fullList.forEachIndexed { index, res ->
+                    if (updatedSelection[index]) {
+                        currentResolutions.add(res)
+                    }
+                }
+            }
+            setPosButton(R.string.ok) {
+                val toSave = if (currentResolutions.isEmpty()) ALL_RESOLUTIONS else currentResolutions
+                PrefManager.setPreferredDownloadResolutions(extensionName, toSave)
+                onUpdated?.invoke(toSave)
+            }
+            setNeutralButton(R.string.reset) {
+                PrefManager.setPreferredDownloadResolutions(extensionName, ALL_RESOLUTIONS)
+                onUpdated?.invoke(ALL_RESOLUTIONS)
+            }
+            setNegButton(R.string.cancel)
+            show()
         }
     }
 }

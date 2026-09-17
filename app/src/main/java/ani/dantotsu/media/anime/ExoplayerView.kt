@@ -56,6 +56,12 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import ani.dantotsu.download.DownloadsManager
+import ani.dantotsu.download.anime.AnimeDownloader
+import ani.dantotsu.download.video.Helper
+import ani.dantotsu.media.MediaType
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.ui.PlayerView
@@ -117,6 +123,7 @@ import com.bumptech.glide.Glide
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -1124,7 +1131,84 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         subtitleManager.applySubtitleStyles(customSubtitleView)
         subtitleManager.setupSubFormatting(playerView)
 
+        checkSmartDownloadAnime(ext)
+
         buildExoplayer()
+    }
+
+    private fun findBestVideoForDownload(
+        videos: List<ani.dantotsu.parsers.Video>,
+        preferredResolutions: List<String>
+    ): ani.dantotsu.parsers.Video? {
+        if (videos.isEmpty()) return null
+        if (preferredResolutions.isEmpty()) return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
+
+        for (preferred in preferredResolutions) {
+            val resNumber = Regex("""\d+""").find(preferred)?.value?.toIntOrNull()
+            if (resNumber != null) {
+                val match = videos.firstOrNull { it.quality == resNumber }
+                if (match != null) return match
+            }
+            val cleanPreferred = preferred.lowercase().replace("p", "").trim()
+            val matchFallback = videos.firstOrNull { video ->
+                val note = video.extraNote?.lowercase() ?: ""
+                val url = video.file.url.lowercase()
+                note.contains(preferred.lowercase()) || note.contains(cleanPreferred) ||
+                        url.contains("${cleanPreferred}p") || url.contains(cleanPreferred)
+            }
+            if (matchFallback != null) return matchFallback
+        }
+
+        return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
+    }
+
+    private fun checkSmartDownloadAnime(currentExt: ani.dantotsu.parsers.VideoExtractor) {
+        if (!PrefManager.getVal<Boolean>(PrefName.SmartDownloadAnime)) return
+        val isOffline = currentExt.server.offline || Injekt.get<DownloadsManager>().queryDownload(media.mainName(), episode.number, MediaType.ANIME)
+        if (!isOffline) return
+
+        val currentIdx = episodeArr.indexOf(episode.number)
+        if (currentIdx == -1 || currentIdx + 1 >= episodeArr.size) return
+        val nextEpKey = episodeArr[currentIdx + 1]
+        val downloadsManager = Injekt.get<DownloadsManager>()
+        if (downloadsManager.queryDownload(media.mainName(), nextEpKey, MediaType.ANIME)) return
+        if (AnimeDownloader.isDownloading(media.id, nextEpKey)) return
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val nextEpisode = episodes[nextEpKey] ?: media.anime?.episodes?.getEpisode(nextEpKey) ?: return@launch
+                val sourceIndex = media.selected?.sourceIndex ?: return@launch
+                val serverName = if (!currentExt.server.offline) currentExt.server.name else (media.selected?.server ?: "")
+
+                val success = if (serverName.isNotBlank()) {
+                    model.loadEpisodeSingleVideo(nextEpisode, media.selected!!, selectedServerName = serverName)
+                } else false
+
+                val extractorToUse = if (success) {
+                    nextEpisode.extractors?.find { it.server.name == serverName }
+                } else {
+                    model.loadEpisodeVideos(nextEpisode, sourceIndex)
+                    nextEpisode.extractors?.firstOrNull { it.videos.isNotEmpty() }
+                } ?: return@launch
+
+                val sourceName = model.watchSources?.get(sourceIndex)?.name
+                val preferredResolutions = PrefManager.getPreferredDownloadResolutions(sourceName)
+                val bestVideo = findBestVideoForDownload(extractorToUse.videos, preferredResolutions) ?: return@launch
+
+                withContext(Dispatchers.Main) {
+                    Helper.startAnimeDownloadService(
+                        this@ExoplayerView,
+                        media.mainName(),
+                        nextEpisode.number,
+                        bestVideo,
+                        sourceMedia = media,
+                        episodeImage = nextEpisode.thumb?.url ?: media.banner ?: media.cover
+                    )
+                }
+            } catch (e: Exception) {
+                Logger.log("SmartDownloadAnime error: ${e.message}")
+            }
+        }
     }
 
     private fun buildExoplayer() {

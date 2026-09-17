@@ -160,6 +160,9 @@
         <activity android:name=".settings.FAQActivity" />
         <activity android:name=".settings.DownloadQueueActivity" android:parentActivityName=".settings.SettingsActivity" />
         <activity
+            android:name=".settings.data.SettingsDataActivity"
+            android:parentActivityName=".settings.SettingsActivity" />
+        <activity
             android:name=".settings.SettingsActivity"
             android:parentActivityName=".MainActivity" />
         <activity

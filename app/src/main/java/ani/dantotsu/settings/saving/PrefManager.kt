@@ -522,4 +522,22 @@ object PrefManager {
             default
         }
     }
+
+    fun getPreferredDownloadResolutions(extensionName: String? = null): List<String> {
+        if (!extensionName.isNullOrBlank()) {
+            val custom = getCustomVal<List<String>>("pref_download_res_${extensionName}", emptyList())
+            if (custom.isNotEmpty()) {
+                return custom
+            }
+        }
+        return getVal(PrefName.PreferredDownloadResolutions)
+    }
+
+    fun setPreferredDownloadResolutions(extensionName: String?, resolutions: List<String>) {
+        if (!extensionName.isNullOrBlank()) {
+            setCustomVal("pref_download_res_${extensionName}", resolutions)
+        } else {
+            setVal(PrefName.PreferredDownloadResolutions, resolutions)
+        }
+    }
 }

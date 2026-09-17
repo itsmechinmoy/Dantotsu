@@ -72,6 +72,7 @@ data class Media(
     var meanScore: Int? = null,
     var genres: ArrayList<String> = arrayListOf(),
     var tags: ArrayList<String> = arrayListOf(),
+    var tagsIsSpoiler: ArrayList<Boolean> = arrayListOf(),
     var description: String? = null,
     var synonyms: ArrayList<String> = arrayListOf(),
     var trailer: String? = null,
@@ -201,6 +202,7 @@ data class Media(
         }
         apiMedia.tags?.let { tagList ->
             this.tags = ArrayList(tagList.mapNotNull { it.name })
+            this.tagsIsSpoiler = ArrayList(tagList.map { it.isMediaSpoiler == true })
         }
     }
 
@@ -217,6 +219,7 @@ data class Media(
             mediaList.media?.genres?.toMutableList() as? ArrayList<String>? ?: arrayListOf()
         mediaList.media?.tags?.let { tagList ->
             this.tags = ArrayList(tagList.mapNotNull { it.name })
+            this.tagsIsSpoiler = ArrayList(tagList.map { it.isMediaSpoiler == true })
         }
     }
 

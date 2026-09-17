@@ -64,6 +64,19 @@ enum class PrefName(val data: Pref) {
     ProxyAuthEnabled(Pref(Location.General, Boolean::class, false)),
     AniMangaSearchDirect(Pref(Location.General, Boolean::class, true)),
     DownloadWifiOnly(Pref(Location.General, Boolean::class, false)),
+    AutoSelectResolutionPriority(Pref(Location.General, Boolean::class, true)),
+    PreferredDownloadResolutions(
+        Pref(
+            Location.General,
+            List::class,
+            listOf("1080p", "720p", "480p", "360p", "240p", "144p")
+        )
+    ),
+    SmartDownloadAnime(Pref(Location.General, Boolean::class, false)),
+    SmartDownloadManga(Pref(Location.General, Boolean::class, false)),
+    AutoBackupInterval(Pref(Location.General, Int::class, 0)),
+    AutoBackupMaxCopies(Pref(Location.General, Int::class, 3)),
+    LastAutoBackupTimestamp(Pref(Location.General, Long::class, 0L)),
 
     //User Interface
     EpisodeMetadataSource(Pref(Location.UI, Int::class, 0)),
@@ -112,6 +125,7 @@ enum class PrefName(val data: Pref) {
     CommentSortOrder(Pref(Location.UI, String::class, "newest")),
     FollowerLayout(Pref(Location.UI, Int::class, 0)),
     ShowNotificationRedDot(Pref(Location.UI, Boolean::class, true)),
+    HideSpoilerTags(Pref(Location.UI, Boolean::class, true)),
 
 
     //Player
@@ -160,6 +174,7 @@ enum class PrefName(val data: Pref) {
     RotationPlayer(Pref(Location.Player, Boolean::class, true)),
     TorrentEnabled(Pref(Location.Player, Boolean::class, false)),
     UseAdditionalCodec(Pref(Location.Player, Boolean::class, false)),
+    AutoSelectServer(Pref(Location.Player, Boolean::class, false)),
 
     //Reader
     ShowSource(Pref(Location.Reader, Boolean::class, true)),

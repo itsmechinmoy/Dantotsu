@@ -196,6 +196,14 @@ class App : Application(), GraphProvider<AppGraph> {
                 Logger.log("Failed to schedule tasks")
                 Logger.log(e)
             }
+            try {
+                ani.dantotsu.settings.data.AutoBackupWorker.schedule(
+                    this@App,
+                    PrefManager.getVal(PrefName.AutoBackupInterval)
+                )
+            } catch (e: Exception) {
+                Logger.log("Failed to schedule auto backup: ${e.message}")
+            }
         }
         applicationScope.launch(Dispatchers.IO) {
             delay(10000)

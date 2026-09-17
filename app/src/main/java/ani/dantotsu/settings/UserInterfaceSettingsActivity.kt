@@ -163,6 +163,11 @@ class UserInterfaceSettingsActivity : AppCompatActivity() {
             PrefManager.setVal(PrefName.TrendingScroller, isChecked)
         }
 
+        binding.uiSettingsHideSpoilerTags.isChecked = PrefManager.getVal(PrefName.HideSpoilerTags)
+        binding.uiSettingsHideSpoilerTags.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setVal(PrefName.HideSpoilerTags, isChecked)
+        }
+
         val map = mapOf(
             2f to 0.5f,
             1.75f to 0.625f,

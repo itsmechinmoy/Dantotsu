@@ -73,6 +73,20 @@ class AnimeSourcePreferencesFragment : PreferenceFragmentCompat() {
                 }
             }
         }
+        val downloadResPref = androidx.preference.Preference(requireContext()).apply {
+            key = "pref_download_resolution_priority"
+            title = requireContext().getString(R.string.custom_extension_resolution_priority)
+            val current = ani.dantotsu.settings.saving.PrefManager.getPreferredDownloadResolutions(source.name)
+            summary = current.joinToString(", ")
+            isIconSpaceReserved = false
+            setOnPreferenceClickListener {
+                ani.dantotsu.settings.ResolutionPriorityDialog.show(requireContext(), source.name) { updated ->
+                    summary = updated.joinToString(", ")
+                }
+                true
+            }
+        }
+        sourceScreen.addPreference(downloadResPref)
         return sourceScreen
     }
 
@@ -115,6 +129,20 @@ class InitialAnimeSourcePreferencesFragment(
         preferenceManager.preferenceDataStore = dataStore
         val sourceScreen = preferenceManager.createPreferenceScreen(requireContext())
         source.setupPreferenceScreen(sourceScreen)
+        val downloadResPref = androidx.preference.Preference(requireContext()).apply {
+            key = "pref_download_resolution_priority"
+            title = requireContext().getString(R.string.custom_extension_resolution_priority)
+            val current = ani.dantotsu.settings.saving.PrefManager.getPreferredDownloadResolutions(source.name)
+            summary = current.joinToString(", ")
+            isIconSpaceReserved = false
+            setOnPreferenceClickListener {
+                ani.dantotsu.settings.ResolutionPriorityDialog.show(requireContext(), source.name) { updated ->
+                    summary = updated.joinToString(", ")
+                }
+                true
+            }
+        }
+        sourceScreen.addPreference(downloadResPref)
         return sourceScreen
     }
 }

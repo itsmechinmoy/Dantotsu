@@ -131,6 +131,32 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         }
     }
 
+    fun findBestVideoForDownload(
+        videos: List<Video>,
+        preferredResolutions: List<String>
+    ): Video? {
+        if (videos.isEmpty()) return null
+        if (preferredResolutions.isEmpty()) return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
+
+        for (preferred in preferredResolutions) {
+            val resNumber = Regex("""\d+""").find(preferred)?.value?.toIntOrNull()
+            if (resNumber != null) {
+                val match = videos.firstOrNull { it.quality == resNumber }
+                if (match != null) return match
+            }
+            val cleanPreferred = preferred.lowercase().replace("p", "").trim()
+            val matchFallback = videos.firstOrNull { video ->
+                val note = video.extraNote?.lowercase() ?: ""
+                val url = video.file.url.lowercase()
+                note.contains(preferred.lowercase()) || note.contains(cleanPreferred) ||
+                        url.contains("${cleanPreferred}p") || url.contains(cleanPreferred)
+            }
+            if (matchFallback != null) return matchFallback
+        }
+
+        return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
+    }
+
     @SuppressLint("SetTextI18n")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         var loaded = false
@@ -147,6 +173,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         }
                     }
                 }
+
                 fun initializeVideoServerSelector(ep: Episode, onEpisodeDownloadHandler: EpisodeDownloadHandler? = null) {
                     binding.selectorRecyclerView.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                         bottomMargin = navBarHeight
@@ -203,6 +230,75 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         binding.selectorProgressBar.visibility = View.GONE
                     }
                 }
+
+                fun autoSelectServerAndPlay(ep: Episode) {
+                    binding.selectorListContainer.visibility = View.GONE
+                    binding.selectorAutoListContainer.visibility = View.VISIBLE
+                    binding.selectorAutoText.text = getString(R.string.auto_select_server)
+                    var isCancelled = false
+                    binding.selectorCancel.setOnClickListener {
+                        isCancelled = true
+                        binding.selectorAutoListContainer.visibility = View.GONE
+                        binding.selectorListContainer.visibility = View.VISIBLE
+                        initializeVideoServerSelector(ep)
+                    }
+
+                    val sourceName = model.watchSources?.get(media?.selected?.sourceIndex ?: 0)?.name
+                    val preferredResolutions = PrefManager.getPreferredDownloadResolutions(sourceName)
+
+                    fun selectAndStart(chosenExtractor: VideoExtractor): Boolean {
+                        val bestVideo = findBestVideoForDownload(chosenExtractor.videos, preferredResolutions) ?: return false
+                        ep.selectedExtractor = chosenExtractor.server.name
+                        ep.selectedVideo = chosenExtractor.videos.indexOf(bestVideo).takeIf { it >= 0 } ?: 0
+                        val currentKey = media!!.anime!!.selectedEpisode ?: ep.number
+                        media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedExtractor = ep.selectedExtractor
+                        media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedVideo = ep.selectedVideo
+                        startExoplayer(media!!)
+                        return true
+                    }
+
+                    if (ep.allStreams) {
+                        val extractors = ep.extractors ?: emptyList()
+                        val validExtractor = extractors.firstOrNull { it.videos.isNotEmpty() }
+                        if (validExtractor != null && selectAndStart(validExtractor)) {
+                            return
+                        } else {
+                            binding.selectorAutoListContainer.visibility = View.GONE
+                            binding.selectorListContainer.visibility = View.VISIBLE
+                            initializeVideoServerSelector(ep)
+                            return
+                        }
+                    }
+
+                    var hasStarted = false
+                    ep.extractorCallback = { extractor ->
+                        scope.launch(Dispatchers.Main) {
+                            if (_binding == null || !isAdded || isCancelled || hasStarted) return@launch
+                            if (extractor.videos.isNotEmpty()) {
+                                hasStarted = true
+                                selectAndStart(extractor)
+                            }
+                        }
+                    }
+                    scope.launch(Dispatchers.IO) {
+                        model.loadEpisodeVideos(ep, media!!.selected!!.sourceIndex)
+                        withContext(Dispatchers.Main) {
+                            if (_binding == null || !isAdded || isCancelled) return@withContext
+                            if (!hasStarted) {
+                                val valid = ep.extractors?.firstOrNull { it.videos.isNotEmpty() }
+                                if (valid != null) {
+                                    hasStarted = true
+                                    selectAndStart(valid)
+                                } else {
+                                    binding.selectorAutoListContainer.visibility = View.GONE
+                                    binding.selectorListContainer.visibility = View.VISIBLE
+                                    initializeVideoServerSelector(ep)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 suspend fun loadEpisodeSingleServer(episodeName: String, selectedServerName: String): Boolean{
                     val ep = media?.anime?.episodes?.getEpisode(episodeName) ?: media?.anime?.episodes?.getEpisode(media?.anime?.selectedEpisode)
                     if (ep == null) return false
@@ -223,10 +319,22 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                          selectedSubtitles: MutableList<String>,
                                          selectedAudioTracks: MutableList<String>){
                     fun downloadUsingSingleServer(extractor: VideoExtractor, currentEp: Episode): Boolean {
+                        val sourceName = model.watchSources?.get(media?.selected?.sourceIndex ?: 0)?.name
+                        val preferredResolutions = PrefManager.getPreferredDownloadResolutions(sourceName)
+                        val autoPriority = PrefManager.getVal<Boolean>(PrefName.AutoSelectResolutionPriority)
+
                         currentEp.selectedExtractor = extractor.server.name
-                        if (currentEp.selectedVideo >= extractor.videos.size) {
-                            currentEp.selectedVideo = 0
+                        val bestVideo = if (autoPriority && extractor.videos.isNotEmpty()) {
+                            findBestVideoForDownload(extractor.videos, preferredResolutions)
+                        } else null
+
+                        val chosenVideoIndex = if (bestVideo != null) {
+                            extractor.videos.indexOf(bestVideo).takeIf { it >= 0 } ?: 0
+                        } else {
+                            if (currentEp.selectedVideo >= extractor.videos.size) 0 else currentEp.selectedVideo
                         }
+                        currentEp.selectedVideo = chosenVideoIndex
+
                         val epKey = media?.anime?.episodes?.getEpisodeKey(currentEp.number) ?: currentEp.number
                         media?.anime?.episodes?.get(epKey)?.let { mapEp ->
                             mapEp.selectedExtractor = extractor.server.name
@@ -445,6 +553,9 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                     }
                                 }
                             } else load()
+                        }
+                        else if (PrefManager.getVal<Boolean>(PrefName.AutoSelectServer) && media?.format != "LOCAL" && isDownloadMenu != true) {
+                            autoSelectServerAndPlay(ep)
                         }
                         else
                             initializeVideoServerSelector(ep)

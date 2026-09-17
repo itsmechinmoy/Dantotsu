@@ -72,6 +72,15 @@ import ani.dantotsu.parsers.MangaImage
 import ani.dantotsu.parsers.MangaSources
 import ani.dantotsu.px
 import ani.dantotsu.setSafeOnClickListener
+import ani.dantotsu.download.DownloadsManager
+import ani.dantotsu.download.manga.MangaDownloaderService
+import ani.dantotsu.download.manga.MangaServiceDataSingleton
+import ani.dantotsu.media.MediaType
+import ani.dantotsu.parsers.OfflineMangaParser
+import ani.dantotsu.parsers.MangaParser
+import ani.dantotsu.parsers.DynamicMangaParser
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import ani.dantotsu.settings.CurrentReaderSettings
 import ani.dantotsu.settings.CurrentReaderSettings.Companion.applyWebtoon
 import ani.dantotsu.settings.CurrentReaderSettings.Directions.BOTTOM_TO_TOP
@@ -528,6 +537,7 @@ class MangaReaderActivity : AppCompatActivity() {
                 binding.mangaReaderPrevChap.text =
                     chaptersTitleArr.getOrNull(currentChapterIndex - 1) ?: ""
                 applySettings()
+                checkSmartDownloadManga(chap)
                 val context = this
                 val offline: Boolean = PrefManager.getVal(PrefName.OfflineMode)
                 val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
@@ -1773,6 +1783,53 @@ class MangaReaderActivity : AppCompatActivity() {
                     visibility = View.GONE
                 }.start()
             }, 80)
+        }
+    }
+
+    private fun checkSmartDownloadManga(currentChapter: MangaChapter) {
+        if (!PrefManager.getVal<Boolean>(PrefName.SmartDownloadManga)) return
+        val downloadsManager = Injekt.get<DownloadsManager>()
+        val isCurrentDownloaded = downloadsManager.queryDownload(media.mainName(), currentChapter.number, MediaType.MANGA) ||
+                (model.mangaReadSources?.isDownloadedSource(media.selected?.sourceIndex ?: -1) == true)
+        if (!isCurrentDownloaded) return
+
+        val nextIndex = currentChapterIndex + 1
+        if (nextIndex !in chaptersArr.indices) return
+        val nextChapterKey = chaptersArr[nextIndex]
+        val nextChapter = chapters[nextChapterKey] ?: media.manga?.chapters?.get(nextChapterKey) ?: return
+
+        if (downloadsManager.queryDownload(media.mainName(), nextChapter.number, MediaType.MANGA)) return
+        val isAlreadyQueued = MangaServiceDataSingleton.downloadQueue.any { it.title == media.mainName() && (it.chapter == nextChapter.number || it.chapter == nextChapter.title) } ||
+                MangaServiceDataSingleton.currentTasks.any { it.title == media.mainName() && (it.chapter == nextChapter.number || it.chapter == nextChapter.title) }
+        if (isAlreadyQueued) return
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                var parser = model.mangaReadSources?.get(media.selected?.sourceIndex ?: 0) as? DynamicMangaParser
+                if (parser == null) {
+                    parser = model.mangaReadSources?.list?.mapNotNull { it.get?.value as? DynamicMangaParser }?.firstOrNull()
+                }
+                val images = parser?.imageList(nextChapter.sChapter) ?: return@launch
+                if (images.isNotEmpty()) {
+                    val downloadTask = MangaDownloaderService.DownloadTask(
+                        title = media.mainName(),
+                        chapter = nextChapter.number,
+                        scanlator = nextChapter.scanlator ?: "Unknown",
+                        imageData = images,
+                        sourceMedia = media,
+                        retries = 25,
+                        simultaneousDownloads = 2
+                    )
+                    MangaServiceDataSingleton.downloadQueue.offer(downloadTask)
+                    val intent = Intent(this@MangaReaderActivity, MangaDownloaderService::class.java)
+                    withContext(Dispatchers.Main) {
+                        ContextCompat.startForegroundService(this@MangaReaderActivity, intent)
+                    }
+                    MangaServiceDataSingleton.isServiceRunning = true
+                }
+            } catch (e: Exception) {
+                ani.dantotsu.util.Logger.log("SmartDownloadManga error: ${e.message}")
+            }
         }
     }
 }

@@ -130,6 +130,16 @@ class SettingsActivity : AppCompatActivity() {
                     ),
                     Settings(
                         type = 1,
+                        name = getString(R.string.label_data_storage),
+                        desc = getString(R.string.label_data_storage_desc),
+                        icon = R.drawable.ic_round_folder_24,
+                        onClick = {
+                            startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
                         name = getString(R.string.anime),
                         desc = getString(R.string.anime_desc),
                         icon = R.drawable.ic_round_movie_filter_24,

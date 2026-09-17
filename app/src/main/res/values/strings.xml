@@ -1401,4 +1401,55 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="transition_current">Current:</string>
     <string name="transition_read_previous">Read Previous Chapter</string>
     <string name="transition_no_previous">There\'s no previous chapter</string>
+
+    <!-- Download Resolution & Server Priority -->
+    <string name="preferred_download_resolutions">Preferred Download Resolutions</string>
+    <string name="preferred_download_resolutions_desc">Priority list of video resolutions for downloads. If a resolution is missing, the next one is picked automatically.</string>
+    <string name="auto_select_server_title">Auto Server Selection</string>
+    <string name="auto_select_server_desc">Automatically select the highest quality server without waiting for choice</string>
+    <string name="custom_extension_resolution_priority">Download Resolution Priority</string>
+
+    <!-- Smart Download -->
+    <string name="smart_download_anime">Smart Download (Next Episode)</string>
+    <string name="smart_download_anime_desc">Automatically download the next episode while watching a downloaded one</string>
+    <string name="smart_download_manga">Smart Download (Next Chapter)</string>
+    <string name="smart_download_manga_desc">Automatically download the next chapter while reading a downloaded one</string>
+
+    <!-- Spoiler Tags -->
+    <string name="hide_spoiler_tags">Hide Spoiler Tags</string>
+    <string name="hide_spoiler_tags_desc">Mask spoiler tags on anime and manga details until tapped</string>
+    <string name="spoiler_tag_placeholder">Spoiler</string>
+    <string name="show_spoilers">Show Spoilers</string>
+    <string name="hide_spoilers">Hide Spoilers</string>
+
+    <!-- Data and Storage -->
+    <string name="label_data_storage">Data and Storage</string>
+    <string name="label_data_storage_desc">Storage usage, cache cleaning, and automated backups</string>
+    <string name="storage_usage">Storage Usage</string>
+    <string name="storage_available_info">%1$s free of %2$s</string>
+    <string name="clear_cache">Clear Cache</string>
+    <string name="clear_cache_desc">Clear temporary network, image, and player caches (%1$s)</string>
+    <string name="cache_cleared">Cleared %1$s of cached data</string>
+    <string name="cache_calculating">Calculating…</string>
+    <string name="auto_backup">Automatic Backup</string>
+    <string name="auto_backup_desc">Periodically create backups in the background</string>
+    <string name="auto_backup_interval">Backup Frequency</string>
+    <string name="auto_backup_interval_off">Off</string>
+    <string name="auto_backup_interval_6h">Every 6 hours</string>
+    <string name="auto_backup_interval_12h">Every 12 hours</string>
+    <string name="auto_backup_interval_24h">Daily (24 hours)</string>
+    <string name="auto_backup_interval_48h">Every 2 days (48 hours)</string>
+    <string name="auto_backup_interval_weekly">Weekly</string>
+    <string name="auto_backup_max_copies">Backups to Retain</string>
+    <string name="last_auto_backup">Last Auto-Backup: %1$s</string>
+    <string name="last_auto_backup_never">Last Auto-Backup: Never</string>
+    <string name="backup_now">Create Backup Now</string>
+    <string name="backup_now_desc">Export app settings and preferences</string>
+    <string name="restore_backup">Restore Backup</string>
+    <string name="restore_backup_desc">Import app settings from a backup file</string>
+    <string name="change_download_directory">Change Download Directory</string>
+    <string name="change_download_directory_desc">Choose a directory to store Dantotsu downloads</string>
+    <string name="change_download_directory_confirm">Are you sure you want to change the download directory? Existing downloads will remain in the old directory.</string>
+    <string name="purge_downloads">Purge All Downloads</string>
+    <string name="purge_downloads_desc">Delete all downloaded anime, manga, and novel files to free up storage</string>
 </resources>
