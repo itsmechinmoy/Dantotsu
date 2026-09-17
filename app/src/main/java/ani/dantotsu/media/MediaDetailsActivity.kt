@@ -143,6 +143,10 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         screenWidth = resources.displayMetrics.widthPixels.toFloat()
         navBar = binding.mediaBottomBar
 
+        supportFragmentManager.addOnBackStackChangedListener {
+            syncExtensionPrefsUi()
+        }
+
         // Ui init
 
 
@@ -532,25 +536,25 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     override fun onResume() {
         super.onResume()
         if (!::binding.isInitialized) return
-
-        val extContainer = findViewById<android.widget.FrameLayout>(R.id.fragmentExtensionsContainer)
-        if (extContainer != null) {
-            val hasExtFragment = supportFragmentManager.findFragmentById(R.id.fragmentExtensionsContainer) != null
-            if (hasExtFragment) {
-                supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
-                extContainer.visibility = View.GONE
-            }
-        }
-
-        if (::navBar.isInitialized)
-            navBar.selectTabAt(selected)
-        binding.mediaAppBar.visibility = View.VISIBLE
-        binding.mediaViewPager.visibility = View.VISIBLE
-        binding.mediaCover.visibility = View.VISIBLE
-        binding.mediaClose.visibility = View.VISIBLE
-        if (::navBar.isInitialized)
-            navBar.isVisible = true
+        syncExtensionPrefsUi()
         binding.root.requestLayout()
+    }
+
+    private fun syncExtensionPrefsUi() {
+        if (!::binding.isInitialized) return
+        val hasExtFragment =
+            supportFragmentManager.findFragmentById(R.id.fragmentExtensionsContainer) != null
+
+        binding.fragmentExtensionsContainer.isVisible = hasExtFragment
+        binding.mediaAppBar.isVisible = !hasExtFragment
+        binding.mediaViewPager.isVisible = !hasExtFragment
+        binding.mediaCover.isVisible = !hasExtFragment
+        binding.mediaClose.isVisible = !hasExtFragment
+        binding.commentInputLayout.isVisible = !hasExtFragment && selected == 2
+        if (::navBar.isInitialized) {
+            navBar.isVisible = !hasExtFragment
+            if (!hasExtFragment) navBar.selectTabAt(selected)
+        }
     }
 
     private enum class SupportedMedia {

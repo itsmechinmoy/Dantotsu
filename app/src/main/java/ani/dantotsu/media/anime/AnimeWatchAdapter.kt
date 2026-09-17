@@ -177,7 +177,7 @@ class AnimeWatchAdapter(
             )
         )
 
-        if (watchSources.names.isNotEmpty() && source in 0 until watchSources.names.size) {
+        if (watchSources.names.isNotEmpty() && source in watchSources.names.indices) {
             binding.mediaSource.setText(watchSources.names[source], false)
             watchSources[source].apply {
                 this.selectDub = media.selected!!.preferDub
