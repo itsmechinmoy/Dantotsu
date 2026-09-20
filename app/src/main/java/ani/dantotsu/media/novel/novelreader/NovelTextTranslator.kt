@@ -3,6 +3,8 @@ package ani.dantotsu.media.novel.novelreader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
@@ -16,24 +18,54 @@ object NovelTextTranslator {
         cache.get(key)?.let { return it }
 
         return withContext(Dispatchers.IO) {
-            try {
-                val encoded = URLEncoder.encode(text, "UTF-8")
-                val url = "https://translate.googleapis.com/translate_a/single" +
-                        "?client=gtx&sl=auto&tl=$targetLang&dt=t&q=$encoded"
-                val response = URL(url).readText()
-                val json = JSONArray(response)
-                val parts = json.getJSONArray(0)
-                val sb = StringBuilder()
-                for (i in 0 until parts.length()) {
-                    sb.append(parts.getJSONArray(i).getString(0))
-                }
-                val result = sb.toString()
-                cache.put(key, result)
-                result
-            } catch (e: Exception) {
-                text
-            }
+            val translated = translateWithGoogle(text, targetLang)
+                ?: translateWithMyMemory(text, targetLang)
+                ?: error("Translation unavailable (services rate-limited or offline)")
+            cache.put(key, translated)
+            translated
         }
+    }
+
+    private fun translateWithGoogle(text: String, targetLang: String): String? = try {
+        val encoded = URLEncoder.encode(text, "UTF-8")
+        val url = "https://translate.googleapis.com/translate_a/single?client=dict-chrome-ex&sl=auto&tl=$targetLang&dt=t&q=$encoded"
+        val response = httpGet(url)
+        if (response.contains("google.com/sorry") || !response.trimStart().startsWith("[")) null
+        else {
+            val firstArray = JSONArray(response).getJSONArray(0)
+            val result = StringBuilder()
+            for (i in 0 until firstArray.length()) {
+                result.append(firstArray.getJSONArray(i).getString(0))
+            }
+            result.toString().takeIf { it.isNotBlank() }
+        }
+    } catch (_: Exception) { null }
+
+    private fun translateWithMyMemory(text: String, targetLang: String): String? = try {
+        val encoded = URLEncoder.encode(text, "UTF-8")
+        val langPair = "autodetect|$targetLang"
+        val url = "https://api.mymemory.translated.net/get?q=$encoded&langpair=$langPair"
+        val response = httpGet(url)
+        val json = JSONObject(response)
+        val status = json.optInt("responseStatus", 0)
+        if (status != 200) null
+        else {
+            json.getJSONObject("responseData")
+                .getString("translatedText")
+                .takeIf { it.isNotBlank() && !it.equals(text, ignoreCase = true) }
+        }
+    } catch (_: Exception) { null }
+
+    private fun httpGet(urlString: String): String {
+        val connection = URL(urlString).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 10000
+        connection.readTimeout = 10000
+        connection.setRequestProperty(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        )
+        return connection.inputStream.bufferedReader().use { it.readText() }
     }
     
     val languages: LinkedHashMap<String, String> = linkedMapOf(

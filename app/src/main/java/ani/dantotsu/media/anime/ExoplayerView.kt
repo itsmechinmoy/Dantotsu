@@ -958,7 +958,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                         null, -1 -> ext.subtitles.find {
                             it.language.contains(lang, true) ||
                             it.language.contains("English", true) ||
-                            it.language.contains("en", true)
+                            Regex("""(?i)(?:^|[^a-zA-Z])(en|eng)(?:[^a-zA-Z]|$)""").containsMatchIn(it.language)
                         } ?: ext.subtitles.firstOrNull()
                         else -> ext.subtitles.getOrNull(episode.selectedSubtitle!!)
                     }
@@ -978,7 +978,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                 subtitle = ext.subtitles.find {
                     it.language.contains(lang, true) ||
                     it.language.contains("English", true) ||
-                    it.language.contains("en", true)
+                    Regex("""(?i)(?:^|[^a-zA-Z])(en|eng)(?:[^a-zA-Z]|$)""").containsMatchIn(it.language)
                 } ?: ext.subtitles.firstOrNull()
             }
             // Falling back to a language name here would make the track-change handler

@@ -137,6 +137,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -190,6 +191,8 @@ dependencies {
     implementation(libs.bundles.glide)
     ksp(libs.glide.ksp)
 
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     // UI
     implementation(libs.material)
     implementation(libs.materialKolor)
@@ -203,7 +206,13 @@ dependencies {
     implementation(libs.mlkit.text.japanese)
     implementation(libs.mlkit.text)
     implementation(libs.play.services.base)
-    implementation(libs.ebook)
+    // Readium Kotlin Toolkit
+    implementation(libs.readium.shared)
+    implementation(libs.readium.streamer)
+    implementation(libs.readium.navigator)
+    implementation(libs.readium.navigator.media.tts)
+    implementation(libs.readium.adapter.pdfium.document)
+    implementation(libs.readium.adapter.pdfium.navigator)
     implementation(libs.dialogs)
     implementation(libs.charts)
 

@@ -43,6 +43,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.slider.Slider
 import ani.dantotsu.GesturesListener
 import ani.dantotsu.NoPaddingArrayAdapter
 import ani.dantotsu.R
@@ -651,11 +652,12 @@ class MangaReaderActivity : AppCompatActivity() {
             }
 
             if (chapImages.size > 1) {
-                binding.mangaReaderSlider.apply {
-                    visibility = View.VISIBLE
-                    valueTo = maxChapterPage.toFloat()
-                    value = clamp(currentChapterPage.toFloat(), 1f, valueTo)
-                }
+                binding.mangaReaderSlider.visibility = View.VISIBLE
+                binding.mangaReaderSlider.updateRangeAndValue(
+                    to = maxChapterPage.toFloat(),
+                    currentVal = currentChapterPage.toFloat(),
+                    from = 1f
+                )
             } else {
                 binding.mangaReaderSlider.visibility = View.GONE
             }
@@ -1296,8 +1298,12 @@ class MangaReaderActivity : AppCompatActivity() {
             }
             binding.mangaReaderPageNumber.text =
                 if (defaultSettings.hidePageNumbers) "" else "${currentChapterPage}/$maxChapterPage"
-            if (!sliding) binding.mangaReaderSlider.apply {
-                value = clamp(currentChapterPage.toFloat(), 1f, valueTo)
+            if (!sliding) {
+                binding.mangaReaderSlider.updateRangeAndValue(
+                    to = maxChapterPage.toFloat(),
+                    currentVal = currentChapterPage.toFloat(),
+                    from = 1f
+                )
             }
         }
         if (maxChapterPage - currentChapterPage <= 1 && loading.compareAndSet(false, true))
@@ -1756,7 +1762,11 @@ class MangaReaderActivity : AppCompatActivity() {
 
             if (totalPages > 1) {
                 binding.mangaReaderSlider.visibility = View.VISIBLE
-                binding.mangaReaderSlider.valueTo = maxChapterPage.toFloat()
+                binding.mangaReaderSlider.updateRangeAndValue(
+                    to = maxChapterPage.toFloat(),
+                    currentVal = pageNum.toFloat(),
+                    from = 1f
+                )
             } else {
                 binding.mangaReaderSlider.visibility = View.GONE
             }
@@ -1830,6 +1840,27 @@ class MangaReaderActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 ani.dantotsu.util.Logger.log("SmartDownloadManga error: ${e.message}")
             }
+        }
+    }
+
+    private fun Slider.updateRangeAndValue(to: Float, currentVal: Float, from: Float = 1f) {
+        val safeTo = if (to >= from) to else from + 0.01f
+        val safeVal = currentVal.coerceIn(from, safeTo)
+
+        if (this.valueFrom > from) {
+            this.valueFrom = from
+        }
+
+        if (safeTo < this.value) {
+            this.value = safeVal
+            this.valueTo = safeTo
+        } else {
+            this.valueTo = safeTo
+            this.value = safeVal
+        }
+
+        if (this.valueFrom != from) {
+            this.valueFrom = from
         }
     }
 }

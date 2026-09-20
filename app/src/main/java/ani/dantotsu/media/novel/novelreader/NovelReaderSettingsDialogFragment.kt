@@ -5,12 +5,18 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
+import androidx.lifecycle.lifecycleScope
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.NoPaddingArrayAdapter
 import ani.dantotsu.R
 import ani.dantotsu.databinding.BottomSheetCurrentNovelReaderSettingsBinding
 import ani.dantotsu.settings.CurrentNovelReaderSettings
 import ani.dantotsu.settings.CurrentReaderSettings
+import ani.dantotsu.settings.saving.PrefManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class NovelReaderSettingsDialogFragment : BottomSheetDialogFragment() {
     private var _binding: BottomSheetCurrentNovelReaderSettingsBinding? = null
@@ -34,7 +40,8 @@ class NovelReaderSettingsDialogFragment : BottomSheetDialogFragment() {
         val themeLabels = activity.themes.map { it.name }
         binding.themeSelect.adapter =
             NoPaddingArrayAdapter(activity, R.layout.item_dropdown, themeLabels)
-        binding.themeSelect.setSelection(themeLabels.indexOfFirst { it == settings.currentThemeName })
+        var initialThemeSet = true
+        var themeDebounceJob: Job? = null
         binding.themeSelect.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
                 parent: AdapterView<*>?,
@@ -42,15 +49,101 @@ class NovelReaderSettingsDialogFragment : BottomSheetDialogFragment() {
                 position: Int,
                 id: Long
             ) {
-                settings.currentThemeName = themeLabels[position]
-                activity.applySettings()
+                if (initialThemeSet) {
+                    initialThemeSet = false
+                    return
+                }
+                val newTheme = themeLabels[position]
+                if (newTheme != settings.currentThemeName) {
+                    settings.currentThemeName = newTheme
+                    themeDebounceJob?.cancel()
+                    themeDebounceJob = viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                        delay(150)
+                        activity.applySettings()
+                    }
+                }
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
+
+        val fontLabels = listOf(
+            "Default",
+            "Sans-Serif",
+            "Serif",
+            "Monospace",
+            "Poppins",
+            "OpenDyslexic",
+            "Cursive",
+            "AccessibleDfA",
+            "IA Writer Duospace"
+        )
+        binding.fontSelect.adapter =
+            NoPaddingArrayAdapter(activity, R.layout.item_dropdown, fontLabels)
+        val currentFont = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, "Default")
+        val fontIndex = fontLabels.indexOf(currentFont).coerceAtLeast(0)
+        binding.fontSelect.setSelection(fontIndex, false)
+
+        var fontDebounceJob: Job? = null
+        binding.fontSelect.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+                val newFont = fontLabels.getOrNull(position) ?: return
+                val savedFont = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, "Default")
+                if (newFont != savedFont) {
+                    PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, newFont)
+                    fontDebounceJob?.cancel()
+                    fontDebounceJob = viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                        delay(100)
+                        activity.applySettings()
+                    }
+                }
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Font Size
+        val currentFontSize = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, 100)
+        binding.fontSize.setText(currentFontSize.toString())
+        binding.fontSize.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val value = binding.fontSize.text.toString().toIntOrNull() ?: 100
+                val clamped = value.coerceIn(50, 300)
+                PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, clamped)
+                binding.fontSize.setText(clamped.toString())
+                activity.applySettings()
+            }
+        }
+        binding.incrementFontSize.setOnClickListener {
+            val value = binding.fontSize.text.toString().toIntOrNull() ?: 100
+            val newValue = (value + 5).coerceAtMost(300)
+            PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, newValue)
+            binding.fontSize.setText(newValue.toString())
+            activity.applySettings()
+        }
+        binding.decrementFontSize.setOnClickListener {
+            val value = binding.fontSize.text.toString().toIntOrNull() ?: 100
+            val newValue = (value - 5).coerceAtLeast(50)
+            PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, newValue)
+            binding.fontSize.setText(newValue.toString())
+            activity.applySettings()
+        }
+
         binding.useOledTheme.isChecked = settings.useOledTheme
         binding.useOledTheme.setOnCheckedChangeListener { _, isChecked ->
             settings.useOledTheme = isChecked
+            activity.applySettings()
+        }
+
+        val isBoldFont = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_BOLD_FONT, false)
+        binding.boldFont.isChecked = isBoldFont
+        binding.boldFont.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_BOLD_FONT, isChecked)
             activity.applySettings()
         }
         val layoutList = listOf(
@@ -108,14 +201,16 @@ class NovelReaderSettingsDialogFragment : BottomSheetDialogFragment() {
 
         binding.incrementLineHeight.setOnClickListener {
             val value = binding.lineHeight.text.toString().toFloatOrNull() ?: 1.4f
-            settings.lineHeight = value + 0.1f
+            val newValue = Math.round((value + 0.1f) * 10f) / 10f
+            settings.lineHeight = newValue
             binding.lineHeight.setText(settings.lineHeight.toString())
             activity.applySettings()
         }
 
         binding.decrementLineHeight.setOnClickListener {
             val value = binding.lineHeight.text.toString().toFloatOrNull() ?: 1.4f
-            settings.lineHeight = value - 0.1f
+            val newValue = (Math.round((value - 0.1f) * 10f) / 10f).coerceAtLeast(0.5f)
+            settings.lineHeight = newValue
             binding.lineHeight.setText(settings.lineHeight.toString())
             activity.applySettings()
         }
@@ -132,14 +227,20 @@ class NovelReaderSettingsDialogFragment : BottomSheetDialogFragment() {
 
         binding.incrementMargin.setOnClickListener {
             val value = binding.margin.text.toString().toFloatOrNull() ?: 0.06f
-            settings.margin = value + 0.01f
+            val step = if (value < 0.4f) 0.01f else 0.1f
+            val factor = if (value < 0.4f) 100f else 10f
+            val newValue = Math.round((value + step) * factor) / factor
+            settings.margin = newValue
             binding.margin.setText(settings.margin.toString())
             activity.applySettings()
         }
 
         binding.decrementMargin.setOnClickListener {
             val value = binding.margin.text.toString().toFloatOrNull() ?: 0.06f
-            settings.margin = value - 0.01f
+            val step = if (value <= 0.4f) 0.01f else 0.1f
+            val factor = if (value <= 0.4f) 100f else 10f
+            val newValue = (Math.round((value - step) * factor) / factor).coerceAtLeast(0.01f)
+            settings.margin = newValue
             binding.margin.setText(settings.margin.toString())
             activity.applySettings()
         }
@@ -208,6 +309,31 @@ class NovelReaderSettingsDialogFragment : BottomSheetDialogFragment() {
         binding.volumeButton.setOnCheckedChangeListener { _, isChecked ->
             settings.volumeButtons = isChecked
             activity.applySettings()
+        }
+
+        val autoScrollEnabled = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_AUTO_SCROLL, false)
+        binding.autoScrollSwitch.isChecked = autoScrollEnabled
+        binding.autoScrollSwitch.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_AUTO_SCROLL, isChecked)
+            if (isChecked && settings.layout == CurrentNovelReaderSettings.Layouts.PAGED) {
+                settings.layout = CurrentNovelReaderSettings.Layouts.SCROLLED
+                binding.layoutText.text = settings.layout.string
+                selected.alpha = 0.33f
+                selected = binding.continuous
+                selected.alpha = 1f
+            }
+            activity.applySettings()
+        }
+
+        val autoScrollSpeed = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_AUTO_SCROLL_SPEED, 3f).toFloat()
+        binding.autoScrollSpeedSlider.value = autoScrollSpeed.coerceIn(0.5f, 10f)
+        binding.autoScrollSpeedText.text = "${autoScrollSpeed}x"
+        binding.autoScrollSpeedSlider.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_AUTO_SCROLL_SPEED, value)
+                binding.autoScrollSpeedText.text = "${value}x"
+                activity.autoScroll.speed = value
+            }
         }
     }
 

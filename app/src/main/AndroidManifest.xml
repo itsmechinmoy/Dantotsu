@@ -60,6 +60,9 @@
         <package android:name="com.dv.adm" />
         <package android:name="moe.shizuku.privileged.api" />
         <package android:name="rikka.art.shizuku" />
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
     </queries>
 
     <application
@@ -128,22 +131,47 @@
             android:name=".media.novel.novelreader.NovelReaderActivity"
             android:configChanges="orientation|screenSize"
             android:exported="true">
+            <!-- Intent filter for MIME types (standard Android SAF, content://, file://) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-
-                <data android:mimeType="application/epub+zip"/>
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/epub+zip" />
                 <data android:mimeType="application/x-mobipocket-ebook" />
                 <data android:mimeType="application/vnd.amazon.ebook" />
                 <data android:mimeType="application/fb2+zip" />
                 <data android:mimeType="application/vnd.comicbook+zip" />
+            </intent-filter>
+
+            <!-- Intent filter for file extensions without MIME type -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.pdf" />
                 <data android:pathPattern=".*\\.epub" />
                 <data android:pathPattern=".*\\.mobi" />
                 <data android:pathPattern=".*\\.kf8" />
                 <data android:pathPattern=".*\\.fb2" />
                 <data android:pathPattern=".*\\.cbz" />
+            </intent-filter>
+
+            <!-- Fallback for octet-stream MIME type with file extension -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" />
                 <data android:scheme="file" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathPattern=".*\\.epub" />
             </intent-filter>
         </activity>
         <activity android:name=".others.calc.CalcActivity"

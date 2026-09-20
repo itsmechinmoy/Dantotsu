@@ -374,7 +374,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                 if (currentEp.selectedVideo in extractor.videos.indices) extractor.videos[currentEp.selectedVideo].file.url else extractor.videos[0].file.url
                             } else ""
                             subtitles.forEach {
-                                if (it.language in selectedSubtitles || selectedSubtitles.isEmpty()) {
+                                if (it.language in selectedSubtitles) {
                                     val resolvedUrl = ani.dantotsu.media.anime.player.PlayerSubtitleManager.resolveSubtitleUrl(
                                         it.file.url, embedUrl, selectedVideoUrl
                                     )
@@ -385,7 +385,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             val audioTracks = extractor.audioTracks
                             val audioTracksToDownload: MutableList<Pair<String, String>> = mutableListOf()
                             audioTracks.forEach {
-                                if(it.lang in selectedAudioTracks || selectedAudioTracks.isEmpty()){
+                                if (it.lang in selectedAudioTracks) {
                                     audioTracksToDownload.add(Pair(it.url, it.lang))
                                 }
                             }
@@ -978,9 +978,25 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     }
                     if (subtitles.isNotEmpty()) { // ToTest
                         val subtitleNamesArray = subtitleNames.toTypedArray()
+                        val subLanguages = arrayOf(
+                            "Albanian", "Arabic", "Bosnian", "Bulgarian", "Chinese", "Croatian", "Czech", "Danish", "Dutch", "English",
+                            "Estonian", "Finnish", "French", "Georgian", "German", "Greek", "Hebrew", "Hindi", "Indonesian", "Irish",
+                            "Italian", "Japanese", "Korean", "Lithuanian", "Luxembourgish", "Macedonian", "Mongolian", "Norwegian",
+                            "Polish", "Portuguese", "Punjabi", "Romanian", "Russian", "Serbian", "Slovak", "Slovenian", "Spanish",
+                            "Turkish", "Ukrainian", "Urdu", "Vietnamese"
+                        )
+                        val prefLang = subLanguages.getOrNull(PrefManager.getVal<Int>(PrefName.SubLanguage)) ?: "English"
+                        val isPrefEnglish = prefLang.equals("English", ignoreCase = true)
+                        val hasPrefMatch = if (!isPrefEnglish) subtitleNamesArray.any { it.contains(prefLang, ignoreCase = true) } else false
+                        val englishRegex = Regex("""(?i)(?:^|[^a-zA-Z])(en|eng|english)(?:[^a-zA-Z]|$)""")
+
                         val checkedItems = BooleanArray(subtitleNamesArray.size) { index ->
                             val name = subtitleNamesArray[index]
-                            val isDefaultMatch = name.contains("English", true) || name.contains("en", true) || (subtitles.size == 1)
+                            val isDefaultMatch = if (hasPrefMatch) {
+                                name.contains(prefLang, ignoreCase = true)
+                            } else {
+                                name.contains("English", true) || englishRegex.containsMatchIn(name) || (subtitles.size == 1)
+                            }
                             if (isDefaultMatch) {
                                 selectedSubtitles.add(subtitles[index].language)
                             }

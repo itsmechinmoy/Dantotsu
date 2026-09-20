@@ -38,11 +38,100 @@
 
             <ani.dantotsu.SpinnerNoSwipe
                 android:id="@+id/themeSelect"
-                android:layout_width="wrap_content"
+                android:layout_width="170dp"
                 android:layout_height="48dp"
                 android:entries="@array/themes"
                 android:popupBackground="@drawable/round_corner"
                 tools:ignore="SpeakableTextPresentCheck" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fontFamily="@font/poppins_bold"
+                android:text="Font" />
+
+            <ani.dantotsu.SpinnerNoSwipe
+                android:id="@+id/fontSelect"
+                android:layout_width="170dp"
+                android:layout_height="48dp"
+                android:popupBackground="@drawable/round_corner"
+                tools:ignore="SpeakableTextPresentCheck" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fontFamily="@font/poppins_bold"
+                android:text="Font Size" />
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="@color/nav_bg_inv"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <ImageButton
+                    android:id="@+id/decrementFontSize"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:scaleX="-1"
+                    android:src="@drawable/ic_minus"
+                    app:tint="?attr/colorOnBackground"
+                    tools:ignore="ContentDescription,SpeakableTextPresentCheck,ImageContrastCheck" />
+            </androidx.cardview.widget.CardView>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/fontSize"
+                    android:layout_width="64dp"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:textSize="12sp"
+                    tools:ignore="SpeakableTextPresentCheck" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="@color/nav_bg_inv"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <ImageButton
+                    android:id="@+id/incrementFontSize"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:scaleX="-1"
+                    android:src="@drawable/ic_add"
+                    app:tint="?attr/colorOnBackground"
+                    tools:ignore="ContentDescription,SpeakableTextPresentCheck,ImageContrastCheck" />
+            </androidx.cardview.widget.CardView>
         </LinearLayout>
 
         <LinearLayout
@@ -247,7 +336,7 @@
                     android:id="@+id/lineHeight"
                     android:layout_width="64dp"
                     android:layout_height="wrap_content"
-                    android:inputType="number"
+                    android:inputType="numberDecimal"
                     android:textSize="12sp"
                     tools:ignore="SpeakableTextPresentCheck" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -285,7 +374,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:fontFamily="@font/poppins_bold"
-                android:text="Margin" />
+                android:text="Side Margin" />
 
             <androidx.cardview.widget.CardView
                 android:layout_width="wrap_content"
@@ -316,7 +405,7 @@
                     android:id="@+id/margin"
                     android:layout_width="64dp"
                     android:layout_height="wrap_content"
-                    android:inputType="number"
+                    android:inputType="numberDecimal"
                     android:textSize="12sp"
                     tools:ignore="SpeakableTextPresentCheck" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -533,6 +622,25 @@
             tools:ignore="VisualLintButtonSize" />
 
         <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/boldFont"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="false"
+            android:drawableStart="@drawable/format_bold_24"
+            android:drawablePadding="16dp"
+            android:elegantTextHeight="true"
+            android:fontFamily="@font/poppins_bold"
+            android:minHeight="64dp"
+            android:text="Bold Text"
+            android:textAlignment="viewStart"
+            android:textColor="?attr/colorOnBackground"
+            app:cornerRadius="0dp"
+            app:drawableTint="?attr/colorPrimary"
+            app:showText="false"
+            app:thumbTint="@color/button_switch_track"
+            tools:ignore="VisualLintButtonSize" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/keepScreenOn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -570,6 +678,61 @@
             app:showText="false"
             app:thumbTint="@color/button_switch_track"
             tools:ignore="VisualLintButtonSize" />
+
+        <!-- Auto Scroll -->
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/autoScrollSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="false"
+            android:drawableStart="@drawable/ic_round_swipe_vertical_24"
+            android:drawablePadding="16dp"
+            android:elegantTextHeight="true"
+            android:fontFamily="@font/poppins_bold"
+            android:minHeight="64dp"
+            android:text="@string/auto_scroll"
+            android:textAlignment="viewStart"
+            android:textColor="?attr/colorOnBackground"
+            app:cornerRadius="0dp"
+            app:drawableTint="?attr/colorPrimary"
+            app:showText="false"
+            app:thumbTint="@color/button_switch_track"
+            tools:ignore="VisualLintButtonSize" />
+
+        <LinearLayout
+            android:id="@+id/autoScrollSpeedLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/auto_scroll_speed"
+                android:textColor="?attr/colorOnBackground" />
+
+            <TextView
+                android:id="@+id/autoScrollSpeedText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="13sp"
+                tools:text="3.0x" />
+        </LinearLayout>
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/autoScrollSpeedSlider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stepSize="0.5"
+            android:value="3.0"
+            android:valueFrom="0.5"
+            android:valueTo="10.0" />
     </LinearLayout>
 
 </androidx.core.widget.NestedScrollView>

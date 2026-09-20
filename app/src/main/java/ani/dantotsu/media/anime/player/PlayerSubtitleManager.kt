@@ -479,7 +479,10 @@ class PlayerSubtitleManager(
             val isMatch = targetLabel != null && (
                 subtitle.language.equals(targetLabel, ignoreCase = true) ||
                 subtitle.language.contains(targetLabel, ignoreCase = true) ||
-                (targetLabel.equals("English", ignoreCase = true) && (subtitle.language.contains("Eng", ignoreCase = true) || subtitle.language.contains("en", ignoreCase = true)))
+                (targetLabel.equals("English", ignoreCase = true) && (
+                    subtitle.language.contains("Eng", ignoreCase = true) ||
+                    Regex("""(?i)(?:^|[^a-zA-Z])(en|eng)(?:[^a-zA-Z]|$)""").containsMatchIn(subtitle.language)
+                ))
             )
             val isDefaultSelection = isMatch || (targetLabel == null && index == 0)
             MediaItem.SubtitleConfiguration.Builder(resolvedSubtitleUrl.toUri())

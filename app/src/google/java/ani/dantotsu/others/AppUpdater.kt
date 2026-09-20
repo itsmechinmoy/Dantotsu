@@ -51,20 +51,6 @@ object AppUpdater {
         val downloadUrl: String? = null
     )
 
-    private suspend fun fetchUpdateInfo(repo: String, isDebug: Boolean): Pair<String, String>? {
-        return try {
-            fetchFromGithub(repo, isDebug)
-        } catch (e: Exception) {
-            Logger.log("Github fetch failed, trying fallback: ${e.message}")
-            try {
-                fetchFromFallback(isDebug)
-            } catch (e: Exception) {
-                Logger.log("Fallback fetch failed: ${e.message}")
-                null
-            }
-        }
-    }
-
     private suspend fun fetchFromGithub(repo: String, isDebug: Boolean): Pair<String, String> {
         return if (isDebug) {
             val res = client.get("https://api.github.com/repos/$repo/releases")
@@ -89,20 +75,6 @@ object AppUpdater {
         return response.changelog to response.version
     }
 
-    private suspend fun fetchApkUrl(repo: String, version: String, isDebug: Boolean): String? {
-        return try {
-            fetchApkUrlFromGithub(repo, version)
-        } catch (e: Exception) {
-            Logger.log("Github APK fetch failed, trying fallback: ${e.message}")
-            try {
-                fetchApkUrlFromFallback(version, isDebug)
-            } catch (e: Exception) {
-                Logger.log("Fallback APK fetch failed: ${e.message}")
-                null
-            }
-        }
-    }
-
     private suspend fun fetchApkUrlFromGithub(repo: String, version: String): String? {
         val apks = client.get("https://api.github.com/repos/$repo/releases/tags/v$version")
             .parsed<GithubResponse>().assets?.filter {
@@ -116,15 +88,96 @@ object AppUpdater {
         return CommentsAPI.requestBuilder().get("$url/$version").parsed<FallbackResponse>().downloadUrl
     }
 
+    // Custom updater repo support for itsmechinmoy/dantotsu-updater with multi-ABI APK selection
+    private const val UPDATER_REPO = "itsmechinmoy/dantotsu-updater"
+
+    private suspend fun fetchFromCustomUpdater(repo: String = UPDATER_REPO): Pair<String, String>? {
+        return try {
+            val res = client.get("https://api.github.com/repos/$repo/releases/latest")
+            if (res.code == 200) {
+                val release = Mapper.json.decodeFromString<GithubResponse>(res.text)
+                val v = release.tagName.removePrefix("v").trim()
+                (release.body ?: "") to v.ifEmpty { release.tagName }
+            } else null
+        } catch (e: Exception) {
+            Logger.log("Custom updater check failed: ${e.message}")
+            null
+        }
+    }
+
+    private suspend fun fetchApkUrlFromCustomUpdater(repo: String = UPDATER_REPO, version: String): String? {
+        val tagParam = if (version.startsWith("v")) version else "v$version"
+        val assets = try {
+            client.get("https://api.github.com/repos/$repo/releases/tags/$tagParam")
+                .parsed<GithubResponse>().assets?.filter {
+                    it.browserDownloadURL.endsWith(".apk")
+                }
+        } catch (e: Exception) {
+            try {
+                client.get("https://api.github.com/repos/$repo/releases/tags/$version")
+                    .parsed<GithubResponse>().assets?.filter {
+                        it.browserDownloadURL.endsWith(".apk")
+                    }
+            } catch (e2: Exception) {
+                null
+            }
+        } ?: return null
+
+        val supportedAbis = android.os.Build.SUPPORTED_ABIS ?: emptyArray()
+        for (abi in supportedAbis) {
+            val normalizedAbi = abi.lowercase()
+            val match = assets.firstOrNull { asset ->
+                val name = asset.browserDownloadURL.lowercase()
+                name.contains("-$normalizedAbi-") || name.contains("-$normalizedAbi.") || name.contains("_$normalizedAbi")
+            }
+            if (match != null) {
+                Logger.log("Selected APK matching ABI $normalizedAbi: ${match.browserDownloadURL}")
+                return match.browserDownloadURL
+            }
+        }
+
+        val universal = assets.firstOrNull { it.browserDownloadURL.contains("universal", ignoreCase = true) }
+        if (universal != null) {
+            Logger.log("Selected Universal APK: ${universal.browserDownloadURL}")
+            return universal.browserDownloadURL
+        }
+
+        return assets.firstOrNull()?.browserDownloadURL
+    }
+
     suspend fun check(activity: FragmentActivity, post: Boolean = false) {
         if (post) snackString(currContext()?.getString(R.string.checking_for_update))
         val repo = activity.getString(R.string.repo)
         tryWithSuspend {
-            val (md, version) = fetchUpdateInfo(repo, BuildConfig.DEBUG) ?: return@tryWithSuspend
+            // First check user's custom updater repository
+            val customUpdate = fetchFromCustomUpdater()
+            val (md, version, isCustom) = if (customUpdate != null && isOutdated(customUpdate.second, BuildConfig.VERSION_NAME)) {
+                Triple(customUpdate.first, customUpdate.second, true)
+            } else {
+                // Fallback to original Dantotsu update mechanism
+                val originalUpdate = try {
+                    fetchFromGithub(repo, BuildConfig.DEBUG)
+                } catch (e: Exception) {
+                    Logger.log("Github fetch failed, trying fallback: ${e.message}")
+                    try {
+                        fetchFromFallback(BuildConfig.DEBUG)
+                    } catch (e: Exception) {
+                        Logger.log("Fallback fetch failed: ${e.message}")
+                        null
+                    }
+                } ?: return@tryWithSuspend
+                Triple(originalUpdate.first, originalUpdate.second, false)
+            }
 
             Logger.log("Git Version : $version")
             val dontShow = PrefManager.getCustomVal("dont_ask_for_update_$version", false)
-            if (compareVersion(version) && !dontShow && !activity.isDestroyed) activity.runOnUiThread {
+            val shouldUpdate = if (isCustom) {
+                isOutdated(version, BuildConfig.VERSION_NAME)
+            } else {
+                version > BuildConfig.VERSION_NAME
+            }
+
+            if (shouldUpdate && !dontShow && !activity.isDestroyed) activity.runOnUiThread {
                 CustomBottomDialog.newInstance().apply {
                     setTitleText(
                         "${if (BuildConfig.DEBUG) "Beta " else ""}Update " + currContext()!!.getString(
@@ -153,11 +206,31 @@ object AppUpdater {
                     setPositiveButton(currContext()!!.getString(R.string.lets_go)) {
                         MainScope().launch(Dispatchers.IO) {
                             try {
-                                val apkUrl = fetchApkUrl(repo, version, BuildConfig.DEBUG)
+                                val apkUrl = if (isCustom) {
+                                    fetchApkUrlFromCustomUpdater(UPDATER_REPO, version)
+                                        ?: try {
+                                            fetchApkUrlFromGithub(repo, version)
+                                        } catch (e: Exception) {
+                                            fetchApkUrlFromFallback(version, BuildConfig.DEBUG)
+                                        }
+                                } else {
+                                    try {
+                                        fetchApkUrlFromGithub(repo, version)
+                                    } catch (e: Exception) {
+                                        Logger.log("Github APK fetch failed, trying fallback: ${e.message}")
+                                        try {
+                                            fetchApkUrlFromFallback(version, BuildConfig.DEBUG)
+                                        } catch (e: Exception) {
+                                            Logger.log("Fallback APK fetch failed: ${e.message}")
+                                            null
+                                        }
+                                    }
+                                }
                                 if (apkUrl != null) {
                                     activity.downloadUpdate(version, apkUrl)
                                 } else {
-                                    openLinkInBrowser("https://github.com/repos/$repo/releases/tag/v$version")
+                                    val targetRepo = if (isCustom) UPDATER_REPO else repo
+                                    openLinkInBrowser("https://github.com/$targetRepo/releases/tag/v$version")
                                 }
                             } catch (e: Exception) {
                                 logError(e)
@@ -176,31 +249,43 @@ object AppUpdater {
         }
     }
 
-    private fun compareVersion(version: String): Boolean {
+    private fun isOutdated(latestTag: String, currentVersion: String): Boolean {
+        val latest = latestTag.removePrefix("v").trim()
+        val current = currentVersion.removePrefix("v").trim()
+        if (latest == current) return false
 
+        val latestBase = latest.substringBefore("+").substringBefore("-").trim()
+        val currentBase = current.substringBefore("+").substringBefore("-").trim()
 
-        return when (BuildConfig.BUILD_TYPE) {
-            "debug" -> BuildConfig.VERSION_NAME != version
-            "alpha" -> false
-            else -> {
-                fun toDoubleSafe(list: List<String>): Double {
-                    return list.mapIndexed { i, s ->
-                        val num = s.toDoubleOrNull() ?: 0.0
-                        when (i) {
-                            0 -> num * 100
-                            1 -> num * 10
-                            2 -> num
-                            else -> num
-                        }
-                    }.sum()
-                }
-                val cleanNew = version.substringBefore("+").substringBefore("-")
-                val cleanCurr = BuildConfig.VERSION_NAME.substringBefore("+").substringBefore("-")
-                val new = toDoubleSafe(cleanNew.split("."))
-                val curr = toDoubleSafe(cleanCurr.split("."))
-                new > curr
+        val lParts = latestBase.split(".").mapNotNull { it.toIntOrNull() }
+        val cParts = currentBase.split(".").mapNotNull { it.toIntOrNull() }
+
+        if (lParts.isNotEmpty() && cParts.isNotEmpty()) {
+            val maxLen = maxOf(lParts.size, cParts.size)
+            for (i in 0 until maxLen) {
+                val l = lParts.getOrElse(i) { 0 }
+                val c = cParts.getOrElse(i) { 0 }
+                if (l > c) return true
+                if (l < c) return false
             }
         }
+
+        val latestHash = when {
+            "+" in latest -> latest.substringAfter("+").substringBefore("-").trim()
+            lParts.isEmpty() && latest.isNotBlank() -> latest.substringBefore("-").trim()
+            else -> ""
+        }
+        val currentHash = when {
+            "+" in current -> current.substringAfter("+").substringBefore("-").trim()
+            cParts.isEmpty() && current.isNotBlank() -> current.substringBefore("-").trim()
+            else -> ""
+        }
+
+        if (latestHash.isNotEmpty() && currentHash.isNotEmpty()) {
+            return !(latestHash.startsWith(currentHash) || currentHash.startsWith(latestHash))
+        }
+
+        return latestHash.isNotEmpty() && currentHash.isEmpty()
     }
 
 
