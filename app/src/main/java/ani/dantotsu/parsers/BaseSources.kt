@@ -22,34 +22,45 @@ abstract class WatchSources : BaseSources() {
         return get(i) is OfflineAnimeParser
     }
 
-    suspend fun loadEpisodesFromMedia(i: Int, media: Media, invalidate: Boolean = false): MutableMap<String, Episode> {
+    suspend fun loadEpisodesFromMedia(
+        i: Int,
+        media: Media,
+        invalidate: Boolean = false,
+        onCachedLoaded: ((MutableMap<String, Episode>) -> Unit)? = null
+    ): MutableMap<String, Episode> {
         return tryWithSuspend(true) {
             val parser = get(i)
             val sourceKey = parser.saveName.ifBlank { parser.name }
 
+            var cached: MutableMap<String, Episode>? = null
             if (!invalidate && parser !is OfflineAnimeParser) {
                 val savedResponse = parser.loadSavedShowResponse(media.id)
                 if (savedResponse != null && savedResponse.link.isNotBlank()) {
-                    val cached = EpisodeStorage.loadEpisodes(sourceKey, savedResponse.link)
+                    cached = EpisodeStorage.loadEpisodes(sourceKey, savedResponse.link)
                     if (!cached.isNullOrEmpty()) {
-                        return@tryWithSuspend cached
+                        onCachedLoaded?.invoke(cached)
                     }
                 }
             }
 
-            val res = parser.autoSearch(media) ?: return@tryWithSuspend mutableMapOf()
-            if (!invalidate && parser !is OfflineAnimeParser) {
-                val cached = EpisodeStorage.loadEpisodes(sourceKey, res.link)
+            val res = parser.autoSearch(media) ?: return@tryWithSuspend (cached ?: mutableMapOf())
+            if (cached.isNullOrEmpty() && !invalidate && parser !is OfflineAnimeParser) {
+                cached = EpisodeStorage.loadEpisodes(sourceKey, res.link)
                 if (!cached.isNullOrEmpty()) {
-                    return@tryWithSuspend cached
+                    onCachedLoaded?.invoke(cached)
                 }
             }
 
-            val loaded = loadEpisodes(i, res.link, res.extra, res.sAnime)
+            val loaded = tryWithSuspend(true) {
+                loadEpisodes(i, res.link, res.extra, res.sAnime)
+            } ?: mutableMapOf()
+
             if (loaded.isNotEmpty() && parser !is OfflineAnimeParser) {
                 EpisodeStorage.saveEpisodes(sourceKey, res.link, loaded)
+                loaded
+            } else {
+                cached ?: loaded
             }
-            loaded
         } ?: mutableMapOf()
     }
 
@@ -99,34 +110,45 @@ abstract class MangaReadSources : BaseSources() {
         return get(i) is OfflineMangaParser
     }
 
-    suspend fun loadChaptersFromMedia(i: Int, media: Media, invalidate: Boolean = false): MutableMap<String, MangaChapter> {
+    suspend fun loadChaptersFromMedia(
+        i: Int,
+        media: Media,
+        invalidate: Boolean = false,
+        onCachedLoaded: ((MutableMap<String, MangaChapter>) -> Unit)? = null
+    ): MutableMap<String, MangaChapter> {
         return tryWithSuspend(true) {
             val parser = get(i)
             val sourceKey = parser.saveName.ifBlank { parser.name }
 
+            var cached: MutableMap<String, MangaChapter>? = null
             if (!invalidate && parser !is OfflineMangaParser) {
                 val savedResponse = parser.loadSavedShowResponse(media.id)
                 if (savedResponse != null && savedResponse.link.isNotBlank()) {
-                    val cached = ChapterStorage.loadChapters(sourceKey, savedResponse.link)
+                    cached = ChapterStorage.loadChapters(sourceKey, savedResponse.link)
                     if (!cached.isNullOrEmpty()) {
-                        return@tryWithSuspend cached
+                        onCachedLoaded?.invoke(cached)
                     }
                 }
             }
 
-            val res = parser.autoSearch(media) ?: return@tryWithSuspend mutableMapOf()
-            if (!invalidate && parser !is OfflineMangaParser) {
-                val cached = ChapterStorage.loadChapters(sourceKey, res.link)
+            val res = parser.autoSearch(media) ?: return@tryWithSuspend (cached ?: mutableMapOf())
+            if (cached.isNullOrEmpty() && !invalidate && parser !is OfflineMangaParser) {
+                cached = ChapterStorage.loadChapters(sourceKey, res.link)
                 if (!cached.isNullOrEmpty()) {
-                    return@tryWithSuspend cached
+                    onCachedLoaded?.invoke(cached)
                 }
             }
 
-            val loaded = loadChapters(i, res)
+            val loaded = tryWithSuspend(true) {
+                loadChapters(i, res)
+            } ?: mutableMapOf()
+
             if (loaded.isNotEmpty() && parser !is OfflineMangaParser) {
                 ChapterStorage.saveChapters(sourceKey, res.link, loaded)
+                loaded
+            } else {
+                cached ?: loaded
             }
-            loaded
         } ?: mutableMapOf()
     }
 
