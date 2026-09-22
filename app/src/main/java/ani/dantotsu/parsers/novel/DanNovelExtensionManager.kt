@@ -108,20 +108,43 @@ class DanNovelExtensionManager(private val context: Context) {
                 changed = true
             } else if (avail != null) {
                 val hasUpdate = ext.updateExists(avail)
-                if (ext.hasUpdate != hasUpdate) {
-                    mut[i] = ext.copy(hasUpdate = hasUpdate)
+                val newRepo = avail.repository
+                val newRepoName = avail.repoName
+
+                if (ext.hasUpdate != hasUpdate ||
+                    ext.repository != newRepo ||
+                    ext.repoName != newRepoName ||
+                    ext.isUnofficial
+                ) {
+                    mut[i] = ext.copy(
+                        hasUpdate = hasUpdate,
+                        isUnofficial = false,
+                        repository = newRepo,
+                        repoName = newRepoName,
+                    )
                     changed = true
+                    ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveInstalledExtensionRepo(
+                        ext.pkgName,
+                        newRepo,
+                        newRepoName
+                    )
                 }
             }
         }
         if (changed) _installedNovelExtensionsFlow.value = mut
     }
 
-    fun installExtension(extension: NovelExtension.Available): Observable<InstallStep> =
-        installer.downloadAndInstall(
+    fun installExtension(extension: NovelExtension.Available): Observable<InstallStep> {
+        ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveInstalledExtensionRepo(
+            extension.pkgName,
+            extension.repository,
+            extension.repoName
+        )
+        return installer.downloadAndInstall(
             api.getNovelApkUrl(extension), extension.pkgName,
             extension.name, MediaType.NOVEL
         )
+    }
 
     fun updateExtension(extension: NovelExtension.Installed): Observable<InstallStep> {
         val avail = _availableNovelExtensionsFlow.value.find { it.pkgName == extension.pkgName }

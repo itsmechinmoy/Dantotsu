@@ -204,10 +204,26 @@ class MangaExtensionManager(
                 changed = true
             } else if (availableExt != null) {
                 val hasUpdate = installedExt.updateExists(availableExt)
+                val newRepo = availableExt.repository
+                val newRepoName = availableExt.repoName
 
-                if (installedExt.hasUpdate != hasUpdate) {
-                    mutInstalledExtensions[index] = installedExt.copy(hasUpdate = hasUpdate)
+                if (installedExt.hasUpdate != hasUpdate ||
+                    installedExt.repository != newRepo ||
+                    installedExt.repoName != newRepoName ||
+                    installedExt.isUnofficial
+                ) {
+                    mutInstalledExtensions[index] = installedExt.copy(
+                        hasUpdate = hasUpdate,
+                        isUnofficial = false,
+                        repository = newRepo,
+                        repoName = newRepoName,
+                    )
                     changed = true
+                    ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveInstalledExtensionRepo(
+                        pkgName,
+                        newRepo,
+                        newRepoName
+                    )
                 }
             }
         }
@@ -225,6 +241,11 @@ class MangaExtensionManager(
      * @param extension The extension to be installed.
      */
     fun installExtension(extension: MangaExtension.Available): Observable<InstallStep> {
+        ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveInstalledExtensionRepo(
+            extension.pkgName,
+            extension.repository,
+            extension.repoName
+        )
         return installer.downloadAndInstall(
             api.getMangaApkUrl(extension), extension.pkgName,
             extension.name, MediaType.MANGA

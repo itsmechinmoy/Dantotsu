@@ -64,6 +64,7 @@ internal class ExtensionGithubApi {
 
     private fun List<ExtensionJsonObject>.toAnimeExtensions(repository: String): List<AnimeExtension.Available> {
         val cleanRepo = cleanRepoUrl(repository)
+        val badge = ani.dantotsu.parsers.ExtensionRepoMetaHelper.getRepoBadgeName(repository)
         return this
             .filter {
                 val libVersion = it.extractLibVersion()
@@ -85,6 +86,7 @@ internal class ExtensionGithubApi {
                     apkName = it.apk,
                     repository = repository,
                     iconUrl = it.iconUrl ?: "$cleanRepo/icon/${it.pkg}.png",
+                    repoName = badge,
                 )
             }
     }
@@ -195,6 +197,15 @@ internal class ExtensionGithubApi {
                             val legacyRepo = runCatching {
                                 json.decodeFromString<NetworkLegacyExtensionRepo>(bodyString)
                             }.getOrNull()
+                            if (legacyRepo?.meta != null) {
+                                ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveMeta(
+                                    originalUrl,
+                                    name = legacyRepo.meta.name,
+                                    shortName = legacyRepo.meta.shortName,
+                                    website = legacyRepo.meta.website,
+                                    discord = null
+                                )
+                            }
                             val nextUrl = legacyRepo?.indexV2
                             if (nextUrl != null) {
                                 updateStoreUrl(originalUrl, nextUrl, mediaType)
@@ -208,6 +219,18 @@ internal class ExtensionGithubApi {
                                 !bodyString.contains("\"extensions\"")
 
                         if (isLegacyMetaOnly) {
+                            val legacy = runCatching {
+                                json.decodeFromString<NetworkLegacyExtensionRepo>(bodyString)
+                            }.getOrNull()
+                            if (legacy?.meta != null) {
+                                ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveMeta(
+                                    originalUrl,
+                                    name = legacy.meta.name,
+                                    shortName = legacy.meta.shortName,
+                                    website = legacy.meta.website,
+                                    discord = null
+                                )
+                            }
                             null
                         } else {
                             runCatching {
@@ -221,6 +244,13 @@ internal class ExtensionGithubApi {
                     }
 
                     if (store != null) {
+                        ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveMeta(
+                            originalUrl,
+                            name = store.name,
+                            shortName = store.badgeLabel,
+                            website = store.contact.website,
+                            discord = store.contact.discord
+                        )
                         val resolvedList: NetworkExtensionStore.ExtensionList? = if (store.extensionListUrl != null) {
                             val listUrl = if (store.extensionListUrl.startsWith("http")) {
                                 store.extensionListUrl
@@ -335,6 +365,7 @@ internal class ExtensionGithubApi {
 
     private fun List<ExtensionJsonObject>.toMangaExtensions(repository: String): List<MangaExtension.Available> {
         val cleanRepo = cleanRepoUrl(repository)
+        val badge = ani.dantotsu.parsers.ExtensionRepoMetaHelper.getRepoBadgeName(repository)
         return this
             .filter {
                 val libVersion = it.extractLibVersion()
@@ -355,6 +386,7 @@ internal class ExtensionGithubApi {
                     apkName = it.apk,
                     repository = repository,
                     iconUrl = it.iconUrl ?: "$cleanRepo/icon/${it.pkg}.png",
+                    repoName = badge,
                 )
             }
     }
@@ -416,6 +448,8 @@ internal class ExtensionGithubApi {
     }
 
     private fun List<ExtensionJsonObject>.toNovelExtensions(repository: String): List<NovelExtension.Available> {
+        val cleanRepo = cleanRepoUrl(repository)
+        val badge = ani.dantotsu.parsers.ExtensionRepoMetaHelper.getRepoBadgeName(repository)
         return filter { !it.apk.isNullOrBlank() && !it.pkg.isNullOrBlank() && it.apk.endsWith(".apk", ignoreCase = true) }
             .mapNotNull { extension ->
                 val sources = extension.sources?.map { source ->
@@ -426,7 +460,7 @@ internal class ExtensionGithubApi {
                         source.baseUrl,
                     )
                 }
-                val iconUrl = extension.iconUrl ?: "${cleanRepoUrl(repository)}/icon/${extension.pkg}.png"
+                val iconUrl = extension.iconUrl ?: "$cleanRepo/icon/${extension.pkg}.png"
                 NovelExtension.Available(
                     extension.name,
                     extension.pkg,
@@ -435,6 +469,7 @@ internal class ExtensionGithubApi {
                     repository,
                     sources?.toNovelSources() ?: emptyList(),
                     iconUrl,
+                    repoName = badge,
                 )
             }
     }

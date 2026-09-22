@@ -32,6 +32,8 @@ sealed class MangaExtension {
         val hasUpdate: Boolean = false,
         val isObsolete: Boolean = false,
         val isUnofficial: Boolean = false,
+        val repository: String? = null,
+        val repoName: String? = null,
     ) : MangaExtension()
 
     data class Available(
@@ -47,7 +49,8 @@ sealed class MangaExtension {
         val sources: List<AvailableMangaSources>,
         val apkName: String,
         val iconUrl: String,
-        val repository: String
+        val repository: String,
+        val repoName: String? = null,
     ) : MangaExtension()
 
     data class Untrusted(

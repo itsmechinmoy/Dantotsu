@@ -162,7 +162,7 @@ class NovelExtensionAdapter(private val clickListener: OnNovelInstallClickListen
                 oldItem: NovelExtension.Available,
                 newItem: NovelExtension.Available
             ): Boolean {
-                return oldItem.pkgName == newItem.pkgName
+                return oldItem.pkgName == newItem.pkgName && oldItem.repository == newItem.repository
             }
 
             override fun areContentsTheSame(
@@ -223,10 +223,12 @@ class NovelExtensionAdapter(private val clickListener: OnNovelInstallClickListen
 
         val extensionIconImageView: ImageView = binding.extensionIconImageView
         fun bind(extension: NovelExtension.Available) {
-            val nsfw = ""
             val lang = LanguageMapper.getLanguageName(extension.lang)
             binding.extensionNameTextView.text = extension.name
-            binding.extensionVersionTextView.text = "$lang ${extension.versionName} $nsfw"
+            val repo = extension.repoName ?: ani.dantotsu.parsers.ExtensionRepoMetaHelper.getRepoBadgeName(extension.repository)
+            val repoBadge = if (repo.isNotBlank()) "@$repo" else ""
+            val versionText = listOf(lang, extension.versionName, repoBadge).filter { it.isNotBlank() }.joinToString(" ")
+            binding.extensionVersionTextView.text = versionText
         }
 
         fun clear() {

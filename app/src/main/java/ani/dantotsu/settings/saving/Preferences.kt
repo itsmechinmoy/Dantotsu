@@ -38,6 +38,8 @@ enum class PrefName(val data: Pref) {
     AnimeExtensionRepos(Pref(Location.General, Set::class, setOf<String>())),
     MangaExtensionRepos(Pref(Location.General, Set::class, setOf<String>())),
     NovelExtensionRepos(Pref(Location.General, Set::class, setOf<String>())),
+    ExtensionRepoMeta(Pref(Location.General, String::class, "{}")),
+    InstalledExtensionRepos(Pref(Location.General, String::class, "{}")),
     AnimeSourcesOrder(Pref(Location.General, List::class, listOf<String>())),
     MangaSourcesOrder(Pref(Location.General, List::class, listOf<String>())),
     SortedAnimeSH(Pref(Location.General, List::class, listOf<SearchHistory>())),

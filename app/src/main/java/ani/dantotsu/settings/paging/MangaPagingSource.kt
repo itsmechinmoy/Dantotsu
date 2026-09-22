@@ -138,7 +138,7 @@ class MangaExtensionAdapter(private val clickListener: OnMangaInstallClickListen
                 oldItem: MangaExtension.Available,
                 newItem: MangaExtension.Available
             ): Boolean {
-                return oldItem.pkgName == newItem.pkgName
+                return oldItem.pkgName == newItem.pkgName && oldItem.repository == newItem.repository
             }
 
             override fun areContentsTheSame(
@@ -209,7 +209,9 @@ class MangaExtensionAdapter(private val clickListener: OnMangaInstallClickListen
             } else {
                 "$libStr.${extension.versionName}"
             }
-            val versionText = "$lang $displayVersion $nsfw".trim()
+            val repo = extension.repoName ?: ani.dantotsu.parsers.ExtensionRepoMetaHelper.getRepoBadgeName(extension.repository)
+            val repoBadge = if (repo.isNotBlank()) "@$repo" else ""
+            val versionText = listOf(lang, displayVersion, nsfw, repoBadge).filter { it.isNotBlank() }.joinToString(" ")
             binding.extensionVersionTextView.text = versionText
         }
 

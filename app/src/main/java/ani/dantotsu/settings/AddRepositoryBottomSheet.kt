@@ -8,6 +8,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.R
@@ -15,6 +17,8 @@ import ani.dantotsu.copyToClipboard
 import ani.dantotsu.databinding.BottomSheetAddRepositoryBinding
 import ani.dantotsu.databinding.ItemRepoBinding
 import ani.dantotsu.media.MediaType
+import ani.dantotsu.parsers.ExtensionRepoMeta
+import ani.dantotsu.parsers.ExtensionRepoMetaHelper
 import ani.dantotsu.parsers.novel.NovelExtensionManager
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -23,9 +27,11 @@ import com.xwray.groupie.GroupieAdapter
 import com.xwray.groupie.viewbinding.BindableItem
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
+import eu.kanade.tachiyomi.util.system.openInBrowser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -37,7 +43,19 @@ class RepoItem(
     override fun getLayout() = R.layout.item_repo
 
     override fun bind(viewBinding: ItemRepoBinding, position: Int) {
-        viewBinding.repoNameTextView.text = url.cleanShownUrl()
+        viewBinding.root.tag = url
+        val initialMeta = ExtensionRepoMetaHelper.getCachedMeta(url)
+        bindMeta(viewBinding, initialMeta)
+
+        CoroutineScope(Dispatchers.Main).launch {
+            val meta = withContext(Dispatchers.IO) {
+                ExtensionRepoMetaHelper.getMeta(url)
+            }
+            if (viewBinding.root.tag == url) {
+                bindMeta(viewBinding, meta)
+            }
+        }
+
         viewBinding.repoDeleteImageView.setOnClickListener {
             onRemove(url, mediaType)
         }
@@ -47,15 +65,66 @@ class RepoItem(
         }
     }
 
-    override fun initializeViewBinding(view: View): ItemRepoBinding {
-        return ItemRepoBinding.bind(view)
+    private fun bindMeta(viewBinding: ItemRepoBinding, meta: ExtensionRepoMeta?) {
+        val context = viewBinding.root.context
+        val cleanUrl = ExtensionRepoMetaHelper.cleanShownUrl(url)
+        val name = meta?.name?.takeIf { it.isNotBlank() }
+            ?: meta?.shortName?.takeIf { it.isNotBlank() }
+            ?: cleanUrl
+
+        val repoPageUrl = ExtensionRepoMetaHelper.getRepoPageUrl(url, meta)
+        val displayUrl = repoPageUrl?.removePrefix("https://")?.removePrefix("http://") ?: cleanUrl
+
+        viewBinding.repoNameTextView.text = name
+        viewBinding.repoUrlTextView.text = displayUrl
+
+        val openRepoPage: (View) -> Unit = {
+            val target = repoPageUrl ?: meta?.website?.takeIf { it.isNotBlank() }
+            if (target != null) {
+                context.openInBrowser(target)
+            }
+        }
+
+        if (repoPageUrl != null || (meta?.website?.isNotBlank() == true)) {
+            viewBinding.repoNameTextView.setOnClickListener(openRepoPage)
+            viewBinding.repoUrlTextView.setOnClickListener(openRepoPage)
+        } else {
+            viewBinding.repoNameTextView.setOnClickListener(null)
+            viewBinding.repoUrlTextView.setOnClickListener(null)
+        }
+
+        if (repoPageUrl != null) {
+            viewBinding.repoGithubImageView.isVisible = true
+            viewBinding.repoGithubImageView.setOnClickListener {
+                context.openInBrowser(repoPageUrl)
+            }
+        } else {
+            viewBinding.repoGithubImageView.isGone = true
+        }
+
+        val websiteUrl = meta?.website?.takeIf { it.isNotBlank() }
+        if (websiteUrl != null && websiteUrl != repoPageUrl && websiteUrl != "$repoPageUrl/") {
+            viewBinding.repoWebsiteImageView.isVisible = true
+            viewBinding.repoWebsiteImageView.setOnClickListener {
+                context.openInBrowser(websiteUrl)
+            }
+        } else {
+            viewBinding.repoWebsiteImageView.isGone = true
+        }
+
+        val discordUrl = meta?.discord?.takeIf { it.isNotBlank() }
+        if (discordUrl != null) {
+            viewBinding.repoDiscordImageView.isVisible = true
+            viewBinding.repoDiscordImageView.setOnClickListener {
+                context.openInBrowser(discordUrl)
+            }
+        } else {
+            viewBinding.repoDiscordImageView.isGone = true
+        }
     }
 
-    private fun String.cleanShownUrl(): String {
-        return this
-            .removePrefix("https://raw.githubusercontent.com/")
-            .replace("index.min.json", "")
-            .removeSuffix("/")
+    override fun initializeViewBinding(view: View): ItemRepoBinding {
+        return ItemRepoBinding.bind(view)
     }
 }
 
@@ -220,6 +289,7 @@ class AddRepositoryBottomSheet : BottomSheetDialogFragment() {
                             .plus(validLink)
                     PrefManager.setVal(PrefName.AnimeExtensionRepos, anime)
                     CoroutineScope(Dispatchers.IO).launch {
+                        ExtensionRepoMetaHelper.getMeta(validLink)
                         Injekt.get<AnimeExtensionManager>().findAvailableExtensions()
                     }
                 }
@@ -230,6 +300,7 @@ class AddRepositoryBottomSheet : BottomSheetDialogFragment() {
                             .plus(validLink)
                     PrefManager.setVal(PrefName.MangaExtensionRepos, manga)
                     CoroutineScope(Dispatchers.IO).launch {
+                        ExtensionRepoMetaHelper.getMeta(validLink)
                         Injekt.get<MangaExtensionManager>().findAvailableExtensions()
                     }
                 }
@@ -240,6 +311,7 @@ class AddRepositoryBottomSheet : BottomSheetDialogFragment() {
                             .plus(validLink)
                     PrefManager.setVal(PrefName.NovelExtensionRepos, novel)
                     CoroutineScope(Dispatchers.IO).launch {
+                        ExtensionRepoMetaHelper.getMeta(validLink)
                         Injekt.get<NovelExtensionManager>().findAvailableExtensions()
                     }
                 }

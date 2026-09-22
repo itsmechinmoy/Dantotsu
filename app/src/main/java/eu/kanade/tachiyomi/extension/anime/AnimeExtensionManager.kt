@@ -207,10 +207,26 @@ class AnimeExtensionManager(
                 changed = true
             } else if (availableExt != null) {
                 val hasUpdate = installedExt.updateExists(availableExt)
+                val newRepo = availableExt.repository
+                val newRepoName = availableExt.repoName
 
-                if (installedExt.hasUpdate != hasUpdate) {
-                    mutInstalledAnimeExtensions[index] = installedExt.copy(hasUpdate = hasUpdate)
+                if (installedExt.hasUpdate != hasUpdate ||
+                    installedExt.repository != newRepo ||
+                    installedExt.repoName != newRepoName ||
+                    installedExt.isUnofficial
+                ) {
+                    mutInstalledAnimeExtensions[index] = installedExt.copy(
+                        hasUpdate = hasUpdate,
+                        isUnofficial = false,
+                        repository = newRepo,
+                        repoName = newRepoName,
+                    )
                     changed = true
+                    ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveInstalledExtensionRepo(
+                        pkgName,
+                        newRepo,
+                        newRepoName
+                    )
                 }
             }
         }
@@ -228,6 +244,11 @@ class AnimeExtensionManager(
      * @param extension The anime extension to be installed.
      */
     fun installExtension(extension: AnimeExtension.Available): Observable<InstallStep> {
+        ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveInstalledExtensionRepo(
+            extension.pkgName,
+            extension.repository,
+            extension.repoName
+        )
         return installer.downloadAndInstall(
             api.getAnimeApkUrl(extension), extension.pkgName,
             extension.name, MediaType.ANIME

@@ -571,6 +571,7 @@ internal object ExtensionLoader {
             else -> "all"
         }
 
+        val savedRepo = ani.dantotsu.parsers.ExtensionRepoMetaHelper.getInstalledExtensionRepo(pkgName)
         val extension = AnimeExtension.Installed(
             name = extName,
             pkgName = pkgName,
@@ -585,6 +586,8 @@ internal object ExtensionLoader {
             pkgFactory = appInfo.metaData?.getString("$ANIME_PACKAGE$XX_METADATA_SOURCE_FACTORY"),
             isUnofficial = true,
             icon = context.getApplicationIcon(pkgName),
+            repository = savedRepo?.first,
+            repoName = savedRepo?.second,
         )
         return AnimeLoadResult.Success(extension)
     }
@@ -705,6 +708,7 @@ internal object ExtensionLoader {
             else -> "all"
         }
 
+        val savedRepo = ani.dantotsu.parsers.ExtensionRepoMetaHelper.getInstalledExtensionRepo(pkgName)
         val extension = MangaExtension.Installed(
             name = extName,
             pkgName = pkgName,
@@ -719,6 +723,8 @@ internal object ExtensionLoader {
             pkgFactory = appInfo.metaData?.getString("$MANGA_PACKAGE$XX_METADATA_SOURCE_FACTORY"),
             isUnofficial = true,
             icon = context.getApplicationIcon(pkgName),
+            repository = savedRepo?.first,
+            repoName = savedRepo?.second,
         )
         return MangaLoadResult.Success(extension)
     }
@@ -761,6 +767,7 @@ internal object ExtensionLoader {
             return NovelLoadResult.Error(e as Exception)
         }
 
+        val savedRepo = ani.dantotsu.parsers.ExtensionRepoMetaHelper.getInstalledExtensionRepo(pkgName)
         val extension = NovelExtension.Installed(
             name = extName,
             pkgName = pkgName,
@@ -769,6 +776,8 @@ internal object ExtensionLoader {
             sources = listOfNotNull(novelInterfaceInstance),
             isUnofficial = true,
             icon = context.getApplicationIcon(pkgName),
+            repository = savedRepo?.first,
+            repoName = savedRepo?.second,
         )
         return NovelLoadResult.Success(extension)
     }
