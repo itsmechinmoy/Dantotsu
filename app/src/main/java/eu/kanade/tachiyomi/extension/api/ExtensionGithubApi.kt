@@ -131,10 +131,10 @@ internal class ExtensionGithubApi {
 
         val defaultEndpoints = when (mediaType) {
             MediaType.ANIME -> listOf(
-                "$cleanBase/index.min.json",
+                "$cleanBase/index.pb",
                 "$cleanBase/repo.json",
-                "$cleanBase/index.json",
-                "$cleanBase/index.pb"
+                "$cleanBase/index.min.json",
+                "$cleanBase/index.json"
             )
             MediaType.MANGA -> listOf(
                 "$cleanBase/index.pb",
@@ -180,8 +180,11 @@ internal class ExtensionGithubApi {
                     }.getOrNull()
 
                     if (!list.isNullOrEmpty()) {
-                        val hasDeprecation = mediaType == MediaType.MANGA && list.any {
-                            it.pkg.contains("keiyoushi") || it.name.contains("Outdated App", ignoreCase = true) || it.name.contains("Update to Mihon", ignoreCase = true)
+                        val hasDeprecation = (mediaType == MediaType.MANGA || mediaType == MediaType.ANIME) && list.any {
+                            it.pkg.contains("keiyoushi") || it.pkg.contains("animiru") ||
+                            it.name.contains("Outdated App", ignoreCase = true) ||
+                            it.name.contains("Update to Mihon", ignoreCase = true) ||
+                            it.name.contains("switch to Animiru", ignoreCase = true)
                         }
                         if (hasDeprecation && !targetUrl.endsWith("index.pb")) {
                             val pbUrl = "$cleanBase/index.pb"
@@ -191,7 +194,7 @@ internal class ExtensionGithubApi {
                     }
                 } else {
                     // JSON Object '{' or Protobuf
-                    val store: NetworkExtensionStore? = if (firstByte == 0x7B.toByte()) { // '{'
+                    if (firstByte == 0x7B.toByte()) { // '{'
                         val bodyString = responseBytes.toString(Charsets.UTF_8)
                         if (bodyString.contains("\"index_v2\"") || bodyString.contains("\"indexV2\"")) {
                             val legacyRepo = runCatching {
@@ -231,16 +234,100 @@ internal class ExtensionGithubApi {
                                     discord = null
                                 )
                             }
-                            null
-                        } else {
-                            runCatching {
-                                json.decodeFromString<NetworkExtensionStore>(bodyString)
-                            }.getOrNull()
+                            continue
                         }
-                    } else { // Protobuf
-                        runCatching {
-                            ProtoBuf.decodeFromByteArray<NetworkExtensionStore>(responseBytes)
-                        }.getOrNull()
+                    }
+
+                    val prefix = when (mediaType) {
+                        MediaType.ANIME -> "Aniyomi: "
+                        MediaType.MANGA -> "Tachiyomi: "
+                        else -> ""
+                    }
+
+                    // Attempt decode as Anime store first if mediaType == ANIME, otherwise Manga store first
+                    if (mediaType == MediaType.ANIME) {
+                        val animeStore = if (firstByte == 0x7B.toByte()) {
+                            val bodyString = responseBytes.toString(Charsets.UTF_8)
+                            runCatching { json.decodeFromString<NetworkAnimeExtensionStore>(bodyString) }.getOrNull()
+                        } else {
+                            runCatching { ProtoBuf.decodeFromByteArray<NetworkAnimeExtensionStore>(responseBytes) }.getOrNull()
+                        }
+
+                        if (animeStore != null) {
+                            ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveMeta(
+                                originalUrl,
+                                name = animeStore.name,
+                                shortName = animeStore.badgeLabel,
+                                website = animeStore.contact.website,
+                                discord = animeStore.contact.discord
+                            )
+
+                            val extensionsList = if (animeStore.extensionListUrl != null) {
+                                val listUrl = if (animeStore.extensionListUrl.startsWith("http")) {
+                                    animeStore.extensionListUrl
+                                } else {
+                                    "$cleanBase/${animeStore.extensionListUrl.removePrefix("/")}"
+                                }
+                                val listResponse = runCatching {
+                                    networkService.client.newCall(GET(listUrl)).awaitSuccess()
+                                }.getOrNull()
+
+                                val listBytes = listResponse?.body?.bytes()?.decompressIfGzipped()
+                                if (listBytes != null && listBytes.isNotEmpty() && listBytes[0] == 0x7B.toByte()) {
+                                    runCatching {
+                                        json.decodeFromString<NetworkAnimeExtensionStore.ExtensionList>(listBytes.toString(Charsets.UTF_8))
+                                    }.getOrNull()
+                                } else if (listBytes != null && listBytes.isNotEmpty()) {
+                                    runCatching {
+                                        ProtoBuf.decodeFromByteArray<NetworkAnimeExtensionStore.ExtensionList>(listBytes)
+                                    }.getOrNull()
+                                } else {
+                                    null
+                                }
+                            } else {
+                                animeStore.extensionList
+                            }
+
+                            if (extensionsList != null && extensionsList.extensions.isNotEmpty()) {
+                                return extensionsList.extensions.map { ext ->
+                                    val sourcesMapped = ext.sources.map { src ->
+                                        ExtensionSourceJsonObject(
+                                            id = src.id,
+                                            lang = src.language,
+                                            name = src.name,
+                                            baseUrl = src.homeUrl
+                                        )
+                                    }
+                                    val primaryLang = ext.sources.firstOrNull()?.language ?: "all"
+                                    val prefixName = if (ext.name.startsWith(prefix)) ext.name else "$prefix${ext.name}"
+                                    val extLib = ext.extensionLib.ifBlank {
+                                        ext.versionName.substringBefore('.').takeIf { it.toDoubleOrNull() != null }
+                                    }
+                                    ExtensionJsonObject(
+                                        name = prefixName,
+                                        pkg = ext.packageName,
+                                        apk = ext.resources.apkUrl,
+                                        lang = primaryLang,
+                                        code = ext.versionCode,
+                                        version = ext.versionName,
+                                        nsfw = if (ext.contentWarning == NetworkAnimeExtensionStore.ContentWarning.NSFW || ext.contentWarning == NetworkAnimeExtensionStore.ContentWarning.MIXED) 1 else 0,
+                                        hasReadme = 0,
+                                        hasChangelog = 0,
+                                        sources = sourcesMapped,
+                                        iconUrl = ext.resources.iconUrl,
+                                        extensionLib = extLib,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback or Manga store
+                    val store: NetworkExtensionStore? = if (firstByte == 0x7B.toByte()) {
+                        val bodyString = responseBytes.toString(Charsets.UTF_8)
+                        runCatching { json.decodeFromString<NetworkExtensionStore>(bodyString) }.getOrNull()
+                    } else {
+                        runCatching { ProtoBuf.decodeFromByteArray<NetworkExtensionStore>(responseBytes) }.getOrNull()
                     }
 
                     if (store != null) {
@@ -278,11 +365,6 @@ internal class ExtensionGithubApi {
                         }
 
                         if (resolvedList != null && resolvedList.extensions.isNotEmpty()) {
-                            val prefix = when (mediaType) {
-                                MediaType.ANIME -> "Aniyomi: "
-                                MediaType.MANGA -> "Tachiyomi: "
-                                else -> ""
-                            }
                             return resolvedList.extensions.map { ext ->
                                 val sourcesMapped = ext.sources.map { src ->
                                     ExtensionSourceJsonObject(

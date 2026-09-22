@@ -4,6 +4,7 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
 import eu.kanade.tachiyomi.extension.api.NetworkExtensionStore
+import eu.kanade.tachiyomi.extension.api.NetworkExtensionStoreMetaOnly
 import eu.kanade.tachiyomi.extension.api.NetworkLegacyExtensionRepo
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -316,17 +317,17 @@ object ExtensionRepoMetaHelper {
                         break
                     }
                 } else if (firstByte != 0x5B.toByte()) { // Protobuf
-                    val store = runCatching {
-                        ProtoBuf.decodeFromByteArray<NetworkExtensionStore>(responseBytes)
+                    val metaOnly = runCatching {
+                        ProtoBuf.decodeFromByteArray<NetworkExtensionStoreMetaOnly>(responseBytes)
                     }.getOrNull()
 
-                    if (store != null) {
+                    if (metaOnly != null && (metaOnly.name.isNotBlank() || metaOnly.badgeLabel.isNotBlank())) {
                         fetchedMeta = saveMeta(
                             repoUrl = repoUrl,
-                            name = store.name,
-                            shortName = store.badgeLabel,
-                            website = store.contact.website,
-                            discord = store.contact.discord
+                            name = metaOnly.name,
+                            shortName = metaOnly.badgeLabel,
+                            website = metaOnly.contact.website,
+                            discord = metaOnly.contact.discord
                         )
                         break
                     }
