@@ -97,6 +97,8 @@ media3-ui = { module = "androidx.media3:media3-ui", version.ref = "exo" }
 media3-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "exo" }
 media3-dash = { module = "androidx.media3:media3-exoplayer-dash", version.ref = "exo" }
 media3-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "exo" }
+media3-cronet = { module = "androidx.media3:media3-datasource-cronet", version.ref = "exo" }
+play-services-cronet = "com.google.android.gms:play-services-cronet:18.1.0"
 media3-session = { module = "androidx.media3:media3-session", version.ref = "exo" }
 media3-cast = { module = "androidx.media3:media3-cast", version.ref = "exo" }
 media3-effect = { module = "androidx.media3:media3-effect", version.ref = "exo" }

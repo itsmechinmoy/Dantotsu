@@ -165,6 +165,12 @@ dependencies {
     implementation(libs.bundles.media3)
     implementation(libs.bundles.subtitles)
     implementation(libs.mediarouter)
+    // HTTP/3 (QUIC) — media3-datasource-cronet:1.11.1 API surface:
+    // Tier 1 (GMS devices): CronetDataSource via Play Services CronetProvider — HTTP/3 + HTTP/2.
+    // Tier 2 (fallback / F-Droid): OkHttp — HTTP/2. CronetProvider absent → caught → falls through.
+    implementation(libs.media3.cronet)
+    // GMS Cronet provider — google flavor only; absent from F-Droid APK
+    add("googleImplementation", libs.play.services.cronet)
 
     // Firebase
     add("googleImplementation", platform(libs.firebase.bom))

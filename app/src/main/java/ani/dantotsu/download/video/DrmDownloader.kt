@@ -13,7 +13,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSourceInputStream
-import androidx.media3.datasource.okhttp.OkHttpDataSource
+import ani.dantotsu.media.anime.MediaDataSourceFactory
 import androidx.media3.exoplayer.dash.DashSegmentIndex
 import androidx.media3.exoplayer.dash.DashUtil
 import androidx.media3.exoplayer.dash.manifest.Period
@@ -200,10 +200,9 @@ object DrmDownloader {
         val client = Injekt.get<NetworkHelper>().client
         // The source's own headers win: a manifest behind auth 401s without them.
         val merged = defaultHeaders + extra
-        return OkHttpDataSource.Factory(client).apply {
-            setDefaultRequestProperties(merged)
-            merged["User-Agent"]?.let { setUserAgent(it) }
-        }
+        // DRM license fetches intentionally stay on OkHttp — they need the existing
+        // cookie jar and CloudFlare interceptor chain; QUIC is not required here.
+        return MediaDataSourceFactory.buildOkHttpFactory(client, merged)
     }
 
     private fun bestRepresentation(period: Period, type: Int): Representation? =

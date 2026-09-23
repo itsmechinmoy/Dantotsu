@@ -16,7 +16,6 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -33,6 +32,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import ani.dantotsu.defaultHeaders
 import ani.dantotsu.media.anime.AudioFocusListener
+import ani.dantotsu.media.anime.MediaDataSourceFactory
 import ani.dantotsu.media.anime.VideoCache
 import ani.dantotsu.others.LanguageMapper
 import ani.dantotsu.parsers.Video
@@ -209,12 +209,12 @@ class DantotsuPlayerManager(
                 }
             }
         }.build()
-        val httpDataSourceFactory = OkHttpDataSource.Factory(httpClient).apply {
-            setDefaultRequestProperties(headers)
-            if (headers.containsKey("User-Agent")) {
-                setUserAgent(headers["User-Agent"])
-            }
-        }
+        val httpDataSourceFactory = MediaDataSourceFactory.resolveHttpFactory(
+            context = activity,
+            headers = headers,
+            okHttpClient = httpClient,
+            isLocalhost = isLocalhost,
+        )
 
         val upstream = DefaultDataSource.Factory(activity, httpDataSourceFactory)
         val cacheFactory: DataSource.Factory = CacheDataSource.Factory()
