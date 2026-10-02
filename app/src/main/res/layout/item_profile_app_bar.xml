@@ -9,6 +9,8 @@
         android:layout_height="wrap_content"
         android:translationZ="5dp"
         android:visibility="gone"
+        app:elevation="0dp"
+        app:liftOnScroll="false"
         tools:visibility="visible">
 
         <com.google.android.material.appbar.CollapsingToolbarLayout

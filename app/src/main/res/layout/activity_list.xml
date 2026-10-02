@@ -18,7 +18,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?attr/colorSurface"
-        android:theme="@style/Theme.Dantotsu.AppBarOverlay">
+        android:theme="@style/Theme.Dantotsu.AppBarOverlay"
+        app:elevation="0dp"
+        app:liftOnScroll="false">
 
         <LinearLayout
             android:id="@+id/settingsContainer"

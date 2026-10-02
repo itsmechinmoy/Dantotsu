@@ -158,7 +158,7 @@ configurations.all {
 }
 
 dependencies {
-    // ffmpeg-kit (must precede media3 so complete native binaries with av_log_default_callback are chosen by pickFirsts)
+    // ffmpeg-kit for NativeVideoDownloader
     implementation(libs.ffmpeg.kit)
 
     // Media3 & decoders

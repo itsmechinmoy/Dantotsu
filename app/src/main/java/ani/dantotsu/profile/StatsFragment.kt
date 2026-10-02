@@ -89,7 +89,7 @@ class StatsFragment :
 
         binding.compare.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                viewLifecycleOwner.lifecycleScope.launch {
+                lifecycleScope.launch {
                     if (Anilist.userid != null) {
                         withContext(Dispatchers.Main) {
                             val currentBinding = _binding ?: return@withContext

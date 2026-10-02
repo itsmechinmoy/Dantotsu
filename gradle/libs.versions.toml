@@ -220,8 +220,7 @@ media3 = [
     "media3-okhttp",
     "media3-session",
     "media3-cast",
-    "media3-effect",
-    "nextlib"
+    "media3-effect"
 ]
 
 subtitles = ["ass-media", "ass-kt"]

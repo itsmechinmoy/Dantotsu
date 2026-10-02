@@ -8,8 +8,7 @@
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/characterAppBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:contentScrim="?android:colorBackground">
+        android:layout_height="wrap_content">
 
         <com.google.android.material.appbar.CollapsingToolbarLayout
             android:id="@+id/characterCollapsing"

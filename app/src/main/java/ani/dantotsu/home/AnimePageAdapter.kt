@@ -279,10 +279,6 @@ class AnimePageAdapter : RecyclerView.Adapter<AnimePageAdapter.AnimePageViewHold
         }
     }
 
-    private val sharedMediaPool = RecyclerView.RecycledViewPool().apply {
-        setMaxRecycledViews(0, 25)
-    }
-
     fun init(
         adaptor: MediaAdaptor,
         recyclerView: RecyclerView,
@@ -293,7 +289,6 @@ class AnimePageAdapter : RecyclerView.Adapter<AnimePageAdapter.AnimePageViewHold
         media: MutableList<Media>
     ) {
         progress.visibility = View.GONE
-        recyclerView.setRecycledViewPool(sharedMediaPool)
         recyclerView.setHasFixedSize(true)
         val llm = LinearLayoutManager(
             recyclerView.context,

@@ -27,7 +27,6 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import ani.dantotsu.defaultHeaders
@@ -41,7 +40,6 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
-import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import io.github.peerless2012.ass.media.kt.withAssSupport
 import okhttp3.OkHttpClient
 import java.io.ByteArrayInputStream
@@ -321,6 +319,9 @@ class DantotsuPlayerManager(
         val player = exoPlayer ?: return
         val currentItem = currentMediaItem ?: return
 
+        // Snapshot current track parameters so audio selection survives the media-source rebuild.
+        val savedTrackParams = player.trackSelectionParameters
+
         val newMediaItem = currentItem.buildUpon()
             .setSubtitleConfigurations(newSubConfigs)
             .build()
@@ -335,6 +336,8 @@ class DantotsuPlayerManager(
             player.setMediaItem(newMediaItem, position)
         }
         player.prepare()
+        // Restore track selection so the audio track (and any disabled text tracks) are not reset.
+        player.trackSelectionParameters = savedTrackParams
         player.play()
     }
 
@@ -365,27 +368,12 @@ class DantotsuPlayerManager(
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        val useExtensionDecoder = !forceDefaultRenderers
-        val decoder = if (useExtensionDecoder) {
-            DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-        } else {
-            DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-        }
-
-        val nextRenderersFactory = NextRenderersFactory(activity)
-            .setEnableDecoderFallback(true)
-            .setExtensionRendererMode(decoder)
-
         subtitleManager.initAssHandler()
         val handler = subtitleManager.assHandler!!
-        Logger.log("Libass: Calling nextRenderersFactory.withAssSupport()")
-        val renderersFactory = if (forceDefaultRenderers) {
-            DefaultRenderersFactory(activity)
-                .setEnableDecoderFallback(true)
-                .withAssSupport(handler)
-        } else {
-            nextRenderersFactory.withAssSupport(handler)
-        }
+        Logger.log("Libass: Calling renderersFactory.withAssSupport()")
+        val renderersFactory = DefaultRenderersFactory(activity)
+            .setEnableDecoderFallback(true)
+            .withAssSupport(handler)
 
         val mediaSourceFactory = activeMediaSourceFactory ?: DefaultMediaSourceFactory(activity)
             .setSubtitleParserFactory(subtitleManager.createSubtitleParserFactory())
@@ -434,7 +422,6 @@ class DantotsuPlayerManager(
         }
 
         player.addListener(listener)
-        player.addAnalyticsListener(EventLogger())
         isInitialized = true
         return player
     }
