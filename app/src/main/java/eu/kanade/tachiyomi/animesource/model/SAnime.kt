@@ -2,6 +2,7 @@
 
 package eu.kanade.tachiyomi.animesource.model
 
+import kotlinx.serialization.json.JsonObject
 import java.io.Serializable
 
 interface SAnime : Serializable {
@@ -29,6 +30,8 @@ interface SAnime : Serializable {
     var fetch_type: FetchType
 
     var season_number: Double
+
+    var memo: JsonObject
 
     var initialized: Boolean
 
@@ -61,6 +64,7 @@ interface SAnime : Serializable {
         it.update_strategy = update_strategy
         it.fetch_type = fetch_type
         it.season_number = season_number
+        it.memo = memo
         it.initialized = initialized
     }
 
@@ -92,6 +96,7 @@ fun SAnime.copy(
     thumbnail_url: String? = this.thumbnail_url,
     fetch_type: FetchType = this.fetch_type,
     season_number: Double = this.season_number,
+    memo: JsonObject = this.memo,
     initialized: Boolean = this.initialized,
 ) = SAnime.create().also {
     it.url = url
@@ -104,6 +109,7 @@ fun SAnime.copy(
     it.thumbnail_url = thumbnail_url
     it.fetch_type = fetch_type
     it.season_number = season_number
+    it.memo = memo
     it.initialized = initialized
 }
 // <-- AM (CUSTOM_INFORMATION)
@@ -119,6 +125,7 @@ fun SAnime.copyFrom(other: SAnime) {
     update_strategy = other.update_strategy
     fetch_type = other.fetch_type
     season_number = other.season_number
+    memo = other.memo
     initialized = other.initialized
 }
 

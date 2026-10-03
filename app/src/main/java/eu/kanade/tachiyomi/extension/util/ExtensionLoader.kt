@@ -75,8 +75,8 @@ internal object ExtensionLoader {
     private const val XX_METADATA_NSFW = "n.nsfw"
     private const val XX_METADATA_HAS_README = ".hasReadme"
     private const val XX_METADATA_HAS_CHANGELOG = ".hasChangelog"
-    const val ANIME_LIB_VERSION_MIN = 12
-    const val ANIME_LIB_VERSION_MAX = 20
+    const val ANIME_LIB_VERSION_MIN = 14
+    const val ANIME_LIB_VERSION_MAX = 17
 
     const val MANGA_LIB_VERSION_MIN = 1.2
     const val MANGA_LIB_VERSION_MAX = 2.0

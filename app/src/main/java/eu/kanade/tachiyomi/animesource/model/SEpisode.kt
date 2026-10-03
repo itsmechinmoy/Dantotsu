@@ -2,6 +2,7 @@
 
 package eu.kanade.tachiyomi.animesource.model
 
+import kotlinx.serialization.json.JsonObject
 import java.io.Serializable
 
 interface SEpisode : Serializable {
@@ -22,6 +23,8 @@ interface SEpisode : Serializable {
 
     var preview_url: String?
 
+    var memo: JsonObject
+
     fun copyFrom(other: SEpisode) {
         name = other.name
         url = other.url
@@ -31,6 +34,7 @@ interface SEpisode : Serializable {
         scanlator = other.scanlator
         summary = other.summary
         preview_url = other.preview_url
+        memo = other.memo
     }
 
     companion object {
