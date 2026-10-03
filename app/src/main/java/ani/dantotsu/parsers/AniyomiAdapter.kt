@@ -1008,7 +1008,13 @@ private suspend fun AnimeSource.getEpisodeListCompat(anime: SAnime): List<SEpiso
 
 private suspend fun AnimeSource.getSeasonListCompat(anime: SAnime): List<SAnime> {
     return try {
-        getSeasonList(anime)
+        getAnimeSeasonUpdate(anime, emptyList(), fetchDetails = false, fetchSeasons = true).seasons
+    } catch (e: UnsupportedOperationException) {
+        runCatching { getSeasonList(anime) }.getOrDefault(emptyList())
+    } catch (e: NoSuchMethodError) {
+        runCatching { getSeasonList(anime) }.getOrDefault(emptyList())
+    } catch (e: NotImplementedError) {
+        runCatching { getSeasonList(anime) }.getOrDefault(emptyList())
     } catch (_: Throwable) {
         emptyList()
     }
