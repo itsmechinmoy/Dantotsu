@@ -139,7 +139,7 @@ data class Video(
         ffmpegVideoArgs = ffmpegVideoArgs,
         internalData = internalData,
         initialized = initialized,
-        memo = JsonObject(emptyMap()),
+        memo = this.memo,
     )
 
     @Transient

@@ -387,6 +387,7 @@ data class ShowResponse(
             out.writeObject(anime.background_url)
             out.writeDouble(anime.season_number)
             out.writeBoolean(anime.initialized)
+            runCatching { out.writeObject(anime.memo.toString()) }
         } else {
             out.writeBoolean(false)
         }
@@ -422,6 +423,12 @@ data class ShowResponse(
                 background_url = inStream.readObject() as? String
                 season_number = inStream.readDouble()
                 initialized = inStream.readBoolean()
+                memo = runCatching {
+                    val raw = inStream.readObject() as? String ?: "{}"
+                    kotlinx.serialization.json.Json.parseToJsonElement(raw)
+                        as? kotlinx.serialization.json.JsonObject
+                        ?: kotlinx.serialization.json.JsonObject(emptyMap())
+                }.getOrDefault(kotlinx.serialization.json.JsonObject(emptyMap()))
             }
             sAnime = anime
         }

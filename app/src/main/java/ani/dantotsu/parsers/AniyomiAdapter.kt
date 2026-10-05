@@ -167,7 +167,9 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
                 source.getAnimeDetails(sAnime)
             }.getOrNull()
             if (networkAnime != null) {
-                sAnime.copyFrom(networkAnime)
+                runCatching {
+                    sAnime.copyFrom(networkAnime)
+                }
             }
             val seasons = runCatching {
                 source.getSeasonListCompat(sAnime)
@@ -999,10 +1001,12 @@ private suspend fun AnimeSource.getEpisodeListCompat(anime: SAnime): List<SEpiso
         runCatching { getEpisodeList(anime) }.getOrDefault(emptyList())
     } catch (e: NoSuchMethodError) {
         runCatching { getEpisodeList(anime) }.getOrDefault(emptyList())
+    } catch (e: AbstractMethodError) {
+        runCatching { getEpisodeList(anime) }.getOrDefault(emptyList())
     } catch (e: NotImplementedError) {
         runCatching { getEpisodeList(anime) }.getOrDefault(emptyList())
     } catch (_: Throwable) {
-        emptyList()
+        runCatching { getEpisodeList(anime) }.getOrDefault(emptyList())
     }
 }
 
@@ -1013,9 +1017,11 @@ private suspend fun AnimeSource.getSeasonListCompat(anime: SAnime): List<SAnime>
         runCatching { getSeasonList(anime) }.getOrDefault(emptyList())
     } catch (e: NoSuchMethodError) {
         runCatching { getSeasonList(anime) }.getOrDefault(emptyList())
+    } catch (e: AbstractMethodError) {
+        runCatching { getSeasonList(anime) }.getOrDefault(emptyList())
     } catch (e: NotImplementedError) {
         runCatching { getSeasonList(anime) }.getOrDefault(emptyList())
     } catch (_: Throwable) {
-        emptyList()
+        runCatching { getSeasonList(anime) }.getOrDefault(emptyList())
     }
 }
