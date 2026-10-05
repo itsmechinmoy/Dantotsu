@@ -105,6 +105,8 @@ class PlayerSubtitleManager(
     @Volatile var pendingTrackId: String? = null
     @Volatile var initialSubtitleLabel: String? = null
 
+    private val loadedFontNames = mutableSetOf<String>()
+
     fun setActiveServerSubtitle(sub: Subtitle?) {
         if (sub == null) {
             currentActiveSubFile = null
@@ -385,16 +387,23 @@ class PlayerSubtitleManager(
     fun loadLocalFonts() {
         val handler = assHandler ?: return
         runCatching {
-            val fontDirs = listOf(
-                java.io.File(activity.filesDir, "mpv/fonts"),
-                java.io.File(activity.cacheDir, "reanime-fonts")
-            )
+            val fontDirs = buildList {
+                add(java.io.File(activity.filesDir, "mpv/fonts"))
+                add(java.io.File(activity.filesDir, "fonts"))
+                activity.cacheDir.listFiles()?.forEach { dir ->
+                    if (dir.isDirectory && dir.name.contains("font", ignoreCase = true)) {
+                        add(dir)
+                    }
+                }
+            }
             fontDirs.forEach { dir ->
                 if (dir.isDirectory) {
                     dir.walkTopDown()
                         .filter { it.isFile && (it.extension.equals("ttf", true) || it.extension.equals("otf", true) || it.extension.equals("ttc", true)) }
                         .forEach { file ->
-                            handler.addFont(file.name, file.readBytes())
+                            if (loadedFontNames.add(file.name)) {
+                                handler.addFont(file.name, file.readBytes())
+                            }
                         }
                 }
             }
@@ -1128,6 +1137,7 @@ class PlayerSubtitleManager(
 
         if (match != null) {
             val (group, trackIndex) = match
+            loadLocalFonts()
             pendingTrackId = null
             pendingSubtitleLabel = null
             initialSubtitleLabel = null
@@ -1212,5 +1222,6 @@ class PlayerSubtitleManager(
         serverSubJob = null
         assHandler = null
         assSubtitleView = null
+        loadedFontNames.clear()
     }
 }
