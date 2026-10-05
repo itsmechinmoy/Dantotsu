@@ -173,10 +173,9 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
                     val offline = (ctx != null && !isOnline(ctx)) || PrefManager.getVal(PrefName.OfflineMode)
                     val isLocal = model.watchSources?.list?.getOrNull(media.selected!!.sourceIndex)?.name == "Local"
                     if (!offline && !isLocal) {
-                        val kitsuEpisodes = async { model.loadKitsuEpisodes(media, force = true) }
-                        val anifyEpisodes = async { model.loadAnifyEpisodes(media, force = true) }
-                        val fillerEpisodes = async { model.loadFillerEpisodes(media, force = true) }
-                        awaitAll(kitsuEpisodes, anifyEpisodes, fillerEpisodes)
+                        launch { model.loadKitsuEpisodes(media, force = true) }
+                        launch { model.loadAnifyEpisodes(media, force = true) }
+                        launch { model.loadFillerEpisodes(media, force = true) }
                     }
                     model.loadEpisodes(media, media.selected!!.sourceIndex, invalidate = true)
                     withContext(Dispatchers.Main) {
@@ -259,10 +258,9 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
                         if (offline && !isLocal) {
                             media.selected!!.sourceIndex = model.watchSources!!.list.lastIndex
                         } else if (!offline && !isLocal) {
-                            val kitsuEpisodes = async { model.loadKitsuEpisodes(media) }
-                            val anifyEpisodes = async { model.loadAnifyEpisodes(media) }
-                            val fillerEpisodes = async { model.loadFillerEpisodes(media) }
-                            awaitAll(kitsuEpisodes, anifyEpisodes, fillerEpisodes)
+                            launch { model.loadKitsuEpisodes(media) }
+                            launch { model.loadAnifyEpisodes(media) }
+                            launch { model.loadFillerEpisodes(media) }
                         }
                         model.loadEpisodes(media, media.selected!!.sourceIndex)
                     }

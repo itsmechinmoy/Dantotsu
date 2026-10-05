@@ -66,6 +66,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
 import java.net.URI
+import java.net.URLDecoder
 import java.util.ArrayDeque
 import java.util.Locale
 
@@ -377,6 +378,26 @@ class PlayerSubtitleManager(
             )
             contentFrame?.addView(assView)
             assSubtitleView = assView
+            loadLocalFonts()
+        }
+    }
+
+    fun loadLocalFonts() {
+        val handler = assHandler ?: return
+        runCatching {
+            val fontDirs = listOf(
+                java.io.File(activity.filesDir, "mpv/fonts"),
+                java.io.File(activity.cacheDir, "reanime-fonts")
+            )
+            fontDirs.forEach { dir ->
+                if (dir.isDirectory) {
+                    dir.walkTopDown()
+                        .filter { it.isFile && (it.extension.equals("ttf", true) || it.extension.equals("otf", true) || it.extension.equals("ttc", true)) }
+                        .forEach { file ->
+                            handler.addFont(file.name, file.readBytes())
+                        }
+                }
+            }
         }
     }
 
@@ -426,20 +447,42 @@ class PlayerSubtitleManager(
     }
 
     companion object {
-        fun resolveSubtitleUrl(subtitleUrl: String, vararg baseUrls: String): String {
-            val subtitleUri = runCatching { URI(subtitleUrl) }.getOrElse {
-                Logger.log("Failed to parse subtitle URL '$subtitleUrl': ${it.message}")
-                return subtitleUrl
+        private val LOOPBACK = setOf("127.0.0.1", "localhost", "::1", "[::1]", "0.0.0.0")
+        private fun String.isHttp() = startsWith("http://", true) || startsWith("https://", true)
+
+        private fun decodeParam(raw: String): String? {
+            val once = runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrNull() ?: return null
+            if (once.isHttp()) return once
+            return runCatching { URLDecoder.decode(once, "UTF-8") }.getOrNull()?.takeIf { it.isHttp() }
+        }
+
+        fun unwrapProxyUrl(url: String): String {
+            var current = url
+            repeat(5) {
+                val uri = runCatching { URI(current) }.getOrNull() ?: return current
+                if (uri.host !in LOOPBACK) return current
+                current = uri.rawQuery.orEmpty().split('&')
+                    .mapNotNull { it.substringAfter('=', "").takeIf(String::isNotEmpty) }
+                    .firstNotNullOfOrNull { decodeParam(it) } ?: return current
             }
-            if (subtitleUri.isAbsolute) return subtitleUri.toString()
+            return current
+        }
+
+        fun resolveSubtitleUrl(subtitleUrl: String, vararg baseUrls: String): String {
+            val unwrapped = unwrapProxyUrl(subtitleUrl)
+            val subtitleUri = runCatching { URI(unwrapped) }.getOrElse {
+                Logger.log("Failed to parse subtitle URL '$unwrapped': ${it.message}")
+                return unwrapped
+            }
+            if (subtitleUri.isAbsolute) return unwrapProxyUrl(subtitleUri.toString())
 
             baseUrls.forEach { baseUrl ->
                 val resolved = runCatching {
                     if (baseUrl.isBlank()) null else URI(baseUrl).resolve(subtitleUri).takeIf { it.isAbsolute }?.toString()
                 }.getOrNull()
-                if (!resolved.isNullOrBlank()) return resolved
+                if (!resolved.isNullOrBlank()) return unwrapProxyUrl(resolved)
             }
-            return subtitleUrl
+            return unwrapped
         }
 
         fun buildSubtitleId(index: Int, language: String, url: String): String {
@@ -459,10 +502,11 @@ class PlayerSubtitleManager(
         hasExtSubtitles: Boolean,
         defaultSubLanguage: String? = null
     ): List<MediaItem.SubtitleConfiguration> {
+        loadLocalFonts()
         val targetLabel = defaultSubLanguage ?: initialSubtitleLabel
         return subtitles.mapIndexed { index, subtitle ->
             val subtitleUrl = if (!hasExtSubtitles) currentVideoUrl else subtitle.file.url
-            val resolvedSubtitleUrl = resolveSubtitleUrl(subtitleUrl, embedUrl, currentVideoUrl)
+            val resolvedSubtitleUrl = unwrapProxyUrl(resolveSubtitleUrl(subtitleUrl, embedUrl, currentVideoUrl))
             val subtitleId = buildSubtitleId(index, subtitle.language, resolvedSubtitleUrl)
             val subtitleLangCodeRaw = LanguageMapper.getLanguageCode(subtitle.language)
             val subtitleLanguageCode =
@@ -1000,29 +1044,34 @@ class PlayerSubtitleManager(
         }
     }
 
-    private fun selectSubtitleTrack(targetTrackId: String?, targetLabel: String?) {
-        val player = getPlayer() ?: return
-        try {
-            val tracks = player.currentTracks
-            for (groupIndex in 0 until tracks.groups.size) {
-                val group = tracks.groups[groupIndex]
-                if (group.type == TRACK_TYPE_TEXT) {
-                    for (trackIndex in 0 until group.length) {
-                        val format = group.getTrackFormat(trackIndex)
-                        val trackId = format.id ?: ""
-                        val trackLabel = format.label ?: ""
-                        if ((targetTrackId != null && trackId == targetTrackId) ||
-                            (targetLabel != null && trackLabel == targetLabel)
-                        ) {
-                            onSetTrackGroupOverride(group, TRACK_TYPE_TEXT, trackIndex)
-                            snackString("Subtitle loaded: $trackLabel", activity)
-                            return
-                        }
-                    }
+    private val periodPrefix = Regex("^\\d+:")
+    private fun Format.baseId() = id.orEmpty().replace(periodPrefix, "")
+
+    private fun Tracks.textTracks() = groups
+        .filter { it.type == TRACK_TYPE_TEXT }
+        .flatMap { g -> (0 until g.length).map { g to it } }
+
+    private fun findTextTrack(id: String?, label: String?): Pair<Tracks.Group, Int>? {
+        val tracks = getPlayer()?.currentTracks?.textTracks() ?: return null
+        return id?.let { want -> tracks.firstOrNull { (g, i) -> g.getTrackFormat(i).baseId() == want } }
+            ?: label?.let { l ->
+                tracks.firstOrNull { (g, i) ->
+                    val f = g.getTrackFormat(i)
+                    f.label.equals(l, ignoreCase = true) || f.language.equals(l, ignoreCase = true)
                 }
             }
+    }
+
+    fun selectSubtitleTrack(targetTrackId: String?, targetLabel: String?) {
+        val player = getPlayer() ?: return
+        try {
+            val (group, trackIndex) = findTextTrack(targetTrackId, targetLabel) ?: return
+            onSetTrackGroupOverride(group, TRACK_TYPE_TEXT, trackIndex)
+            val trackFormat = group.getTrackFormat(trackIndex)
+            val trackLabel = trackFormat.label ?: trackFormat.language ?: ""
+            snackString("Subtitle loaded: $trackLabel", activity)
         } catch (e: Exception) {
-            Log.e("PlayerSubtitleManager", "selectSubtitleTrack error: ${e.message}")
+            Logger.log("Failed to select subtitle track: ${e.message}")
         }
     }
 
@@ -1065,43 +1114,34 @@ class PlayerSubtitleManager(
 
         if (targetTrackId == null && pendingLabel == null) return
 
-        var matched = false
-        for (groupIndex in 0 until tracks.groups.size) {
-            val group = tracks.groups[groupIndex]
-            if (group.type == TRACK_TYPE_TEXT) {
-                for (trackIndex in 0 until group.length) {
-                    val format = group.getTrackFormat(trackIndex)
-                    val trackId = format.id ?: ""
-                    val trackLabel = format.label ?: ""
-                    val trackLang = format.language ?: ""
+        val textTracks = tracks.textTracks()
+        // ID match first, so period 0 embedded tracks never shadow external tracks
+        val match = targetTrackId?.let { want ->
+            textTracks.firstOrNull { (g, i) -> g.getTrackFormat(i).baseId() == want }
+        } ?: pendingLabel?.let { l ->
+            textTracks.firstOrNull { (g, i) ->
+                val f = g.getTrackFormat(i)
+                f.label.equals(l, ignoreCase = true) || f.language.equals(l, ignoreCase = true) ||
+                    (l.equals("English", ignoreCase = true) && (f.language.equals("en", true) || f.language.equals("eng", true) || f.label?.contains("English", true) == true))
+            }
+        }
 
-                    val isExactIdMatch = targetTrackId != null && trackId == targetTrackId
-                    val isExactLabelMatch = pendingLabel != null && trackLabel.equals(pendingLabel, ignoreCase = true)
-                    val isFuzzyMatch = targetTrackId == null && pendingLabel != null && (
-                        trackLang.equals(pendingLabel, ignoreCase = true) ||
-                        (pendingLabel.equals("English", ignoreCase = true) && (trackLang.equals("en", ignoreCase = true) || trackLang.equals("eng", ignoreCase = true) || trackLabel.contains("English", ignoreCase = true) || trackLabel.contains("Eng", ignoreCase = true))) ||
-                        (trackLabel.isNotBlank() && trackLabel.contains(pendingLabel, ignoreCase = true))
-                    )
-
-                    if (isExactIdMatch || isExactLabelMatch || isFuzzyMatch) {
-                        pendingTrackId = null
-                        pendingSubtitleLabel = null
-                        initialSubtitleLabel = null
-                        matched = true
-                        onSetTrackGroupOverride(group, TRACK_TYPE_TEXT, trackIndex)
-                        if (userLabel != null && targetTrackId != null) {
-                            if (targetTrackId.startsWith("shifted_sub_")) {
-                                val effectiveDelay = subtitleDelayMs - audioDelayMs
-                                snackString("Sync applied: ${effectiveDelay}ms", activity)
-                            } else {
-                                snackString("Subtitle loaded: $trackLabel", activity)
-                            }
-                        }
-                        break
-                    }
+        if (match != null) {
+            val (group, trackIndex) = match
+            pendingTrackId = null
+            pendingSubtitleLabel = null
+            initialSubtitleLabel = null
+            onSetTrackGroupOverride(group, TRACK_TYPE_TEXT, trackIndex)
+            val trackFormat = group.getTrackFormat(trackIndex)
+            val trackLabel = trackFormat.label ?: trackFormat.language ?: ""
+            if (userLabel != null) {
+                if (targetTrackId?.startsWith("shifted_sub_") == true) {
+                    val effectiveDelay = subtitleDelayMs - audioDelayMs
+                    snackString("Sync applied: ${effectiveDelay}ms", activity)
+                } else {
+                    snackString("Subtitle loaded: $trackLabel", activity)
                 }
             }
-            if (matched) break
         }
     }
 
@@ -1135,7 +1175,7 @@ class PlayerSubtitleManager(
                     val parts = trimmedLine.substringAfter(":").split(",")
                     styleFormatMap.clear()
                     parts.forEachIndexed { index, name ->
-                        styleFormatMap[name.trim().lowercase(Locale.ROOT)] = index
+                        styleFormatMap[name.trim().lowercase(java.util.Locale.ROOT)] = index
                     }
                 } else if (trimmedLine.startsWith("Style:", ignoreCase = true) && styleFormatMap.isNotEmpty()) {
                     val styleContent = trimmedLine.substringAfter("Style:")

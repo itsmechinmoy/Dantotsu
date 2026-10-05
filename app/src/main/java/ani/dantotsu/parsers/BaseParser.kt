@@ -94,6 +94,17 @@ abstract class BaseParser {
             }
             saveShowResponse(mediaObj.id, response, true)
         } else {
+            fun fuzzyMatch(candidate: String, target: String): Int {
+                val a = candidate.lowercase().trim()
+                val b = target.lowercase().trim()
+                if (a == b) return 100
+                return maxOf(
+                    FuzzySearch.ratio(a, b),
+                    FuzzySearch.tokenSetRatio(a, b),
+                    FuzzySearch.tokenSortRatio(a, b)
+                )
+            }
+
             setUserText("Searching : ${mediaObj.mainName()}")
             Logger.log("Searching : ${mediaObj.mainName()}")
             val results = search(mediaObj.mainName())
@@ -103,30 +114,21 @@ abstract class BaseParser {
             }
             val sortedResults = if (results.isNotEmpty()) {
                 results.sortedByDescending {
-                    FuzzySearch.ratio(
-                        it.name.lowercase(),
-                        mediaObj.mainName().lowercase()
-                    )
+                    fuzzyMatch(it.name, mediaObj.mainName())
                 }
             } else {
                 emptyList()
             }
             response = sortedResults.firstOrNull()
 
-            if (response == null || FuzzySearch.ratio(
-                    response.name.lowercase(),
-                    mediaObj.mainName().lowercase()
-                ) < 100
-            ) {
+            val mainRatio = response?.let { fuzzyMatch(it.name, mediaObj.mainName()) } ?: 0
+            if (response == null || mainRatio < 85) {
                 setUserText("Searching : ${mediaObj.nameRomaji}")
                 Logger.log("Searching : ${mediaObj.nameRomaji}")
                 val romajiResults = search(mediaObj.nameRomaji)
                 val sortedRomajiResults = if (romajiResults.isNotEmpty()) {
                     romajiResults.sortedByDescending {
-                        FuzzySearch.ratio(
-                            it.name.lowercase(),
-                            mediaObj.nameRomaji.lowercase()
-                        )
+                        fuzzyMatch(it.name, mediaObj.nameRomaji)
                     }
                 } else {
                     emptyList()
@@ -138,18 +140,11 @@ abstract class BaseParser {
                     Logger.log("No exact match found in results. Using closest match from RomajiResults.")
                     closestRomaji
                 } else {
-                    val romajiRatio = FuzzySearch.ratio(
-                        closestRomaji?.name?.lowercase() ?: "",
-                        mediaObj.nameRomaji.lowercase()
-                    )
-                    val mainNameRatio = FuzzySearch.ratio(
-                        response.name.lowercase(),
-                        mediaObj.mainName().lowercase()
-                    )
-                    Logger.log("Fuzzy ratio for closest match in results: $mainNameRatio for ${response.name.lowercase()}")
+                    val romajiRatio = closestRomaji?.let { fuzzyMatch(it.name, mediaObj.nameRomaji) } ?: 0
+                    Logger.log("Fuzzy ratio for closest match in results: $mainRatio for ${response.name.lowercase()}")
                     Logger.log("Fuzzy ratio for closest match in RomajiResults: $romajiRatio for ${closestRomaji?.name?.lowercase() ?: "None"}")
 
-                    if (romajiRatio > mainNameRatio) {
+                    if (romajiRatio > mainRatio) {
                         Logger.log("RomajiResults has a closer match. Replacing response.")
                         closestRomaji
                     } else {
@@ -159,12 +154,9 @@ abstract class BaseParser {
                 }
             }
 
-            if (response == null || FuzzySearch.ratio(
-                    response.name.lowercase(),
-                    mediaObj.mainName().lowercase()
-                ) < 80
-            ) {
-                for (synonym in mediaObj.synonyms) {
+            val bestRatio = response?.let { fuzzyMatch(it.name, mediaObj.mainName()) } ?: 0
+            if (response == null || bestRatio < 80) {
+                for (synonym in mediaObj.synonyms.take(4)) {
                     if (synonym.isBlank() || synonym == mediaObj.mainName() || synonym == mediaObj.nameRomaji) continue
                     setUserText("Searching : $synonym")
                     Logger.log("Searching : $synonym")
@@ -176,29 +168,20 @@ abstract class BaseParser {
                     }
                     val sortedSynonymResults = if (synonymResults.isNotEmpty()) {
                         synonymResults.sortedByDescending {
-                            FuzzySearch.ratio(
-                                it.name.lowercase(),
-                                synonym.lowercase()
-                            )
+                            fuzzyMatch(it.name, synonym)
                         }
                     } else {
                         emptyList()
                     }
                     val closestSynonym = sortedSynonymResults.firstOrNull()
                     if (closestSynonym != null) {
-                        val synonymRatio = FuzzySearch.ratio(
-                            closestSynonym.name.lowercase(),
-                            synonym.lowercase()
-                        )
+                        val synonymRatio = fuzzyMatch(closestSynonym.name, synonym)
                         if (synonymRatio >= 80) {
-                            val currentRatio = if (response != null) FuzzySearch.ratio(
-                                response.name.lowercase(),
-                                mediaObj.mainName().lowercase()
-                            ) else 0
+                            val currentRatio = if (response != null) fuzzyMatch(response.name, mediaObj.mainName()) else 0
                             if (synonymRatio > currentRatio) {
                                 Logger.log("Synonym search found a better match: ${closestSynonym.name}")
                                 response = closestSynonym
-                                if (synonymRatio >= 95) {
+                                if (synonymRatio >= 85) {
                                     break
                                 }
                             }
@@ -410,41 +393,43 @@ data class ShowResponse(
 
     private fun readObject(inStream: java.io.ObjectInputStream) {
         inStream.defaultReadObject()
-        if (inStream.readBoolean()) {
-            val anime = SAnime.create().apply {
-                url = inStream.readObject() as String
-                title = inStream.readObject() as String
-                artist = inStream.readObject() as? String
-                author = inStream.readObject() as? String
-                description = inStream.readObject() as? String
-                genre = inStream.readObject() as? String
-                status = inStream.readInt()
-                thumbnail_url = inStream.readObject() as? String
-                background_url = inStream.readObject() as? String
-                season_number = inStream.readDouble()
-                initialized = inStream.readBoolean()
-                memo = runCatching {
-                    val raw = inStream.readObject() as? String ?: "{}"
-                    kotlinx.serialization.json.Json.parseToJsonElement(raw)
-                        as? kotlinx.serialization.json.JsonObject
-                        ?: kotlinx.serialization.json.JsonObject(emptyMap())
-                }.getOrDefault(kotlinx.serialization.json.JsonObject(emptyMap()))
+        runCatching {
+            if (inStream.readBoolean()) {
+                val anime = SAnime.create().apply {
+                    url = inStream.readObject() as String
+                    title = inStream.readObject() as String
+                    artist = inStream.readObject() as? String
+                    author = inStream.readObject() as? String
+                    description = inStream.readObject() as? String
+                    genre = inStream.readObject() as? String
+                    status = inStream.readInt()
+                    thumbnail_url = inStream.readObject() as? String
+                    background_url = inStream.readObject() as? String
+                    season_number = inStream.readDouble()
+                    initialized = inStream.readBoolean()
+                    memo = runCatching {
+                        val raw = inStream.readObject() as? String ?: "{}"
+                        kotlinx.serialization.json.Json.parseToJsonElement(raw)
+                            as? kotlinx.serialization.json.JsonObject
+                            ?: kotlinx.serialization.json.JsonObject(emptyMap())
+                    }.getOrDefault(kotlinx.serialization.json.JsonObject(emptyMap()))
+                }
+                sAnime = anime
             }
-            sAnime = anime
-        }
-        if (inStream.readBoolean()) {
-            val manga = SManga.create().apply {
-                url = inStream.readObject() as String
-                title = inStream.readObject() as String
-                artist = inStream.readObject() as? String
-                author = inStream.readObject() as? String
-                description = inStream.readObject() as? String
-                genre = inStream.readObject() as? String
-                status = inStream.readInt()
-                thumbnail_url = inStream.readObject() as? String
-                initialized = inStream.readBoolean()
+            if (inStream.readBoolean()) {
+                val manga = SManga.create().apply {
+                    url = inStream.readObject() as String
+                    title = inStream.readObject() as String
+                    artist = inStream.readObject() as? String
+                    author = inStream.readObject() as? String
+                    description = inStream.readObject() as? String
+                    genre = inStream.readObject() as? String
+                    status = inStream.readInt()
+                    thumbnail_url = inStream.readObject() as? String
+                    initialized = inStream.readBoolean()
+                }
+                sManga = manga
             }
-            sManga = manga
         }
     }
 
