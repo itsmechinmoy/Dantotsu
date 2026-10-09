@@ -818,7 +818,8 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
             FileUrl(videoUrl, headersMap),
             null,
             null,
-            parseDrmInfo(aniVideo.internalData)
+            parseDrmInfo(aniVideo.internalData),
+            preferred = aniVideo.preferred
         )
     }
 

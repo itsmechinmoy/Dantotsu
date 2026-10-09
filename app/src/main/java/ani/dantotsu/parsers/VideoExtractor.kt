@@ -15,6 +15,9 @@ abstract class VideoExtractor : Serializable {
     var subtitles: List<Subtitle> = listOf()
     var audioTracks: List<Track> = listOf()
 
+    val isPreferred: Boolean
+        get() = server.video?.preferred == true || videos.any { it.preferred }
+
     /**
      * Extracts videos & subtitles from the `embed`
      *
@@ -63,6 +66,8 @@ data class VideoServer(
     val video: eu.kanade.tachiyomi.animesource.model.Video? = null,
     val offline: Boolean = false
 ) : Serializable {
+    val isPreferred: Boolean
+        get() = video?.preferred == true
     constructor(name: String, embedUrl: String, extraData: Map<String, String>? = null)
             : this(name, FileUrl(embedUrl), extraData)
 
@@ -137,6 +142,7 @@ data class Video(
      * clear streams, which is the overwhelming majority.
      * **/
     val drm: DrmInfo? = null,
+    val preferred: Boolean = false,
 ) : Serializable {
 
     constructor(

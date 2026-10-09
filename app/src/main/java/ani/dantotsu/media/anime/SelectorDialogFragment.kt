@@ -136,6 +136,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         preferredResolutions: List<String>
     ): Video? {
         if (videos.isEmpty()) return null
+        val preferredVideo = videos.firstOrNull { it.preferred }
+        if (preferredVideo != null) return preferredVideo
         if (preferredResolutions.isEmpty()) return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
 
         for (preferred in preferredResolutions) {
@@ -259,7 +261,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
                     if (ep.allStreams) {
                         val extractors = ep.extractors ?: emptyList()
-                        val validExtractor = extractors.firstOrNull { it.videos.isNotEmpty() }
+                        val validExtractor = extractors.firstOrNull { it.isPreferred && it.videos.isNotEmpty() }
+                            ?: extractors.firstOrNull { it.videos.isNotEmpty() }
                         if (validExtractor != null && selectAndStart(validExtractor)) {
                             return
                         } else {
@@ -274,7 +277,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     ep.extractorCallback = { extractor ->
                         scope.launch(Dispatchers.Main) {
                             if (_binding == null || !isAdded || isCancelled || hasStarted) return@launch
-                            if (extractor.videos.isNotEmpty()) {
+                            if (extractor.videos.isNotEmpty() && extractor.isPreferred) {
                                 hasStarted = true
                                 selectAndStart(extractor)
                             }
@@ -285,7 +288,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                         withContext(Dispatchers.Main) {
                             if (_binding == null || !isAdded || isCancelled) return@withContext
                             if (!hasStarted) {
-                                val valid = ep.extractors?.firstOrNull { it.videos.isNotEmpty() }
+                                val valid = ep.extractors?.firstOrNull { it.isPreferred && it.videos.isNotEmpty() }
+                                    ?: ep.extractors?.firstOrNull { it.videos.isNotEmpty() }
                                 if (valid != null) {
                                     hasStarted = true
                                     selectAndStart(valid)
@@ -523,22 +527,29 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             }
 
                             fun load() {
-                                val size =
+                                val matchedExtractor =
                                     if (model.watchSources!!.isDownloadedSource(media!!.selected!!.sourceIndex)) {
-                                        ep.extractors?.firstOrNull()?.videos?.size
+                                        ep.extractors?.firstOrNull()
                                     } else {
-                                        ep.extractors?.find { it.server.name == selected }?.videos?.size
+                                        ep.extractors?.find { it.server.name == selected }
                                     }
+
+                                val size = matchedExtractor?.videos?.size
 
                                 if (size != null && size >= media!!.selected!!.video) {
                                     val currentKey = media!!.anime!!.selectedEpisode ?: actualKey
-                                    media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedExtractor = selected
+                                    media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedExtractor = matchedExtractor.server.name
                                     media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedVideo = media!!.selected!!.video
+                                    media!!.selected!!.server = matchedExtractor.server.name
                                     startExoplayer(media!!)
                                 } else failToList()
                             }
 
-                            if (ep.extractors?.filter { it.server.name == selected } == null) {
+                            val hasMatchingExtractor = ep.extractors?.any {
+                                it.server.name == selected
+                            } == true
+
+                            if (!hasMatchingExtractor) {
                                 scope.launch{
                                     val success = withContext(Dispatchers.IO){
                                         loadEpisodeSingleServer(ep.number, selected!!)
@@ -778,20 +789,29 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
         fun add(videoExtractor: VideoExtractor) {
             if (videoExtractor.videos.isNotEmpty()) {
-                val existingIndex = links.indexOfFirst { it.server.name == videoExtractor.server.name }
+                val existingIndex = links.indexOfFirst {
+                    it.server.name == videoExtractor.server.name
+                }
                 if (existingIndex >= 0) {
                     links[existingIndex] = videoExtractor
                     notifyItemChanged(existingIndex)
                 } else {
-                    links.add(videoExtractor)
-                    notifyItemInserted(links.size - 1)
+                    if (videoExtractor.isPreferred) {
+                        links.add(0, videoExtractor)
+                        notifyItemInserted(0)
+                    } else {
+                        links.add(videoExtractor)
+                        notifyItemInserted(links.size - 1)
+                    }
                 }
             }
         }
 
         fun addAll(extractors: List<VideoExtractor>?) {
-            links.addAll(extractors ?: return)
-            notifyItemRangeInserted(0, extractors.size)
+            if (extractors == null) return
+            val sorted = extractors.sortedByDescending { it.isPreferred }
+            links.addAll(sorted)
+            notifyItemRangeInserted(0, sorted.size)
         }
 
         fun performClick(position: Int) {
@@ -1044,8 +1064,9 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 )
                 binding.urlSize.text = sizeText
             }
+            val isPref = video.preferred || extractor.isPreferred
             binding.urlNote.visibility = View.VISIBLE
-            binding.urlNote.text = video.format.name
+            binding.urlNote.text = if (isPref) "${video.format.name} • Preferred" else video.format.name
             binding.urlQuality.text = extractor.server.name
         }
 

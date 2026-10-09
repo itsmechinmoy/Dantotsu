@@ -1141,6 +1141,8 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         preferredResolutions: List<String>
     ): ani.dantotsu.parsers.Video? {
         if (videos.isEmpty()) return null
+        val preferredVideo = videos.firstOrNull { it.preferred }
+        if (preferredVideo != null) return preferredVideo
         if (preferredResolutions.isEmpty()) return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
 
         for (preferred in preferredResolutions) {
@@ -1188,7 +1190,8 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                     nextEpisode.extractors?.find { it.server.name == serverName }
                 } else {
                     model.loadEpisodeVideos(nextEpisode, sourceIndex)
-                    nextEpisode.extractors?.firstOrNull { it.videos.isNotEmpty() }
+                    nextEpisode.extractors?.firstOrNull { it.isPreferred && it.videos.isNotEmpty() }
+                        ?: nextEpisode.extractors?.firstOrNull { it.videos.isNotEmpty() }
                 } ?: return@launch
 
                 val sourceName = model.watchSources?.get(sourceIndex)?.name
