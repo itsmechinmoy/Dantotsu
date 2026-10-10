@@ -1383,6 +1383,8 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="image_quality_fast">Fast (Bilinear)</string>
     <string name="image_quality_balanced">Balanced (Box)</string>
     <string name="image_quality_lanczos">Lanczos (HQ)</string>
+    <string name="use_webgpu_renderer">High Quality Renderer (WebGPU)</string>
+    <string name="use_webgpu_renderer_info">Hardware-accelerated Vulkan/WebGPU renderer. Requires Android 10+ and Vulkan 1.1. Turn off if your device overheats.</string>
     <string name="preload_amount">Page Preload Amount</string>
     <string name="always_show_chapter_transition">Always Show Chapter Transition</string>
     <string name="manga_translator">Manga Translator</string>

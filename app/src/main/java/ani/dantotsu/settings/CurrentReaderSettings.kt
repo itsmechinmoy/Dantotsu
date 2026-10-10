@@ -40,6 +40,7 @@ data class CurrentReaderSettings(
     var eInkFlash: Boolean = PrefManager.getVal(PrefName.EInkFlashPageChange),
     var imageQuality: ImageQuality = ImageQuality[PrefManager.getVal(PrefName.ImageQuality)]
         ?: ImageQuality.FAST,
+    var webGpuRenderer: Boolean = PrefManager.getVal(PrefName.WebGpuRenderer),
     var preloadAmount: Int = PrefManager.getVal(PrefName.PagePreloadAmount),
     var alwaysShowChapterTransition: Boolean = PrefManager.getVal(PrefName.AlwaysShowChapterTransition)
 ) : Serializable {

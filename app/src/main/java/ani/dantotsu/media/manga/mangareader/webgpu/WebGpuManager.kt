@@ -34,6 +34,18 @@ object WebGpuManager {
     }
 
     /**
+     * Checks if WebGPU renderer is supported by hardware/OS AND enabled in user settings.
+     */
+    fun isEnabled(context: Context): Boolean {
+        if (!isSupported(context)) return false
+        return try {
+            ani.dantotsu.settings.saving.PrefManager.getVal<Boolean>(ani.dantotsu.settings.saving.PrefName.WebGpuRenderer)
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
      * Safely creates an [ImageView] instance for paged reading mode.
      * Returns null if device or runtime does not support WebGPU.
      */

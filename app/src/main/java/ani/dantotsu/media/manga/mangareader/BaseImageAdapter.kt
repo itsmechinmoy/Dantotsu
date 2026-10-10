@@ -119,11 +119,7 @@ abstract class BaseImageAdapter(
         }
         val subsamplingView = holder.itemView.findViewById<com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView>(R.id.imgProgImageNoGestures)
         subsamplingView?.recycle()
-        val oldBitmap = holder.itemView.getTag(R.id.imgProgImageNoGestures) as? Bitmap
         holder.itemView.setTag(R.id.imgProgImageNoGestures, null)
-        if (oldBitmap != null && !oldBitmap.isRecycled) {
-            oldBitmap.recycle()
-        }
         super.onViewRecycled(holder)
     }
 
@@ -360,6 +356,12 @@ abstract class BaseImageAdapter(
         ): Bitmap? {
             return tryWithSuspend {
                 val mangaCache = uy.kohesive.injekt.Injekt.get<MangaCache>()
+                val cacheKey = if (transforms.isEmpty()) link.url else "${link.url}_${transforms.hashCode()}"
+                val memCached = mangaCache.getBitmap(cacheKey)
+                if (memCached != null && !memCached.isRecycled) {
+                    return@tryWithSuspend memCached
+                }
+
                 withContext(Dispatchers.IO) {
                     val localFile = File(link.url)
                     val baseBitmap = when {
@@ -368,7 +370,6 @@ abstract class BaseImageAdapter(
                                 Glide.with(this@loadBitmap)
                                     .asBitmap()
                                     .load(localFile.absoluteFile)
-                                    .skipMemoryCache(true)
                                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                                     .submit()
                                     .get()
@@ -382,7 +383,6 @@ abstract class BaseImageAdapter(
                                 Glide.with(this@loadBitmap)
                                     .asBitmap()
                                     .load(Uri.parse(link.url))
-                                    .skipMemoryCache(true)
                                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                                     .submit()
                                     .get()
@@ -402,8 +402,7 @@ abstract class BaseImageAdapter(
                                     Glide.with(this@loadBitmap)
                                         .asBitmap()
                                         .load(GlideUrl(link.url) { link.headers })
-                                        .skipMemoryCache(true)
-                                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                                        .diskCacheStrategy(DiskCacheStrategy.DATA)
                                         .submit()
                                         .get()
                                 } catch (_: Exception) {
@@ -428,13 +427,12 @@ abstract class BaseImageAdapter(
                         }
                     } ?: return@withContext null
 
-                    if (transforms.isEmpty()) {
+                    val result = if (transforms.isEmpty()) {
                         baseBitmap
                     } else {
                         val transformed = Glide.with(this@loadBitmap)
                             .asBitmap()
                             .load(baseBitmap)
-                            .skipMemoryCache(true)
                             .diskCacheStrategy(DiskCacheStrategy.NONE)
                             .transform(*transforms.toTypedArray())
                             .submit()
@@ -442,8 +440,13 @@ abstract class BaseImageAdapter(
                         if (transformed != null && transformed != baseBitmap && !baseBitmap.isRecycled) {
                             baseBitmap.recycle()
                         }
-                        transformed
+                        transformed ?: baseBitmap
                     }
+
+                    if (!result.isRecycled) {
+                        mangaCache.putBitmap(cacheKey, result)
+                    }
+                    result
                 }
             }
         }
@@ -546,12 +549,25 @@ abstract class BaseImageAdapter(
         }
 
         private fun scaleLanczos3(src: Bitmap, dstW: Int, dstH: Int): Bitmap {
-            val srcW = src.width
-            val srcH = src.height
+            val scaleX0 = src.width.toFloat() / dstW
+            val scaleY0 = src.height.toFloat() / dstH
+            val effectiveSrc = if (scaleX0 > 2.5f || scaleY0 > 2.5f) {
+                val midW = (dstW * 2).coerceAtMost(src.width)
+                val midH = (dstH * 2).coerceAtMost(src.height)
+                Bitmap.createScaledBitmap(src, midW, midH, true)
+            } else {
+                src
+            }
+
+            val srcW = effectiveSrc.width
+            val srcH = effectiveSrc.height
 
             // Read source pixels into an int array once – avoids per-pixel JNI calls
             val srcPixels = IntArray(srcW * srcH)
-            src.getPixels(srcPixels, 0, srcW, 0, 0, srcW, srcH)
+            effectiveSrc.getPixels(srcPixels, 0, srcW, 0, 0, srcW, srcH)
+            if (effectiveSrc !== src) {
+                effectiveSrc.recycle()
+            }
 
             val dstPixels = IntArray(dstW * dstH)
             val scaleX = srcW.toDouble() / dstW

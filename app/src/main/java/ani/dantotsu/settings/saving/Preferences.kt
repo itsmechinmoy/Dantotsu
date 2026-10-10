@@ -209,6 +209,7 @@ enum class PrefName(val data: Pref) {
     ContinuousSidePadding(Pref(Location.Reader, Int::class, 0)), // Percentage (0-25%)
     EInkFlashPageChange(Pref(Location.Reader, Boolean::class, false)),
     ImageQuality(Pref(Location.Reader, Int::class, 0)), // 0=FAST, 1=BALANCED, 2=LANCZOS
+    WebGpuRenderer(Pref(Location.Reader, Boolean::class, false)),
     PagePreloadAmount(Pref(Location.Reader, Int::class, 3)),
     AlwaysShowChapterTransition(Pref(Location.Reader, Boolean::class, false)),
     

@@ -106,6 +106,8 @@ import com.bumptech.glide.load.resource.bitmap.BitmapTransformation
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import ani.dantotsu.media.manga.mangareader.BaseImageAdapter.Companion.loadBitmap
+import ani.dantotsu.media.manga.mangareader.webgpu.WebGpuManager
+import ani.dantotsu.media.manga.mangareader.webgpu.WebGpuReaderView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -132,11 +134,14 @@ class MangaReaderActivity : AppCompatActivity() {
     val autoScrollHelper = MangaReaderAutoScroll()
 
     private lateinit var media: Media
-    private lateinit var chapter: MangaChapter
-    private lateinit var chapters: MutableMap<String, MangaChapter>
-    private lateinit var chaptersArr: List<String>
-    private lateinit var chaptersTitleArr: ArrayList<String>
-    private var currentChapterIndex = 0
+    lateinit var chapter: MangaChapter
+    lateinit var chapters: MutableMap<String, MangaChapter>
+    lateinit var chaptersArr: List<String>
+    lateinit var chaptersTitleArr: ArrayList<String>
+    var currentChapterIndex = 0
+
+    var webGpuReaderView: WebGpuReaderView? = null
+        private set
 
     private var isContVisible = false
     private var showProgressDialog = true
@@ -207,6 +212,8 @@ class MangaReaderActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        webGpuReaderView?.destroy()
+        webGpuReaderView = null
         autoScrollHelper.destroy()
         mangaCache.clear()
         goneHandler.removeCallbacksAndMessages(null)
@@ -294,7 +301,9 @@ class MangaReaderActivity : AppCompatActivity() {
         binding.mangaReaderSlider.addOnChangeListener { _, value, fromUser ->
             if (fromUser) {
                 sliding = true
-                if (defaultSettings.layout != PAGED) {
+                if (webGpuReaderView != null && binding.mangaReaderWebGpuContainer.isVisible) {
+                    webGpuReaderView?.scrollToPage(value.toInt())
+                } else if (defaultSettings.layout != PAGED) {
                     val pos = imageAdapter?.findPositionForPage(chapter, value.toInt())
                     if (pos != null && pos >= 0) {
                         binding.mangaReaderRecycler.scrollToPosition(pos)
@@ -779,7 +788,68 @@ class MangaReaderActivity : AppCompatActivity() {
             }
         }
 
-        if (defaultSettings.layout != PAGED) {
+        if (defaultSettings.webGpuRenderer && WebGpuManager.isSupported(this)) {
+            binding.mangaReaderRecyclerContainer.visibility = View.GONE
+            binding.mangaReaderPager.visibility = View.GONE
+            binding.mangaReaderWebGpuContainer.visibility = View.VISIBLE
+
+            val isContinuous = defaultSettings.layout != PAGED
+            val isVertical = defaultSettings.direction == TOP_TO_BOTTOM || defaultSettings.direction == BOTTOM_TO_TOP
+            val isReversed = directionRLBT
+
+            val currentGpu = webGpuReaderView
+            if (currentGpu == null || currentGpu.isContinuous != isContinuous || currentGpu.isVertical != isVertical || currentGpu.isReversed != isReversed) {
+                currentGpu?.destroy()
+                binding.mangaReaderWebGpuContainer.removeAllViews()
+                val newGpu = WebGpuReaderView(this, isContinuous = isContinuous, isVertical = isVertical, isReversed = isReversed)
+                binding.mangaReaderWebGpuContainer.addView(
+                    newGpu.viewer,
+                    android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                )
+                webGpuReaderView = newGpu
+            }
+            binding.mangaReaderSwipy.child = webGpuReaderView?.viewer
+            webGpuReaderView?.bind(chapter, currentPage)
+
+            onVolumeUp = {
+                webGpuReaderView?.scrollUp()
+            }
+            onVolumeDown = {
+                webGpuReaderView?.scrollDown()
+            }
+            onVolumeUpLong = {
+                if (webGpuReaderView?.currentPosition == 0) {
+                    if (isVertical) {
+                        binding.mangaReaderSwipy.onTopSwiped.invoke()
+                    } else {
+                        if (isReversed) binding.mangaReaderSwipy.onRightSwiped.invoke() else binding.mangaReaderSwipy.onLeftSwiped.invoke()
+                    }
+                    true
+                } else false
+            }
+            onVolumeDownLong = {
+                val lastIndex = (maxChapterPage - 1).toInt()
+                if (webGpuReaderView?.currentPosition?.let { it >= lastIndex } == true) {
+                    if (isVertical) {
+                        binding.mangaReaderSwipy.onBottomSwiped.invoke()
+                    } else {
+                        if (isReversed) binding.mangaReaderSwipy.onLeftSwiped.invoke() else binding.mangaReaderSwipy.onRightSwiped.invoke()
+                    }
+                    true
+                } else false
+            }
+        } else {
+            if (webGpuReaderView != null) {
+                webGpuReaderView?.destroy()
+                webGpuReaderView = null
+                binding.mangaReaderWebGpuContainer.removeAllViews()
+            }
+            binding.mangaReaderWebGpuContainer.visibility = View.GONE
+
+            if (defaultSettings.layout != PAGED) {
 
             binding.mangaReaderRecyclerContainer.visibility = View.VISIBLE
             binding.mangaReaderRecyclerContainer.controller.settings.isRotationEnabled =
@@ -865,7 +935,7 @@ class MangaReaderActivity : AppCompatActivity() {
                                 )))
                             ) {
                                 handleController(true)
-                            } else if (!isContVisible) handleController(false)
+                            } else if (isContVisible) handleController(false)
                         }
 
                         val visiblePos = if (directionRLBT) {
@@ -1037,6 +1107,7 @@ class MangaReaderActivity : AppCompatActivity() {
                     true
                 } else false
             }
+        }
         }
     }
 
@@ -1562,6 +1633,7 @@ class MangaReaderActivity : AppCompatActivity() {
         binding.root.setBackgroundColor(color)
         binding.mangaReaderRecycler.setBackgroundColor(color)
         binding.mangaReaderPager.setBackgroundColor(color)
+        webGpuReaderView?.updateBackgroundColor(color)
     }
 
     fun applyOrientationLock(orientationIndex: Int) {
@@ -1630,7 +1702,7 @@ class MangaReaderActivity : AppCompatActivity() {
 
     private val loadingChapters = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
-    private fun preloadChapterAndAppend(targetChapter: MangaChapter) {
+    internal fun preloadChapterAndAppend(targetChapter: MangaChapter) {
         val chapterKey = targetChapter.uniqueNumber()
         if (loadingChapters.contains(chapterKey)) return
 
@@ -1660,7 +1732,7 @@ class MangaReaderActivity : AppCompatActivity() {
         }
     }
 
-    private fun preloadChapterAndPrepend(targetChapter: MangaChapter) {
+    internal fun preloadChapterAndPrepend(targetChapter: MangaChapter) {
         val chapterKey = targetChapter.uniqueNumber()
         if (loadingChapters.contains(chapterKey)) return
 
@@ -1706,7 +1778,7 @@ class MangaReaderActivity : AppCompatActivity() {
         }
     }
 
-    private fun onChapterScrolledTo(newChapter: MangaChapter, pageNum: Int, totalPages: Int) {
+    internal fun onChapterScrolledTo(newChapter: MangaChapter, pageNum: Int, totalPages: Int) {
         if (newChapter.uniqueNumber() != chapter.uniqueNumber()) {
             val oldChapter = chapter
             val oldChapNum = MediaNameAdapter.findChapterNumber(oldChapter.number)

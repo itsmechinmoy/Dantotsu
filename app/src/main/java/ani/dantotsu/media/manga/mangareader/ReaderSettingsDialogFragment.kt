@@ -19,6 +19,7 @@ import ani.dantotsu.getThemeColor
 import com.google.android.material.slider.Slider
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import ani.dantotsu.media.manga.mangareader.webgpu.WebGpuManager
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 
@@ -328,6 +329,21 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
         binding.readerTrueColors.setOnCheckedChangeListener { _, isChecked ->
             settings.trueColors = isChecked
             activity.applySettings()
+        }
+
+        val isWebGpuSupported = WebGpuManager.isSupported(requireContext())
+        if (!isWebGpuSupported) {
+            binding.readerWebGpuRenderer.isEnabled = false
+            binding.readerWebGpuRenderer.isChecked = false
+            binding.readerWebGpuRendererDesc.text = getString(R.string.use_webgpu_renderer_info) + " (Unsupported on this device/OS)"
+        } else {
+            binding.readerWebGpuRenderer.isChecked = settings.webGpuRenderer
+            binding.readerWebGpuRenderer.setOnCheckedChangeListener { _, isChecked ->
+                settings.webGpuRenderer = isChecked
+                PrefManager.setVal(PrefName.WebGpuRenderer, isChecked)
+                activity.saveCurrentSettings()
+                activity.applySettings()
+            }
         }
 
         binding.readerImageRotation.isChecked = settings.rotation

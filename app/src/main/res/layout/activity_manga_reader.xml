@@ -36,6 +36,12 @@
                 tools:listitem="@layout/item_dual_page" />
 
         </com.alexvasilkov.gestures.views.GestureFrameLayout>
+
+        <FrameLayout
+            android:id="@+id/mangaReaderWebGpuContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
     </ani.dantotsu.media.manga.mangareader.Swipy>
 
     <FrameLayout
