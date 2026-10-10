@@ -68,6 +68,12 @@
     <init>(...);
 }
 
+# Keep NanoHTTPD for anime extensions and local proxy servers
+-keep class fi.iki.elonen.** { *; }
+-dontwarn fi.iki.elonen.**
+-keep class org.nanohttpd.** { *; }
+-dontwarn org.nanohttpd.**
+
 #############################################
 # Firebase
 #############################################
