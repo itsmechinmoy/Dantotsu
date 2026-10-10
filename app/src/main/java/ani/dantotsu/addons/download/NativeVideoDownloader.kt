@@ -616,7 +616,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             for ((index, audio) in audioUrls.withIndex()) {
                 command.append("-metadata:s:a:${index + 1} language=\"${audio.second}\" ")
             }
-            command.append("\"$downloadPath\" ")
+            command.append("-y \"$downloadPath\" ")
 
             val ffmpegSessionId = AtomicLong(-1L)
             val exec = FFmpegKit.executeAsync(command.toString(),

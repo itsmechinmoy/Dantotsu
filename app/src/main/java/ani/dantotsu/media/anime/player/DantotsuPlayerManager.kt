@@ -10,6 +10,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
@@ -18,6 +19,8 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
@@ -373,6 +376,29 @@ class DantotsuPlayerManager(
         Logger.log("Libass: Calling renderersFactory.withAssSupport()")
         val renderersFactory = DefaultRenderersFactory(activity)
             .setEnableDecoderFallback(true)
+            .setMediaCodecSelector(object : MediaCodecSelector {
+                override fun getDecoderInfos(
+                    mimeType: String,
+                    requiresSecureDecoder: Boolean,
+                    requiresTunnelingDecoder: Boolean
+                ): List<MediaCodecInfo> {
+                    val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(
+                        mimeType,
+                        requiresSecureDecoder,
+                        requiresTunnelingDecoder
+                    )
+                    if (mimeType.equals(MimeTypes.AUDIO_AAC, ignoreCase = true)) {
+                        // Prefer Google's software decoder for AAC to fix AAC Main (mp4a.40.1) crashes on hardware decoders (especially Samsung/Qualcomm)
+                        val (softwareDecoders, hardwareDecoders) = decoders.partition {
+                            it.name.startsWith("c2.android.", ignoreCase = true) ||
+                            it.name.startsWith("OMX.google.", ignoreCase = true) ||
+                            it.name.contains("sw", ignoreCase = true)
+                        }
+                        return softwareDecoders + hardwareDecoders
+                    }
+                    return decoders
+                }
+            })
             .withAssSupport(handler)
 
         val mediaSourceFactory = activeMediaSourceFactory ?: DefaultMediaSourceFactory(activity)

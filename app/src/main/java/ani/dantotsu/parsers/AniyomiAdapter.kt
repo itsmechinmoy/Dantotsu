@@ -791,9 +791,20 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
                     } else null
                 }
 
-                val targetParam = queryPairs.find { it.first == "url" || it.first == "file" }?.second ?: ""
-                if (targetParam.isNotBlank()) {
-                    format = getVideoType(targetParam)
+                val typeParam = queryPairs.find { it.first.equals("type", ignoreCase = true) }?.second ?: ""
+                if (typeParam.isNotBlank()) {
+                    format = getVideoType(typeParam)
+                }
+
+                if (format == null) {
+                    val targetParam = queryPairs.find { it.first == "url" || it.first == "file" }?.second ?: ""
+                    if (targetParam.isNotBlank()) {
+                        format = getVideoType(targetParam)
+                    }
+                }
+
+                if (format == null && (videoUrl.contains(".m3u8", ignoreCase = true) || query.contains(".m3u8", ignoreCase = true))) {
+                    format = VideoType.M3U8
                 }
             }
 
