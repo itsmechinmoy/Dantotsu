@@ -201,17 +201,6 @@ class CommentsFragment : Fragment() {
         }
 
         binding.commentSort.setOnClickListener { sortView ->
-            fun sortComments(sortOrder: String) {
-                val groups = section.groups
-                when (sortOrder) {
-                    "newest" -> groups.sortByDescending { CommentItem.timestampToMillis((it as CommentItem).comment.timestamp) }
-                    "oldest" -> groups.sortBy { CommentItem.timestampToMillis((it as CommentItem).comment.timestamp) }
-                    "highest_rated" -> groups.sortByDescending { (it as CommentItem).comment.upvotes - it.comment.downvotes }
-                    "lowest_rated" -> groups.sortBy { (it as CommentItem).comment.upvotes - it.comment.downvotes }
-                }
-                section.update(groups)
-            }
-
             val popup = PopupMenu(activity, sortView)
             popup.setOnMenuItemClickListener { item ->
                 val sortOrder = when (item.itemId) {
@@ -222,13 +211,9 @@ class CommentsFragment : Fragment() {
                     else -> return@setOnMenuItemClickListener false
                 }
                 PrefManager.setVal(PrefName.CommentSortOrder, sortOrder)
-                if (totalPages > pagesLoaded) {
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        loadAndDisplayComments()
-                        activity.binding.commentReplyToContainer.visibility = View.GONE
-                    }
-                } else {
-                    sortComments(sortOrder)
+                viewLifecycleOwner.lifecycleScope.launch {
+                    loadAndDisplayComments()
+                    activity.binding.commentReplyToContainer.visibility = View.GONE
                 }
                 binding.commentsList.scrollToPosition(0)
                 true
@@ -786,11 +771,11 @@ class CommentsFragment : Fragment() {
                 mediaId,
                 page = 1,
                 tag = effectiveFilter,
-                sort = null
+                sort = sortOrder
             )
         }
 
-        comments?.comments?.forEach { comment ->
+        sortComments(comments?.comments).forEach { comment ->
             withContext(Dispatchers.Main) {
                 section.add(
                     CommentItem(

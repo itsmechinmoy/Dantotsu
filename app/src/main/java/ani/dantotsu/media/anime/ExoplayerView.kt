@@ -929,6 +929,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         lifecycleScope.launch(Dispatchers.IO) { extractor?.onVideoStopped(video) }
 
         val ext = episode.extractors?.find { it.server.name == episode.selectedExtractor }
+            ?: episode.extractors?.firstOrNull { it.isPreferred }
             ?: episode.extractors?.firstOrNull() ?: return
         extractor = ext
         video = ext.videos.getOrNull(episode.selectedVideo) ?: ext.videos.firstOrNull() ?: return

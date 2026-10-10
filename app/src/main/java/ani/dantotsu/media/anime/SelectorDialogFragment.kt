@@ -532,21 +532,25 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                         ep.extractors?.firstOrNull()
                                     } else {
                                         ep.extractors?.find { it.server.name == selected }
+                                            ?: ep.extractors?.find { it.isPreferred }
+                                            ?: ep.extractors?.firstOrNull()
                                     }
 
                                 val size = matchedExtractor?.videos?.size
 
-                                if (size != null && size >= media!!.selected!!.video) {
+                                if (matchedExtractor != null && size != null && size > 0) {
                                     val currentKey = media!!.anime!!.selectedEpisode ?: actualKey
                                     media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedExtractor = matchedExtractor.server.name
-                                    media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedVideo = media!!.selected!!.video
+                                    val chosenVideo = if (media!!.selected!!.video in 0 until size) media!!.selected!!.video else 0
+                                    media!!.anime!!.episodes?.getEpisode(currentKey)?.selectedVideo = chosenVideo
                                     media!!.selected!!.server = matchedExtractor.server.name
+                                    model.saveSelected(media!!.id, media!!.selected!!)
                                     startExoplayer(media!!)
                                 } else failToList()
                             }
 
                             val hasMatchingExtractor = ep.extractors?.any {
-                                it.server.name == selected
+                                it.server.name == selected || it.isPreferred
                             } == true
 
                             if (!hasMatchingExtractor) {

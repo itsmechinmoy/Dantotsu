@@ -880,7 +880,7 @@ class MediaDetailsViewModel : ViewModel() {
         val server = selectedServerName ?: selected.server ?: return false
         val link = ep.link ?: return false
 
-        if (ep.extractors?.find{ it.server.name == server } == null) {
+        if (ep.extractors?.find { it.server.name == server || it.isPreferred } == null) {
             Log.d("AnimeDownloader", "Loading Video Server for episode: ${ep.number}, selected server: $server")
             if(ep.extractors == null){
                 ep.extractors = mutableListOf(watchSources?.get(selected.sourceIndex)?.let {

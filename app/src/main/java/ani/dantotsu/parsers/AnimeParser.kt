@@ -140,14 +140,16 @@ abstract class AnimeParser : BaseParser() {
         post: Boolean
     ): VideoExtractor? {
         return tryWithSuspend(post) {
-            loadVideoServers(episodeUrl, extra, sEpisode).apply {
-                find { it.name == serverName }?.also {
-                    return@tryWithSuspend getVideoExtractor(it)?.apply {
-                        load()
-                    }
+            val servers = loadVideoServers(episodeUrl, extra, sEpisode)
+            val target = servers.find { it.name == serverName }
+                ?: servers.find { it.isPreferred }
+                ?: servers.firstOrNull()
+
+            target?.let {
+                getVideoExtractor(it)?.apply {
+                    load()
                 }
             }
-            null
         }
     }
 
