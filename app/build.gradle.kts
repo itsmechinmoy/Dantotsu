@@ -209,6 +209,7 @@ dependencies {
     implementation(libs.gesture)
     implementation(libs.webgpuviewer)
     implementation(libs.image.decoder)
+    implementation(libs.androidx.compose.ui)
     implementation(libs.mlkit.text.japanese)
     implementation(libs.mlkit.text)
     implementation(libs.play.services.base)

@@ -474,12 +474,13 @@ abstract class BaseImageAdapter(
          */
         fun decodeWithLibvips(inputStream: InputStream): Bitmap? {
             return try {
-                ImageDecoder.new(inputStream)?.use { decoder ->
-                    if (decoder.pages > 0) {
-                        val res = decoder.decode()
-                        val bitmap = Bitmap.createBitmap(res.width, res.height, Bitmap.Config.ARGB_8888)
-                        res.image.rewind()
-                        bitmap.copyPixelsFromBuffer(res.image)
+                ImageDecoder.open(inputStream).use { decoder ->
+                    if (decoder.hasNext) {
+                        val frame = decoder.decodeNext()
+                        val bitmap = Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
+                        frame.image.rewind()
+                        bitmap.copyPixelsFromBuffer(frame.image)
+                        frame.close()
                         bitmap
                     } else {
                         null

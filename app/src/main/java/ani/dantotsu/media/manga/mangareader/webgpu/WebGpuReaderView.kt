@@ -58,6 +58,8 @@ class WebGpuReaderView(
             else -> Color.TRANSPARENT
         }
 
+        viewer.setBackgroundColor(bgColor)
+
         if (isContinuous) {
             continuousViewer?.state?.apply {
                 backgroundColor = bgColor
@@ -71,15 +73,16 @@ class WebGpuReaderView(
                     val pageIndex = pageCache.entries.firstOrNull { it.value === readThrough }?.key
                     if (pageIndex != null && pageIndex != currentPosition) {
                         currentPosition = pageIndex
-                        val chap = currentChapter ?: return@apply
-                        activity.onChapterScrolledTo(chap, pageIndex + 1, images.size)
-                        checkPreloadBoundaries(pageIndex)
+                        val chap = currentChapter
+                        if (chap != null) {
+                            activity.onChapterScrolledTo(chap, pageIndex + 1, images.size)
+                            checkPreloadBoundaries(pageIndex)
+                        }
                     }
                 }
             }
         } else {
             pagedViewer?.state?.apply {
-                backgroundColor = bgColor
                 onTap = { _ ->
                     activity.handleController()
                 }
@@ -90,10 +93,12 @@ class WebGpuReaderView(
                     val target = currentPosition + delta
                     if (target in images.indices) {
                         currentPosition = target
-                        val chap = currentChapter ?: return@onPageChange
-                        activity.onChapterScrolledTo(chap, currentPosition + 1, images.size)
-                        checkPreloadBoundaries(currentPosition)
-                        preloadAround(currentPosition)
+                        val chap = currentChapter
+                        if (chap != null) {
+                            activity.onChapterScrolledTo(chap, currentPosition + 1, images.size)
+                            checkPreloadBoundaries(currentPosition)
+                            preloadAround(currentPosition)
+                        }
                     }
                 }
             }
@@ -101,10 +106,9 @@ class WebGpuReaderView(
     }
 
     fun updateBackgroundColor(color: Int) {
+        viewer.setBackgroundColor(color)
         if (isContinuous) {
             continuousViewer?.state?.backgroundColor = color
-        } else {
-            pagedViewer?.state?.backgroundColor = color
         }
         invalidate()
     }
@@ -197,9 +201,9 @@ class WebGpuReaderView(
         val img = images.getOrNull(index) ?: return
 
         val job = activity.lifecycleScope.launch(Dispatchers.IO) {
+            val stream = openStream(img) ?: return@launch
             try {
-                val stream = openStream(img) ?: return@launch
-                val imagePage = stream.use { decodeToGpuImage(it) }
+                val imagePage = decodeToGpuImage(stream)
                 if (imagePage != null) {
                     pageCache[index] = imagePage
                     withContext(Dispatchers.Main) {
@@ -208,22 +212,23 @@ class WebGpuReaderView(
                 }
             } catch (_: Throwable) {
             } finally {
+                try { stream.close() } catch (_: Throwable) {}
                 loadingJobs.remove(index)
             }
         }
         loadingJobs[index] = job
     }
 
-    private fun decodeToGpuImage(inputStream: InputStream): ImagePage? {
-        return try {
-            val decoder = try {
-                ImageDecoder.open(inputStream)
-            } catch (_: Throwable) {
-                ImageDecoder.new(inputStream)
-            } ?: return null
+    private suspend fun decodeToGpuImage(inputStream: InputStream): ImagePage? {
+        val decoder = try {
+            ImageDecoder.open(inputStream)
+        } catch (_: Throwable) {
+            null
+        } ?: return null
 
+        return try {
             decoder.use { dec ->
-                if (dec.pages > 0) {
+                if (dec.hasNext) {
                     val frame = dec.decodeNext()
                     val trimColors = if (activity.defaultSettings.cropBorders) {
                         listOf(floatArrayOf(1f, 1f, 1f), floatArrayOf(0f, 0f, 0f))
