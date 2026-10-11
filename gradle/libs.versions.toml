@@ -45,7 +45,7 @@ firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 
 # AndroidX Core
-androidx-core = "androidx.core:core-ktx:1.19.0"
+androidx-core = "androidx.core:core-ktx:1.19.1"
 androidx-appcompat = "androidx.appcompat:appcompat:1.8.0"
 androidx-activity = "androidx.activity:activity-ktx:1.13.0"
 androidx-fragment = "androidx.fragment:fragment-ktx:1.9.0"
