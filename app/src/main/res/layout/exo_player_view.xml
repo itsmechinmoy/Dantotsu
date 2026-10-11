@@ -279,6 +279,7 @@
                 android:valueTo="10"
                 app:labelBehavior="gone"
                 app:thumbElevation="0dp"
+                app:thumbRadius="12dp"
                 app:trackColorActive="?attr/colorPrimary"
                 app:trackColorInactive="?attr/colorOnPrimary"
                 app:trackHeight="24dp" />
@@ -323,6 +324,7 @@
                 android:valueTo="10"
                 app:labelBehavior="gone"
                 app:thumbElevation="0dp"
+                app:thumbRadius="12dp"
                 app:trackColorActive="?attr/colorPrimary"
                 app:trackColorInactive="?attr/colorOnPrimary"
                 app:trackHeight="24dp" />
