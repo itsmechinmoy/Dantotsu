@@ -120,7 +120,6 @@ class WebGpuReaderView(
             }
         } else {
             pagedViewer?.state?.apply {
-                backgroundColor = bgColor
                 transition = if (isVertical) TransitionBasic.Vertical else TransitionBasic
                 onTap = { _ ->
                     activity.handleController()
