@@ -712,7 +712,8 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         // Episode Observer
         model.getEpisode().observe(this) { ep ->
             hideSystemBarsExtendView()
-            if (ep != null && !epChanging) {
+            if (ep != null && (!epChanging || ep.extractors?.isNotEmpty() == true)) {
+                epChanging = false
                 val currentPos = playerManager.exoPlayer?.currentPosition
                 episode = ep
                 media.selected = model.loadSelected(media)
