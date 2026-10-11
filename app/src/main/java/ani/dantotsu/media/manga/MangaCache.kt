@@ -150,9 +150,11 @@ class MangaCache {
     private val maxEntries = 500
     private val cache = LruCache<String, ImageData>(maxEntries)
     private val cacheSizeKb = ((Runtime.getRuntime().maxMemory() / 1024) / 8).toInt().coerceIn(32 * 1024, 96 * 1024)
-    private val bitmapCache = object : LruCache<String, Bitmap>(cacheSizeKb) {
-        override fun sizeOf(key: String, value: Bitmap): Int {
-            return (value.byteCount / 1024).coerceAtLeast(1)
+    private class CachedBitmap(val bitmap: Bitmap, val sizeKb: Int)
+
+    private val bitmapCache = object : LruCache<String, CachedBitmap>(cacheSizeKb) {
+        override fun sizeOf(key: String, value: CachedBitmap): Int {
+            return value.sizeKb
         }
     }
 
@@ -178,11 +180,21 @@ class MangaCache {
 
     @Synchronized
     fun putBitmap(key: String, bitmap: Bitmap) {
-        bitmapCache.put(key, bitmap)
+        if (bitmap.isRecycled) return
+        val sizeKb = (bitmap.allocationByteCount / 1024).coerceAtLeast(1)
+        bitmapCache.put(key, CachedBitmap(bitmap, sizeKb))
     }
 
     @Synchronized
-    fun getBitmap(key: String): Bitmap? = bitmapCache.get(key)
+    fun getBitmap(key: String): Bitmap? {
+        val entry = bitmapCache.get(key) ?: return null
+        return if (!entry.bitmap.isRecycled) {
+            entry.bitmap
+        } else {
+            bitmapCache.remove(key)
+            null
+        }
+    }
 
     @Synchronized
     fun clearBitmaps() {

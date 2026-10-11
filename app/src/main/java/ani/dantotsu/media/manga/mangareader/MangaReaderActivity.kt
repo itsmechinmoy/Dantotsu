@@ -222,15 +222,12 @@ class MangaReaderActivity : AppCompatActivity() {
         ani.dantotsu.widgets.continue_widget.ContinueWidget.updateReadingState(this, null, null, null, isExiting = true)
         if (::binding.isInitialized) {
             try {
+                binding.mangaReaderSwipy.isEnabled = true
                 for (i in 0 until binding.mangaReaderRecycler.childCount) {
                     val child = binding.mangaReaderRecycler.getChildAt(i)
                     val subsamplingView = child.findViewById<SubsamplingScaleImageView>(R.id.imgProgImageNoGestures)
                     subsamplingView?.recycle()
-                    val oldBitmap = child.getTag(R.id.imgProgImageNoGestures) as? Bitmap
                     child.setTag(R.id.imgProgImageNoGestures, null)
-                    if (oldBitmap != null && !oldBitmap.isRecycled) {
-                        oldBitmap.recycle()
-                    }
                 }
                 binding.mangaReaderRecycler.adapter = null
                 binding.mangaReaderRecycler.recycledViewPool.clear()
@@ -792,6 +789,7 @@ class MangaReaderActivity : AppCompatActivity() {
             binding.mangaReaderRecyclerContainer.visibility = View.GONE
             binding.mangaReaderPager.visibility = View.GONE
             binding.mangaReaderWebGpuContainer.visibility = View.VISIBLE
+            binding.mangaReaderSwipy.isEnabled = false
 
             val isContinuous = defaultSettings.layout != PAGED
             val isVertical = defaultSettings.direction == TOP_TO_BOTTOM || defaultSettings.direction == BOTTOM_TO_TOP
@@ -842,6 +840,7 @@ class MangaReaderActivity : AppCompatActivity() {
                 } else false
             }
         } else {
+            binding.mangaReaderSwipy.isEnabled = true
             if (webGpuReaderView != null) {
                 webGpuReaderView?.destroy()
                 webGpuReaderView = null

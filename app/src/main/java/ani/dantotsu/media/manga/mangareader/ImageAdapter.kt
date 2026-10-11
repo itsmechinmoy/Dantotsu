@@ -101,14 +101,10 @@ open class ImageAdapter(
             ?: return false
         val progress = parent.findViewById<View>(R.id.imgProgProgress) ?: return false
 
-        val previousBitmap = parent.getTag(R.id.imgProgImageNoGestures) as? Bitmap
         parent.setTag(R.id.imgProgImageNoGestures, null)
         imageView.recycle()
         imageView.visibility = View.GONE
         progress.visibility = View.VISIBLE
-        if (previousBitmap != null && !previousBitmap.isRecycled) {
-            previousBitmap.recycle()
-        }
 
         var bitmap = loadBitmap(position, parent)
         if (bitmap == null) {
@@ -120,7 +116,6 @@ open class ImageAdapter(
         }
 
         if (!currentCoroutineContext().isActive) {
-            if (!bitmap.isRecycled) bitmap.recycle()
             return false
         }
 
@@ -162,10 +157,8 @@ open class ImageAdapter(
             val scaled = withContext(Dispatchers.IO) {
                 scaleBitmap(bitmap, targetW, targetH, quality)
             }
-            if (scaled !== bitmap && !bitmap.isRecycled) bitmap.recycle()
             bitmap = scaled
             if (!currentCoroutineContext().isActive) {
-                if (!bitmap.isRecycled) bitmap.recycle()
                 return false
             }
             parent.setTag(R.id.imgProgImageNoGestures, bitmap)

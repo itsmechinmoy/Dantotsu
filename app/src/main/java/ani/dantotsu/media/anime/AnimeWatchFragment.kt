@@ -357,7 +357,7 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
             if (i != null) {
                 media.anime?.kitsuEpisodes = i
                 if (loaded) {
-                    updateEpisodes()
+                    loadEpisodes(media.selected!!.sourceIndex, false)
                 }
             }
         }
@@ -366,7 +366,7 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
             if (i != null) {
                 media.anime?.fillerEpisodes = i
                 if (loaded) {
-                    updateEpisodes()
+                    loadEpisodes(media.selected!!.sourceIndex, false)
                 }
             }
         }
@@ -374,7 +374,7 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
             if (i != null) {
                 media.anime?.anifyEpisodes = i
                 if (loaded) {
-                    updateEpisodes()
+                    loadEpisodes(media.selected!!.sourceIndex, false)
                 }
             }
         }

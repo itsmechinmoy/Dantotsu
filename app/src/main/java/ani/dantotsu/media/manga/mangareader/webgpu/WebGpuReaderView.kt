@@ -4,13 +4,17 @@ import android.graphics.Color
 import android.net.Uri
 import android.view.View
 import androidx.lifecycle.lifecycleScope
+import androidx.webgpu.GPUTexture
+import ani.dantotsu.media.manga.MangaCache
 import ani.dantotsu.media.manga.MangaChapter
 import ani.dantotsu.media.manga.mangareader.MangaReaderActivity
 import ani.dantotsu.parsers.MangaImage
+import ani.dantotsu.util.Logger
 import ca.mpreg.imagedecoder.ImageDecoder
 import ca.mpreg.webgpuviewer.ImageView
 import ca.mpreg.webgpuviewer.ImageViewContinuous
 import ca.mpreg.webgpuviewer.renderer.Image
+import ca.mpreg.webgpuviewer.transition.TransitionBasic
 import ca.mpreg.webgpuviewer.viewer.ImagePage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,10 +24,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
+import kotlin.math.min
 
 class WebGpuReaderView(
     private val activity: MangaReaderActivity,
@@ -50,12 +56,42 @@ class WebGpuReaderView(
     var currentPosition: Int = 0
         private set
 
+    inner class ProgressPage(val pageIndex: Int) : ImagePage.Render(0, 0) {
+        override val width: Int
+            get() = (pagedViewer?.state?.width ?: continuousViewer?.state?.width)?.takeIf { it > 0 } ?: 1080
+
+        override val height: Int
+            get() = (pagedViewer?.state?.height ?: continuousViewer?.state?.height)?.takeIf { it > 0 } ?: 1920
+
+        override val backgroundColor: Int
+            get() = when (activity.defaultSettings.backgroundColor) {
+                1 -> Color.BLACK
+                2 -> Color.DKGRAY
+                3 -> Color.WHITE
+                else -> Color.BLACK
+            }
+
+        init {
+            minScale = 1f
+            maxScale = 1f
+            homeScale = 1f
+        }
+
+        override fun render(dst: GPUTexture, x: Float, y: Float, scale: Float) {
+            fillPage(dst, x, y, scale, backgroundColor)
+            val cx = dst.width * (0.5f + scale * x)
+            val cy = dst.height * (0.5f + scale * y)
+            val full = min(width, height) * 0.25f * scale
+            circle(cx, cy, full / 2f, 0x55888888.toInt())
+        }
+    }
+
     init {
         val bgColor = when (activity.defaultSettings.backgroundColor) {
             1 -> Color.BLACK
             2 -> Color.DKGRAY
             3 -> Color.WHITE
-            else -> Color.TRANSPARENT
+            else -> Color.BLACK
         }
 
         viewer.setBackgroundColor(bgColor)
@@ -77,12 +113,15 @@ class WebGpuReaderView(
                         if (chap != null) {
                             activity.onChapterScrolledTo(chap, pageIndex + 1, images.size)
                             checkPreloadBoundaries(pageIndex)
+                            preloadAround(pageIndex)
                         }
                     }
                 }
             }
         } else {
             pagedViewer?.state?.apply {
+                backgroundColor = bgColor
+                transition = if (isVertical) TransitionBasic.Vertical else TransitionBasic
                 onTap = { _ ->
                     activity.handleController()
                 }
@@ -118,6 +157,10 @@ class WebGpuReaderView(
         images = chapter.images()
         currentPosition = (initialPage - 1).coerceIn(0, (images.size - 1).coerceAtLeast(0))
         clearCache()
+        if (currentPosition in images.indices) {
+            pageCache[currentPosition] = ProgressPage(currentPosition)
+            loadPage(currentPosition)
+        }
         preloadAround(currentPosition)
         invalidate()
     }
@@ -162,8 +205,10 @@ class WebGpuReaderView(
         val cached = pageCache[targetIdx]
         if (cached != null) return cached
 
+        val placeholder = ProgressPage(targetIdx)
+        pageCache[targetIdx] = placeholder
         loadPage(targetIdx)
-        return null
+        return placeholder
     }
 
     private fun preloadAround(center: Int) {
@@ -197,20 +242,34 @@ class WebGpuReaderView(
     }
 
     private fun loadPage(index: Int) {
-        if (loadingJobs.containsKey(index) || pageCache.containsKey(index)) return
+        if (loadingJobs.containsKey(index)) return
+        val currentEntry = pageCache[index]
+        if (currentEntry != null && currentEntry !is ProgressPage) return
         val img = images.getOrNull(index) ?: return
 
         val job = activity.lifecycleScope.launch(Dispatchers.IO) {
-            val stream = openStream(img) ?: return@launch
+            val stream = openStream(img)
+            if (stream == null) {
+                Logger.log("WebGpuReaderView: openStream returned null for page $index")
+                return@launch
+            }
             try {
                 val imagePage = decodeToGpuImage(stream)
                 if (imagePage != null) {
+                    val old = pageCache[index]
                     pageCache[index] = imagePage
+                    old?.cleanup()
+                    if (!isContinuous) {
+                        imagePage.fadeIn()
+                    }
                     withContext(Dispatchers.Main) {
                         invalidate()
                     }
+                } else {
+                    Logger.log("WebGpuReaderView: decodeToGpuImage returned null for page $index")
                 }
-            } catch (_: Throwable) {
+            } catch (e: Throwable) {
+                Logger.log("WebGpuReaderView: Exception loading page $index: ${e.message}")
             } finally {
                 try { stream.close() } catch (_: Throwable) {}
                 loadingJobs.remove(index)
@@ -222,7 +281,8 @@ class WebGpuReaderView(
     private suspend fun decodeToGpuImage(inputStream: InputStream): ImagePage? {
         val decoder = try {
             ImageDecoder.open(inputStream)
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            Logger.log("WebGpuReaderView: ImageDecoder.open failed: ${e.message}")
             null
         } ?: return null
 
@@ -234,6 +294,7 @@ class WebGpuReaderView(
                         listOf(floatArrayOf(1f, 1f, 1f), floatArrayOf(0f, 0f, 0f))
                     } else null
 
+                    frame.image.rewind()
                     val gpuImage = Image(
                         frame.image,
                         frame.width,
@@ -246,7 +307,8 @@ class WebGpuReaderView(
                     ImagePage.ImageSingle(gpuImage)
                 } else null
             }
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            Logger.log("WebGpuReaderView: decodeNext failed: ${e.message}")
             null
         }
     }
@@ -257,24 +319,57 @@ class WebGpuReaderView(
 
         if (url.startsWith("content://")) {
             return@withContext try {
-                activity.contentResolver.openInputStream(Uri.parse(url))
-            } catch (_: Exception) { null }
+                val bytes = activity.contentResolver.openInputStream(Uri.parse(url))?.use { it.readBytes() }
+                bytes?.let { ByteArrayInputStream(it) }
+            } catch (e: Exception) {
+                Logger.log("WebGpuReaderView: contentResolver error: ${e.message}")
+                null
+            }
         }
 
         val localFile = File(url)
         if (localFile.exists()) {
-            return@withContext try { localFile.inputStream() } catch (_: Exception) { null }
+            return@withContext try {
+                val bytes = localFile.inputStream().use { it.readBytes() }
+                ByteArrayInputStream(bytes)
+            } catch (e: Exception) {
+                Logger.log("WebGpuReaderView: localFile error: ${e.message}")
+                null
+            }
         }
 
+        // 1. Check MangaCache for ImageData with source (handles cookies, Cloudflare, headers)
+        try {
+            val mangaCache = Injekt.get<MangaCache>()
+            val imageData = mangaCache.get(url)
+            if (imageData != null) {
+                val response = imageData.source.getImage(imageData.page)
+                if (response.isSuccessful) {
+                    val bytes = response.body.byteStream().use { it.readBytes() }
+                    return@withContext ByteArrayInputStream(bytes)
+                } else {
+                    Logger.log("WebGpuReaderView: source.getImage response code: ${response.code}")
+                }
+            }
+        } catch (e: Exception) {
+            Logger.log("WebGpuReaderView: source.getImage error: ${e.message}")
+        }
+
+        // 2. Network fallback with OkHttpClient
         try {
             val okHttpClient = Injekt.get<OkHttpClient>()
             val requestBuilder = Request.Builder().url(url)
             image.url.headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
             val response = okHttpClient.newCall(requestBuilder.build()).execute()
             if (response.isSuccessful) {
-                response.body?.byteStream()
-            } else null
-        } catch (_: Exception) {
+                val bytes = response.body?.byteStream()?.use { it.readBytes() } ?: return@withContext null
+                ByteArrayInputStream(bytes)
+            } else {
+                Logger.log("WebGpuReaderView: network fallback response code: ${response.code}")
+                null
+            }
+        } catch (e: Exception) {
+            Logger.log("WebGpuReaderView: network fallback error: ${e.message}")
             null
         }
     }

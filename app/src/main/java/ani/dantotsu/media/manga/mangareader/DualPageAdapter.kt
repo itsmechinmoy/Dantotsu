@@ -154,7 +154,6 @@ class DualPageAdapter(
         val bitmap2 = if (link2 != null) {
             val b2 = activity.loadBitmap(link2, transforms2)
             if (b2 == null) {
-                if (!bitmap1.isRecycled) bitmap1.recycle()
                 return null
             }
             b2
@@ -164,8 +163,6 @@ class DualPageAdapter(
             val merged = if (settings.direction != LEFT_TO_RIGHT)
                 mergeBitmap(bitmap2, bitmap1)
             else mergeBitmap(bitmap1, bitmap2)
-            if (bitmap1 != merged && !bitmap1.isRecycled) bitmap1.recycle()
-            if (bitmap2 != merged && !bitmap2.isRecycled) bitmap2.recycle()
             merged
         } else bitmap1
     }
