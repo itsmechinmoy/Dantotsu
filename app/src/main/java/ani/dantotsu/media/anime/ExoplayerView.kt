@@ -105,6 +105,7 @@ import ani.dantotsu.others.Xubtitle
 import ani.dantotsu.others.getSerialized
 import ani.dantotsu.parsers.AnimeSources
 import ani.dantotsu.parsers.HAnimeSources
+import ani.dantotsu.parsers.StreamTypeDetector
 import ani.dantotsu.parsers.Subtitle
 import ani.dantotsu.parsers.Video
 import ani.dantotsu.parsers.VideoExtractor
@@ -1022,13 +1023,25 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         lifecycleScope.launch(Dispatchers.IO) { ext.onVideoPlayed(video) }
 
         val videoUrl = video?.file?.url ?: ""
+        val uri = runCatching { Uri.parse(videoUrl) }.getOrNull()
+        val isLocalDash = StreamTypeDetector.isLocalDash(uri)
+        val isLocalhostHls = StreamTypeDetector.isLocalhostHls(uri)
+
         val mimeType = when {
             video?.format == VideoType.M3U8 ||
                     videoUrl.contains(".m3u8", ignoreCase = true) ||
-                    videoUrl.contains("/m3u8", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                    videoUrl.contains("/m3u8", ignoreCase = true) ||
+                    videoUrl.contains("/pl/", ignoreCase = true) ||
+                    videoUrl.contains("/playlist/", ignoreCase = true) ||
+                    videoUrl.contains("/hls/", ignoreCase = true) ||
+                    videoUrl.contains("format=m3u8", ignoreCase = true) ||
+                    isLocalhostHls -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
             video?.format == VideoType.DASH ||
                     videoUrl.contains(".mpd", ignoreCase = true) ||
-                    videoUrl.contains("/mpd", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_MPD
+                    videoUrl.contains("/mpd", ignoreCase = true) ||
+                    videoUrl.contains("/dash/", ignoreCase = true) ||
+                    videoUrl.contains("format=mpd", ignoreCase = true) ||
+                    isLocalDash -> androidx.media3.common.MimeTypes.APPLICATION_MPD
             video?.format == VideoType.CONTAINER -> {
                 if (videoUrl.startsWith("content://")) {
                     val decoded = runCatching { java.net.URLDecoder.decode(videoUrl, "UTF-8").lowercase() }.getOrDefault("")
@@ -1604,6 +1617,17 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                 if (playerErrorRetryCount < MAX_PLAYER_ERROR_RETRIES) {
                     playerErrorRetryCount++
                     val savedPos = if (playerManager.isInitialized) player?.currentPosition?.takeIf { it > 0 } ?: playbackPosition else playbackPosition
+                    if (error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED && video != null && video!!.format == VideoType.CONTAINER && extractor != null) {
+                        video = video!!.copy(format = VideoType.M3U8)
+                        val ext = extractor!!
+                        val subConfigs = subtitleManager.buildSubtitleConfigurations(
+                            ext.subtitles, ext.server.embed.url, video!!.file.url, hasExtSubtitles, subtitle?.language
+                        )
+                        playerManager.buildMediaSource(
+                            video!!, subConfigs, androidx.media3.common.MimeTypes.APPLICATION_M3U8,
+                            null, null, ext.audioTracks
+                        )
+                    }
                     val currentParams = playerManager.exoPlayer?.playbackParameters ?: PlaybackParameters(1f)
                     val fallbackExo = playerManager.buildExoplayer(savedPos, currentParams, this, forceDefaultRenderers = false)
                     playerView.player = fallbackExo

@@ -808,6 +808,27 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
                 }
             }
 
+            if (format == null) {
+                if (StreamTypeDetector.isLocalMp4(urlObj)) {
+                    format = VideoType.CONTAINER
+                } else if (StreamTypeDetector.isLocalhost(urlObj) && !StreamTypeDetector.isTorrentStream(urlObj)) {
+                    if (StreamTypeDetector.isLocalDash(urlObj)) {
+                        format = VideoType.DASH
+                    } else {
+                        format = VideoType.M3U8
+                    }
+                }
+            }
+
+            if (format == null) {
+                val titleOrQuality = "${aniVideo.videoTitle} ${aniVideo.quality}"
+                if (titleOrQuality.contains("hls", ignoreCase = true) || titleOrQuality.contains("m3u8", ignoreCase = true)) {
+                    format = VideoType.M3U8
+                } else if (titleOrQuality.contains("dash", ignoreCase = true) || titleOrQuality.contains("mpd", ignoreCase = true)) {
+                    format = VideoType.DASH
+                }
+            }
+
             // If the format is still undetermined, log an error
             if (format == null) {
                 Logger.log("Unknown video format: $videoUrl")
@@ -892,15 +913,23 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
             ) || fileName.endsWith(
                 ".webm",
                 ignoreCase = true
-            ) -> VideoType.CONTAINER
+            ) || fileName.contains("/mp4", ignoreCase = true) ||
+                    fileName.contains("format=mp4", ignoreCase = true) -> VideoType.CONTAINER
 
             fileName.endsWith(".m3u8", ignoreCase = true) ||
                     fileName.contains(".m3u8", ignoreCase = true) ||
                     fileName.contains("/m3u8", ignoreCase = true) ||
+                    fileName.contains("/pl/", ignoreCase = true) ||
+                    fileName.contains("/playlist/", ignoreCase = true) ||
+                    fileName.contains("/hls/", ignoreCase = true) ||
+                    fileName.contains("format=m3u8", ignoreCase = true) ||
+                    fileName.contains("type=m3u8", ignoreCase = true) ||
                     fileName.equals("m3u8", ignoreCase = true) -> VideoType.M3U8
             fileName.endsWith(".mpd", ignoreCase = true) ||
                     fileName.contains(".mpd", ignoreCase = true) ||
-                    fileName.contains("/mpd", ignoreCase = true) -> VideoType.DASH
+                    fileName.contains("/mpd", ignoreCase = true) ||
+                    fileName.contains("/dash/", ignoreCase = true) ||
+                    fileName.contains("format=mpd", ignoreCase = true) -> VideoType.DASH
             else -> null
         }
 
