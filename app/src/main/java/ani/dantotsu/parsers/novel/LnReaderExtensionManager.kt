@@ -116,6 +116,10 @@ class LnReaderExtensionManager(private val context: Context) {
         }
 
         _availablePluginsFlow.value = withUpdate
+        _installedPluginsFlow.value = _installedPluginsFlow.value.map { inst ->
+            val avail = withUpdate.find { it.id == inst.id }
+            if (avail?.hasUpdate == true) inst.copy(hasUpdate = true) else inst
+        }
         withUpdate
     }
 

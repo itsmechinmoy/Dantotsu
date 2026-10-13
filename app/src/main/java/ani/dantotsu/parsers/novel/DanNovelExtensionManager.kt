@@ -65,6 +65,7 @@ class DanNovelExtensionManager(private val context: Context) {
             .filterIsInstance<NovelLoadResult.Success>()
             .map { it.extension }
         isInitialized = true
+        updatedInstalledNovelExtensionsStatuses(_availableNovelExtensionsFlow.value)
     }
 
     fun refreshInstalledExtensions() {

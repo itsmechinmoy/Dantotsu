@@ -64,9 +64,7 @@ class NovelExtensionsFragment : Fragment(),
         }
 
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-            if (novelExtensionManager.availableExtensionsFlow.value.isEmpty()) {
-                novelExtensionManager.findAvailableExtensions()
-            }
+            novelExtensionManager.findAvailableExtensions()
         }
 
         viewModel.invalidatePager() // Force a refresh of the pager

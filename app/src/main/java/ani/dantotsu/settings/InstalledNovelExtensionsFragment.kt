@@ -39,6 +39,7 @@ import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
 import eu.kanade.tachiyomi.data.notification.Notifications
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import rx.android.schedulers.AndroidSchedulers
@@ -237,6 +238,9 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
             novelExtensionManager.allInstalledExtensionsFlow.collect { extensions ->
                 extensionsAdapter.updateData(sortToNovelSourcesList(extensions))
             }
+        }
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            novelExtensionManager.findAvailableExtensions()
         }
         return binding.root
     }
