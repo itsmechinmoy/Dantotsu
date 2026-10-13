@@ -13,6 +13,16 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.core.view.updatePadding
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
+import androidx.cardview.widget.CardView
+import android.widget.FrameLayout
+import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.appbar.AppBarLayout
+import ani.dantotsu.parsers.novel.ConfigurableNovelSource
+import ani.dantotsu.parsers.novel.NovelExtension
+import ani.dantotsu.settings.extensionprefs.NovelSourcePreferencesFragment
+import ani.dantotsu.util.customAlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
@@ -721,6 +731,52 @@ class NovelReadFragment : Fragment(),
     override fun onPause() {
         super.onPause()
         state = binding.mediaSourceRecycler.layoutManager?.onSaveInstanceState()
+    }
+
+    fun openSettings(pkg: NovelExtension.Installed) {
+        val changeUIVisibility: (Boolean) -> Unit = { show ->
+            val activity = activity
+            if (activity is MediaDetailsActivity && isAdded) {
+                activity.findViewById<AppBarLayout>(R.id.mediaAppBar).isVisible = show
+                activity.findViewById<ViewPager2>(R.id.mediaViewPager).isVisible = show
+                activity.findViewById<CardView>(R.id.mediaCover).isVisible = show
+                activity.findViewById<CardView>(R.id.mediaClose).isVisible = show
+                activity.navBar.isVisible = show
+                activity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer).isGone = show
+            }
+        }
+        val configurable = pkg.sources.filterIsInstance<ConfigurableNovelSource>()
+        val hasPrefMethod = pkg.sources.any { src ->
+            src.javaClass.methods.any { it.name == "setupPreferenceScreen" }
+        }
+        if (configurable.isNotEmpty() || hasPrefMethod) {
+            changeUIVisibility(false)
+            val fragment = NovelSourcePreferencesFragment().getInstance(pkg.pkgName) {
+                changeUIVisibility(true)
+                val sel = media.selected?.sourceIndex ?: 0
+                lifecycleScope.launch {
+                    model.loadNovelChapters(media, sel, invalidate = true)
+                }
+            }
+            parentFragmentManager.beginTransaction()
+                .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
+                .replace(R.id.fragmentExtensionsContainer, fragment)
+                .addToBackStack(null)
+                .commit()
+        } else {
+            requireContext().customAlertDialog().apply {
+                setTitle(pkg.name)
+                val msg = buildString {
+                    append("Package: ${pkg.pkgName}\n")
+                    append("Version: ${pkg.versionName}\n")
+                    pkg.repository?.let { append("Repository: $it\n") }
+                    append("Sources: ${pkg.sources.size}")
+                }
+                setMessage(msg)
+                setPosButton(R.string.ok)
+                show()
+            }
+        }
     }
 
     companion object {

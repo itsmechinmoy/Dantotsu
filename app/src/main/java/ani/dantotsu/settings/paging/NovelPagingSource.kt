@@ -89,7 +89,10 @@ class NovelExtensionsViewModel(
                 )
             }
 
-        val combinedAvailable = available.filterNot { it.pkgName.isBlank() || it.versionName.isBlank() || it.pkgName in installedPkgs } + lnAsAvailable
+        val combinedAvailable = available.filterNot { avail ->
+            avail.pkgName.isBlank() || avail.versionName.isBlank() ||
+            installed.any { inst -> ani.dantotsu.parsers.novel.isSameNovelExtension(avail.pkgName, avail.name, inst.pkgName, inst.name) }
+        } + lnAsAvailable
         Pair(combinedAvailable, query)
     }.flatMapLatest { (combinedAvailable, query) ->
         Pager(
@@ -99,7 +102,7 @@ class NovelExtensionsViewModel(
                 prefetchDistance = 15
             )
         ) {
-            val nEPS = NovelExtensionPagingSource(combinedAvailable, query)
+            val nEPS = NovelExtensionPagingSource(combinedAvailable, novelExtensionManager, query)
             currentPagingSource = nEPS
             nEPS
         }.flow
@@ -109,16 +112,26 @@ class NovelExtensionsViewModel(
 
 class NovelExtensionPagingSource(
     private val availableExtensions: List<NovelExtension.Available>,
+    private val novelExtensionManager: NovelExtensionManager,
     private val searchQuery: String
 ) : PagingSource<Int, NovelExtension.Available>() {
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, NovelExtension.Available> {
         val position = params.key ?: 0
+        val installed = novelExtensionManager.installedExtensionsFlow.value
+        val installedLnIds = novelExtensionManager.lnReaderManager.installedPluginsFlow.value.map { it.id }.toSet()
+        val uninstalledAvailable = availableExtensions.filterNot { avail ->
+            if (avail.pkgName.startsWith("lnreader-")) {
+                avail.pkgName.removePrefix("lnreader-") in installedLnIds
+            } else {
+                installed.any { inst -> ani.dantotsu.parsers.novel.isSameNovelExtension(avail.pkgName, avail.name, inst.pkgName, inst.name) }
+            }
+        }
         val query = searchQuery
         val filteredExtensions = if (query.isEmpty()) {
-            availableExtensions
+            uninstalledAvailable
         } else {
-            availableExtensions.filter { it.name.contains(query, ignoreCase = true) }
+            uninstalledAvailable.filter { it.name.contains(query, ignoreCase = true) }
         }
         val lang: String = PrefManager.getVal(PrefName.LangSort)
         val langFilter = if (lang != "all") {

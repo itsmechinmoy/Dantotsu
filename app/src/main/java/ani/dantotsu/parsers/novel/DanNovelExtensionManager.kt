@@ -67,6 +67,10 @@ class DanNovelExtensionManager(private val context: Context) {
         isInitialized = true
     }
 
+    fun refreshInstalledExtensions() {
+        initNovelExtensions()
+    }
+
     fun getSourceData(id: Long) = availableNovelExtensionsSourcesData[id]
 
     suspend fun findAvailableExtensions(): List<NovelExtension.Available> {
@@ -102,7 +106,9 @@ class DanNovelExtensionManager(private val context: Context) {
         val mut = _installedNovelExtensionsFlow.value.toMutableList()
         var changed = false
         for ((i, ext) in mut.withIndex()) {
-            val avail = availableNovelExtensions.find { it.pkgName == ext.pkgName }
+            val avail = availableNovelExtensions.find {
+                isSameNovelExtension(it.pkgName, it.name, ext.pkgName, ext.name)
+            }
             if (avail == null && !ext.isObsolete) {
                 mut[i] = ext.copy(isObsolete = true)
                 changed = true
@@ -147,8 +153,9 @@ class DanNovelExtensionManager(private val context: Context) {
     }
 
     fun updateExtension(extension: NovelExtension.Installed): Observable<InstallStep> {
-        val avail = _availableNovelExtensionsFlow.value.find { it.pkgName == extension.pkgName }
-            ?: return Observable.empty()
+        val avail = _availableNovelExtensionsFlow.value.find {
+            isSameNovelExtension(it.pkgName, it.name, extension.pkgName, extension.name)
+        } ?: return Observable.empty()
         return installExtension(avail)
     }
 
@@ -164,12 +171,15 @@ class DanNovelExtensionManager(private val context: Context) {
     fun uninstallExtension(pkgName: String) = installer.uninstallApk(pkgName)
 
     private fun registerNewExtension(ext: NovelExtension.Installed) {
-        _installedNovelExtensionsFlow.value += ext
+        val mut = _installedNovelExtensionsFlow.value.toMutableList()
+        mut.removeAll { isSameNovelExtension(it.pkgName, it.name, ext.pkgName, ext.name) }
+        mut.add(ext)
+        _installedNovelExtensionsFlow.value = mut
     }
 
     private fun registerUpdatedExtension(ext: NovelExtension.Installed) {
         val mut = _installedNovelExtensionsFlow.value.toMutableList()
-        val index = mut.indexOfFirst { it.pkgName == ext.pkgName }
+        val index = mut.indexOfFirst { isSameNovelExtension(it.pkgName, it.name, ext.pkgName, ext.name) }
         if (index != -1) {
             mut[index] = ext
         } else {
@@ -179,8 +189,9 @@ class DanNovelExtensionManager(private val context: Context) {
     }
 
     private fun unregisterNovelExtension(pkgName: String) {
-        val ext = _installedNovelExtensionsFlow.value.find { it.pkgName == pkgName }
-        if (ext != null) _installedNovelExtensionsFlow.value -= ext
+        val mut = _installedNovelExtensionsFlow.value.toMutableList()
+        mut.removeAll { isSameNovelExtension(it.pkgName, it.name, pkgName, "") }
+        _installedNovelExtensionsFlow.value = mut
     }
 
     private inner class NovelInstallationListener : ExtensionInstallReceiver.NovelListener {
@@ -200,7 +211,9 @@ class DanNovelExtensionManager(private val context: Context) {
     private fun NovelExtension.Installed.updateExists(
         avail: NovelExtension.Available? = null
     ): Boolean {
-        val a = avail ?: _availableNovelExtensionsFlow.value.find { it.pkgName == pkgName }
+        val a = avail ?: _availableNovelExtensionsFlow.value.find {
+            isSameNovelExtension(it.pkgName, it.name, pkgName, name)
+        }
         return a != null && a.versionCode > versionCode
     }
 }

@@ -69,3 +69,33 @@ data class NovelSourceData(
 ) {
     val isMissingInfo: Boolean = name.isBlank() || lang.isBlank()
 }
+
+fun isSameNovelExtension(pkg1: String, name1: String, pkg2: String, name2: String): Boolean {
+    val p1 = pkg1.trim().lowercase()
+    val p2 = pkg2.trim().lowercase()
+
+    // 1. Exact package name match
+    if (p1.isNotBlank() && p1 == p2) return true
+
+    val n1 = name1.trim().lowercase()
+    val n2 = name2.trim().lowercase()
+
+    // 2. Extension name match
+    if (n1.isNotBlank() && n1 == n2) return true
+
+    // 3. Normalized name match (ignoring punctuation, hyphens, and whitespace)
+    val norm1 = n1.replace("'", "").replace(" ", "").replace("-", "").replace(".", "")
+    val norm2 = n2.replace("'", "").replace(" ", "").replace("-", "").replace(".", "")
+    if (norm1.isNotBlank() && norm1 == norm2) return true
+
+    // 4. Package suffix match (e.g. ani.dantotsu.extension.novel.xyz)
+    val s1 = p1.substringAfterLast('.')
+    val s2 = p2.substringAfterLast('.')
+    if (s1.isNotBlank() && s1 == s2 && s1.length > 3) return true
+
+    // 5. Cross-match: package suffix against normalized name
+    if (s1.isNotBlank() && norm2.isNotBlank() && s1 == norm2) return true
+    if (s2.isNotBlank() && norm1.isNotBlank() && s2 == norm1) return true
+
+    return false
+}

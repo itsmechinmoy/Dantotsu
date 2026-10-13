@@ -6,13 +6,21 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.tabs.TabLayout
+import com.google.android.material.textfield.TextInputLayout
+import ani.dantotsu.settings.extensionprefs.NovelSourcePreferencesFragment
+import ani.dantotsu.parsers.novel.ConfigurableNovelSource
+import ani.dantotsu.util.customAlertDialog
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -45,9 +53,46 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
     private val skipIcons: Boolean = PrefManager.getVal(PrefName.SkipExtensionIcons)
     private val novelExtensionManager: NovelExtensionManager = Injekt.get()
     private val extensionsAdapter = NovelExtensionsAdapter(
-        { _ ->
-            Toast.makeText(requireContext(), "Source is not configurable", Toast.LENGTH_SHORT)
-                .show()
+        { ext ->
+            val name = ext.name
+            val changeUIVisibility: (Boolean) -> Unit = { show ->
+                val activity = activity as? ExtensionsActivity
+                if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
+                    activity.findViewById<ViewPager2>(R.id.viewPager).isVisible = show
+                    activity.findViewById<TabLayout>(R.id.tabLayout).isVisible = show
+                    activity.findViewById<TextInputLayout>(R.id.searchView).isVisible = show
+                    activity.findViewById<ImageView>(R.id.languageselect).isVisible = show
+                    activity.findViewById<TextView>(R.id.extensions).text =
+                        if (show) activity.getString(R.string.extensions) else name
+                    activity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer).isGone = show
+                }
+            }
+
+            when (ext) {
+                is NovelExtension.Installed -> {
+                    val configurable = ext.sources.filterIsInstance<ConfigurableNovelSource>()
+                    val hasPrefMethod = ext.sources.any { src ->
+                        src.javaClass.methods.any { it.name == "setupPreferenceScreen" }
+                    }
+                    if (configurable.isNotEmpty() || hasPrefMethod) {
+                        changeUIVisibility(false)
+                        val fragment = NovelSourcePreferencesFragment().getInstance(ext.pkgName) {
+                            changeUIVisibility(true)
+                        }
+                        parentFragmentManager.beginTransaction()
+                            .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
+                            .replace(R.id.fragmentExtensionsContainer, fragment)
+                            .addToBackStack(null)
+                            .commit()
+                    } else {
+                        showExtensionInfoDialog(ext)
+                    }
+                }
+                is NovelExtension.JsPlugin -> {
+                    showExtensionInfoDialog(ext)
+                }
+                else -> {}
+            }
         },
         { ext ->
             if (isAdded) {
@@ -202,6 +247,23 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
             sourcesMap[name]
         }
         return orderedSources + inpt.filter { !NovelSources.pinnedNovelSources.contains(it.name) }
+    }
+
+    private fun showExtensionInfoDialog(ext: NovelExtension) {
+        requireContext().customAlertDialog().apply {
+            setTitle(ext.name)
+            val msg = buildString {
+                append("Package: ${ext.pkgName}\n")
+                append("Version: ${ext.versionName}\n")
+                if (ext is NovelExtension.Installed) {
+                    ext.repository?.let { append("Repository: $it\n") }
+                    append("Sources: ${ext.sources.size}")
+                }
+            }
+            setMessage(msg)
+            setPosButton(R.string.ok)
+            show()
+        }
     }
 
 

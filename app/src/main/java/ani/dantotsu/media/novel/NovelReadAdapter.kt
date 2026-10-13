@@ -109,8 +109,12 @@ class NovelReadAdapter(
             )
 
             fun updateLayoutForSource(idx: Int) {
+                val isLocal = idx in 0 until novelReadSources.names.size && (novelReadSources.names[idx] == "Local" || novelReadSources.names[idx] == "Downloaded")
                 val isLnReader = idx in 0 until novelReadSources.names.size
                         && novelReadSources[idx] is ani.dantotsu.parsers.novel.LnReaderNovelParser
+                val isDynamic = idx in 0 until novelReadSources.names.size
+                        && novelReadSources[idx] is ani.dantotsu.parsers.novel.DynamicNovelParser
+
                 if (isLnReader) {
                     binding.searchBar.visibility = View.GONE
                     binding.divider.visibility = View.GONE
@@ -120,15 +124,25 @@ class NovelReadAdapter(
                     binding.mediaSourceTitle.isSelected = true
                     binding.chaptersHeaderRow.visibility = View.VISIBLE
                 } else {
-                    binding.searchBar.visibility = View.VISIBLE
-                    binding.divider.visibility = View.VISIBLE
-                    binding.wrongTitleButton.visibility = View.GONE
-                    binding.mediaSourceTitle.visibility = View.GONE
-                    binding.chaptersHeaderRow.visibility = View.GONE
+                    binding.searchBar.visibility = if (isLocal) View.GONE else View.VISIBLE
+                    binding.divider.visibility = if (isLocal) View.GONE else View.VISIBLE
+                    binding.wrongTitleButton.visibility = if (isLocal) View.GONE else View.VISIBLE
+                    binding.mediaSourceTitle.visibility = if (isLocal) View.GONE else View.VISIBLE
+                    binding.mediaSourceTitle.text = "Found : ${media.name ?: media.nameRomaji}"
+                    binding.mediaSourceTitle.isSelected = true
+                    binding.chaptersHeaderRow.visibility = View.VISIBLE
                 }
 
                 // novel ext setting
-                binding.mediaSourceSettings.visibility = View.GONE
+                binding.mediaSourceSettings.visibility = if (isDynamic) View.VISIBLE else View.GONE
+                if (isDynamic) {
+                    binding.mediaSourceSettings.setOnClickListener {
+                        val parser = novelReadSources[idx] as? ani.dantotsu.parsers.novel.DynamicNovelParser
+                        if (parser != null) {
+                            fragment.openSettings(parser.extension)
+                        }
+                    }
+                }
             }
             updateLayoutForSource(source)
 

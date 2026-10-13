@@ -754,27 +754,57 @@ internal object ExtensionLoader {
             return NovelLoadResult.Error(Exception("Missing versionName for extension $extName"))
         }
 
-        val classLoader = ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
+        val classLoader = try {
+            dalvik.system.PathClassLoader(appInfo.sourceDir, null, context.classLoader)
+        } catch (_: Throwable) {
+            ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
+        }
+
         val novelInterfaceInstance = try {
-            val className = appInfo.loadLabel(context.packageManager).toString()
-            val lower = className.lowercase(Locale.getDefault())
-            val candidateNames = listOf(
-                "ani.dantotsu.extension.novel.$lower.$className",
-                "some.random.novelextensions.$lower.$className"
-            )
+            val rawLabel = appInfo.loadLabel(context.packageManager).toString()
+            val cleanLabel = rawLabel.replace(" ", "").replace("-", "").replace("'", "")
+            val pkgSuffix = pkgName.substringAfterLast('.')
+            val metaDataClass = appInfo.metaData?.getString("dantotsu.novelextension.class")
+                ?: appInfo.metaData?.getString("tachiyomi.novelextension.class")
+
+            val candidateNames = mutableListOf<String>()
+            metaDataClass?.let { candidateNames.add(it) }
+            candidateNames.add("$pkgName.$cleanLabel")
+            candidateNames.add("$pkgName.${cleanLabel.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}")
+            candidateNames.add("$pkgName.$pkgSuffix")
+            candidateNames.add("$pkgName.${pkgSuffix.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}")
+            candidateNames.add("ani.dantotsu.extension.novel.$pkgSuffix.$cleanLabel")
+            candidateNames.add("ani.dantotsu.extension.novel.$pkgSuffix.${pkgSuffix.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}")
+            if (pkgName.contains('.')) {
+                candidateNames.add("${pkgName.substringBeforeLast('.')}.$pkgSuffix.$cleanLabel")
+            }
+
             var loadedClass: Class<*>? = null
-            for (cand in candidateNames) {
+            for (cand in candidateNames.distinct()) {
                 try {
                     loadedClass = classLoader.loadClass(cand)
-                    break
+                    if (loadedClass != null) break
                 } catch (_: ClassNotFoundException) {}
             }
-            val targetClass = loadedClass ?: classLoader.loadClass(candidateNames[0])
-            val instance = targetClass.getDeclaredConstructor().newInstance()
-            instance as? NovelInterface
+            if (loadedClass == null) {
+                Logger.log("No valid novel extension class found for $extName in $pkgName")
+                return NovelLoadResult.Error(ClassNotFoundException("No entry class found for $extName in $pkgName"))
+            }
+
+            val instance = loadedClass.getDeclaredConstructor().newInstance()
+            val parsedInterface = if (instance is NovelInterface) {
+                instance
+            } else {
+                createNovelInterfaceProxy(instance)
+            }
+            if (parsedInterface == null) {
+                Logger.log("Loaded class ${loadedClass.name} does not implement NovelInterface")
+                return NovelLoadResult.Error(ClassCastException("${loadedClass.name} does not implement NovelInterface"))
+            }
+            parsedInterface
         } catch (e: Throwable) {
-            Logger.log("Extension load error: $extName")
-            return NovelLoadResult.Error(e as Exception)
+            Logger.log("Extension load error: $extName - ${e.message}")
+            return NovelLoadResult.Error(if (e is Exception) e else Exception(e))
         }
 
         val savedRepo = ani.dantotsu.parsers.ExtensionRepoMetaHelper.getInstalledExtensionRepo(pkgName)
@@ -792,6 +822,39 @@ internal object ExtensionLoader {
         return NovelLoadResult.Success(extension)
     }
 
+    private fun createNovelInterfaceProxy(instance: Any): NovelInterface? {
+        if (instance is NovelInterface) return instance
+        return try {
+            val instanceClass = instance.javaClass
+            val hasSearch = instanceClass.methods.any { it.name == "search" }
+            val hasLoadBook = instanceClass.methods.any { it.name == "loadBook" }
+            if (!hasSearch || !hasLoadBook) return null
+
+            object : NovelInterface {
+                @Suppress("UNCHECKED_CAST")
+                override suspend fun search(query: String, client: com.lagradost.nicehttp.Requests): List<ani.dantotsu.parsers.ShowResponse> {
+                    val searchMethod = instanceClass.methods.first { it.name == "search" }
+                    val result = kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Any?> { cont ->
+                        searchMethod.invoke(instance, query, client, cont)
+                    }
+                    return (result as? List<*>)?.filterIsInstance<ani.dantotsu.parsers.ShowResponse>() ?: emptyList()
+                }
+
+                @Suppress("UNCHECKED_CAST")
+                override suspend fun loadBook(link: String, extra: Map<String, String>?, client: com.lagradost.nicehttp.Requests): ani.dantotsu.parsers.Book {
+                    val loadMethod = instanceClass.methods.first { it.name == "loadBook" }
+                    val result = kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Any?> { cont ->
+                        loadMethod.invoke(instance, link, extra, client, cont)
+                    }
+                    return result as? ani.dantotsu.parsers.Book ?: ani.dantotsu.parsers.Book("", "", "", emptyList())
+                }
+            }
+        } catch (e: Throwable) {
+            Logger.log("Proxy creation error: ${e.message}")
+            null
+        }
+    }
+
 
     /**
      * Returns true if the given package is an extension.
@@ -800,8 +863,14 @@ internal object ExtensionLoader {
      */
     private fun isPackageAnExtension(type: MediaType, pkgInfo: PackageInfo): Boolean {
         if (type == MediaType.NOVEL) {
+            val meta = pkgInfo.applicationInfo?.metaData
+            val hasFeature = pkgInfo.reqFeatures.orEmpty().any {
+                it.name == "dantotsu.novelextension" || it.name == "ani.dantotsu.novelextension"
+            }
+            if (hasFeature) return true
             return pkgInfo.packageName.startsWith("ani.dantotsu.extension.novel") ||
-                    pkgInfo.packageName.startsWith("some.random")
+                    pkgInfo.packageName.contains(".extension.novel") ||
+                    meta?.containsKey("dantotsu.novelextension.class") == true
         }
         val meta = pkgInfo.applicationInfo?.metaData
         val hasFeature = pkgInfo.reqFeatures.orEmpty().any {
