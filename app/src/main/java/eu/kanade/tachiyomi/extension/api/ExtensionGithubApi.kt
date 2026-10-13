@@ -546,7 +546,7 @@ internal class ExtensionGithubApi {
                 NovelExtension.Available(
                     extension.name,
                     extension.pkg,
-                    extension.apk,
+                    extension.version,
                     extension.code,
                     repository,
                     sources?.toNovelSources() ?: emptyList(),

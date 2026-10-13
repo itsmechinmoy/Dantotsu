@@ -757,10 +757,20 @@ internal object ExtensionLoader {
         val classLoader = ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
         val novelInterfaceInstance = try {
             val className = appInfo.loadLabel(context.packageManager).toString()
-            val extensionClassName =
-                "some.random.novelextensions.${className.lowercase(Locale.getDefault())}.$className"
-            val loadedClass = classLoader.loadClass(extensionClassName)
-            val instance = loadedClass.getDeclaredConstructor().newInstance()
+            val lower = className.lowercase(Locale.getDefault())
+            val candidateNames = listOf(
+                "ani.dantotsu.extension.novel.$lower.$className",
+                "some.random.novelextensions.$lower.$className"
+            )
+            var loadedClass: Class<*>? = null
+            for (cand in candidateNames) {
+                try {
+                    loadedClass = classLoader.loadClass(cand)
+                    break
+                } catch (_: ClassNotFoundException) {}
+            }
+            val targetClass = loadedClass ?: classLoader.loadClass(candidateNames[0])
+            val instance = targetClass.getDeclaredConstructor().newInstance()
             instance as? NovelInterface
         } catch (e: Throwable) {
             Logger.log("Extension load error: $extName")
@@ -790,7 +800,8 @@ internal object ExtensionLoader {
      */
     private fun isPackageAnExtension(type: MediaType, pkgInfo: PackageInfo): Boolean {
         if (type == MediaType.NOVEL) {
-            return pkgInfo.packageName.startsWith("some.random")
+            return pkgInfo.packageName.startsWith("ani.dantotsu.extension.novel") ||
+                    pkgInfo.packageName.startsWith("some.random")
         }
         val meta = pkgInfo.applicationInfo?.metaData
         val hasFeature = pkgInfo.reqFeatures.orEmpty().any {
