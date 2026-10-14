@@ -11,6 +11,29 @@ import uy.kohesive.injekt.api.get
 class NovelAdapter
 
 class DynamicNovelParser(extension: NovelExtension.Installed) : NovelParser() {
+    override val name: String get() = extension.name
+    override val saveName: String get() {
+        val src = extension.sources.firstOrNull()
+        return try {
+            val field = src?.javaClass?.getDeclaredField("saveName")
+            field?.isAccessible = true
+            (field?.get(src) as? String)?.takeIf { it.isNotBlank() } ?: extension.pkgName
+        } catch (_: Exception) {
+            extension.pkgName
+        }
+    }
+    override val hostUrl: String get() {
+        val src = extension.sources.firstOrNull()
+        return try {
+            val field = src?.javaClass?.getDeclaredField("currentHost")
+            field?.isAccessible = true
+            (field?.get(src) as? String)?.takeIf { it.isNotBlank() } ?: "https://${extension.pkgName}"
+        } catch (_: Exception) {
+            "https://${extension.pkgName}"
+        }
+    }
+    override val icon: android.graphics.drawable.Drawable? get() = extension.icon
+
     override val volumeRegex =
         Regex("vol\\.? (\\d+(\\.\\d+)?)|volume (\\d+(\\.\\d+)?)", RegexOption.IGNORE_CASE)
     var extension: NovelExtension.Installed

@@ -139,10 +139,10 @@ class NovelReadFragment : Fragment(),
     }
 
     override fun downloadedCheckWithStart(novel: ShowResponse): Boolean {
-        if (media.format == "LOCAL" || media.format == "LOCAL_NOVEL") {
+        if (media.format == "LOCAL" || media.format == "LOCAL_NOVEL" || novel.link.startsWith("content://") || novel.link.startsWith("file://")) {
             try {
                 val fileUri = android.net.Uri.parse(novel.link)
-                val intent = Intent(context, NovelReaderActivity::class.java).apply {
+                val intent = Intent(requireContext(), NovelReaderActivity::class.java).apply {
                     action = Intent.ACTION_VIEW
                     setDataAndType(fileUri, "application/epub+zip")
                     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -156,27 +156,43 @@ class NovelReadFragment : Fragment(),
         }
 
         val downloadsManager = Injekt.get<DownloadsManager>()
-        if (downloadsManager.queryDownload(
-                DownloadedType(
-                    media.mainName(),
-                    novel.name.findValidName(),
-                    MediaType.NOVEL
-                )
-            )
-        ) {
+        val downloadedItem = downloadsManager.novelDownloadedTypes.firstOrNull {
+            (it.titleName.equals(media.mainName(), ignoreCase = true) ||
+             it.titleName.equals(media.name, ignoreCase = true) ||
+             it.titleName.equals(media.nameRomaji, ignoreCase = true) ||
+             it.titleName.equals(novel.extra?.get("title"), ignoreCase = true)) &&
+            (it.chapterName.equals(novel.name, ignoreCase = true) ||
+             it.chapterName.equals(novel.name.findValidName(), ignoreCase = true))
+        }
+
+        val titleToSearch = downloadedItem?.titleName ?: novel.extra?.get("title") ?: media.mainName()
+        val chapterToSearch = downloadedItem?.chapterName ?: novel.name
+
+        val directory = DownloadsManager.findSubDirectory(
+            context ?: currContext()!!,
+            MediaType.NOVEL,
+            titleToSearch,
+            chapterToSearch
+        ) ?: DownloadsManager.getSubDirectory(
+            context ?: currContext()!!,
+            MediaType.NOVEL,
+            false,
+            titleToSearch,
+            chapterToSearch
+        )
+
+        val file = directory?.findFile("0.epub")
+            ?: directory?.listFiles()?.firstOrNull {
+                it.isFile && (it.name?.endsWith(".epub", ignoreCase = true) == true || it.type == "application/epub+zip")
+            }
+            ?: directory?.listFiles()?.firstOrNull {
+                it.isFile && it.length() > 0 && it.name != "cover.jpg" && it.name != "media.json" && !it.name.orEmpty().startsWith(".")
+            }
+
+        if (file != null && file.exists()) {
             try {
-                val directory =
-                    DownloadsManager.getSubDirectory(
-                        context ?: currContext()!!,
-                        MediaType.NOVEL,
-                        false,
-                        media.mainName(),
-                        novel.name
-                    )
-                val file = directory?.findFile("0.epub")
-                if (file?.exists() == false) return false
-                val fileUri = file?.uri ?: return false
-                val intent = Intent(context, NovelReaderActivity::class.java).apply {
+                val fileUri = file.uri
+                val intent = Intent(requireContext(), NovelReaderActivity::class.java).apply {
                     action = Intent.ACTION_VIEW
                     setDataAndType(fileUri, "application/epub+zip")
                     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -187,30 +203,50 @@ class NovelReadFragment : Fragment(),
                 Logger.log(e)
                 return false
             }
-        } else {
-            return false
         }
+        return false
     }
 
     override fun downloadedCheck(novel: ShowResponse): Boolean {
-        if (media.format == "LOCAL") return true
+        if (media.format == "LOCAL" || media.format == "LOCAL_NOVEL" || novel.link.startsWith("content://") || novel.link.startsWith("file://")) return true
 
         val downloadsManager = Injekt.get<DownloadsManager>()
-        return downloadsManager.queryDownload(
-            DownloadedType(
-                media.mainName(),
-                novel.name.findValidName(),
-                MediaType.NOVEL
-            )
+        val isIndexed = downloadsManager.novelDownloadedTypes.any {
+            (it.titleName.equals(media.mainName(), ignoreCase = true) ||
+             it.titleName.equals(media.name, ignoreCase = true) ||
+             it.titleName.equals(media.nameRomaji, ignoreCase = true) ||
+             it.titleName.equals(novel.extra?.get("title"), ignoreCase = true)) &&
+            (it.chapterName.equals(novel.name, ignoreCase = true) ||
+             it.chapterName.equals(novel.name.findValidName(), ignoreCase = true))
+        }
+        if (isIndexed) return true
+
+        val titleToSearch = novel.extra?.get("title") ?: media.mainName()
+        val dir = DownloadsManager.findSubDirectory(
+            context ?: currContext()!!,
+            MediaType.NOVEL,
+            titleToSearch,
+            novel.name
         )
+        return dir != null && (dir.findFile("0.epub") != null || dir.listFiles().any { it.isFile && it.name?.endsWith(".epub", ignoreCase = true) == true })
     }
 
     override fun deleteDownload(novel: ShowResponse) {
         val downloadsManager = Injekt.get<DownloadsManager>()
+        val downloadedItem = downloadsManager.novelDownloadedTypes.firstOrNull {
+            (it.titleName.equals(media.mainName(), ignoreCase = true) ||
+             it.titleName.equals(media.name, ignoreCase = true) ||
+             it.titleName.equals(media.nameRomaji, ignoreCase = true) ||
+             it.titleName.equals(novel.extra?.get("title"), ignoreCase = true)) &&
+            (it.chapterName.equals(novel.name, ignoreCase = true) ||
+             it.chapterName.equals(novel.name.findValidName(), ignoreCase = true))
+        }
+        val titleToUse = downloadedItem?.titleName ?: novel.extra?.get("title") ?: media.mainName()
+        val chapterToUse = downloadedItem?.chapterName ?: novel.name.findValidName()
         downloadsManager.removeDownload(
             DownloadedType(
-                media.mainName(),
-                novel.name.findValidName(),
+                titleToUse,
+                chapterToUse,
                 MediaType.NOVEL
             )
         ) {}
@@ -266,6 +302,13 @@ class NovelReadFragment : Fragment(),
         }
 
         if (downloadedCheckWithStart(novel)) {
+            return
+        }
+
+        val isOfflineSource = source in 0 until model.novelSources.names.size &&
+                (model.novelSources.names[source] == "Downloaded" || model.novelSources.names[source] == "Local")
+        if (isOfflineSource) {
+            snackString("File not found or corrupted")
             return
         }
 

@@ -19,10 +19,12 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.parsers.ShowResponse
 import ani.dantotsu.loadImage
 import ani.dantotsu.parsers.NovelReadSources
+import ani.dantotsu.others.webview.CookieCatcher
 import ani.dantotsu.settings.FAQActivity
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.customAlertDialog
+import eu.kanade.tachiyomi.util.system.WebViewUtil
 
 class NovelReadAdapter(
     private val media: Media,
@@ -269,7 +271,28 @@ class NovelReadAdapter(
                     }
                 }
             }
-            mediaWebviewContainer.visibility = View.GONE
+            val isLocal = source in 0 until novelReadSources.names.size && (novelReadSources.names[source] == "Local" || novelReadSources.names[source] == "Downloaded")
+            if (isLocal) {
+                mediaWebviewContainer.visibility = View.GONE
+            } else {
+                mediaWebviewContainer.visibility = View.VISIBLE
+                mediaWebviewContainer.setOnClickListener {
+                    if (!WebViewUtil.supportsWebView(fragment.requireContext())) {
+                        ani.dantotsu.toast(R.string.webview_not_installed)
+                        return@setOnClickListener
+                    }
+                    if (novelReadSources.names.isNotEmpty() && source in 0 until novelReadSources.names.size) {
+                        val currentParser = novelReadSources[source]
+                        val url = currentParser?.hostUrl?.takeIf { it.isNotBlank() && it != "Empty" && it != "Offline" }
+                        url?.let {
+                            val intent = Intent(fragment.requireContext(), CookieCatcher::class.java)
+                                .putExtra("url", it)
+                                .putExtra("headers", hashMapOf<String, String>())
+                            fragment.requireContext().startActivity(intent)
+                        }
+                    }
+                }
+            }
 
 
             resetProgressDef.text = "Clear stored chapter details"

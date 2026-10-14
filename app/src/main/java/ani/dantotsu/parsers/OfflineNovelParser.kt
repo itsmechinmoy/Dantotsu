@@ -1,6 +1,7 @@
 package ani.dantotsu.parsers
 
 import android.app.Application
+import ani.dantotsu.FileUrl
 import ani.dantotsu.download.DownloadsManager
 import ani.dantotsu.download.DownloadsManager.Companion.getSubDirectory
 import ani.dantotsu.media.MediaNameAdapter
@@ -22,29 +23,33 @@ class OfflineNovelParser : NovelParser() {
         Regex("vol\\.? (\\d+(\\.\\d+)?)|volume (\\d+(\\.\\d+)?)", RegexOption.IGNORE_CASE)
 
     override suspend fun loadBook(link: String, extra: Map<String, String>?): Book {
-        //link should be a directory
-        val directory = getSubDirectory(context, MediaType.NOVEL, false, link)
-        val chapters = mutableListOf<Book>()
+        val title = extra?.get("title") ?: link
+        val directory = getSubDirectory(context, MediaType.NOVEL, false, title)
         if (directory?.exists() == true) {
-            directory.listFiles().forEach {
-                if (it.isDirectory) {
-                    val chapter = Book(
-                        it.name ?: "Unknown",
-                        it.uri.toString(),
-                        null,
-                        listOf(it.uri.toString())
-                    )
-                    chapters.add(chapter)
-                }
+            val chapters = mutableListOf<FileUrl>()
+            val chapterDirs = directory.listFiles().filter { it.isDirectory }
+                .sortedBy { MediaNameAdapter.findChapterNumber(it.name) }
+
+            chapterDirs.forEach { chDir ->
+                val epub = chDir.findFile("0.epub")
+                    ?: chDir.listFiles().firstOrNull { it.isFile && it.name?.endsWith(".epub", ignoreCase = true) == true }
+                    ?: chDir.listFiles().firstOrNull { it.isFile && it.length() > 0 && it.name != "cover.jpg" && it.name != "media.json" && !it.name.orEmpty().startsWith(".") }
+                val uriStr = epub?.uri?.toString() ?: chDir.uri.toString()
+                chapters.add(FileUrl(uriStr, mapOf("X-Chapter-Name" to (chDir.name ?: "Unknown"))))
             }
-            chapters.sortBy { MediaNameAdapter.findChapterNumber(it.name) }
-            return chapters.first()
+            val coverUri = directory.findFile("cover.jpg")?.uri?.toString() ?: ""
+            return Book(
+                name = directory.name ?: title,
+                img = FileUrl(coverUri),
+                description = null,
+                links = chapters
+            )
         }
         return Book(
             "error",
             "",
             null,
-            listOf("error")
+            emptyList()
         )
     }
 
@@ -68,19 +73,25 @@ class OfflineNovelParser : NovelParser() {
         val returnTitles = returnTitlesPair.sortedByDescending { it.second }.map { it.first }
         val returnList: MutableList<ShowResponse> = mutableListOf()
         for (title in returnTitles) {
-            //need to search the subdirectories for the ShowResponses
             val directory = getSubDirectory(context, MediaType.NOVEL, false, title)
-            val names = mutableListOf<String>()
             if (directory?.exists() == true) {
-                directory.listFiles().forEach {
-                    if (it.isDirectory) {
-                        names.add(it.name ?: "Unknown")
-                    }
+                val cover = directory.findFile("cover.jpg")?.uri?.toString() ?: ""
+                val chapterDirs = directory.listFiles().filter { it.isDirectory }
+                    .sortedBy { MediaNameAdapter.findChapterNumber(it.name) }
+                for (chDir in chapterDirs) {
+                    val epub = chDir.findFile("0.epub")
+                        ?: chDir.listFiles().firstOrNull { it.isFile && it.name?.endsWith(".epub", ignoreCase = true) == true }
+                        ?: chDir.listFiles().firstOrNull { it.isFile && it.length() > 0 && it.name != "cover.jpg" && it.name != "media.json" && !it.name.orEmpty().startsWith(".") }
+                    val linkUri = epub?.uri?.toString() ?: chDir.uri.toString()
+                    returnList.add(
+                        ShowResponse(
+                            name = chDir.name ?: "Unknown",
+                            link = linkUri,
+                            coverUrl = FileUrl(cover),
+                            extra = mutableMapOf("title" to title, "chapter" to (chDir.name ?: "Unknown"))
+                        )
+                    )
                 }
-            }
-            val cover = directory?.findFile("cover.jpg")?.uri.toString()
-            names.forEach {
-                returnList.add(ShowResponse(it, query, cover))
             }
         }
         return returnList

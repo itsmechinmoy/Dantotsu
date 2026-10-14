@@ -186,6 +186,9 @@ abstract class NovelReadSources : BaseSources() {
 }
 
 class EmptyNovelParser : NovelParser() {
+    override val name: String = "Empty"
+    override val hostUrl: String = "Empty"
+    override val saveName: String = "Empty"
 
     override val volumeRegex: Regex = Regex("")
 
