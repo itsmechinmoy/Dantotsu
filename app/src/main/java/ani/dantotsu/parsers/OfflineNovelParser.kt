@@ -28,7 +28,7 @@ class OfflineNovelParser : NovelParser() {
         if (directory?.exists() == true) {
             val chapters = mutableListOf<FileUrl>()
             val chapterDirs = directory.listFiles().filter { it.isDirectory }
-                .sortedBy { MediaNameAdapter.findChapterNumber(it.name) }
+                .sortedBy { MediaNameAdapter.findChapterNumber(it.name.orEmpty()) }
 
             chapterDirs.forEach { chDir ->
                 val epub = chDir.findFile("0.epub")
@@ -77,7 +77,7 @@ class OfflineNovelParser : NovelParser() {
             if (directory?.exists() == true) {
                 val cover = directory.findFile("cover.jpg")?.uri?.toString() ?: ""
                 val chapterDirs = directory.listFiles().filter { it.isDirectory }
-                    .sortedBy { MediaNameAdapter.findChapterNumber(it.name) }
+                    .sortedBy { MediaNameAdapter.findChapterNumber(it.name.orEmpty()) }
                 for (chDir in chapterDirs) {
                     val epub = chDir.findFile("0.epub")
                         ?: chDir.listFiles().firstOrNull { it.isFile && it.name?.endsWith(".epub", ignoreCase = true) == true }

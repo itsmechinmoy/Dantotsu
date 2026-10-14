@@ -271,7 +271,8 @@ class NovelReadAdapter(
                     }
                 }
             }
-            val isLocal = source in 0 until novelReadSources.names.size && (novelReadSources.names[source] == "Local" || novelReadSources.names[source] == "Downloaded")
+            val currentSource = fragment.source
+            val isLocal = currentSource in 0 until novelReadSources.names.size && (novelReadSources.names[currentSource] == "Local" || novelReadSources.names[currentSource] == "Downloaded")
             if (isLocal) {
                 mediaWebviewContainer.visibility = View.GONE
             } else {
@@ -281,8 +282,9 @@ class NovelReadAdapter(
                         ani.dantotsu.toast(R.string.webview_not_installed)
                         return@setOnClickListener
                     }
-                    if (novelReadSources.names.isNotEmpty() && source in 0 until novelReadSources.names.size) {
-                        val currentParser = novelReadSources[source]
+                    val src = fragment.source
+                    if (novelReadSources.names.isNotEmpty() && src in 0 until novelReadSources.names.size) {
+                        val currentParser = novelReadSources[src]
                         val url = currentParser?.hostUrl?.takeIf { it.isNotBlank() && it != "Empty" && it != "Offline" }
                         url?.let {
                             val intent = Intent(fragment.requireContext(), CookieCatcher::class.java)
