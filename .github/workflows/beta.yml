@@ -31,7 +31,7 @@ jobs:
         fetch-depth: 0
 
     - name: Download last SHA artifact
-      uses: dawidd6/action-download-artifact@d63b86af1b34672e53c440b1b83979861906bad7 # v24
+      uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477 # v27
       with:
         workflow: beta.yml
         name: last-sha
@@ -83,7 +83,7 @@ jobs:
       uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
       with:
         distribution: 'temurin'
-        java-version: 21
+        java-version: 25
 
     - name: Cache Gradle dependencies
       if: ${{ env.SKIP_BUILD != 'true' }}
