@@ -178,7 +178,7 @@ webgpuviewer = { module = "ca.mpreg:webgpuviewer", version.ref = "webgpuviewer" 
 image-decoder = { module = "ca.mpreg:imagedecoder", version.ref = "image-decoder" }
 mlkit-text-japanese = { module = "com.google.android.gms:play-services-mlkit-text-recognition-japanese", version.ref = "mlkit-text-japanese" }
 mlkit-text = { module = "com.google.mlkit:text-recognition", version.ref = "mlkit-text" }
-play-services-base = "com.google.android.gms:play-services-base:18.5.0"
+play-services-base = "com.google.android.gms:play-services-base:18.11.1"
 
 [plugins]
 android = { id = "com.android.application", version.ref = "agp" }
