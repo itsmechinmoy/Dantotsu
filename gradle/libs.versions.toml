@@ -53,7 +53,7 @@ androidx-browser = "androidx.browser:browser:1.10.0"
 androidx-swipe = "androidx.swiperefreshlayout:swiperefreshlayout:1.2.0"
 androidx-legacy = "androidx.legacy:legacy-support-v4:1.0.0"
 
-androidx-work = "androidx.work:work-runtime-ktx:2.11.2"
+androidx-work = "androidx.work:work-runtime-ktx:2.12.0"
 androidx-preference = "androidx.preference:preference-ktx:1.2.1"
 androidx-webkit = "androidx.webkit:webkit:1.17.1"
 androidx-biometric = "androidx.biometric:biometric:1.1.0"
@@ -178,7 +178,7 @@ webgpuviewer = { module = "ca.mpreg:webgpuviewer", version.ref = "webgpuviewer" 
 image-decoder = { module = "ca.mpreg:imagedecoder", version.ref = "image-decoder" }
 mlkit-text-japanese = { module = "com.google.android.gms:play-services-mlkit-text-recognition-japanese", version.ref = "mlkit-text-japanese" }
 mlkit-text = { module = "com.google.mlkit:text-recognition", version.ref = "mlkit-text" }
-play-services-base = "com.google.android.gms:play-services-base:18.5.0"
+play-services-base = "com.google.android.gms:play-services-base:18.11.1"
 
 [plugins]
 android = { id = "com.android.application", version.ref = "agp" }
