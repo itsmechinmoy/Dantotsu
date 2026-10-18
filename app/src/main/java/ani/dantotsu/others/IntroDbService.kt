@@ -9,13 +9,14 @@ import kotlinx.serialization.json.*
 object IntroDbService {
     private const val TAG = "IntroDbService"
     private const val INTRODB_APP_URL = "https://api.introdb.app/segments"
-    private const val THE_INTRODB_URL = "https://api.theintrodb.org/v3/media"
+    private const val THE_INTRODB_URL = "https://api.theintrodb.org/v4/media"
 
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
     suspend fun getSkipTimes(
         imdbId: String? = null,
         tmdbId: Int? = null,
+        tvdbId: Int? = null,
         season: String = "1",
         episode: String
     ): List<AniSkip.Stamp>? = withContext(Dispatchers.IO) {
@@ -27,9 +28,14 @@ object IntroDbService {
             if (!fromImdb.isNullOrEmpty()) return@withContext fromImdb
         }
 
-        // 2. Try TheIntroDb API via TMDB ID
+        // 2. Try TheIntroDb API (TVDB ID preferred, TMDB ID fallback)
+        if (tvdbId != null && tvdbId > 0) {
+            val fromTvdb = fetchFromTheIntroDb(tvdbId = tvdbId, season = season, episode = episode, episodeInt = epInt)
+            if (!fromTvdb.isNullOrEmpty()) return@withContext fromTvdb
+        }
+
         if (tmdbId != null && tmdbId > 0) {
-            val fromTmdb = fetchFromTheIntroDb(tmdbId, season, episode, epInt)
+            val fromTmdb = fetchFromTheIntroDb(tmdbId = tmdbId, season = season, episode = episode, episodeInt = epInt)
             if (!fromTmdb.isNullOrEmpty()) return@withContext fromTmdb
         }
 
@@ -104,18 +110,26 @@ object IntroDbService {
     }
 
     private suspend fun fetchFromTheIntroDb(
-        tmdbId: Int,
+        tvdbId: Int? = null,
+        tmdbId: Int? = null,
         season: String,
         episode: String,
         episodeInt: Int
     ): List<AniSkip.Stamp>? {
-        val url = "$THE_INTRODB_URL?tmdb_id=$tmdbId&season=$season&episode=$episode"
+        val idParam = when {
+            tvdbId != null && tvdbId > 0 -> "tvdb_id=$tvdbId"
+            tmdbId != null && tmdbId > 0 -> "tmdb_id=$tmdbId"
+            else -> return null
+        }
+        val url = "$THE_INTRODB_URL?$idParam&season=$season&episode=$episode"
         return try {
             val response = client.get(url)
             val text = response.text
             if (text.isBlank()) return null
             val root = json.parseToJsonElement(text).jsonObject
 
+            // In v4, responses are keyed by tvdb_id; tmdb_id is no longer returned in the body
+            val mediaId = root["tvdb_id"]?.jsonPrimitive?.intOrNull ?: tvdbId ?: tmdbId
             val stamps = mutableListOf<AniSkip.Stamp>()
 
             fun parseSegments(type: String, key: String) {
@@ -129,7 +143,7 @@ object IntroDbService {
                             AniSkip.Stamp(
                                 interval = AniSkip.AniSkipInterval(startMs / 1000.0, endMs / 1000.0),
                                 skipType = type,
-                                skipId = "theintrodb_${type}_${tmdbId}_$episodeInt",
+                                skipId = "theintrodb_${type}_${mediaId}_$episodeInt",
                                 episodeLength = 0.0
                             )
                         )

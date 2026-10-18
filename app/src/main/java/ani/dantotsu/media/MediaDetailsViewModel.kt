@@ -841,7 +841,8 @@ class MediaDetailsViewModel : ViewModel() {
                 val mediaVal = media.value
                 val imdbId = mediaVal?.idIMDB ?: mediaVal?.id?.let { runCatching { IdMappers.getImdbId(it) }.getOrNull() }
                 val tmdbId = mediaVal?.idTMDB?.toIntOrNull() ?: mediaVal?.id?.let { runCatching { IdMappers.getIds(it)?.tmdbId }.getOrNull() }
-                stamps = IntroDbService.getSkipTimes(imdbId = imdbId, tmdbId = tmdbId, episode = episodeNum.toString())
+                val tvdbId = mediaVal?.id?.let { runCatching { IdMappers.getIds(it)?.tvdbId }.getOrNull() }
+                stamps = IntroDbService.getSkipTimes(imdbId = imdbId, tmdbId = tmdbId, tvdbId = tvdbId, episode = episodeNum.toString())
             }
             stamps
         }
