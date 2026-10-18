@@ -45,7 +45,9 @@ import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
 import io.github.peerless2012.ass.media.kt.withAssSupport
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayInputStream
 import java.util.Calendar
 import java.util.zip.GZIPInputStream
@@ -198,21 +200,18 @@ class DantotsuPlayerManager(
                             decompressedBytes
                         }
 
-                        val finalContentType = if (startsWithHls || isM3u8) {
+                        val mediaType = (if (startsWithHls || isM3u8) {
                             "application/vnd.apple.mpegurl"
                         } else {
-                            body.contentType()?.toString() ?: "application/octet-stream"
-                        }
+                            body.contentType()?.toString()
+                        })?.toMediaTypeOrNull() ?: body.contentType()
 
                         val strippedHeaders = response.headers.newBuilder()
                             .removeAll("Content-Encoding")
                             .removeAll("Content-Length")
                             .build()
 
-                        val newBody = okhttp3.ResponseBody.create(
-                            okhttp3.MediaType.parse(finalContentType),
-                            finalBytes
-                        )
+                        val newBody = finalBytes.toResponseBody(mediaType)
                         response.newBuilder()
                             .headers(strippedHeaders)
                             .body(newBody)
