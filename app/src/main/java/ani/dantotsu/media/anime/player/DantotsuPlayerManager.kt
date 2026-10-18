@@ -161,13 +161,16 @@ class DantotsuPlayerManager(
                 }
                 val response = chain.proceed(newRequest)
                 if (isLocal && response.isSuccessful) {
-                    val isSegment = request.url.encodedPath.contains("/segment") ||
-                        request.url.encodedPath.contains("/seg") ||
-                        request.url.encodedPath.endsWith(".ts") ||
-                        request.url.encodedPath.endsWith(".m4s")
-                    val isM3u8 = request.url.encodedPath.contains("m3u8") ||
-                        request.url.query?.contains(".m3u8") == true ||
-                        response.header("Content-Type")?.contains("mpegurl", ignoreCase = true) == true
+                    val contentType = response.header("Content-Type").orEmpty().lowercase()
+                    val isMediaContent = contentType.startsWith("video/") ||
+                        contentType.startsWith("audio/") ||
+                        contentType.startsWith("image/")
+
+                    val isSegment = isMediaContent || StreamTypeDetector.isSegmentUrl(request.url)
+                    val isM3u8 = !isSegment && (
+                        contentType.contains("mpegurl") ||
+                        StreamTypeDetector.isM3u8Url(request.url)
+                    )
                     val hasGzipEncoding = response.header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true
 
                     val body = response.body
@@ -184,7 +187,8 @@ class DantotsuPlayerManager(
                             rawBytes
                         }
 
-                        val finalBytes = if (isM3u8) {
+                        val startsWithHls = StreamTypeDetector.startsWithHlsMagic(decompressedBytes)
+                        val finalBytes = if (startsWithHls || isM3u8) {
                             var text = decompressedBytes.toString(Charsets.UTF_8)
                             if (text.startsWith("\uFEFF")) {
                                 text = text.substring(1)
@@ -194,12 +198,21 @@ class DantotsuPlayerManager(
                             decompressedBytes
                         }
 
+                        val finalContentType = if (startsWithHls || isM3u8) {
+                            "application/vnd.apple.mpegurl"
+                        } else {
+                            body.contentType()?.toString() ?: "application/octet-stream"
+                        }
+
                         val strippedHeaders = response.headers.newBuilder()
                             .removeAll("Content-Encoding")
                             .removeAll("Content-Length")
                             .build()
 
-                        val newBody = okhttp3.ResponseBody.create(body.contentType(), finalBytes)
+                        val newBody = okhttp3.ResponseBody.create(
+                            okhttp3.MediaType.parse(finalContentType),
+                            finalBytes
+                        )
                         response.newBuilder()
                             .headers(strippedHeaders)
                             .body(newBody)
@@ -276,8 +289,9 @@ class DantotsuPlayerManager(
             DefaultMediaSourceFactory(localDataSourceFactory, extractorsFactory)
                 .setSubtitleParserFactory(assParserFactory)
                 .setDrmSessionManagerProvider(drmProvider)
-        } else if (isLocalhostTorrent) {
-            // Direct upstream for localhost torrent streams - avoids double writing to flash via VideoCache
+        } else if (isLocalhostTorrent || isLocalhost) {
+            // Direct upstream for localhost streams (torrents and local extension proxies)
+            // - avoids double writing to flash via VideoCache and avoids Range request issues with NanoHTTPD
             DefaultMediaSourceFactory(upstream, extractorsFactory)
                 .setSubtitleParserFactory(assParserFactory)
                 .setDrmSessionManagerProvider(drmProvider)
