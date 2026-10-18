@@ -45,6 +45,7 @@ val gitCommitHash = computeGitCommitHash()
 android {
     namespace = "ani.dantotsu"
     compileSdk = 37
+    compileSdkMinor = 2
 
     defaultConfig {
         applicationId = "ani.dantotsu"
