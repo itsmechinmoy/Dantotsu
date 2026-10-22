@@ -150,7 +150,7 @@ injekt = "com.github.mihonapp:injekt:91edab2317"
 
 # OkHttp
 okhttp = "com.squareup.okhttp3:okhttp:5.5.0"
-okhttp-logging = "com.squareup.okhttp3:logging-interceptor:5.5.0"
+okhttp-logging = "com.squareup.okhttp3:logging-interceptor:5.5.1"
 okhttp-brotli = "com.squareup.okhttp3:okhttp-brotli:5.5.0"
 okhttp-doh = "com.squareup.okhttp3:okhttp-dnsoverhttps:5.5.0"
 okhttp-zstd = "com.squareup.okhttp3:okhttp-zstd:5.5.0"
