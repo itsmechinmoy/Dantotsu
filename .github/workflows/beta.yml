@@ -5,10 +5,6 @@ on:
   push:
     tags:
       - "v*.*.*"
-    branches-ignore:
-      - main
-      - l10n_dev_crowdin
-      - custom-download-location
     paths-ignore:
       - '**/README.md'
 
