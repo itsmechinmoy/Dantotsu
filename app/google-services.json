@@ -1,18 +1,22 @@
 {
-  "project_info": {
-    "project_number": "1234567890",
-    "project_id": "aniaura-dummy"
-  },
+  "project_info": { "project_number": "123", "project_id": "aniaura" },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1234567890:android:abcdef",
-        "android_client_info": {
-          "package_name": "com.aniaura.app"
-        }
+        "mobilesdk_app_id": "1:123:android:aaa",
+        "android_client_info": { "package_name": "com.aniaura.app" }
       },
       "oauth_client": [],
-      "api_key": [{ "current_key": "fake-key" }],
+      "api_key": [{ "current_key": "fake" }],
+      "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123:android:bbb",
+        "android_client_info": { "package_name": "com.aniaura.app.beta" }
+      },
+      "oauth_client": [],
+      "api_key": [{ "current_key": "fake" }],
       "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
     }
   ],
