@@ -48,7 +48,7 @@ android {
     compileSdkMinor = 2
 
     defaultConfig {
-        applicationId = "ani.dantotsu"
+        applicationId = "com.ani-aura.app"
         minSdk = 26
         targetSdk = 36
 
