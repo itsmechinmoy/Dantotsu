@@ -1,6 +1,7 @@
 name: Build APK and Notify Discord
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*.*.*"
