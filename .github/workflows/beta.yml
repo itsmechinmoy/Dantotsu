@@ -1,0 +1,164 @@
+name: Build APK and Notify Discord
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+    branches-ignore:
+      - main
+      - l10n_dev_crowdin
+      - custom-download-location
+    paths-ignore:
+      - '**/README.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CI: true
+      SKIP_BUILD: false
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+
+    - name: Download last SHA artifact
+      uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477 # v27
+      with:
+        workflow: beta.yml
+        name: last-sha
+        path: .
+      continue-on-error: true
+
+    - name: Get Commits Since Last Run
+      run: |
+        if [ -f last_sha.txt ]; then
+          LAST_SHA=$(cat last_sha.txt)
+        else
+          LAST_SHA=$(git rev-list --max-parents=0 HEAD)
+        fi
+        echo "Commits since $LAST_SHA:"
+        COMMIT_LOGS=$(git log $LAST_SHA..HEAD --pretty=format:"● %s ~%an [֍](https://github.com/${{ github.repository }}/commit/%H)" --max-count=10)
+        COMMIT_LOGS=$(echo "$COMMIT_LOGS" | sed -E 's/#([0-9]+)/[#\1](https:\/\/github.com\/rebelonion\/Dantotsu\/pull\/\1)/g')
+        COMMIT_LOGS="${COMMIT_LOGS//'%'/'%25'}"
+        COMMIT_LOGS="${COMMIT_LOGS//$'\n'/'%0A'}"
+        COMMIT_LOGS="${COMMIT_LOGS//$'\r'/'%0D'}"
+        echo "COMMIT_LOG=${COMMIT_LOGS}" >> $GITHUB_ENV
+        echo "$COMMIT_LOGS"
+        echo "$COMMIT_LOGS" > commit_log.txt
+        BRANCH=${{ github.ref }}
+        BRANCH=${BRANCH#refs/heads/}
+        echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+      shell: /usr/bin/bash -e {0}
+      env:
+        CI: true
+
+    - name: Save Current SHA for Next Run
+      run: echo ${{ github.sha }} > last_sha.txt
+
+    - name: Set variables
+      run: |
+        VER=$(grep -E -o 'baseVersion = ".*"' app/build.gradle.kts 2>/dev/null | sed -e 's/baseVersion = //g' | tr -d '"')
+        if [ -z "$VER" ]; then
+          VER=$(grep -E -o 'versionName = ".*"' app/build.gradle.kts 2>/dev/null | sed -e 's/versionName = //g' | tr -d '"')
+        fi
+        SHA=${{ github.sha }}
+        VERSION="$VER+${SHA:0:7}"
+        echo "Version $VERSION"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: List files in the directory
+      run: ls -l
+
+    - name: Setup JDK 21
+      if: ${{ env.SKIP_BUILD != 'true' }}
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+      with:
+        distribution: 'temurin'
+        java-version: 25
+
+    - name: Cache Gradle dependencies
+      if: ${{ env.SKIP_BUILD != 'true' }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: v1-${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          v1-${{ runner.os }}-gradle-
+
+    - name: Decode Keystore File
+      if: ${{ github.repository == 'rebelonion/Dantotsu' }}
+      run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > $GITHUB_WORKSPACE/key.keystore
+
+    - name: Make gradlew executable
+      if: ${{ env.SKIP_BUILD != 'true' }}
+      run: chmod +x ./gradlew
+
+    - name: Build with Gradle
+      if: ${{ env.SKIP_BUILD != 'true' }}
+      run: |
+        if [ "${{ github.repository }}" == "rebelonion/Dantotsu" ]; then
+          ./gradlew assembleGoogleAlpha \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/key.keystore \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }};
+        else
+          ./gradlew assembleGoogleAlpha;
+        fi
+
+    - name: Generate APK checksum
+      if: ${{ env.SKIP_BUILD != 'true' }}
+      run: |
+        APK_PATH="app/build/outputs/apk/google/alpha/app-google-alpha.apk"
+        if [ -f "$APK_PATH" ]; then
+          CHECKSUM=$(sha256sum "$APK_PATH" | awk '{print $1}')
+          echo "CHECKSUM=$CHECKSUM" >> $GITHUB_ENV
+          echo "SHA256: $CHECKSUM"
+        fi
+
+    - name: Upload a Build Artifact
+      if: ${{ env.SKIP_BUILD != 'true' }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+          name: Dantotsu
+          retention-days: 5
+          compression-level: 9
+          path: "app/build/outputs/apk/google/alpha/app-google-alpha.apk"
+
+    - name: Upload APK to Discord and Telegram
+      if: ${{ github.repository == 'rebelonion/Dantotsu' }}
+      shell: bash
+      run: |
+        chmod +x workflowscripts/notify.sh
+        ./workflowscripts/notify.sh
+      env:
+        COMMIT_LOG: ${{ env.COMMIT_LOG }}
+        VERSION: ${{ env.VERSION }}
+        CHECKSUM: ${{ env.CHECKSUM }}
+        SKIP_BUILD: ${{ env.SKIP_BUILD }}
+        APK_PATH: "app/build/outputs/apk/google/alpha/app-google-alpha.apk"
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+    - name: Upload Current SHA as Artifact
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: last-sha
+        path: last_sha.txt
+
+    - name: Upload Commit log as Artifact
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: commit-log
+        path: commit_log.txt
