@@ -15,8 +15,8 @@ libtorrent4j = "2.1.0-39"
 shizuku = "13.1.5"
 ffmpeg-kit = "2.2.3"
 nanohttpd = "2.3.1"
-metro = "1.4.5"
-metrox-viewmodel = "1.4.5"
+metro = "1.5.0"
+metrox-viewmodel = "1.5.0"
 materialKolor = "5.0.1"
 compose-runtime = "1.12.1"
 coil = "3.5.0"
@@ -27,8 +27,8 @@ androidx-baselineProfile = "1.5.0"
 androidx-profileInstaller = "1.4.1"
 leakcanary = "2.14"
 webgpuviewer = "53"
-image-decoder = "17"
-mlkit-text-japanese = "16.0.1"
+image-decoder = "18"
+mlkit-text-japanese = "16.0.2"
 mlkit-text = "16.0.1"
 readium = "3.4.0"
 desugar-jdk-libs = "2.1.5"
@@ -65,7 +65,7 @@ kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref =
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 
 # Networking / misc
-gson = "com.google.code.gson:gson:2.14.0"
+gson = "com.google.code.gson:gson:2.15.0"
 nicehttp = "com.github.Blatzar:NiceHttp:0.4.18"
 
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -149,11 +149,11 @@ logcat = "com.squareup.logcat:logcat:0.4"
 injekt = "com.github.mihonapp:injekt:91edab2317"
 
 # OkHttp
-okhttp = "com.squareup.okhttp3:okhttp:5.5.0"
-okhttp-logging = "com.squareup.okhttp3:logging-interceptor:5.5.0"
-okhttp-brotli = "com.squareup.okhttp3:okhttp-brotli:5.5.0"
-okhttp-doh = "com.squareup.okhttp3:okhttp-dnsoverhttps:5.5.0"
-okhttp-zstd = "com.squareup.okhttp3:okhttp-zstd:5.5.0"
+okhttp = "com.squareup.okhttp3:okhttp:5.5.1"
+okhttp-logging = "com.squareup.okhttp3:logging-interceptor:5.5.1"
+okhttp-brotli = "com.squareup.okhttp3:okhttp-brotli:5.5.1"
+okhttp-doh = "com.squareup.okhttp3:okhttp-dnsoverhttps:5.5.1"
+okhttp-zstd = "com.squareup.okhttp3:okhttp-zstd:5.5.1"
 okio = "com.squareup.okio:okio:3.18.2"
 
 # libtorrent4j
