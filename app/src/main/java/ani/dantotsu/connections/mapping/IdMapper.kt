@@ -16,6 +16,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -92,7 +93,7 @@ object IdMapper {
     private var isWarming = false
 
     private fun getHttpClient(): OkHttpClient {
-        return if (::okHttpClient.isInitialized) okHttpClient else OkHttpClient()
+        return runCatching { okHttpClient }.getOrElse { OkHttpClient() }
     }
 
     private fun getFile(context: Context, anime: Boolean): File {
@@ -443,7 +444,7 @@ object IdMapper {
     private fun extractImdb(element: JsonElement): String? {
         return when (element) {
             is JsonPrimitive -> element.contentOrNull
-            is JsonArray -> element.firstOrNull()?.jsonPrimitive?.contentOrNull
+            is JsonArray -> (element.firstOrNull() as? JsonPrimitive)?.contentOrNull
             else -> null
         }
     }
@@ -451,7 +452,8 @@ object IdMapper {
     private fun extractTmdb(element: JsonElement): Int? {
         return when (element) {
             is JsonPrimitive -> element.intOrNull
-            is JsonObject -> element["tv"]?.jsonPrimitive?.intOrNull ?: element["movie"]?.jsonPrimitive?.intOrNull
+            is JsonObject -> (element["tv"] as? JsonPrimitive)?.intOrNull
+                ?: (element["movie"] as? JsonPrimitive)?.intOrNull
             else -> null
         }
     }
