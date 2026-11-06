@@ -32,6 +32,7 @@ object MediaIndexClient {
         "https://raw.githubusercontent.com/itsmechinmoy/dartotsu-media-index/main"
     private const val SHARD_SIZE = 5000
     private const val MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000L // 7 days
+    private const val CACHE_TIME_MINUTES = (MAX_CACHE_AGE_MS / 60000L).toInt()
 
     private val shardCache = ConcurrentHashMap<String, List<JsonObject>>()
     private val titleCache = ConcurrentHashMap<String, List<JsonObject>>()
@@ -71,28 +72,33 @@ object MediaIndexClient {
 
                 // Check anime
                 val animeRecords = loadShard(ctx, "anime", shardStr)
-                for (rec in animeRecords) {
-                    val rId = rec["id"]?.jsonPrimitive?.intOrNull
-                    if (rId != null && targetIds.contains(rId)) {
-                        result.add(parseMedia(rec, isAnime = true))
-                    }
-                }
+                result.addAll(extractMatchingRecords(animeRecords, targetIds, isAnime = true))
 
                 // Check manga for remaining
                 val foundIds = result.map { it.id }.toSet()
                 val remainingIds = targetIds.filterNot { foundIds.contains(it) }.toSet()
                 if (remainingIds.isNotEmpty()) {
                     val mangaRecords = loadShard(ctx, "manga", shardStr)
-                    for (rec in mangaRecords) {
-                        val rId = rec["id"]?.jsonPrimitive?.intOrNull
-                        if (rId != null && remainingIds.contains(rId)) {
-                            result.add(parseMedia(rec, isAnime = false))
-                        }
-                    }
+                    result.addAll(extractMatchingRecords(mangaRecords, remainingIds, isAnime = false))
                 }
             }
             result
         }
+
+    private fun extractMatchingRecords(
+        records: List<JsonObject>,
+        targetIds: Set<Int>,
+        isAnime: Boolean
+    ): List<Media> {
+        val result = mutableListOf<Media>()
+        for (rec in records) {
+            val rId = rec["id"]?.jsonPrimitive?.intOrNull
+            if (rId != null && targetIds.contains(rId)) {
+                result.add(parseMedia(rec, isAnime = isAnime))
+            }
+        }
+        return result
+    }
 
     /**
      * Offline title search against the flat search index.
@@ -126,12 +132,7 @@ object MediaIndexClient {
             val shardStr = String.format("%04d", shardIdx)
             val records = loadShard(ctx, sub, shardStr)
             val idSet = shardIds.toSet()
-            for (rec in records) {
-                val rId = rec["id"]?.jsonPrimitive?.intOrNull
-                if (rId != null && idSet.contains(rId)) {
-                    results.add(parseMedia(rec, isAnime = isAnime))
-                }
-            }
+            results.addAll(extractMatchingRecords(records, idSet, isAnime = isAnime))
         }
         results
     }
@@ -166,7 +167,7 @@ object MediaIndexClient {
         // Fetch from CDN
         try {
             val url = "$BASE_URL/data/$sub/$shardIndex.json"
-            val res = client.get(url, cacheTime = (MAX_CACHE_AGE_MS / 60000).toInt())
+            val res = client.get(url, cacheTime = CACHE_TIME_MINUTES)
             if (res.code == 200 && res.text.startsWith("[")) {
                 cacheFile.writeText(res.text)
                 val parsed = parseJsonArray(res.text)
@@ -208,10 +209,9 @@ object MediaIndexClient {
             }
         }
 
-        // Fetch from CDN
         try {
-            val url = "$BASE_URL/search/${sub}_titles.json"
-            val res = client.get(url, cacheTime = (MAX_CACHE_AGE_MS / 60000).toInt())
+            val url = "$BASE_URL/data/${sub}_titles.json"
+            val res = client.get(url, cacheTime = CACHE_TIME_MINUTES)
             if (res.code == 200 && res.text.startsWith("[")) {
                 cacheFile.writeText(res.text)
                 val parsed = parseJsonArray(res.text)
@@ -237,6 +237,15 @@ object MediaIndexClient {
         return runCatching {
             Json.parseToJsonElement(raw).jsonArray.mapNotNull { it as? JsonObject }
         }.getOrDefault(emptyList())
+    }
+
+    private fun parseFuzzyDate(obj: JsonObject?): FuzzyDate? {
+        if (obj == null) return null
+        return FuzzyDate(
+            obj["year"]?.jsonPrimitive?.intOrNull,
+            obj["month"]?.jsonPrimitive?.intOrNull,
+            obj["day"]?.jsonPrimitive?.intOrNull
+        )
     }
 
     private fun parseMedia(json: JsonObject, isAnime: Boolean): Media {
@@ -277,16 +286,8 @@ object MediaIndexClient {
             favourites = json["favourites"]?.jsonPrimitive?.intOrNull,
             countryOfOrigin = json["countryOfOrigin"]?.jsonPrimitive?.contentOrNull,
             genres = ArrayList(genresList),
-            startDate = if (startObj != null) FuzzyDate(
-                startObj["year"]?.jsonPrimitive?.intOrNull,
-                startObj["month"]?.jsonPrimitive?.intOrNull,
-                startObj["day"]?.jsonPrimitive?.intOrNull
-            ) else null,
-            endDate = if (endObj != null) FuzzyDate(
-                endObj["year"]?.jsonPrimitive?.intOrNull,
-                endObj["month"]?.jsonPrimitive?.intOrNull,
-                endObj["day"]?.jsonPrimitive?.intOrNull
-            ) else null,
+            startDate = parseFuzzyDate(startObj),
+            endDate = parseFuzzyDate(endObj),
             anime = if (isAnime) Anime(
                 totalEpisodes = episodes,
                 nextAiringEpisode = nextEp?.minus(1)

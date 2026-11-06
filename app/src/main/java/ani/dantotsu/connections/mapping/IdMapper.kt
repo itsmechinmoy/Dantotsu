@@ -62,6 +62,7 @@ object IdMapper {
     private const val MANGA_SOURCE =
         "https://raw.githubusercontent.com/itsmechinmoy/dartotsu_manga_mapper/main/manga-list-mini.json"
     private const val MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000L // 7 days
+    private const val CACHE_TIME_MINUTES = (MAX_AGE_MS / 60000L).toInt()
 
     // Forward maps: AniList ID -> IDs bundle
     private val animeById = ConcurrentHashMap<Int, AnimeIds>()
@@ -118,22 +119,27 @@ object IdMapper {
         }
     }
 
+    private suspend fun fetchRemote(url: String, file: File, anime: Boolean): Boolean {
+        return try {
+            val res = client.get(url, cacheTime = CACHE_TIME_MINUTES)
+            if (res.code == 200 && res.text.startsWith("[")) {
+                file.writeText(res.text)
+                parseAndIndex(res.text, anime)
+                true
+            } else false
+        } catch (e: Exception) {
+            Logger.log("IdMapper download failed (${if (anime) "anime" else "manga"}): ${e.message}")
+            false
+        }
+    }
+
     private suspend fun load(context: Context, anime: Boolean) = withContext(Dispatchers.IO) {
         val file = getFile(context, anime)
         val isStale = !file.exists() || System.currentTimeMillis() - file.lastModified() > MAX_AGE_MS
 
         if (isStale) {
-            try {
-                val url = if (anime) ANIME_SOURCE else MANGA_SOURCE
-                val res = client.get(url, cacheTime = (MAX_AGE_MS / 60000).toInt())
-                if (res.code == 200 && res.text.startsWith("[")) {
-                    file.writeText(res.text)
-                    parseAndIndex(res.text, anime)
-                    return@withContext
-                }
-            } catch (e: Exception) {
-                Logger.log("IdMapper download failed (${if (anime) "anime" else "manga"}): ${e.message}")
-            }
+            val url = if (anime) ANIME_SOURCE else MANGA_SOURCE
+            if (fetchRemote(url, file, anime)) return@withContext
         }
 
         // Read from cached file
