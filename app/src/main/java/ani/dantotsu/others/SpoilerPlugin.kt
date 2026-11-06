@@ -14,10 +14,12 @@ import java.util.regex.Pattern
 
 class SpoilerPlugin(private val anilist: Boolean = false) : AbstractMarkwonPlugin() {
     override fun beforeSetText(textView: TextView, markdown: Spanned) {
+        val spannable = markdown as? Spannable ?: return
         if (anilist) {
-            applySpoilerSpans(markdown as Spannable, ARE)
+            applySpoilerSpans(spannable, ARE)
         } else {
-            applySpoilerSpans(markdown as Spannable)
+            applySpoilerSpans(spannable, RE)
+            applySpoilerSpans(spannable, ARE)
         }
     }
 
@@ -47,7 +49,7 @@ class SpoilerPlugin(private val anilist: Boolean = false) : AbstractMarkwonPlugi
 
     companion object {
         private val RE = Pattern.compile("\\|\\|.+?\\|\\|", Pattern.DOTALL)
-        // Matches ~! text !~ and ~!{Label} text !~ with multiline support
+        // Matches ~! text !~ and ~!{Label} text !~ with multiline and closest pairing support
         private val ARE = Pattern.compile("~!(?:\\{([^}\r\n<>]*)\\})?(.+?)!~", Pattern.DOTALL)
 
         private fun applySpoilerSpans(spannable: Spannable, regex: Pattern = RE) {
@@ -78,14 +80,14 @@ class SpoilerPlugin(private val anilist: Boolean = false) : AbstractMarkwonPlugi
                     s + 2
                 }
 
-                // Hide opening syntax (~! or ~!{Label})
+                // Hide opening syntax (~!, ||, or ~!{Label})
                 spannable.setSpan(
                     HideSpoilerSyntaxSpan(),
                     s,
                     openerEnd.coerceAtMost(e),
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
-                // Hide closing syntax (!~)
+                // Hide closing syntax (!~ or ||)
                 spannable.setSpan(
                     HideSpoilerSyntaxSpan(),
                     (e - 2).coerceAtLeast(s),
