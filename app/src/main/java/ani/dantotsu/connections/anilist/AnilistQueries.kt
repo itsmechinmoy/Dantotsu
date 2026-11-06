@@ -50,12 +50,6 @@ class AnilistQueries {
         const val ITEMS_PER_PAGE = 25
     }
 
-    private data class MissingSequelsCache(
-        val sourceIds: Set<Int>,
-        val media: ArrayList<Media>,
-        val cachedAt: Long
-    ) : Serializable
-
     private data class UserStatusCache(
         val users: ArrayList<User>,
         val cachedAt: Long
@@ -501,7 +495,6 @@ class AnilistQueries {
                 } else {
                     if (currContext()?.let { isOnline(it) } == true) {
                         snackString(currContext()?.getString(R.string.error_getting_data))
-                    } else {
                     }
                 }
             }
