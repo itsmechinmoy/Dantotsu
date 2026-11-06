@@ -10,7 +10,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -238,21 +241,20 @@ object IdMapper {
         mangaLoaded = true
     }
 
-    private fun extractImdb(element: kotlinx.serialization.json.JsonElement): String? {
-        return runCatching {
-            element.jsonPrimitive.contentOrNull
-        }.getOrNull() ?: runCatching {
-            element.jsonArray.firstOrNull()?.jsonPrimitive?.contentOrNull
-        }.getOrNull()
+    private fun extractImdb(element: JsonElement): String? {
+        return when (element) {
+            is JsonPrimitive -> element.contentOrNull
+            is JsonArray -> element.firstOrNull()?.jsonPrimitive?.contentOrNull
+            else -> null
+        }
     }
 
-    private fun extractTmdb(element: kotlinx.serialization.json.JsonElement): Int? {
-        return runCatching {
-            element.jsonPrimitive.intOrNull
-        }.getOrNull() ?: runCatching {
-            element.jsonObject["tv"]?.jsonPrimitive?.intOrNull
-                ?: element.jsonObject["movie"]?.jsonPrimitive?.intOrNull
-        }.getOrNull()
+    private fun extractTmdb(element: JsonElement): Int? {
+        return when (element) {
+            is JsonPrimitive -> element.intOrNull
+            is JsonObject -> element["tv"]?.jsonPrimitive?.intOrNull ?: element["movie"]?.jsonPrimitive?.intOrNull
+            else -> null
+        }
     }
 
     // --- High-level Typed Lookups ---
