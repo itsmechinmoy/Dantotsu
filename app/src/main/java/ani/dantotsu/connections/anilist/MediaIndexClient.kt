@@ -5,6 +5,7 @@ import ani.dantotsu.client
 import ani.dantotsu.connections.anilist.api.FuzzyDate
 import ani.dantotsu.currContext
 import ani.dantotsu.media.Media
+import ani.dantotsu.connections.mapping.IdMapper
 import ani.dantotsu.media.anime.Anime
 import ani.dantotsu.media.manga.Manga
 import ani.dantotsu.util.Logger
@@ -294,7 +295,7 @@ object MediaIndexClient {
                 nextAiringEpisode = nextEp?.minus(1)
             ) else null,
             manga = if (!isAnime) Manga(
-                totalChapters = chapters
+                totalChapters = chapters ?: IdMapper.getCachedChapters(id)
             ) else null,
             shareLink = "https://anilist.co/${if (isAnime) "anime" else "manga"}/$id"
         )
