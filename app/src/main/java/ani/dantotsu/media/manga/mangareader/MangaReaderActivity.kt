@@ -605,11 +605,13 @@ class MangaReaderActivity : AppCompatActivity() {
     private fun applyReaderWindowSettings() {
         hideSystemBars()
 
+        //true colors
         SubsamplingScaleImageView.setPreferredBitmapConfig(
             if (defaultSettings.trueColors) Bitmap.Config.ARGB_8888
             else Bitmap.Config.RGB_565
         )
 
+        //keep screen On
         if (defaultSettings.keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 

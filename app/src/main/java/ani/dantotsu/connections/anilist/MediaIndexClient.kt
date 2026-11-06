@@ -209,6 +209,7 @@ object MediaIndexClient {
             }
         }
 
+        // Fetch from CDN
         try {
             val url = "$BASE_URL/data/${sub}_titles.json"
             val res = client.get(url, cacheTime = CACHE_TIME_MINUTES)
