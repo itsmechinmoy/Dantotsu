@@ -523,21 +523,22 @@ class AnilistQueries {
 
         private suspend fun enrichMediaFromIndex(media: Media) {
         val fallback = MediaIndexClient.getMedia(media.id, isAnime = media.anime != null) ?: return
-        if (fallback.idMAL != null && media.idMAL == null) media.idMAL = fallback.idMAL
-        if (media.cover == null) media.cover = fallback.cover
-        if (media.banner == null) media.banner = fallback.banner
-        if (media.status == null) media.status = fallback.status
-        if (media.format == null) media.format = fallback.format
-        if (media.countryOfOrigin == null) media.countryOfOrigin = fallback.countryOfOrigin
-        if (media.genres.isEmpty() && fallback.genres.isNotEmpty()) media.genres = fallback.genres
-        if (media.meanScore == null) media.meanScore = fallback.meanScore
-        if (media.startDate == null) media.startDate = fallback.startDate
-        if (media.endDate == null) media.endDate = fallback.endDate
-        if (media.anime != null && fallback.anime != null) {
-            if (media.anime.totalEpisodes == null) media.anime.totalEpisodes = fallback.anime.totalEpisodes
-            if (media.anime.nextAiringEpisode == null) media.anime.nextAiringEpisode = fallback.anime.nextAiringEpisode
-        } else if (media.manga != null && fallback.manga != null) {
-            if (media.manga.totalChapters == null) media.manga.totalChapters = fallback.manga.totalChapters
+        media.idMAL = media.idMAL ?: fallback.idMAL
+        media.cover = media.cover ?: fallback.cover
+        media.banner = media.banner ?: fallback.banner
+        media.status = media.status ?: fallback.status
+        media.format = media.format ?: fallback.format
+        media.countryOfOrigin = media.countryOfOrigin ?: fallback.countryOfOrigin
+        media.meanScore = media.meanScore ?: fallback.meanScore
+        media.startDate = media.startDate ?: fallback.startDate
+        media.endDate = media.endDate ?: fallback.endDate
+        if (media.genres.isEmpty()) media.genres = fallback.genres
+        media.anime?.apply {
+            totalEpisodes = totalEpisodes ?: fallback.anime?.totalEpisodes
+            nextAiringEpisode = nextAiringEpisode ?: fallback.anime?.nextAiringEpisode
+        }
+        media.manga?.apply {
+            totalChapters = totalChapters ?: fallback.manga?.totalChapters
         }
     }
 
