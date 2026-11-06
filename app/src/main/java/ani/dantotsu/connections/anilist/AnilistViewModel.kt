@@ -188,10 +188,16 @@ class AnilistHomeViewModel : ViewModel() {
     }
 
     private fun postHomePageData(res: Map<String, ArrayList<Media>>) {
-        res["currentAnime"]?.let { animeContinue.postValue(it) }
+        res["currentAnime"]?.let { list ->
+            list.forEach { it.cameFromContinue = true }
+            animeContinue.postValue(list)
+        }
         res["favoriteAnime"]?.let { animeFav.postValue(it) }
         res["currentAnimePlanned"]?.let { animePlanned.postValue(it) }
-        res["currentManga"]?.let { mangaContinue.postValue(it) }
+        res["currentManga"]?.let { list ->
+            list.forEach { it.cameFromContinue = true }
+            mangaContinue.postValue(list)
+        }
         res["favoriteManga"]?.let { mangaFav.postValue(it) }
         res["currentMangaPlanned"]?.let { mangaPlanned.postValue(it) }
         res["recommendations"]?.let { recommendation.postValue(it) }
@@ -225,7 +231,7 @@ class AnilistHomeViewModel : ViewModel() {
 
         tryWithSuspend {
             MAL.query.getUserAnimeList(status = "watching", limit = 20)?.data?.let { entries ->
-                animeContinue.postValue(ArrayList(entries.map { Media(it, true) }))
+                animeContinue.postValue(ArrayList(entries.map { Media(it, true).apply { cameFromContinue = true } }))
             }
         }
         tryWithSuspend {
@@ -235,7 +241,7 @@ class AnilistHomeViewModel : ViewModel() {
         }
         tryWithSuspend {
             MAL.query.getUserMangaList(status = "reading", limit = 20)?.data?.let { entries ->
-                mangaContinue.postValue(ArrayList(entries.map { Media(it, false) }))
+                mangaContinue.postValue(ArrayList(entries.map { Media(it, false).apply { cameFromContinue = true } }))
             }
         }
         tryWithSuspend {

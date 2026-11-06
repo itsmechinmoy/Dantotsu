@@ -656,8 +656,12 @@ binding.homeRecommendedRecyclerView.addOnScrollListener(object :
                             if (isAdded && _binding != null) {
                                 ctx.customAlertDialog().apply {
                                     setTitle(R.string.rescue_mode_prompt_title)
-                                    setMessage(R.string.rescue_mode_prompt_message)
-                                    setPosButton(R.string.rescue_mode_enable) {
+                                    setMessage(R.string.rescue_mode_offline_prompt_message)
+                                    setPosButton(R.string.use_offline_cache) {
+                                        Anilist.anilistDisabledSignal = false
+                                        snackString(ctx.getString(R.string.offline_mode_active))
+                                    }
+                                    setNeutralButton(R.string.rescue_mode_enable) {
                                         PrefManager.setVal(PrefName.RescueMode, true)
                                         Anilist.anilistDisabledSignal = false
                                         val intent = Intent(ctx, MainActivity::class.java)
@@ -667,7 +671,9 @@ binding.homeRecommendedRecyclerView.addOnScrollListener(object :
                                         activity?.finish()
                                         activity?.overridePendingTransition(0, 0)
                                     }
-                                    setNegButton(R.string.no)
+                                    setNegButton(R.string.cancel) {
+                                        Anilist.anilistDisabledSignal = false
+                                    }
                                     show()
                                 }
                             }

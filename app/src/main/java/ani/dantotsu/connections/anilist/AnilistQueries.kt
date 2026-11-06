@@ -25,6 +25,8 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.Studio
 import ani.dantotsu.others.MalScraper
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.mapping.IdMapper
+import ani.dantotsu.util.Logger
 import ani.dantotsu.profile.User
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -136,27 +138,46 @@ class AnilistQueries {
     }
 
     suspend fun getMedia(id: Int, mal: Boolean = false, type: String? = null): Media? {
-        val typeArg = if (type != null) "type: $type," else ""
-        val response = executeQuery<Query.Media>(
-            """{Media($typeArg${if (!mal) "id:" else "idMal:"}$id){id idMal status chapters episodes nextAiringEpisode{episode}type meanScore isAdult isFavourite format bannerImage coverImage{large}title{english romaji userPreferred}mediaListEntry{progress private score(format:POINT_100)status}}}""",
-            force = true
-        )
-        val fetchedMedia = response?.data?.media ?: return null
-        return Media(fetchedMedia)
+        if (!Anilist.anilistDisabledSignal) {
+            try {
+                val typeArg = if (type != null) "type: $type," else ""
+                val response = executeQuery<Query.Media>(
+                    """{Media($typeArg${if (!mal) "id:" else "idMal:"}$id){id idMal status chapters episodes nextAiringEpisode{episode}type meanScore isAdult isFavourite format bannerImage coverImage{large}title{english romaji userPreferred}mediaListEntry{progress private score(format:POINT_100)status}}}""",
+                    force = true
+                )
+                val fetchedMedia = response?.data?.media
+                if (fetchedMedia != null) return Media(fetchedMedia)
+            } catch (e: Exception) {
+                Logger.log("getMedia online query failed: ${e.message}")
+            }
+        }
+        val isAnime = if (type != null) type.uppercase() == "ANIME" else null
+        val targetId = if (mal) {
+            IdMapper.getAnilistId(id, isAnime = isAnime ?: true) ?: id
+        } else id
+        return MediaIndexClient.getMedia(targetId, isAnime)
     }
 
     suspend fun getMediaList(ids: List<Int>): List<Media>? {
         if (ids.isEmpty()) return null
 
-        val idsString = ids.joinToString(",")
-        val response = executeQuery<Query.MediaList>(
-            """{Page(page:1,perPage:50){media(id_in:[${idsString}],isAdult:false){id mediaListEntry{progress private score(format:POINT_100) status} idMal type isAdult popularity status(version:2) chapters episodes nextAiringEpisode{episode} meanScore isFavourite format bannerImage coverImage{large} title{english romaji userPreferred} startDate{year}}}}""",
-            force = true
-        )
-        val fetchedMediaList = response?.data?.page?.media ?: return null
-        return fetchedMediaList.map {
-            Media(it)
+        if (!Anilist.anilistDisabledSignal) {
+            try {
+                val idsString = ids.joinToString(",")
+                val response = executeQuery<Query.MediaList>(
+                    """{Page(page:1,perPage:50){media(id_in:[${idsString}],isAdult:false){id mediaListEntry{progress private score(format:POINT_100) status} idMal type isAdult popularity status(version:2) chapters episodes nextAiringEpisode{episode} meanScore isFavourite format bannerImage coverImage{large} title{english romaji userPreferred} startDate{year}}}}""",
+                    force = true
+                )
+                val fetchedMediaList = response?.data?.page?.media
+                if (fetchedMediaList != null) {
+                    return fetchedMediaList.map { Media(it) }
+                }
+            } catch (e: Exception) {
+                Logger.log("getMediaList online query failed: ${e.message}")
+            }
         }
+        val fallback = MediaIndexClient.getMediaList(ids)
+        return fallback.ifEmpty { null }
     }
 
     fun mediaDetails(media: Media): Media {
@@ -541,6 +562,27 @@ class AnilistQueries {
                     else {
                         response = executeQuery(query, force = true, useToken = false)
                         if (response?.data?.media != null) parse()
+                        else {
+                            val fallback = MediaIndexClient.getMedia(media.id, isAnime = media.anime != null)
+                            if (fallback != null) {
+                                if (fallback.idMAL != null && media.idMAL == null) media.idMAL = fallback.idMAL
+                                if (media.cover == null) media.cover = fallback.cover
+                                if (media.banner == null) media.banner = fallback.banner
+                                if (media.status == null) media.status = fallback.status
+                                if (media.format == null) media.format = fallback.format
+                                if (media.countryOfOrigin == null) media.countryOfOrigin = fallback.countryOfOrigin
+                                if (media.genres.isEmpty() && fallback.genres.isNotEmpty()) media.genres = fallback.genres
+                                if (media.meanScore == null) media.meanScore = fallback.meanScore
+                                if (media.startDate == null) media.startDate = fallback.startDate
+                                if (media.endDate == null) media.endDate = fallback.endDate
+                                if (media.anime != null && fallback.anime != null) {
+                                    if (media.anime.totalEpisodes == null) media.anime.totalEpisodes = fallback.anime.totalEpisodes
+                                    if (media.anime.nextAiringEpisode == null) media.anime.nextAiringEpisode = fallback.anime.nextAiringEpisode
+                                } else if (media.manga != null && fallback.manga != null) {
+                                    if (media.manga.totalChapters == null) media.manga.totalChapters = fallback.manga.totalChapters
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1344,6 +1386,33 @@ class AnilistQueries {
                 page = pageInfo.currentPage.toString().toIntOrNull() ?: 0,
                 hasNextPage = pageInfo.hasNextPage == true,
             )
+        }
+        if (!search.isNullOrBlank()) {
+            val fallbackResults = MediaIndexClient.searchByTitle(search, isAnime = type == "ANIME", limit = perPage ?: 20)
+            if (fallbackResults.isNotEmpty()) {
+                return AniMangaSearchResults(
+                    type = type,
+                    perPage = perPage,
+                    search = search,
+                    sort = sort,
+                    isAdult = isAdult,
+                    onList = onList,
+                    genres = genres,
+                    excludedGenres = excludedGenres,
+                    tags = tags,
+                    excludedTags = excludedTags,
+                    status = status,
+                    source = source,
+                    format = format,
+                    countryOfOrigin = countryOfOrigin,
+                    startYear = startYear,
+                    seasonYear = seasonYear,
+                    season = season,
+                    results = ArrayList(fallbackResults),
+                    page = 1,
+                    hasNextPage = false
+                )
+            }
         }
         return null
     }

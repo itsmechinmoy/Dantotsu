@@ -1420,6 +1420,11 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <!-- Spoiler Tags -->
     <string name="hide_spoiler_tags">Hide Spoiler Tags</string>
     <string name="hide_spoiler_tags_desc">Mask spoiler tags on anime and manga details until tapped</string>
+    <string name="show_unread_count">Show Unread/Unwatched Count</string>
+    <string name="show_unread_count_desc">Display unread chapters and unwatched episodes count badge on continue reading/watching cards</string>
+    <string name="use_offline_cache">Use Offline Cache</string>
+    <string name="offline_mode_active">Offline index active</string>
+    <string name="rescue_mode_offline_prompt_message">AniList seems to be disabled or unavailable. You can continue using Dantotsu with offline cached data and the static media index, or switch to Rescue Mode (MyAnimeList).</string>
     <string name="spoiler_tag_placeholder">Spoiler</string>
     <string name="show_spoilers">Show Spoilers</string>
     <string name="hide_spoilers">Hide Spoilers</string>

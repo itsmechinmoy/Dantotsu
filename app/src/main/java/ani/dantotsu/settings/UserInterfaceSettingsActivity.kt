@@ -167,6 +167,10 @@ class UserInterfaceSettingsActivity : AppCompatActivity() {
         binding.uiSettingsHideSpoilerTags.setOnCheckedChangeListener { _, isChecked ->
             PrefManager.setVal(PrefName.HideSpoilerTags, isChecked)
         }
+        binding.uiSettingsShowUnreadCount.isChecked = PrefManager.getVal(PrefName.ShowUnreadCount)
+        binding.uiSettingsShowUnreadCount.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setVal(PrefName.ShowUnreadCount, isChecked)
+        }
 
         val map = mapOf(
             2f to 0.5f,
