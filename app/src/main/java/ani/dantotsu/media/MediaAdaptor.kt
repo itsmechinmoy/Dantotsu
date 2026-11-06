@@ -185,25 +185,13 @@ class MediaAdaptor(
                                     R.drawable.ic_round_import_contacts_24
                                 )
                             )
-                            b.itemCompactTotal.text = " | ${media.manga.totalChapters ?: "~"}"
-                        }
-                        if (media.cameFromContinue && PrefManager.getVal<Boolean>(PrefName.ShowUnreadCount)) {
-                            val total = if (media.anime != null) {
-                                media.anime.nextAiringEpisode ?: media.anime.totalEpisodes
-                            } else if (media.manga != null) {
-                                media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
-                            } else null
-                            val progress = media.userProgress ?: 0
-                            if (total != null && total > progress) {
-                                val diff = total - progress
-                                b.itemCompactUnreadText.text = if (diff > 99) "99+" else diff.toString()
-                                b.itemCompactUnreadBadge.isVisible = true
-                            } else {
-                                b.itemCompactUnreadBadge.isVisible = false
+                            val chapters = media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
+                            if (media.manga.totalChapters == null && chapters != null) {
+                                media.manga.totalChapters = chapters
                             }
-                        } else {
-                            b.itemCompactUnreadBadge.isVisible = false
+                            b.itemCompactTotal.text = " | ${chapters ?: "~"}"
                         }
+                        bindCompactUnreadBadge(b, holder, media)
                     }
                     b.itemCompactProgressContainer.visibility = if (fav) View.GONE else View.VISIBLE
                 }
@@ -244,7 +232,9 @@ class MediaAdaptor(
                             R.string.chapter_singular
                         )
                         b.itemTotal.text = itemTotal
-                        b.itemCompactTotal.text = "${media.manga.totalChapters ?: "??"}"
+                        val totalCh = media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
+                        if (media.manga.totalChapters == null && totalCh != null) media.manga.totalChapters = totalCh
+                        b.itemCompactTotal.text = "${totalCh ?: "??"}"
                     }
                     if (position == mediaList.size - 2 && viewPager != null) viewPager.post {
                         val start = mediaList.size
@@ -298,7 +288,9 @@ class MediaAdaptor(
                                 ?: 0) != 1
                         ) b.root.context.getString(R.string.chapter_plural)
                         else b.root.context.getString(R.string.chapter_singular)
-                        b.itemCompactTotal.text = "${media.manga.totalChapters ?: "??"}"
+                        val totalCh = media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
+                        if (media.manga.totalChapters == null && totalCh != null) media.manga.totalChapters = totalCh
+                        b.itemCompactTotal.text = "${totalCh ?: "??"}"
                     }
                     @SuppressLint("NotifyDataSetChanged")
                     if (position == mediaList.size - 2 && viewPager != null) viewPager.post {
@@ -365,7 +357,9 @@ class MediaAdaptor(
                                 ?: 0) != 1
                         ) b.root.context.getString(R.string.chapter_plural)
                         else b.root.context.getString(R.string.chapter_singular)
-                        b.itemCompactTotal.text = "${media.manga.totalChapters ?: "??"}"
+                        val totalCh = media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
+                        if (media.manga.totalChapters == null && totalCh != null) media.manga.totalChapters = totalCh
+                        b.itemCompactTotal.text = "${totalCh ?: "??"}"
                     }
                     @SuppressLint("NotifyDataSetChanged")
                     if (position == mediaList.size - 2 && viewPager != null) viewPager.post {
@@ -375,6 +369,43 @@ class MediaAdaptor(
                     }
                 }
             }
+        }
+    }
+
+    private fun bindCompactUnreadBadge(
+        b: ItemMediaCompactBinding,
+        holder: RecyclerView.ViewHolder,
+        media: Media
+    ) {
+        if (media.cameFromContinue && PrefManager.getVal<Boolean>(PrefName.ShowUnreadCount)) {
+            val total = if (media.anime != null) {
+                media.anime.nextAiringEpisode ?: media.anime.totalEpisodes
+            } else if (media.manga != null) {
+                media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
+            } else null
+            val progress = media.userProgress ?: 0
+            if (total != null && total > progress) {
+                val diff = total - progress
+                b.itemCompactUnreadText.text = if (diff > 99) "99+" else diff.toString()
+                b.itemCompactUnreadBadge.isVisible = true
+            } else {
+                b.itemCompactUnreadBadge.isVisible = false
+            }
+            if (media.manga != null && total == null) {
+                IdMapper.resolveChaptersAsync(media.id) { count ->
+                    if (count != null) {
+                        media.manga.totalChapters = count
+                        activity.runOnUiThread {
+                            val pos = holder.bindingAdapterPosition
+                            if (pos != RecyclerView.NO_POSITION) {
+                                notifyItemChanged(pos)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            b.itemCompactUnreadBadge.isVisible = false
         }
     }
 

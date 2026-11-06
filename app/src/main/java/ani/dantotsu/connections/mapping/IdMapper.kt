@@ -1,8 +1,11 @@
 package ani.dantotsu.connections.mapping
 
 import android.content.Context
+import android.util.JsonReader
+import android.util.JsonToken
 import ani.dantotsu.client
 import ani.dantotsu.currContext
+import ani.dantotsu.okHttpClient
 import ani.dantotsu.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +23,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
+import java.io.StringReader
 import java.util.concurrent.ConcurrentHashMap
 
 data class AnimeIds(
@@ -64,6 +70,8 @@ object IdMapper {
         "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json"
     private const val MANGA_SOURCE =
         "https://raw.githubusercontent.com/itsmechinmoy/dartotsu_manga_mapper/main/manga-list-mini.json"
+    private const val MANGABAKA_API =
+        "https://api.mangabaka.org/v1/source/anilist"
     private const val MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000L // 7 days
     private const val CACHE_TIME_MINUTES = (MAX_AGE_MS / 60000L).toInt()
 
@@ -81,6 +89,11 @@ object IdMapper {
     private val muToAnilist = ConcurrentHashMap<Long, Int>()
     private val mbToAnilist = ConcurrentHashMap<Int, Int>()
 
+    // Fast chapter lookup cache and in-flight request tracker
+    private val mangaChapters = ConcurrentHashMap<Int, Int>()
+    private val pendingChapterRequests = ConcurrentHashMap<Int, ArrayList<(Int?) -> Unit>>()
+    private val inFlightRequests = ConcurrentHashMap.newKeySet<Int>()
+
     @Volatile
     private var animeLoaded = false
 
@@ -89,6 +102,10 @@ object IdMapper {
 
     @Volatile
     private var isWarming = false
+
+    private fun getHttpClient(): OkHttpClient {
+        return if (::okHttpClient.isInitialized) okHttpClient else OkHttpClient()
+    }
 
     private fun getFile(context: Context, anime: Boolean): File {
         val dir = File(context.cacheDir, "id_mapper").apply { if (!exists()) mkdirs() }
@@ -104,9 +121,11 @@ object IdMapper {
         isWarming = true
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (!animeLoaded) load(ctx, anime = true)
-                if (!mangaLoaded) load(ctx, anime = false)
-            } catch (e: Exception) {
+                val animeJob = launch { if (!animeLoaded) load(ctx, anime = true) }
+                val mangaJob = launch { if (!mangaLoaded) load(ctx, anime = false) }
+                animeJob.join()
+                mangaJob.join()
+            } catch (e: Throwable) {
                 Logger.log("IdMapper warm-up error: ${e.message}")
             } finally {
                 isWarming = false
@@ -122,19 +141,35 @@ object IdMapper {
         }
     }
 
-    private suspend fun fetchRemote(url: String, file: File, anime: Boolean): Boolean {
-        return try {
-            val res = client.get(url, cacheTime = CACHE_TIME_MINUTES)
-            if (res.code == 200 && res.text.startsWith("[")) {
-                file.writeText(res.text)
-                parseAndIndex(res.text, anime)
-                true
-            } else false
-        } catch (e: Exception) {
-            Logger.log("IdMapper download failed (${if (anime) "anime" else "manga"}): ${e.message}")
-            false
+    private suspend fun fetchRemote(url: String, file: File, anime: Boolean): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val req = Request.Builder()
+                    .url(url)
+                    .header("Accept-Encoding", "gzip")
+                    .build()
+                val response = getHttpClient().newCall(req).execute()
+                if (response.isSuccessful) {
+                    val body = response.body ?: return@withContext false
+                    val tmp = File(file.parentFile, "${file.name}.tmp")
+                    tmp.outputStream().use { out ->
+                        body.byteStream().use { inp ->
+                            inp.copyTo(out)
+                        }
+                    }
+                    if (tmp.exists() && tmp.length() > 0) {
+                        if (file.exists()) file.delete()
+                        tmp.renameTo(file)
+                        parseStreamFile(file, anime)
+                        return@withContext true
+                    }
+                }
+                false
+            } catch (e: Throwable) {
+                Logger.log("IdMapper download failed (${if (anime) "anime" else "manga"}): ${e.message}")
+                false
+            }
         }
-    }
 
     private suspend fun load(context: Context, anime: Boolean) = withContext(Dispatchers.IO) {
         val file = getFile(context, anime)
@@ -148,96 +183,272 @@ object IdMapper {
         // Read from cached file
         if (file.exists()) {
             try {
-                parseAndIndex(file.readText(), anime)
-            } catch (e: Exception) {
+                parseStreamFile(file, anime)
+            } catch (e: Throwable) {
                 Logger.log("IdMapper read cached file failed: ${e.message}")
             }
         }
     }
 
-    private fun parseAndIndex(raw: String, anime: Boolean) {
+    private fun parseStreamFile(file: File, anime: Boolean) {
         try {
-            val array = Json.parseToJsonElement(raw).jsonArray
-            if (anime) {
-                parseAnimeArray(array)
-            } else {
-                parseMangaArray(array)
+            val reader = JsonReader(file.bufferedReader(Charsets.UTF_8))
+            try {
+                if (anime) parseAnimeStream(reader) else parseMangaStream(reader)
+            } finally {
+                reader.close()
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            Logger.log("IdMapper stream parse error (${if (anime) "anime" else "manga"}): ${e.message}")
+        }
+    }
+
+    /**
+     * Parse raw JSON string into index maps. Kept for backwards compatibility and unit testing.
+     */
+    fun parseAndIndex(raw: String, anime: Boolean) {
+        try {
+            val reader = JsonReader(StringReader(raw))
+            try {
+                if (anime) parseAnimeStream(reader) else parseMangaStream(reader)
+            } finally {
+                reader.close()
+            }
+        } catch (e: Throwable) {
             Logger.log("IdMapper parse error (${if (anime) "anime" else "manga"}): ${e.message}")
         }
     }
 
-    private fun parseAnimeArray(array: JsonArray) {
-        for (elem in array) {
-            val obj = elem.jsonObject
-            val alId = obj["anilist_id"]?.jsonPrimitive?.intOrNull ?: continue
-            val malId = obj["mal_id"]?.jsonPrimitive?.intOrNull
-            val kitsuId = obj["kitsu_id"]?.jsonPrimitive?.intOrNull
-            val simklId = obj["simkl_id"]?.jsonPrimitive?.intOrNull
-            val anidbId = obj["anidb_id"]?.jsonPrimitive?.intOrNull
-            val imdbId = obj["imdb_id"]?.let { extractImdb(it) }
-            val tmdbId = obj["themoviedb_id"]?.let { extractTmdb(it) }
-            val tvdbId = obj["tvdb_id"]?.jsonPrimitive?.intOrNull
-            val apId = obj["anime-planet_id"]?.jsonPrimitive?.contentOrNull
-            val asId = obj["anisearch_id"]?.jsonPrimitive?.intOrNull
-            val lcId = obj["livechart_id"]?.jsonPrimitive?.intOrNull
-
-            val ids = AnimeIds(
-                anilistId = alId,
-                malId = malId,
-                kitsuId = kitsuId,
-                simklId = simklId,
-                anidbId = anidbId,
-                imdbId = imdbId,
-                tmdbId = tmdbId,
-                tvdbId = tvdbId,
-                animePlanetId = apId,
-                anisearchId = asId,
-                livechartId = lcId
-            )
-            animeById[alId] = ids
-
-            if (malId != null && malId > 0) malToAnilistAnime[malId] = alId
-            if (kitsuId != null && kitsuId > 0) kitsuToAnilistAnime[kitsuId] = alId
-            if (simklId != null && simklId > 0) simklToAnilist[simklId] = alId
-            if (anidbId != null && anidbId > 0) anidbToAnilist[anidbId] = alId
+    private fun JsonReader.nextIntSafe(): Int? {
+        return when (peek()) {
+            JsonToken.NUMBER -> nextInt()
+            JsonToken.STRING -> nextString().toIntOrNull()
+            JsonToken.NULL -> {
+                nextNull()
+                null
+            }
+            else -> {
+                skipValue()
+                null
+            }
         }
+    }
+
+    private fun JsonReader.nextLongSafe(): Long? {
+        return when (peek()) {
+            JsonToken.NUMBER -> nextLong()
+            JsonToken.STRING -> nextString().toLongOrNull()
+            JsonToken.NULL -> {
+                nextNull()
+                null
+            }
+            else -> {
+                skipValue()
+                null
+            }
+        }
+    }
+
+    private fun JsonReader.nextStringSafe(): String? {
+        return when (peek()) {
+            JsonToken.STRING -> nextString()
+            JsonToken.NUMBER -> nextString()
+            JsonToken.NULL -> {
+                nextNull()
+                null
+            }
+            else -> {
+                skipValue()
+                null
+            }
+        }
+    }
+
+    private fun JsonReader.nextChaptersSafe(): Int? {
+        return when (peek()) {
+            JsonToken.NUMBER -> {
+                val d = nextDouble()
+                if (d > 0.0) d.toInt() else null
+            }
+            JsonToken.STRING -> {
+                nextString().toDoubleOrNull()?.toInt()
+            }
+            JsonToken.NULL -> {
+                nextNull()
+                null
+            }
+            else -> {
+                skipValue()
+                null
+            }
+        }
+    }
+
+    private fun JsonReader.nextImdbSafe(): String? {
+        return when (peek()) {
+            JsonToken.STRING -> nextString()
+            JsonToken.BEGIN_ARRAY -> {
+                beginArray()
+                val first = if (hasNext() && peek() == JsonToken.STRING) nextString() else null
+                while (hasNext()) skipValue()
+                endArray()
+                first
+            }
+            JsonToken.NULL -> {
+                nextNull()
+                null
+            }
+            else -> {
+                skipValue()
+                null
+            }
+        }
+    }
+
+    private fun JsonReader.nextTmdbSafe(): Int? {
+        return when (peek()) {
+            JsonToken.NUMBER -> nextInt()
+            JsonToken.BEGIN_OBJECT -> {
+                beginObject()
+                var found: Int? = null
+                while (hasNext()) {
+                    val k = nextName()
+                    if ((k == "tv" || k == "movie") && peek() == JsonToken.NUMBER) {
+                        val v = nextInt()
+                        if (found == null) found = v
+                    } else {
+                        skipValue()
+                    }
+                }
+                endObject()
+                found
+            }
+            JsonToken.NULL -> {
+                nextNull()
+                null
+            }
+            else -> {
+                skipValue()
+                null
+            }
+        }
+    }
+
+    private fun parseAnimeStream(reader: JsonReader) {
+        reader.beginArray()
+        while (reader.hasNext()) {
+            reader.beginObject()
+            var alId = 0
+            var malId: Int? = null
+            var kitsuId: Int? = null
+            var simklId: Int? = null
+            var anidbId: Int? = null
+            var imdbId: String? = null
+            var tmdbId: Int? = null
+            var tvdbId: Int? = null
+            var apId: String? = null
+            var asId: Int? = null
+            var lcId: Int? = null
+
+            while (reader.hasNext()) {
+                val name = reader.nextName()
+                when (name) {
+                    "anilist_id" -> alId = reader.nextIntSafe() ?: 0
+                    "mal_id" -> malId = reader.nextIntSafe()
+                    "kitsu_id" -> kitsuId = reader.nextIntSafe()
+                    "simkl_id" -> simklId = reader.nextIntSafe()
+                    "anidb_id" -> anidbId = reader.nextIntSafe()
+                    "imdb_id" -> imdbId = reader.nextImdbSafe()
+                    "themoviedb_id" -> tmdbId = reader.nextTmdbSafe()
+                    "tvdb_id" -> tvdbId = reader.nextIntSafe()
+                    "anime-planet_id" -> apId = reader.nextStringSafe()
+                    "anisearch_id" -> asId = reader.nextIntSafe()
+                    "livechart_id" -> lcId = reader.nextIntSafe()
+                    else -> reader.skipValue()
+                }
+            }
+            reader.endObject()
+
+            if (alId > 0) {
+                val ids = AnimeIds(
+                    anilistId = alId,
+                    malId = malId,
+                    kitsuId = kitsuId,
+                    simklId = simklId,
+                    anidbId = anidbId,
+                    imdbId = imdbId,
+                    tmdbId = tmdbId,
+                    tvdbId = tvdbId,
+                    animePlanetId = apId,
+                    anisearchId = asId,
+                    livechartId = lcId
+                )
+                animeById[alId] = ids
+
+                if (malId != null && malId > 0) malToAnilistAnime[malId] = alId
+                if (kitsuId != null && kitsuId > 0) kitsuToAnilistAnime[kitsuId] = alId
+                if (simklId != null && simklId > 0) simklToAnilist[simklId] = alId
+                if (anidbId != null && anidbId > 0) anidbToAnilist[anidbId] = alId
+            }
+        }
+        reader.endArray()
         animeLoaded = true
     }
 
-    private fun parseMangaArray(array: JsonArray) {
-        for (elem in array) {
-            val obj = elem.jsonObject
-            val alId = obj["anilist_id"]?.jsonPrimitive?.intOrNull ?: continue
-            val malId = obj["mal_id"]?.jsonPrimitive?.intOrNull
-            val kitsuId = obj["kitsu_id"]?.jsonPrimitive?.intOrNull
-            val muId = obj["mangaupdates_id"]?.jsonPrimitive?.longOrNull
-            val muSlug = obj["mangaupdates_slug"]?.jsonPrimitive?.contentOrNull
-            val mbId = obj["mangabaka_id"]?.jsonPrimitive?.intOrNull
-            val apId = obj["anime_planet_id"]?.jsonPrimitive?.contentOrNull
-            val skId = obj["shikimori_id"]?.jsonPrimitive?.intOrNull
-            val chapters = obj["total_chapters"]?.jsonPrimitive?.intOrNull
-                ?: obj["total_chapters"]?.jsonPrimitive?.doubleOrNull?.toInt()
+    private fun parseMangaStream(reader: JsonReader) {
+        reader.beginArray()
+        while (reader.hasNext()) {
+            reader.beginObject()
+            var alId = 0
+            var malId: Int? = null
+            var kitsuId: Int? = null
+            var muId: Long? = null
+            var muSlug: String? = null
+            var mbId: Int? = null
+            var apId: String? = null
+            var skId: Int? = null
+            var chapters: Int? = null
 
-            val ids = MangaIds(
-                anilistId = alId,
-                malId = malId,
-                kitsuId = kitsuId,
-                mangaupdatesId = muId,
-                mangaupdatesSlug = muSlug,
-                mangabakaId = mbId,
-                animePlanetId = apId,
-                shikimoriId = skId,
-                totalChapters = chapters
-            )
-            mangaById[alId] = ids
+            while (reader.hasNext()) {
+                val name = reader.nextName()
+                when (name) {
+                    "anilist_id" -> alId = reader.nextIntSafe() ?: 0
+                    "mal_id" -> malId = reader.nextIntSafe()
+                    "kitsu_id" -> kitsuId = reader.nextIntSafe()
+                    "mangaupdates_id" -> muId = reader.nextLongSafe()
+                    "mangaupdates_slug" -> muSlug = reader.nextStringSafe()
+                    "mangabaka_id" -> mbId = reader.nextIntSafe()
+                    "anime_planet_id" -> apId = reader.nextStringSafe()
+                    "shikimori_id" -> skId = reader.nextIntSafe()
+                    "total_chapters" -> chapters = reader.nextChaptersSafe()
+                    else -> reader.skipValue()
+                }
+            }
+            reader.endObject()
 
-            if (malId != null && malId > 0) malToAnilistManga[malId] = alId
-            if (kitsuId != null && kitsuId > 0) kitsuToAnilistManga[kitsuId] = alId
-            if (muId != null && muId > 0L) muToAnilist[muId] = alId
-            if (mbId != null && mbId > 0) mbToAnilist[mbId] = alId
+            if (alId > 0) {
+                val ids = MangaIds(
+                    anilistId = alId,
+                    malId = malId,
+                    kitsuId = kitsuId,
+                    mangaupdatesId = muId,
+                    mangaupdatesSlug = muSlug,
+                    mangabakaId = mbId,
+                    animePlanetId = apId,
+                    shikimoriId = skId,
+                    totalChapters = chapters
+                )
+                mangaById[alId] = ids
+                if (chapters != null && chapters > 0) {
+                    mangaChapters[alId] = chapters
+                }
+                if (malId != null && malId > 0) malToAnilistManga[malId] = alId
+                if (kitsuId != null && kitsuId > 0) kitsuToAnilistManga[kitsuId] = alId
+                if (muId != null && muId > 0L) muToAnilist[muId] = alId
+                if (mbId != null && mbId > 0) mbToAnilist[mbId] = alId
+            }
         }
+        reader.endArray()
         mangaLoaded = true
     }
 
@@ -380,10 +591,84 @@ object IdMapper {
     }
 
     /**
-     * Synchronous getter for cached manga chapter count from the index.
+     * Synchronous getter for cached manga chapter count from the index or MangaBaka cache.
      */
     fun getCachedChapters(anilistId: Int): Int? {
-        return mangaById[anilistId]?.totalChapters
+        return mangaChapters[anilistId] ?: mangaById[anilistId]?.totalChapters
+    }
+
+    /**
+     * Cache manga chapter count manually or after remote resolution.
+     */
+    fun cacheChapters(anilistId: Int, count: Int) {
+        if (count > 0) {
+            mangaChapters[anilistId] = count
+            mangaById[anilistId]?.let {
+                mangaById[anilistId] = it.copy(totalChapters = count)
+            }
+        }
+    }
+
+    /**
+     * Live MangaBaka API lookup for an AniList ID when total_chapters is missing from cache.
+     * Hits https://api.mangabaka.org/v1/source/anilist/$anilistId.
+     */
+    suspend fun fetchMangaBakaChapters(anilistId: Int): Int? = withContext(Dispatchers.IO) {
+        mangaChapters[anilistId]?.let { return@withContext it }
+        try {
+            val url = "$MANGABAKA_API/$anilistId"
+            val res = client.get(url, cacheTime = CACHE_TIME_MINUTES)
+            if (res.code == 200 && res.text.isNotBlank()) {
+                val json = Json.parseToJsonElement(res.text).jsonObject
+                val seriesArr = json["data"]?.jsonObject?.get("series")?.jsonArray
+                val firstSeries = seriesArr?.firstOrNull()?.jsonObject
+                val chapElement = firstSeries?.get("total_chapters")
+                val chapters = when (chapElement) {
+                    is JsonPrimitive -> chapElement.intOrNull
+                        ?: chapElement.doubleOrNull?.toInt()
+                        ?: chapElement.contentOrNull?.toDoubleOrNull()?.toInt()
+                    else -> null
+                }
+                if (chapters != null && chapters > 0) {
+                    cacheChapters(anilistId, chapters)
+                    return@withContext chapters
+                }
+            }
+        } catch (e: Exception) {
+            Logger.log("IdMapper MangaBaka fetch error: ${e.message}")
+        }
+        null
+    }
+
+    /**
+     * Asynchronously resolve total chapters for a manga by AniList ID.
+     * Checks in-memory cache first; if not present, fetches from MangaBaka API and notifies callback.
+     */
+    fun resolveChaptersAsync(anilistId: Int, callback: (Int?) -> Unit) {
+        val cached = getCachedChapters(anilistId)
+        if (cached != null) {
+            callback(cached)
+            return
+        }
+        pendingChapterRequests.compute(anilistId) { _, list ->
+            val callbacks = list ?: ArrayList()
+            callbacks.add(callback)
+            callbacks
+        }
+        if (inFlightRequests.add(anilistId)) {
+            CoroutineScope(Dispatchers.IO).launch {
+                val count = fetchMangaBakaChapters(anilistId)
+                val callbacks = pendingChapterRequests.remove(anilistId)
+                inFlightRequests.remove(anilistId)
+                callbacks?.forEach { cb ->
+                    try {
+                        cb(count)
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+            }
+        }
     }
 
     /**

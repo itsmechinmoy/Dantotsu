@@ -531,7 +531,7 @@ class AnilistQueries {
             nextAiringEpisode = nextAiringEpisode ?: fallback.anime?.nextAiringEpisode
         }
         media.manga?.apply {
-            totalChapters = totalChapters ?: fallback.manga?.totalChapters
+            totalChapters = totalChapters ?: fallback.manga?.totalChapters ?: IdMapper.getCachedChapters(media.id)
         }
     }
 
@@ -871,6 +871,9 @@ fun userMediaDetails(media: Media): Media {
                 val media = Media(entry)
                 if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
                     media.cameFromContinue = true
+                    if (media.manga != null && media.manga.totalChapters == null) {
+                        media.manga.totalChapters = IdMapper.getCachedChapters(media.id)
+                    }
                     subMap[media.id] = media
                 } else {
                     removedMedia.add(media)
@@ -881,6 +884,9 @@ fun userMediaDetails(media: Media): Media {
                 val media = Media(entry)
                 if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
                     media.cameFromContinue = true
+                    if (media.manga != null && media.manga.totalChapters == null) {
+                        media.manga.totalChapters = IdMapper.getCachedChapters(media.id)
+                    }
                     subMap[media.id] = media
                 } else {
                     removedMedia.add(media)
