@@ -191,7 +191,7 @@ class MediaAdaptor(
                             }
                             b.itemCompactTotal.text = " | ${chapters ?: "~"}"
                         }
-                        bindCompactUnreadBadge(b, holder, media)
+                        bindCompactUnreadBadge(b, media)
                     }
                     b.itemCompactProgressContainer.visibility = if (fav) View.GONE else View.VISIBLE
                 }
@@ -374,7 +374,6 @@ class MediaAdaptor(
 
     private fun bindCompactUnreadBadge(
         b: ItemMediaCompactBinding,
-        holder: RecyclerView.ViewHolder,
         media: Media
     ) {
         if (media.cameFromContinue && PrefManager.getVal<Boolean>(PrefName.ShowUnreadCount)) {
@@ -390,19 +389,6 @@ class MediaAdaptor(
                 b.itemCompactUnreadBadge.isVisible = true
             } else {
                 b.itemCompactUnreadBadge.isVisible = false
-            }
-            if (media.manga != null && total == null) {
-                IdMapper.resolveChaptersAsync(media.id) { count ->
-                    if (count != null) {
-                        media.manga.totalChapters = count
-                        activity.runOnUiThread {
-                            val pos = holder.bindingAdapterPosition
-                            if (pos != RecyclerView.NO_POSITION) {
-                                notifyItemChanged(pos)
-                            }
-                        }
-                    }
-                }
             }
         } else {
             b.itemCompactUnreadBadge.isVisible = false

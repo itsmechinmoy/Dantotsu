@@ -3,7 +3,6 @@ package ani.dantotsu.connections.mapping
 import android.content.Context
 import android.util.JsonReader
 import android.util.JsonToken
-import ani.dantotsu.client
 import ani.dantotsu.currContext
 import ani.dantotsu.okHttpClient
 import ani.dantotsu.util.Logger
@@ -11,18 +10,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.longOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -61,7 +54,7 @@ data class MangaIds(
  * AniList, MyAnimeList, Kitsu, Simkl, AniDB, IMDb, TMDB, TVDB, MangaUpdates, MangaBaka,
  * Anime-Planet, AniSearch, LiveChart, Shikimori.
  *
- * Sources:
+ * Sources (offline static dumps - zero live API spam):
  * - Anime: https://github.com/Fribb/anime-lists (anime-list-mini.json)
  * - Manga: https://github.com/itsmechinmoy/dartotsu_manga_mapper (manga-list-mini.json)
  */
@@ -70,10 +63,7 @@ object IdMapper {
         "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json"
     private const val MANGA_SOURCE =
         "https://raw.githubusercontent.com/itsmechinmoy/dartotsu_manga_mapper/main/manga-list-mini.json"
-    private const val MANGABAKA_API =
-        "https://api.mangabaka.org/v1/source/anilist"
     private const val MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000L // 7 days
-    private const val CACHE_TIME_MINUTES = (MAX_AGE_MS / 60000L).toInt()
 
     // Forward maps: AniList ID -> IDs bundle
     private val animeById = ConcurrentHashMap<Int, AnimeIds>()
@@ -89,10 +79,8 @@ object IdMapper {
     private val muToAnilist = ConcurrentHashMap<Long, Int>()
     private val mbToAnilist = ConcurrentHashMap<Int, Int>()
 
-    // Fast chapter lookup cache and in-flight request tracker
+    // Fast chapter lookup cache parsed from the MangaBaka dump
     private val mangaChapters = ConcurrentHashMap<Int, Int>()
-    private val pendingChapterRequests = ConcurrentHashMap<Int, ArrayList<(Int?) -> Unit>>()
-    private val inFlightRequests = ConcurrentHashMap.newKeySet<Int>()
 
     @Volatile
     private var animeLoaded = false
@@ -591,82 +579,20 @@ object IdMapper {
     }
 
     /**
-     * Synchronous getter for cached manga chapter count from the index or MangaBaka cache.
+     * Synchronous getter for cached manga chapter count from the MangaBaka dump index.
      */
     fun getCachedChapters(anilistId: Int): Int? {
         return mangaChapters[anilistId] ?: mangaById[anilistId]?.totalChapters
     }
 
     /**
-     * Cache manga chapter count manually or after remote resolution.
+     * Cache manga chapter count manually.
      */
     fun cacheChapters(anilistId: Int, count: Int) {
         if (count > 0) {
             mangaChapters[anilistId] = count
             mangaById[anilistId]?.let {
                 mangaById[anilistId] = it.copy(totalChapters = count)
-            }
-        }
-    }
-
-    /**
-     * Live MangaBaka API lookup for an AniList ID when total_chapters is missing from cache.
-     * Hits https://api.mangabaka.org/v1/source/anilist/$anilistId.
-     */
-    suspend fun fetchMangaBakaChapters(anilistId: Int): Int? = withContext(Dispatchers.IO) {
-        mangaChapters[anilistId]?.let { return@withContext it }
-        try {
-            val url = "$MANGABAKA_API/$anilistId"
-            val res = client.get(url, cacheTime = CACHE_TIME_MINUTES)
-            if (res.code == 200 && res.text.isNotBlank()) {
-                val json = Json.parseToJsonElement(res.text).jsonObject
-                val seriesArr = json["data"]?.jsonObject?.get("series")?.jsonArray
-                val firstSeries = seriesArr?.firstOrNull()?.jsonObject
-                val chapElement = firstSeries?.get("total_chapters")
-                val chapters = when (chapElement) {
-                    is JsonPrimitive -> chapElement.intOrNull
-                        ?: chapElement.doubleOrNull?.toInt()
-                        ?: chapElement.contentOrNull?.toDoubleOrNull()?.toInt()
-                    else -> null
-                }
-                if (chapters != null && chapters > 0) {
-                    cacheChapters(anilistId, chapters)
-                    return@withContext chapters
-                }
-            }
-        } catch (e: Exception) {
-            Logger.log("IdMapper MangaBaka fetch error: ${e.message}")
-        }
-        null
-    }
-
-    /**
-     * Asynchronously resolve total chapters for a manga by AniList ID.
-     * Checks in-memory cache first; if not present, fetches from MangaBaka API and notifies callback.
-     */
-    fun resolveChaptersAsync(anilistId: Int, callback: (Int?) -> Unit) {
-        val cached = getCachedChapters(anilistId)
-        if (cached != null) {
-            callback(cached)
-            return
-        }
-        pendingChapterRequests.compute(anilistId) { _, list ->
-            val callbacks = list ?: ArrayList()
-            callbacks.add(callback)
-            callbacks
-        }
-        if (inFlightRequests.add(anilistId)) {
-            CoroutineScope(Dispatchers.IO).launch {
-                val count = fetchMangaBakaChapters(anilistId)
-                val callbacks = pendingChapterRequests.remove(anilistId)
-                inFlightRequests.remove(anilistId)
-                callbacks?.forEach { cb ->
-                    try {
-                        cb(count)
-                    } catch (e: Exception) {
-                        // ignore
-                    }
-                }
             }
         }
     }
