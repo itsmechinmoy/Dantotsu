@@ -140,7 +140,7 @@ object MediaIndexClient {
         val shardIndex = String.format("%04d", id / SHARD_SIZE)
         val records = loadShard(context, sub, shardIndex)
         val json = records.firstOrNull { it["id"]?.jsonPrimitive?.intOrNull == id } ?: return null
-        return parseMedia(json, isAnime = (sub == "anime"))
+        return parseMedia(json, isAnime = sub == "anime")
     }
 
     private suspend fun loadShard(context: Context, sub: String, shardIndex: String): List<JsonObject> {
@@ -149,7 +149,7 @@ object MediaIndexClient {
 
         val cacheFile = File(getCacheDir(context), "$sub-$shardIndex.json")
         val isExpired = !cacheFile.exists() ||
-                (System.currentTimeMillis() - cacheFile.lastModified() > MAX_CACHE_AGE_MS)
+                System.currentTimeMillis() - cacheFile.lastModified() > MAX_CACHE_AGE_MS
 
         if (!isExpired) {
             try {
@@ -194,7 +194,7 @@ object MediaIndexClient {
 
         val cacheFile = File(getCacheDir(context), "${sub}_titles.json")
         val isExpired = !cacheFile.exists() ||
-                (System.currentTimeMillis() - cacheFile.lastModified() > MAX_CACHE_AGE_MS)
+                System.currentTimeMillis() - cacheFile.lastModified() > MAX_CACHE_AGE_MS
 
         if (!isExpired) {
             try {

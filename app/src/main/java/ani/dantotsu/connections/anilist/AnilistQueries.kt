@@ -521,7 +521,27 @@ class AnilistQueries {
         return media
     }
 
-    fun userMediaDetails(media: Media): Media {
+        private suspend fun enrichMediaFromIndex(media: Media) {
+        val fallback = MediaIndexClient.getMedia(media.id, isAnime = media.anime != null) ?: return
+        if (fallback.idMAL != null && media.idMAL == null) media.idMAL = fallback.idMAL
+        if (media.cover == null) media.cover = fallback.cover
+        if (media.banner == null) media.banner = fallback.banner
+        if (media.status == null) media.status = fallback.status
+        if (media.format == null) media.format = fallback.format
+        if (media.countryOfOrigin == null) media.countryOfOrigin = fallback.countryOfOrigin
+        if (media.genres.isEmpty() && fallback.genres.isNotEmpty()) media.genres = fallback.genres
+        if (media.meanScore == null) media.meanScore = fallback.meanScore
+        if (media.startDate == null) media.startDate = fallback.startDate
+        if (media.endDate == null) media.endDate = fallback.endDate
+        if (media.anime != null && fallback.anime != null) {
+            if (media.anime.totalEpisodes == null) media.anime.totalEpisodes = fallback.anime.totalEpisodes
+            if (media.anime.nextAiringEpisode == null) media.anime.nextAiringEpisode = fallback.anime.nextAiringEpisode
+        } else if (media.manga != null && fallback.manga != null) {
+            if (media.manga.totalChapters == null) media.manga.totalChapters = fallback.manga.totalChapters
+        }
+    }
+
+fun userMediaDetails(media: Media): Media {
         val query =
             """{Media(id:${media.id}){id mediaListEntry{id status progress progressVolumes private repeat customLists updatedAt startedAt{year month day}completedAt{year month day}}isFavourite idMal}}"""
         runBlocking {
@@ -562,27 +582,7 @@ class AnilistQueries {
                     else {
                         response = executeQuery(query, force = true, useToken = false)
                         if (response?.data?.media != null) parse()
-                        else {
-                            val fallback = MediaIndexClient.getMedia(media.id, isAnime = media.anime != null)
-                            if (fallback != null) {
-                                if (fallback.idMAL != null && media.idMAL == null) media.idMAL = fallback.idMAL
-                                if (media.cover == null) media.cover = fallback.cover
-                                if (media.banner == null) media.banner = fallback.banner
-                                if (media.status == null) media.status = fallback.status
-                                if (media.format == null) media.format = fallback.format
-                                if (media.countryOfOrigin == null) media.countryOfOrigin = fallback.countryOfOrigin
-                                if (media.genres.isEmpty() && fallback.genres.isNotEmpty()) media.genres = fallback.genres
-                                if (media.meanScore == null) media.meanScore = fallback.meanScore
-                                if (media.startDate == null) media.startDate = fallback.startDate
-                                if (media.endDate == null) media.endDate = fallback.endDate
-                                if (media.anime != null && fallback.anime != null) {
-                                    if (media.anime.totalEpisodes == null) media.anime.totalEpisodes = fallback.anime.totalEpisodes
-                                    if (media.anime.nextAiringEpisode == null) media.anime.nextAiringEpisode = fallback.anime.nextAiringEpisode
-                                } else if (media.manga != null && fallback.manga != null) {
-                                    if (media.manga.totalChapters == null) media.manga.totalChapters = fallback.manga.totalChapters
-                                }
-                            }
-                        }
+                        else enrichMediaFromIndex(media)
                     }
                 }
             }

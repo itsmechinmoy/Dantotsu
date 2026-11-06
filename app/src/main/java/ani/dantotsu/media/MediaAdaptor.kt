@@ -196,7 +196,7 @@ class MediaAdaptor(
                             val progress = media.userProgress ?: 0
                             if (total != null && total > progress) {
                                 val diff = total - progress
-                                b.itemCompactUnreadText.text = "+$diff"
+                                b.itemCompactUnreadText.text = if (diff > 99) "99+" else diff.toString()
                                 b.itemCompactUnreadBadge.isVisible = true
                             } else {
                                 b.itemCompactUnreadBadge.isVisible = false
