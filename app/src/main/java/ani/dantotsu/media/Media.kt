@@ -126,7 +126,7 @@ data class Media(
         userProgressVolumes = apiMedia.mediaListEntry?.progressVolumes,
         userScore = apiMedia.mediaListEntry?.score?.toInt() ?: 0,
         userStatus = apiMedia.mediaListEntry?.status?.toString(),
-        meanScore = apiMedia.meanScore,
+        meanScore = apiMedia.meanScore ?: apiMedia.weightedScore ?: apiMedia.averageScore,
         startDate = apiMedia.startDate,
         endDate = apiMedia.endDate,
         favourites = apiMedia.favourites,

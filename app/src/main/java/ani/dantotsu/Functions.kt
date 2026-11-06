@@ -98,6 +98,7 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaDetailsActivity
 import ani.dantotsu.notifications.IncognitoNotificationClickReceiver
 import ani.dantotsu.others.AlignTagHandler
+import ani.dantotsu.others.SpoilerTagHandler
 import ani.dantotsu.others.ImageViewDialog
 import ani.dantotsu.others.SpoilerPlugin
 import ani.dantotsu.parsers.ShowResponse
@@ -1698,6 +1699,7 @@ fun buildMarkwon(
                 )
             }
             plugin.addHandler(AlignTagHandler())
+            plugin.addHandler(SpoilerTagHandler())
         })
         .usePlugin(GlideImagesPlugin.create(object : GlideImagesPlugin.GlideStore {
 

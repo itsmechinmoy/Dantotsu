@@ -90,6 +90,7 @@ data class Media(
 
     // A weighted average score of all the user's scores of the media
     @SerialName("averageScore") var averageScore: Int?,
+    @SerialName("weightedScore") var weightedScore: Int? = null,
 
     // Mean score of all the user's scores of the media
     @SerialName("meanScore") var meanScore: Int?,

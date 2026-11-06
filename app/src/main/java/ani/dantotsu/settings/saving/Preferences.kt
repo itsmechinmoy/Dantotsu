@@ -128,6 +128,7 @@ enum class PrefName(val data: Pref) {
     FollowerLayout(Pref(Location.UI, Int::class, 0)),
     ShowNotificationRedDot(Pref(Location.UI, Boolean::class, true)),
     HideSpoilerTags(Pref(Location.UI, Boolean::class, true)),
+    ShowUnreadCount(Pref(Location.UI, Boolean::class, true)),
 
 
     //Player

@@ -34,6 +34,7 @@ import ani.dantotsu.setAnimation
 import ani.dantotsu.setSafeOnClickListener
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.connections.mapping.IdMapper
 import com.flaviofaria.kenburnsview.RandomTransitionGenerator
 import java.io.Serializable
 
@@ -118,6 +119,7 @@ class MediaAdaptor(
                         b.itemCompactOngoing.isVisible = false
                         b.itemCompactType.isVisible = false
                         b.itemCompactImage.setImageResource(R.drawable.skeleton_cover_placeholder)
+                        b.itemCompactUnreadBadge.isVisible = false
                     } else {
                         b.itemCompactTitle.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                             width = (108 * density).toInt()
@@ -184,6 +186,23 @@ class MediaAdaptor(
                                 )
                             )
                             b.itemCompactTotal.text = " | ${media.manga.totalChapters ?: "~"}"
+                        }
+                        if (media.cameFromContinue && PrefManager.getVal<Boolean>(PrefName.ShowUnreadCount)) {
+                            val total = if (media.anime != null) {
+                                media.anime.nextAiringEpisode ?: media.anime.totalEpisodes
+                            } else if (media.manga != null) {
+                                media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
+                            } else null
+                            val progress = media.userProgress ?: 0
+                            if (total != null && total > progress) {
+                                val diff = total - progress
+                                b.itemCompactUnreadText.text = if (diff > 99) "99+" else diff.toString()
+                                b.itemCompactUnreadBadge.isVisible = true
+                            } else {
+                                b.itemCompactUnreadBadge.isVisible = false
+                            }
+                        } else {
+                            b.itemCompactUnreadBadge.isVisible = false
                         }
                     }
                     b.itemCompactProgressContainer.visibility = if (fav) View.GONE else View.VISIBLE

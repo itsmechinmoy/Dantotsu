@@ -35,6 +35,7 @@ import androidx.viewpager2.adapter.FragmentStateAdapter
 import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.addons.torrent.TorrentServerService
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.mapping.IdMapper
 import ani.dantotsu.connections.anilist.AnilistHomeViewModel
 import ani.dantotsu.databinding.ActivityMainBinding
 import ani.dantotsu.databinding.DialogUserAgentBinding
@@ -121,6 +122,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         TaskScheduler.scheduleSingleWork(this)
+        IdMapper.warm(this)
 
         if (Intent.ACTION_VIEW == intent.action) {
             handleViewIntent(intent)
