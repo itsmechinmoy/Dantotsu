@@ -24,13 +24,12 @@ class SpoilerPlugin(private val anilist: Boolean = false) : AbstractMarkwonPlugi
     class RedditSpoilerSpan : CharacterStyle() {
         var revealed = false
             private set
+
         override fun updateDrawState(tp: TextPaint) {
             if (!revealed) {
-                // use the same text color
                 tp.bgColor = Color.DKGRAY
                 tp.color = Color.DKGRAY
             } else {
-                // for example keep a bit of black background to remind that it is a spoiler
                 tp.bgColor = ColorUtils.applyAlpha(Color.DKGRAY, 25)
             }
         }
@@ -40,17 +39,17 @@ class SpoilerPlugin(private val anilist: Boolean = false) : AbstractMarkwonPlugi
         }
     }
 
-    // we also could make text size smaller (but then MetricAffectingSpan should be used)
     private class HideSpoilerSyntaxSpan : CharacterStyle() {
         override fun updateDrawState(tp: TextPaint) {
-            // set transparent color
             tp.color = 0
         }
     }
 
     companion object {
-        private val RE = Pattern.compile("\\|\\|.+?\\|\\|")
-        private val ARE = Pattern.compile("~!.+?!~")
+        private val RE = Pattern.compile("\\|\\|.+?\\|\\|", Pattern.DOTALL)
+        // Matches ~! text !~ and ~!{Label} text !~ with multiline support
+        private val ARE = Pattern.compile("~!(?:\\{([^}\r\n<>]*)\\})?(.+?)!~", Pattern.DOTALL)
+
         private fun applySpoilerSpans(spannable: Spannable, regex: Pattern = RE) {
             val text = spannable.toString()
             val matcher = regex.matcher(text)
@@ -65,25 +64,31 @@ class SpoilerPlugin(private val anilist: Boolean = false) : AbstractMarkwonPlugi
                         widget.postInvalidateOnAnimation()
                     }
 
-                    override fun updateDrawState(ds: TextPaint) {
-                        // no op
-                    }
+                    override fun updateDrawState(ds: TextPaint) {}
                 }
                 val s = matcher.start()
                 val e = matcher.end()
                 spannable.setSpan(spoilerSpan, s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 spannable.setSpan(clickableSpan, s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 
-                // we also can hide original syntax
+                // Calculate opening syntax length: ~! (2) or ~!{Label} (2 + label.length + 2)
+                val openerEnd = if (matcher.groupCount() >= 1 && matcher.group(1) != null) {
+                    matcher.end(1) + 1
+                } else {
+                    s + 2
+                }
+
+                // Hide opening syntax (~! or ~!{Label})
                 spannable.setSpan(
                     HideSpoilerSyntaxSpan(),
                     s,
-                    s + 2,
+                    openerEnd.coerceAtMost(e),
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
+                // Hide closing syntax (!~)
                 spannable.setSpan(
                     HideSpoilerSyntaxSpan(),
-                    e - 2,
+                    (e - 2).coerceAtLeast(s),
                     e,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
