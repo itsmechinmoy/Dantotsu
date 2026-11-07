@@ -314,157 +314,166 @@ class PlayerGestureManager(
         }
 
         if (PrefManager.getVal<Boolean>(PrefName.Gestures) || PrefManager.getVal<Boolean>(PrefName.DoubleTap)) {
-            fun doubleTap(forward: Boolean, event: MotionEvent) {
-                if (!isLocked && isPlayerInitialized() && PrefManager.getVal<Boolean>(PrefName.DoubleTap)) {
-                    seek(forward, event)
-                }
+            setupAreaGestures(audioManager, ::brightnessHide, ::volumeHide)
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupAreaGestures(
+        audioManager: AudioManager,
+        brightnessHide: () -> Unit,
+        volumeHide: () -> Unit
+    ) {
+        fun doubleTap(forward: Boolean, event: MotionEvent) {
+            if (!isLocked && isPlayerInitialized() && PrefManager.getVal<Boolean>(PrefName.DoubleTap)) {
+                seek(forward, event)
             }
+        }
 
-            exoBrightness.value = getCurrentBrightnessValue(activity) * 10f
-            exoBrightness.addOnChangeListener { _, value, _ ->
-                val lp = activity.window.attributes
-                lp.screenBrightness = brightnessConverter((value.takeIf { !it.isNaN() } ?: 0f) / 10, false)
-                activity.window.attributes = lp
-                brightnessHide()
-            }
+        exoBrightness.value = getCurrentBrightnessValue(activity) * 10f
+        exoBrightness.addOnChangeListener { _, value, _ ->
+            val lp = activity.window.attributes
+            lp.screenBrightness = brightnessConverter((value.takeIf { !it.isNaN() } ?: 0f) / 10, false)
+            activity.window.attributes = lp
+            brightnessHide()
+        }
 
-            val volumeMax = audioManager.getStreamMaxVolume(STREAM_MUSIC)
-            exoVolume.value = audioManager.getStreamVolume(STREAM_MUSIC).toFloat() / volumeMax * 10
+        val volumeMax = audioManager.getStreamMaxVolume(STREAM_MUSIC)
+        exoVolume.value = audioManager.getStreamVolume(STREAM_MUSIC).toFloat() / volumeMax * 10
 
-            exoVolume.addOnChangeListener { _, value, _ ->
-                val volume = ((value.takeIf { !it.isNaN() } ?: 0f) / 10 * volumeMax).roundToInt()
-                audioManager.setStreamVolume(STREAM_MUSIC, volume, 0)
-                volumeHide()
-            }
+        exoVolume.addOnChangeListener { _, value, _ ->
+            val volume = ((value.takeIf { !it.isNaN() } ?: 0f) / 10 * volumeMax).roundToInt()
+            audioManager.setStreamVolume(STREAM_MUSIC, volume, 0)
+            volumeHide()
+        }
 
-            val fastForward = playerView.findViewById<TextView>(R.id.exo_fast_forward_text)
+        val fastForward = playerView.findViewById<TextView>(R.id.exo_fast_forward_text)
 
-            fun updateFastForwardText(speed: Float) {
-                fastForward.text = String.format(Locale.US, "%.2fx", speed)
-            }
+        fun updateFastForwardText(speed: Float) {
+            fastForward.text = String.format(Locale.US, "%.2fx", speed)
+        }
 
-            fun fastForward(event: MotionEvent) {
-                val player = getPlayer() ?: return
-                isFastForwarding = true
-                fastForwardStartX = event.rawX
-                fastForwardOriginalSpeed = player.playbackParameters.speed
-                fastForwardInitialSpeed = clamp(fastForwardOriginalSpeed * 2f, minLongPressSpeed, maxLongPressSpeed)
-                player.setPlaybackSpeed(fastForwardInitialSpeed)
-                lastFastForwardSpeed = fastForwardInitialSpeed
-                fastForward.visibility = View.VISIBLE
-                updateFastForwardText(player.playbackParameters.speed)
-            }
+        fun fastForward(event: MotionEvent) {
+            val player = getPlayer() ?: return
+            isFastForwarding = true
+            fastForwardStartX = event.rawX
+            fastForwardOriginalSpeed = player.playbackParameters.speed
+            fastForwardInitialSpeed = clamp(fastForwardOriginalSpeed * 2f, minLongPressSpeed, maxLongPressSpeed)
+            player.setPlaybackSpeed(fastForwardInitialSpeed)
+            lastFastForwardSpeed = fastForwardInitialSpeed
+            fastForward.visibility = View.VISIBLE
+            updateFastForwardText(player.playbackParameters.speed)
+        }
 
-            fun updateFastForwardSpeed(event: MotionEvent) {
-                val player = getPlayer() ?: return
-                if (!isFastForwarding) return
-                val width = playerView.width.toFloat().takeIf { it > 0f } ?: return
-                val deltaX = event.rawX - fastForwardStartX
-                if (abs(deltaX) < width * horizontalDeadZoneRatio) return
-                val deltaRatio = deltaX / width
-                val targetSpeed = clamp(
-                    fastForwardInitialSpeed + (deltaRatio * dragSpeedSensitivity),
-                    minLongPressSpeed,
-                    maxLongPressSpeed
-                )
-                if (abs(targetSpeed - lastFastForwardSpeed) < minSpeedUpdateDelta) return
-                player.setPlaybackSpeed(targetSpeed)
-                lastFastForwardSpeed = targetSpeed
-                updateFastForwardText(player.playbackParameters.speed)
-            }
-
-            fun stopFastForward() {
-                val player = getPlayer()
-                if (isFastForwarding && player != null) {
-                    isFastForwarding = false
-                    player.setPlaybackSpeed(fastForwardOriginalSpeed)
-                    fastForward.visibility = View.GONE
-                }
-            }
-
-            val fastRewindDetector = GestureDetector(
-                activity,
-                object : GesturesListener() {
-                    override fun onLongClick(event: MotionEvent) {
-                        if (PrefManager.getVal(PrefName.FastForward)) fastForward(event)
-                    }
-
-                    override fun onDoubleClick(event: MotionEvent) {
-                        doubleTap(false, event)
-                    }
-
-                    override fun onScrollYClick(y: Float) {
-                        if (!isLocked && PrefManager.getVal(PrefName.Gestures)) {
-                            exoBrightness.value = clamp(exoBrightness.value + y / 100, 0f, 10f)
-                            exoBrightnessCont.alpha = 1f
-                            if (exoBrightnessCont.visibility != View.VISIBLE) {
-                                exoBrightnessCont.visibility = View.VISIBLE
-                            }
-                            brightnessHide()
-                        }
-                    }
-
-                    override fun onSingleClick(event: MotionEvent) =
-                        if (isSeeking) doubleTap(false, event) else handleController()
-                }
+        fun updateFastForwardSpeed(event: MotionEvent) {
+            val player = getPlayer() ?: return
+            if (!isFastForwarding) return
+            val width = playerView.width.toFloat().takeIf { it > 0f } ?: return
+            val deltaX = event.rawX - fastForwardStartX
+            if (abs(deltaX) < width * horizontalDeadZoneRatio) return
+            val deltaRatio = deltaX / width
+            val targetSpeed = clamp(
+                fastForwardInitialSpeed + (deltaRatio * dragSpeedSensitivity),
+                minLongPressSpeed,
+                maxLongPressSpeed
             )
+            if (abs(targetSpeed - lastFastForwardSpeed) < minSpeedUpdateDelta) return
+            player.setPlaybackSpeed(targetSpeed)
+            lastFastForwardSpeed = targetSpeed
+            updateFastForwardText(player.playbackParameters.speed)
+        }
 
-            val rewindArea = playerView.findViewById<View>(R.id.exo_rewind_area)
-            rewindArea?.isClickable = true
-            rewindArea?.setOnTouchListener { v, event ->
-                fastRewindDetector.onTouchEvent(event)
-                when (event.action) {
-                    MotionEvent.ACTION_MOVE -> updateFastForwardSpeed(event)
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        stopFastForward()
-                        if (exoBrightnessCont.visibility == View.VISIBLE) brightnessHide()
-                    }
-                }
-                v.performClick()
-                true
+        fun stopFastForward() {
+            val player = getPlayer()
+            if (isFastForwarding && player != null) {
+                isFastForwarding = false
+                player.setPlaybackSpeed(fastForwardOriginalSpeed)
+                fastForward.visibility = View.GONE
             }
+        }
 
-            val fastForwardDetector = GestureDetector(
-                activity,
-                object : GesturesListener() {
-                    override fun onLongClick(event: MotionEvent) {
-                        if (PrefManager.getVal(PrefName.FastForward)) fastForward(event)
-                    }
+        val fastRewindDetector = GestureDetector(
+            activity,
+            object : GesturesListener() {
+                override fun onLongClick(event: MotionEvent) {
+                    if (PrefManager.getVal(PrefName.FastForward)) fastForward(event)
+                }
 
-                    override fun onDoubleClick(event: MotionEvent) {
-                        doubleTap(true, event)
-                    }
+                override fun onDoubleClick(event: MotionEvent) {
+                    doubleTap(false, event)
+                }
 
-                    override fun onScrollYClick(y: Float) {
-                        if (!isLocked && PrefManager.getVal(PrefName.Gestures)) {
-                            exoVolume.value = clamp(exoVolume.value + y / 100, 0f, 10f)
-                            exoVolumeCont.alpha = 1f
-                            if (exoVolumeCont.visibility != View.VISIBLE) {
-                                exoVolumeCont.visibility = View.VISIBLE
-                            }
-                            volumeHide()
+                override fun onScrollYClick(y: Float) {
+                    if (!isLocked && PrefManager.getVal(PrefName.Gestures)) {
+                        exoBrightness.value = clamp(exoBrightness.value + y / 100, 0f, 10f)
+                        exoBrightnessCont.alpha = 1f
+                        if (exoBrightnessCont.visibility != View.VISIBLE) {
+                            exoBrightnessCont.visibility = View.VISIBLE
                         }
-                    }
-
-                    override fun onSingleClick(event: MotionEvent) =
-                        if (isSeeking) doubleTap(true, event) else handleController()
-                }
-            )
-
-            val forwardArea = playerView.findViewById<View>(R.id.exo_forward_area)
-            forwardArea?.isClickable = true
-            forwardArea?.setOnTouchListener { v, event ->
-                fastForwardDetector.onTouchEvent(event)
-                when (event.action) {
-                    MotionEvent.ACTION_MOVE -> updateFastForwardSpeed(event)
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        stopFastForward()
-                        if (exoVolumeCont.visibility == View.VISIBLE) volumeHide()
+                        brightnessHide()
                     }
                 }
-                v.performClick()
-                true
+
+                override fun onSingleClick(event: MotionEvent) =
+                    if (isSeeking) doubleTap(false, event) else handleController()
             }
+        )
+
+        val rewindArea = playerView.findViewById<View>(R.id.exo_rewind_area)
+        rewindArea?.isClickable = true
+        rewindArea?.setOnTouchListener { v, event ->
+            fastRewindDetector.onTouchEvent(event)
+            when (event.action) {
+                MotionEvent.ACTION_MOVE -> updateFastForwardSpeed(event)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    stopFastForward()
+                    if (exoBrightnessCont.visibility == View.VISIBLE) brightnessHide()
+                }
+            }
+            v.performClick()
+            true
+        }
+
+        val fastForwardDetector = GestureDetector(
+            activity,
+            object : GesturesListener() {
+                override fun onLongClick(event: MotionEvent) {
+                    if (PrefManager.getVal(PrefName.FastForward)) fastForward(event)
+                }
+
+                override fun onDoubleClick(event: MotionEvent) {
+                    doubleTap(true, event)
+                }
+
+                override fun onScrollYClick(y: Float) {
+                    if (!isLocked && PrefManager.getVal(PrefName.Gestures)) {
+                        exoVolume.value = clamp(exoVolume.value + y / 100, 0f, 10f)
+                        exoVolumeCont.alpha = 1f
+                        if (exoVolumeCont.visibility != View.VISIBLE) {
+                            exoVolumeCont.visibility = View.VISIBLE
+                        }
+                        volumeHide()
+                    }
+                }
+
+                override fun onSingleClick(event: MotionEvent) =
+                    if (isSeeking) doubleTap(true, event) else handleController()
+            }
+        )
+
+        val forwardArea = playerView.findViewById<View>(R.id.exo_forward_area)
+        forwardArea?.isClickable = true
+        forwardArea?.setOnTouchListener { v, event ->
+            fastForwardDetector.onTouchEvent(event)
+            when (event.action) {
+                MotionEvent.ACTION_MOVE -> updateFastForwardSpeed(event)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    stopFastForward()
+                    if (exoVolumeCont.visibility == View.VISIBLE) volumeHide()
+                }
+            }
+            v.performClick()
+            true
         }
     }
 }

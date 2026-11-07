@@ -123,23 +123,27 @@ class PlayerProgressManager(
                 (duration > 0f && player.currentPosition.toFloat() / duration > PrefManager.getVal<Float>(PrefName.WatchPercentage))
         val episode0 = currentEpisodeIndex == 0 && PrefManager.getVal<Boolean>(PrefName.ChapterZeroPlayer)
 
-        if (!incognito && (episodeEnd || episode0) && Anilist.userid != null) {
-            if (PrefManager.getCustomVal("${m.id}_save_progress", true) &&
-                (if (m.isAdult) PrefManager.getVal(PrefName.UpdateForHPlayer) else true)
-            ) {
-                val epKey = episodeArr.getOrNull(currentEpisodeIndex)
-                val epNum = epKey?.let { episodes[it]?.number }
-                    ?: epKey
-                    ?: m.anime?.selectedEpisode
-                    ?: "1"
-                if (episode0 && !episodeEnd) {
-                    updateProgress(m, "0")
-                } else {
-                    updateProgress(m, epNum)
-                }
-            }
+        if (shouldSaveProgress(m, episodeEnd, episode0, incognito)) {
+            val epNum = resolveEpisodeProgressNumber(m, episode0 && !episodeEnd)
+            updateProgress(m, epNum)
         }
         maybeHandleSubscriptionAfterEpisodeCompletion(episodeEnd, incognito)
+    }
+
+    private fun shouldSaveProgress(m: Media, episodeEnd: Boolean, episode0: Boolean, incognito: Boolean): Boolean {
+        if (incognito || (!episodeEnd && !episode0) || Anilist.userid == null) return false
+        val saveAllowed = PrefManager.getCustomVal("${m.id}_save_progress", true)
+        val adultAllowed = if (m.isAdult) PrefManager.getVal(PrefName.UpdateForHPlayer) else true
+        return saveAllowed && adultAllowed
+    }
+
+    private fun resolveEpisodeProgressNumber(m: Media, isZeroOnly: Boolean): String {
+        if (isZeroOnly) return "0"
+        val epKey = episodeArr.getOrNull(currentEpisodeIndex)
+        return epKey?.let { episodes[it]?.number }
+            ?: epKey
+            ?: m.anime?.selectedEpisode
+            ?: "1"
     }
 
     private fun maybeHandleSubscriptionAfterEpisodeCompletion(episodeEnd: Boolean, incognito: Boolean) {
