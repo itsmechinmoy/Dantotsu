@@ -154,26 +154,12 @@ class AnimeFragment : Fragment() {
 
         model.getPopular().observe(viewLifecycleOwner) {
             if (it != null) {
-                if (oldIncludeList == (it.onList != false)) {
-                    val prev = model.aniMangaSearchResults.results.size
-                    model.aniMangaSearchResults.results.addAll(it.results)
-                    popularAdaptor.notifyItemRangeInserted(prev, it.results.size)
-                } else {
-                    model.aniMangaSearchResults.results.addAll(it.results)
-                    popularAdaptor.notifyDataSetChanged()
-                    oldIncludeList = it.onList ?: true
-                }
-                model.aniMangaSearchResults.onList = it.onList
-                model.aniMangaSearchResults.hasNextPage = it.hasNextPage
-                model.aniMangaSearchResults.page = it.page
-                if (it.hasNextPage)
-                    progressAdaptor.bar?.visibility = View.VISIBLE
-                else {
-                    if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-                        snackString(getString(R.string.jobless_message))
-                    }
-                    progressAdaptor.bar?.visibility = View.GONE
-                }
+                HomePageAdapterHelper.handlePopularResults(
+                    it, model, popularAdaptor, progressAdaptor, oldIncludeList,
+                    { updated -> oldIncludeList = updated },
+                    { msg -> snackString(msg) },
+                    getString(R.string.jobless_message)
+                )
                 loading = false
             }
         }

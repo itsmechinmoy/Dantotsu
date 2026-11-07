@@ -284,34 +284,7 @@ class MangaPageAdapter : RecyclerView.Adapter<MangaPageAdapter.MangaPageViewHold
         more: View,
         string: String,
         media: MutableList<Media>
-    ) {
-        progress.visibility = View.GONE
-        recyclerView.setHasFixedSize(true)
-        val llm = LinearLayoutManager(
-            recyclerView.context,
-            LinearLayoutManager.HORIZONTAL,
-            false
-        ).apply {
-            initialPrefetchItemCount = 4
-        }
-        recyclerView.layoutManager = llm
-        recyclerView.adapter = adaptor
-        more.setOnClickListener {
-            MediaListViewActivity.passedMedia = media.toCollection(ArrayList())
-            ContextCompat.startActivity(
-                it.context, Intent(it.context, MediaListViewActivity::class.java)
-                    .putExtra("title", string),
-                null
-            )
-        }
-        recyclerView.visibility = View.VISIBLE
-        title.visibility = View.VISIBLE
-        more.visibility = View.VISIBLE
-        title.startAnimation(setSlideUp())
-        more.startAnimation(setSlideUp())
-        recyclerView.layoutAnimation =
-            LayoutAnimationController(setSlideIn(), 0.25f)
-    }
+    ) = HomePageAdapterHelper.initMediaRow(adaptor, recyclerView, progress, title, more, string, media)
 
     fun updateAvatar() {
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
