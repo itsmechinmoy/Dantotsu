@@ -37,103 +37,8 @@ class NovelReaderSettingsDialogFragment : BottomSheetDialogFragment() {
         super.onViewCreated(view, savedInstanceState)
         val activity = requireActivity() as NovelReaderActivity
         val settings = activity.defaultSettings
-        val themeLabels = activity.themes.map { it.name }
-        binding.themeSelect.adapter =
-            NoPaddingArrayAdapter(activity, R.layout.item_dropdown, themeLabels)
-        var initialThemeSet = true
-        var themeDebounceJob: Job? = null
-        binding.themeSelect.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(
-                parent: AdapterView<*>?,
-                view: View?,
-                position: Int,
-                id: Long
-            ) {
-                if (initialThemeSet) {
-                    initialThemeSet = false
-                    return
-                }
-                val newTheme = themeLabels[position]
-                if (newTheme != settings.currentThemeName) {
-                    settings.currentThemeName = newTheme
-                    themeDebounceJob?.cancel()
-                    themeDebounceJob = viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
-                        delay(150)
-                        activity.applySettings()
-                    }
-                }
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        val fontLabels = listOf(
-            "Default",
-            "Sans-Serif",
-            "Serif",
-            "Monospace",
-            "Poppins",
-            "OpenDyslexic",
-            "Cursive",
-            "AccessibleDfA",
-            "IA Writer Duospace"
-        )
-        binding.fontSelect.adapter =
-            NoPaddingArrayAdapter(activity, R.layout.item_dropdown, fontLabels)
-        val currentFont = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, "Default")
-        val fontIndex = fontLabels.indexOf(currentFont).coerceAtLeast(0)
-        binding.fontSelect.setSelection(fontIndex, false)
-
-        var fontDebounceJob: Job? = null
-        binding.fontSelect.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(
-                parent: AdapterView<*>?,
-                view: View?,
-                position: Int,
-                id: Long
-            ) {
-                val newFont = fontLabels.getOrNull(position) ?: return
-                val savedFont = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, "Default")
-                if (newFont != savedFont) {
-                    PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, newFont)
-                    fontDebounceJob?.cancel()
-                    fontDebounceJob = viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
-                        delay(100)
-                        activity.applySettings()
-                    }
-                }
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        // Font Size
-        val currentFontSize = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, 100)
-        binding.fontSize.setText(currentFontSize.toString())
-        binding.fontSize.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                val value = binding.fontSize.text.toString().toIntOrNull() ?: 100
-                val clamped = value.coerceIn(50, 300)
-                PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, clamped)
-                binding.fontSize.setText(clamped.toString())
-                activity.applySettings()
-            }
-        }
-        binding.incrementFontSize.setOnClickListener {
-            val value = binding.fontSize.text.toString().toIntOrNull() ?: 100
-            val newValue = (value + 5).coerceAtMost(300)
-            PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, newValue)
-            binding.fontSize.setText(newValue.toString())
-            activity.applySettings()
-        }
-        binding.decrementFontSize.setOnClickListener {
-            val value = binding.fontSize.text.toString().toIntOrNull() ?: 100
-            val newValue = (value - 5).coerceAtLeast(50)
-            PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, newValue)
-            binding.fontSize.setText(newValue.toString())
-            activity.applySettings()
-        }
-
+        setupThemesAndFonts(activity, settings)
+        setupFontSizeControls(activity)
         binding.useOledTheme.isChecked = settings.useOledTheme
         binding.useOledTheme.setOnCheckedChangeListener { _, isChecked ->
             settings.useOledTheme = isChecked
@@ -348,4 +253,107 @@ class NovelReaderSettingsDialogFragment : BottomSheetDialogFragment() {
         fun newInstance() = NovelReaderSettingsDialogFragment()
         const val TAG = "NovelReaderSettingsDialogFragment"
     }
+    private fun setupThemesAndFonts(activity: NovelReaderActivity, settings: CurrentNovelReaderSettings) {
+        val themeLabels = activity.themes.map { it.name }
+        binding.themeSelect.adapter =
+            NoPaddingArrayAdapter(activity, R.layout.item_dropdown, themeLabels)
+        var initialThemeSet = true
+        var themeDebounceJob: Job? = null
+        binding.themeSelect.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+                if (initialThemeSet) {
+                    initialThemeSet = false
+                    return
+                }
+                val newTheme = themeLabels[position]
+                if (newTheme != settings.currentThemeName) {
+                    settings.currentThemeName = newTheme
+                    themeDebounceJob?.cancel()
+                    themeDebounceJob = viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                        delay(150)
+                        activity.applySettings()
+                    }
+                }
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        val fontLabels = listOf(
+            "Default",
+            "Sans-Serif",
+            "Serif",
+            "Monospace",
+            "Poppins",
+            "OpenDyslexic",
+            "Cursive",
+            "AccessibleDfA",
+            "IA Writer Duospace"
+        )
+        binding.fontSelect.adapter =
+            NoPaddingArrayAdapter(activity, R.layout.item_dropdown, fontLabels)
+        val currentFont = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, "Default")
+        val fontIndex = fontLabels.indexOf(currentFont).coerceAtLeast(0)
+        binding.fontSelect.setSelection(fontIndex, false)
+
+        var fontDebounceJob: Job? = null
+        binding.fontSelect.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+                val newFont = fontLabels.getOrNull(position) ?: return
+                val savedFont = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, "Default")
+                if (newFont != savedFont) {
+                    PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, newFont)
+                    fontDebounceJob?.cancel()
+                    fontDebounceJob = viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                        delay(100)
+                        activity.applySettings()
+                    }
+                }
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+    }
+
+    private fun setupFontSizeControls(activity: NovelReaderActivity) {
+        // Font Size
+        val currentFontSize = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, 100)
+        binding.fontSize.setText(currentFontSize.toString())
+        binding.fontSize.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val value = binding.fontSize.text.toString().toIntOrNull() ?: 100
+                val clamped = value.coerceIn(50, 300)
+                PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, clamped)
+                binding.fontSize.setText(clamped.toString())
+                activity.applySettings()
+            }
+        }
+        binding.incrementFontSize.setOnClickListener {
+            val value = binding.fontSize.text.toString().toIntOrNull() ?: 100
+            val newValue = (value + 5).coerceAtMost(300)
+            PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, newValue)
+            binding.fontSize.setText(newValue.toString())
+            activity.applySettings()
+        }
+        binding.decrementFontSize.setOnClickListener {
+            val value = binding.fontSize.text.toString().toIntOrNull() ?: 100
+            val newValue = (value - 5).coerceAtLeast(50)
+            PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_FONT_SIZE_PX, newValue)
+            binding.fontSize.setText(newValue.toString())
+            activity.applySettings()
+        }
+
+    }
+
 }
