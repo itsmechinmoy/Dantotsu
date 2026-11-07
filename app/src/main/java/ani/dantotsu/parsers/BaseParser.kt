@@ -123,73 +123,10 @@ abstract class BaseParser {
 
             val mainRatio = response?.let { fuzzyMatch(it.name, mediaObj.mainName()) } ?: 0
             if (response == null || mainRatio < 85) {
-                setUserText("Searching : ${mediaObj.nameRomaji}")
-                Logger.log("Searching : ${mediaObj.nameRomaji}")
-                val romajiResults = search(mediaObj.nameRomaji)
-                val sortedRomajiResults = if (romajiResults.isNotEmpty()) {
-                    romajiResults.sortedByDescending {
-                        fuzzyMatch(it.name, mediaObj.nameRomaji)
-                    }
-                } else {
-                    emptyList()
-                }
-                val closestRomaji = sortedRomajiResults.firstOrNull()
-                Logger.log("Closest match from RomajiResults: ${closestRomaji?.name ?: "None"}")
-
-                response = if (response == null) {
-                    Logger.log("No exact match found in results. Using closest match from RomajiResults.")
-                    closestRomaji
-                } else {
-                    val romajiRatio = closestRomaji?.let { fuzzyMatch(it.name, mediaObj.nameRomaji) } ?: 0
-                    Logger.log("Fuzzy ratio for closest match in results: $mainRatio for ${response.name.lowercase()}")
-                    Logger.log("Fuzzy ratio for closest match in RomajiResults: $romajiRatio for ${closestRomaji?.name?.lowercase() ?: "None"}")
-
-                    if (romajiRatio > mainRatio) {
-                        Logger.log("RomajiResults has a closer match. Replacing response.")
-                        closestRomaji
-                    } else {
-                        Logger.log("Results has a closer or equal match. Keeping existing response.")
-                        response
-                    }
-                }
+                response = searchRomajiCandidate(mediaObj, response, mainRatio, ::fuzzyMatch)
             }
-
-            val bestRatio = response?.let { fuzzyMatch(it.name, mediaObj.mainName()) } ?: 0
-            if (response == null || bestRatio < 80) {
-                for (synonym in mediaObj.synonyms.take(4)) {
-                    if (synonym.isBlank() || synonym == mediaObj.mainName() || synonym == mediaObj.nameRomaji) continue
-                    setUserText("Searching : $synonym")
-                    Logger.log("Searching : $synonym")
-                    val synonymResults = try {
-                        search(synonym)
-                    } catch (e: Exception) {
-                        Logger.log("Synonym search failed for $synonym: $e")
-                        emptyList()
-                    }
-                    val sortedSynonymResults = if (synonymResults.isNotEmpty()) {
-                        synonymResults.sortedByDescending {
-                            fuzzyMatch(it.name, synonym)
-                        }
-                    } else {
-                        emptyList()
-                    }
-                    val closestSynonym = sortedSynonymResults.firstOrNull()
-                    if (closestSynonym != null) {
-                        val synonymRatio = fuzzyMatch(closestSynonym.name, synonym)
-                        if (synonymRatio >= 80) {
-                            val currentRatio = if (response != null) fuzzyMatch(response.name, mediaObj.mainName()) else 0
-                            if (synonymRatio > currentRatio) {
-                                Logger.log("Synonym search found a better match: ${closestSynonym.name}")
-                                response = closestSynonym
-                                if (synonymRatio >= 85) {
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            saveShowResponse(mediaObj.id, response)
+            response = searchSynonymCandidates(mediaObj, response, ::fuzzyMatch)
+                        saveShowResponse(mediaObj.id, response)
         }
         return response
     }
@@ -436,4 +373,59 @@ data class ShowResponse(
     companion object {
         private const val serialVersionUID = 1L
     }
+    private suspend fun searchRomajiCandidate(
+        mediaObj: Media,
+        currentResponse: ShowResponse?,
+        mainRatio: Int,
+        fuzzyMatch: (String, String) -> Int
+    ): ShowResponse? {
+        setUserText("Searching : ${mediaObj.nameRomaji}")
+        Logger.log("Searching : ${mediaObj.nameRomaji}")
+        val romajiResults = search(mediaObj.nameRomaji)
+        val sortedRomajiResults = if (romajiResults.isNotEmpty()) {
+            romajiResults.sortedByDescending { fuzzyMatch(it.name, mediaObj.nameRomaji) }
+        } else emptyList()
+        val closestRomaji = sortedRomajiResults.firstOrNull()
+        Logger.log("Closest match from RomajiResults: ${closestRomaji?.name ?: "None"}")
+
+        return if (currentResponse == null) {
+            closestRomaji
+        } else {
+            val romajiRatio = closestRomaji?.let { fuzzyMatch(it.name, mediaObj.nameRomaji) } ?: 0
+            if (romajiRatio > mainRatio) closestRomaji else currentResponse
+        }
+    }
+
+    private suspend fun searchSynonymCandidates(
+        mediaObj: Media,
+        currentBest: ShowResponse?,
+        fuzzyMatch: (String, String) -> Int
+    ): ShowResponse? {
+        var response = currentBest
+        val bestRatio = response?.let { fuzzyMatch(it.name, mediaObj.mainName()) } ?: 0
+        if (response != null && bestRatio >= 80) return response
+
+        for (synonym in mediaObj.synonyms.take(4)) {
+            if (synonym.isBlank() || synonym == mediaObj.mainName() || synonym == mediaObj.nameRomaji) continue
+            setUserText("Searching : $synonym")
+            val synonymResults = try {
+                search(synonym)
+            } catch (e: Exception) {
+                emptyList()
+            }
+            val closestSynonym = synonymResults.maxByOrNull { fuzzyMatch(it.name, synonym) }
+            if (closestSynonym != null) {
+                val synonymRatio = fuzzyMatch(closestSynonym.name, synonym)
+                if (synonymRatio >= 80) {
+                    val currentRatio = if (response != null) fuzzyMatch(response.name, mediaObj.mainName()) else 0
+                    if (synonymRatio > currentRatio) {
+                        response = closestSynonym
+                        if (synonymRatio >= 85) break
+                    }
+                }
+            }
+        }
+        return response
+    }
+
 }

@@ -286,53 +286,12 @@ object ExtensionRepoMetaHelper {
                 if (responseBytes.isEmpty()) continue
                 val firstByte = responseBytes[0]
 
-                if (firstByte == 0x7B.toByte()) { // '{'
-                    val bodyString = responseBytes.toString(Charsets.UTF_8)
-                    val store = runCatching {
-                        json.decodeFromString<NetworkExtensionStore>(bodyString)
-                    }.getOrNull()
-
-                    val legacyRepo = runCatching {
-                        json.decodeFromString<NetworkLegacyExtensionRepo>(bodyString)
-                    }.getOrNull()
-
-                    val name = store?.name?.takeIf { it.isNotBlank() }
-                        ?: legacyRepo?.meta?.name?.takeIf { it.isNotBlank() }
-                        ?: ""
-                    val shortName = store?.badgeLabel?.takeIf { it.isNotBlank() }
-                        ?: legacyRepo?.meta?.shortName?.takeIf { it.isNotBlank() }
-                    val website = store?.contact?.website?.takeIf { it.isNotBlank() }
-                        ?: legacyRepo?.meta?.website?.takeIf { it.isNotBlank() }
-                        ?: ""
-                    val discord = store?.contact?.discord?.takeIf { it.isNotBlank() }
-
-                    if (name.isNotBlank() || !shortName.isNullOrBlank() || website.isNotBlank() || discord != null) {
-                        fetchedMeta = saveMeta(
-                            repoUrl = repoUrl,
-                            name = name,
-                            shortName = shortName,
-                            website = website,
-                            discord = discord
-                        )
-                        break
-                    }
-                } else if (firstByte != 0x5B.toByte()) { // Protobuf
-                    val metaOnly = runCatching {
-                        ProtoBuf.decodeFromByteArray<NetworkExtensionStoreMetaOnly>(responseBytes)
-                    }.getOrNull()
-
-                    if (metaOnly != null && (metaOnly.name.isNotBlank() || metaOnly.badgeLabel.isNotBlank())) {
-                        fetchedMeta = saveMeta(
-                            repoUrl = repoUrl,
-                            name = metaOnly.name,
-                            shortName = metaOnly.badgeLabel,
-                            website = metaOnly.contact.website,
-                            discord = metaOnly.contact.discord
-                        )
-                        break
-                    }
+                val meta = parseRepoResponseBytes(repoUrl, responseBytes)
+                if (meta != null) {
+                    fetchedMeta = meta
+                    break
                 }
-            } catch (_: Throwable) {
+                        } catch (_: Throwable) {
                 // Continue to next candidate
             }
         }
@@ -362,4 +321,40 @@ object ExtensionRepoMetaHelper {
             this
         }
     }
+    private fun parseRepoResponseBytes(repoUrl: String, responseBytes: ByteArray): ExtensionRepoMeta? {
+        val firstByte = responseBytes.getOrNull(0) ?: return null
+        if (firstByte == 0x7B.toByte()) {
+            val bodyString = responseBytes.toString(Charsets.UTF_8)
+            val store = runCatching { json.decodeFromString<NetworkExtensionStore>(bodyString) }.getOrNull()
+            val legacyRepo = runCatching { json.decodeFromString<NetworkLegacyExtensionRepo>(bodyString) }.getOrNull()
+
+            val name = store?.name?.takeIf { it.isNotBlank() }
+                ?: legacyRepo?.meta?.name?.takeIf { it.isNotBlank() } ?: ""
+            val shortName = store?.badgeLabel?.takeIf { it.isNotBlank() }
+                ?: legacyRepo?.meta?.shortName?.takeIf { it.isNotBlank() }
+            val website = store?.contact?.website?.takeIf { it.isNotBlank() }
+                ?: legacyRepo?.meta?.website?.takeIf { it.isNotBlank() } ?: ""
+            val discord = store?.contact?.discord?.takeIf { it.isNotBlank() }
+
+            if (name.isNotBlank() || !shortName.isNullOrBlank() || website.isNotBlank() || discord != null) {
+                return saveMeta(repoUrl = repoUrl, name = name, shortName = shortName, website = website, discord = discord)
+            }
+        } else if (firstByte != 0x5B.toByte()) {
+            val metaOnly = runCatching {
+                ProtoBuf.decodeFromByteArray<NetworkExtensionStoreMetaOnly>(responseBytes)
+            }.getOrNull()
+
+            if (metaOnly != null && (metaOnly.name.isNotBlank() || metaOnly.badgeLabel.isNotBlank())) {
+                return saveMeta(
+                    repoUrl = repoUrl,
+                    name = metaOnly.name,
+                    shortName = metaOnly.badgeLabel,
+                    website = metaOnly.contact.website,
+                    discord = metaOnly.contact.discord
+                )
+            }
+        }
+        return null
+    }
+
 }
