@@ -316,8 +316,12 @@ class WebGpuReaderView(
         val url = image.url.url
         if (url.isEmpty()) return@withContext null
 
+        openLocalStream(url) ?: openCacheOrNetworkStream(image, url)
+    }
+
+    private fun openLocalStream(url: String): ByteArrayInputStream? {
         if (url.startsWith("content://")) {
-            return@withContext try {
+            return try {
                 val bytes = activity.contentResolver.openInputStream(Uri.parse(url))?.use { it.readBytes() }
                 bytes?.let { ByteArrayInputStream(it) }
             } catch (e: Exception) {
@@ -328,7 +332,7 @@ class WebGpuReaderView(
 
         val localFile = File(url)
         if (localFile.exists()) {
-            return@withContext try {
+            return try {
                 val bytes = localFile.inputStream().use { it.readBytes() }
                 ByteArrayInputStream(bytes)
             } catch (e: Exception) {
@@ -336,8 +340,10 @@ class WebGpuReaderView(
                 null
             }
         }
+        return null
+    }
 
-        // 1. Check MangaCache for ImageData with source (handles cookies, Cloudflare, headers)
+    private fun openCacheOrNetworkStream(image: MangaImage, url: String): ByteArrayInputStream? {
         try {
             val mangaCache = Injekt.get<MangaCache>()
             val imageData = mangaCache.get(url)
@@ -345,7 +351,7 @@ class WebGpuReaderView(
                 val response = imageData.source.getImage(imageData.page)
                 if (response.isSuccessful) {
                     val bytes = response.body.byteStream().use { it.readBytes() }
-                    return@withContext ByteArrayInputStream(bytes)
+                    return ByteArrayInputStream(bytes)
                 } else {
                     Logger.log("WebGpuReaderView: source.getImage response code: ${response.code}")
                 }
@@ -354,14 +360,13 @@ class WebGpuReaderView(
             Logger.log("WebGpuReaderView: source.getImage error: ${e.message}")
         }
 
-        // 2. Network fallback with OkHttpClient
-        try {
+        return try {
             val okHttpClient = Injekt.get<OkHttpClient>()
             val requestBuilder = Request.Builder().url(url)
             image.url.headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
             val response = okHttpClient.newCall(requestBuilder.build()).execute()
             if (response.isSuccessful) {
-                val bytes = response.body?.byteStream()?.use { it.readBytes() } ?: return@withContext null
+                val bytes = response.body?.byteStream()?.use { it.readBytes() } ?: return null
                 ByteArrayInputStream(bytes)
             } else {
                 Logger.log("WebGpuReaderView: network fallback response code: ${response.code}")

@@ -354,80 +354,82 @@ class MangaChapterAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        val ep = arr[position]
         when (holder) {
-            is ChapterCompactViewHolder -> {
-                val binding = holder.binding
-                setAnimation(fragment.requireContext(), holder.binding.root)
-                val ep = arr[position]
-                val parsedNumber = MediaNameAdapter.findChapterNumber(ep.number)?.toInt()
-                binding.itemEpisodeNumber.text = parsedNumber?.toString() ?: ep.number
-                if (media.userProgress != null) {
-                    if ((MediaNameAdapter.findChapterNumber(ep.number)
-                            ?: 9999f) <= media.userProgress!!.toFloat()
+            is ChapterCompactViewHolder -> bindChapterCompact(holder, ep)
+            is ChapterListViewHolder -> bindChapterList(holder, ep)
+        }
+    }
+
+    private fun bindChapterCompact(holder: ChapterCompactViewHolder, ep: Episode) {
+        val binding = holder.binding
+        setAnimation(fragment.requireContext(), holder.binding.root)
+        val parsedNumber = MediaNameAdapter.findChapterNumber(ep.number)?.toInt()
+        binding.itemEpisodeNumber.text = parsedNumber?.toString() ?: ep.number
+        if (media.userProgress != null) {
+            if ((MediaNameAdapter.findChapterNumber(ep.number)
+                    ?: 9999f) <= media.userProgress!!.toFloat()
+            ) {
+                binding.itemEpisodeViewedCover.visibility = View.VISIBLE
+            } else {
+                binding.itemEpisodeViewedCover.visibility = View.GONE
+                binding.itemEpisodeCont.setOnLongClickListener {
+                    updateProgress(
+                        media,
+                        MediaNameAdapter.findChapterNumber(ep.number).toString()
                     )
-                        binding.itemEpisodeViewedCover.visibility = View.VISIBLE
-                    else {
-                        binding.itemEpisodeViewedCover.visibility = View.GONE
-                        binding.itemEpisodeCont.setOnLongClickListener {
-                            updateProgress(
-                                media,
-                                MediaNameAdapter.findChapterNumber(ep.number).toString()
-                            )
-                            true
-                        }
-                    }
+                    true
                 }
             }
+        }
+    }
 
-            is ChapterListViewHolder -> {
-                val binding = holder.binding
-                val ep = arr[position]
-                holder.bind(ep, ep.progress)
-                setAnimation(fragment.requireContext(), holder.binding.root)
-                binding.itemChapterNumber.text = ep.number
+    private fun bindChapterList(holder: ChapterListViewHolder, ep: Episode) {
+        val binding = holder.binding
+        holder.bind(ep, ep.progress)
+        setAnimation(fragment.requireContext(), holder.binding.root)
+        binding.itemChapterNumber.text = ep.number
 
-                if (ep.date != null) {
-                    binding.itemChapterDateLayout.visibility = View.VISIBLE
-                    binding.itemChapterDate.text = formatDate(ep.date)
-                }
-                if (ep.scanlator != null) {
-                    binding.itemChapterDateLayout.visibility = View.VISIBLE
-                    binding.itemChapterScan.text = ep.scanlator.replaceFirstChar {
-                        if (it.isLowerCase()) it.titlecase(
-                            Locale.ROOT
-                        ) else it.toString()
-                    }
-                }
-                if (formatDate(ep.date) == "" || ep.scanlator == null) {
-                    binding.itemChapterDateDivider.visibility = View.GONE
-                } else binding.itemChapterDateDivider.visibility = View.VISIBLE
+        if (ep.date != null) {
+            binding.itemChapterDateLayout.visibility = View.VISIBLE
+            binding.itemChapterDate.text = formatDate(ep.date)
+        }
+        if (ep.scanlator != null) {
+            binding.itemChapterDateLayout.visibility = View.VISIBLE
+            binding.itemChapterScan.text = ep.scanlator.replaceFirstChar {
+                if (it.isLowerCase()) it.titlecase(
+                    Locale.ROOT
+                ) else it.toString()
+            }
+        }
+        if (formatDate(ep.date) == "" || ep.scanlator == null) {
+            binding.itemChapterDateDivider.visibility = View.GONE
+        } else binding.itemChapterDateDivider.visibility = View.VISIBLE
 
-                if (ep.progress.isNullOrEmpty()) {
-                    binding.itemChapterTitle.visibility = View.GONE
-                } else binding.itemChapterTitle.visibility = View.VISIBLE
+        if (ep.progress.isNullOrEmpty()) {
+            binding.itemChapterTitle.visibility = View.GONE
+        } else binding.itemChapterTitle.visibility = View.VISIBLE
 
-                if (media.userProgress != null) {
-                    if ((MediaNameAdapter.findChapterNumber(ep.number)
-                            ?: 9999f) <= media.userProgress!!.toFloat()
-                    ) {
-                        binding.itemEpisodeViewedCover.visibility = View.VISIBLE
-                        binding.itemEpisodeViewed.visibility = View.VISIBLE
-                    } else {
-                        binding.itemEpisodeViewedCover.visibility = View.GONE
-                        binding.itemEpisodeViewed.visibility = View.GONE
-                        binding.root.setOnLongClickListener {
-                            updateProgress(
-                                media,
-                                MediaNameAdapter.findChapterNumber(ep.number).toString()
-                            )
-                            true
-                        }
-                    }
-                } else {
-                    binding.itemEpisodeViewedCover.visibility = View.GONE
-                    binding.itemEpisodeViewed.visibility = View.GONE
+        if (media.userProgress != null) {
+            if ((MediaNameAdapter.findChapterNumber(ep.number)
+                    ?: 9999f) <= media.userProgress!!.toFloat()
+            ) {
+                binding.itemEpisodeViewedCover.visibility = View.VISIBLE
+                binding.itemEpisodeViewed.visibility = View.VISIBLE
+            } else {
+                binding.itemEpisodeViewedCover.visibility = View.GONE
+                binding.itemEpisodeViewed.visibility = View.GONE
+                binding.root.setOnLongClickListener {
+                    updateProgress(
+                        media,
+                        MediaNameAdapter.findChapterNumber(ep.number).toString()
+                    )
+                    true
                 }
             }
+        } else {
+            binding.itemEpisodeViewedCover.visibility = View.GONE
+            binding.itemEpisodeViewed.visibility = View.GONE
         }
     }
 

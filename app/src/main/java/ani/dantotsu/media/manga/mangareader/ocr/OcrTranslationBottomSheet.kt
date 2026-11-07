@@ -151,89 +151,13 @@ class OcrTranslationBottomSheet : BottomSheetDialogFragment() {
             val image = InputImage.fromBitmap(safeBitmap, 0)
             val ctx = context?.applicationContext
 
-            // 1. Attempt Japanese text recognition first
-            var text = ""
-            try {
-                val jpRecognizer = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
-
-                if (ctx != null) {
-                    try {
-                        val moduleInstallClient = ModuleInstall.getClient(ctx)
-                        val isAvailable = suspendCancellableCoroutine<Boolean> { cont ->
-                            moduleInstallClient.areModulesAvailable(jpRecognizer)
-                                .addOnSuccessListener { response ->
-                                    cont.resume(response.areModulesAvailable())
-                                }
-                                .addOnFailureListener {
-                                    cont.resume(false)
-                                }
-                        }
-
-                        if (!isAvailable) {
-                            withContext(Dispatchers.Main) {
-                                if (isAdded) binding.ocrStatusText.text = "Downloading Japanese OCR model..."
-                            }
-                            suspendCancellableCoroutine<Boolean> { cont ->
-                                val listener = InstallStatusListener { statusUpdate ->
-                                    when (statusUpdate.installState) {
-                                        ModuleInstallStatusUpdate.InstallState.STATE_DOWNLOADING -> {
-                                            val info = statusUpdate.progressInfo
-                                            if (info != null && info.totalBytesToDownload > 0) {
-                                                val percent = (info.bytesDownloaded * 100 / info.totalBytesToDownload).toInt()
-                                                lifecycleScope.launch(Dispatchers.Main) {
-                                                    if (isAdded) binding.ocrStatusText.text = "Downloading Japanese OCR model ($percent%)..."
-                                                }
-                                            }
-                                        }
-                                        ModuleInstallStatusUpdate.InstallState.STATE_COMPLETED -> {
-                                            lifecycleScope.launch(Dispatchers.Main) {
-                                                if (isAdded) binding.ocrStatusText.text = "Initializing recognizer..."
-                                            }
-                                        }
-                                    }
-                                }
-                                val request = ModuleInstallRequest.newBuilder()
-                                    .addApi(jpRecognizer)
-                                    .setListener(listener)
-                                    .build()
-
-                                moduleInstallClient.installModules(request)
-                                    .addOnSuccessListener {
-                                        cont.resume(true)
-                                    }
-                                    .addOnFailureListener {
-                                        cont.resume(false)
-                                    }
-                            }
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-
-                withContext(Dispatchers.Main) {
-                    if (isAdded) binding.ocrStatusText.text = "Recognizing text..."
-                }
-                text = processWithRecognizer(jpRecognizer, image)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                text = ""
-            }
-
-            // 2. Fallback to default Latin recognizer if Japanese produces blank text or fails
+            var text = attemptJapaneseRecognition(ctx, image)
             if (text.isBlank()) {
                 withContext(Dispatchers.Main) {
                     if (isAdded) binding.ocrStatusText.text = "Recognizing text (Latin fallback)..."
                 }
-                text = try {
-                    val latinRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                    processWithRecognizer(latinRecognizer, image)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    ""
-                }
+                text = attemptLatinRecognition(image)
             }
-
             text
         } finally {
             if (isCopy) {
@@ -242,11 +166,79 @@ class OcrTranslationBottomSheet : BottomSheetDialogFragment() {
         }
     }
 
-    /**
-     * Translate [text] to English using a fallback chain:
-     *   1. Google Translate (client=dict-chrome-ex, unauthenticated & unblocked)
-     *   2. MyMemory         (free, 5 000 chars/day, with detected language)
-     */
+    private suspend fun attemptJapaneseRecognition(ctx: Context?, image: InputImage): String {
+        return try {
+            val jpRecognizer = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
+            if (ctx != null) {
+                ensureJpModelInstalled(ctx, jpRecognizer)
+            }
+            withContext(Dispatchers.Main) {
+                if (isAdded) binding.ocrStatusText.text = "Recognizing text..."
+            }
+            processWithRecognizer(jpRecognizer, image)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            ""
+        }
+    }
+
+    private suspend fun ensureJpModelInstalled(ctx: Context, jpRecognizer: com.google.mlkit.vision.text.TextRecognizer) {
+        try {
+            val moduleInstallClient = ModuleInstall.getClient(ctx)
+            val isAvailable = suspendCancellableCoroutine<Boolean> { cont ->
+                moduleInstallClient.areModulesAvailable(jpRecognizer)
+                    .addOnSuccessListener { response -> cont.resume(response.areModulesAvailable()) }
+                    .addOnFailureListener { cont.resume(false) }
+            }
+
+            if (!isAvailable) {
+                withContext(Dispatchers.Main) {
+                    if (isAdded) binding.ocrStatusText.text = "Downloading Japanese OCR model..."
+                }
+                suspendCancellableCoroutine<Boolean> { cont ->
+                    val listener = InstallStatusListener { statusUpdate ->
+                        when (statusUpdate.installState) {
+                            ModuleInstallStatusUpdate.InstallState.STATE_DOWNLOADING -> {
+                                val info = statusUpdate.progressInfo
+                                if (info != null && info.totalBytesToDownload > 0) {
+                                    val percent = (info.bytesDownloaded * 100 / info.totalBytesToDownload).toInt()
+                                    lifecycleScope.launch(Dispatchers.Main) {
+                                        if (isAdded) binding.ocrStatusText.text = "Downloading Japanese OCR model ($percent%)..."
+                                    }
+                                }
+                            }
+                            ModuleInstallStatusUpdate.InstallState.STATE_COMPLETED -> {
+                                lifecycleScope.launch(Dispatchers.Main) {
+                                    if (isAdded) binding.ocrStatusText.text = "Initializing recognizer..."
+                                }
+                            }
+                        }
+                    }
+                    val request = ModuleInstallRequest.newBuilder()
+                        .addApi(jpRecognizer)
+                        .setListener(listener)
+                        .build()
+
+                    moduleInstallClient.installModules(request)
+                        .addOnSuccessListener { cont.resume(true) }
+                        .addOnFailureListener { cont.resume(false) }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private suspend fun attemptLatinRecognition(image: InputImage): String {
+        return try {
+            val latinRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+            processWithRecognizer(latinRecognizer, image)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            ""
+        }
+    }
+
     private suspend fun translateText(text: String): String = withContext(Dispatchers.IO) {
         translateWithGoogle(text)
             ?: translateWithMyMemory(text)
