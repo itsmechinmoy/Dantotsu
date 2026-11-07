@@ -60,6 +60,7 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.toPx
+import ani.dantotsu.media.setupMediaScrollTop
 import ani.dantotsu.util.StoragePermissions.Companion.accessAlertDialog
 import ani.dantotsu.util.StoragePermissions.Companion.hasDirAccess
 import ani.dantotsu.util.customAlertDialog
@@ -203,25 +204,14 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
     }
 
     private fun setupScrollTop(gridLayoutManager: GridLayoutManager) {
-        binding.ScrollTop.setOnClickListener {
-            binding.mediaSourceRecycler.scrollToPosition(10)
-            binding.mediaSourceRecycler.smoothScrollToPosition(0)
-        }
-        binding.mediaSourceRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                val position = gridLayoutManager.findFirstVisibleItemPosition()
-                if (position > 2) {
-                    binding.ScrollTop.translationY = -(navBarHeight + 12.toPx).toFloat()
-                    binding.ScrollTop.visibility = View.VISIBLE
-                } else {
-                    binding.ScrollTop.visibility = View.GONE
-                }
-            }
-        })
-        model.scrolledToTop.observe(viewLifecycleOwner) {
-            if (it) binding.mediaSourceRecycler.scrollToPosition(0)
-        }
+        setupMediaScrollTop(
+            binding.mediaSourceRecycler,
+            binding.ScrollTop,
+            gridLayoutManager,
+            navBarHeight,
+            model.scrolledToTop,
+            viewLifecycleOwner
+        )
     }
 
     private fun setupMediaObserver() {

@@ -46,6 +46,7 @@ import ani.dantotsu.media.novel.novelreader.NovelReaderActivity
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.setBaseline
 import ani.dantotsu.toPx
+import ani.dantotsu.media.setupMediaScrollTop
 import ani.dantotsu.isOnline
 import ani.dantotsu.parsers.ShowResponse
 import ani.dantotsu.settings.saving.PrefManager
@@ -484,33 +485,20 @@ class NovelReadFragment : Fragment(),
     }
 
     private fun setupScrollTop(gridLayoutManager: androidx.recyclerview.widget.GridLayoutManager) {
-        binding.ScrollTop.setOnClickListener {
-            binding.mediaSourceRecycler.scrollToPosition(10)
-            binding.mediaSourceRecycler.smoothScrollToPosition(0)
-        }
-        binding.mediaSourceRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                val position = gridLayoutManager.findFirstVisibleItemPosition()
-                if (position > 2) {
-                    binding.ScrollTop.translationY = -(navBarHeight + 12.toPx).toFloat()
-                    binding.ScrollTop.visibility = View.VISIBLE
-                } else {
-                    binding.ScrollTop.visibility = View.GONE
-                }
-            }
-        })
-        model.scrolledToTop.observe(viewLifecycleOwner) {
-            if (it) binding.mediaSourceRecycler.scrollToPosition(0)
-        }
+        setupMediaScrollTop(
+            binding.mediaSourceRecycler,
+            binding.ScrollTop,
+            gridLayoutManager,
+            navBarHeight,
+            model.scrolledToTop,
+            viewLifecycleOwner
+        )
     }
 
     private fun setupMediaObserver() {
         continueEp = model.continueMedia ?: false
-        model.getMedia().observe(viewLifecycleOwner) {
-            if (it != null) {
-                handleMediaLoaded(it)
-            }
+        model.getMedia().observe(viewLifecycleOwner) { novelMedia ->
+            novelMedia?.let { handleMediaLoaded(it) }
         }
     }
 
