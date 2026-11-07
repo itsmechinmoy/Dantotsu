@@ -433,13 +433,22 @@ class DownloadsManager(private val context: Context) {
         ): DocumentFile? {
             val validName = name.findValidName()
             synchronized(lock) {
-                return if (overwrite) {
+                if (overwrite) {
                     findFolder(validName)?.delete()
-                    createDirectory(validName)
-                } else {
-                    val folder = findFolder(validName)
-                    folder ?: createDirectory(validName)
+                    return createDirectory(validName)
                 }
+                val existing = findFolder(validName)
+                if (existing != null) return existing
+                val newDir = createDirectory(validName) ?: return null
+                val newName = newDir.name ?: return newDir
+                if (newName != validName && newName.matches(Regex(".*\\s*\\(\\d+\\)$"))) {
+                    val realFolder = findFolder(validName)
+                    if (realFolder != null && realFolder.uri != newDir.uri) {
+                        try { newDir.delete() } catch (_: Exception) {}
+                        return realFolder
+                    }
+                }
+                return newDir
             }
         }
 

@@ -189,9 +189,10 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     private fun fail(resId: Int) {
         val ctx = context ?: currContext() ?: return
         ContextCompat.getMainExecutor(ctx).execute {
-            snackString(getString(resId))
+            val msg = tryWith { getString(resId) } ?: tryWith { ctx.getString(resId) }
+            if (msg != null) snackString(msg)
             tryWith {
-                dismissAllowingStateLoss()
+                if (isAdded) dismissAllowingStateLoss()
             }
         }
     }
@@ -631,7 +632,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     }
 
     private fun failToSelectorList(ep: Episode) {
-        snackString(getString(R.string.auto_select_server_error))
+        val msg = tryWith { getString(R.string.auto_select_server_error) } ?: (context ?: currContext())?.getString(R.string.auto_select_server_error)
+        if (msg != null) snackString(msg)
         media?.selected?.server = null
         media?.let { m -> m.selected?.let { sel -> model.saveSelected(m.id, sel) } }
         binding.selectorAutoListContainer.visibility = View.GONE
@@ -1235,7 +1237,17 @@ $selectedServerName"
             val isPref = video.preferred || extractor.isPreferred
             binding.urlNote.visibility = View.VISIBLE
             binding.urlNote.text = if (isPref) "${video.format.name} • Preferred" else video.format.name
-            binding.urlQuality.text = extractor.server.name
+            val hoster = video.hoster ?: extractor.server.hoster
+            val cleanServerName = if (hoster != null && extractor.server.name.startsWith("$hoster - ")) {
+                extractor.server.name.removePrefix("$hoster - ")
+            } else {
+                extractor.server.name
+            }
+            binding.urlQuality.text = if (hoster != null && cleanServerName.isNotBlank() && cleanServerName != hoster) {
+                "$hoster • $cleanServerName"
+            } else {
+                extractor.server.name
+            }
         }
 
         override fun getItemCount(): Int = extractor.videos.size

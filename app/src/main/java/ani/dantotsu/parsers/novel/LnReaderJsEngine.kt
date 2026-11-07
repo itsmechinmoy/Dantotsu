@@ -291,6 +291,11 @@ object LnReaderJsEngine {
                         var fn = target["$method"];
                         if (typeof fn !== "function") throw new Error("Method '$method' not found on plugin '$pluginId'");
                         var args = JSON.parse(${Json.encodeToString(argsJson)});
+                        if (args && args.length > 1 && typeof args[1] === "object" && args[1] !== null) {
+                            if (!args[1].filters && target.filters) {
+                                args[1].filters = target.filters;
+                            }
+                        }
                         var p = Promise.resolve(fn.apply(target, args));
                         p.then(
                             function(r) {
@@ -937,16 +942,77 @@ String.prototype.substringBetween = function(l,r){
 """.trimIndent()
 
     private val FETCH_BRIDGE_JS = """
+class Headers {
+    constructor(obj) {
+        this._map = {};
+        if (obj) {
+            if (obj instanceof Headers) {
+                for (var k in obj._map) this._map[k] = obj._map[k];
+            } else if (typeof obj === 'object') {
+                for (var k in obj) {
+                    if (Object.prototype.hasOwnProperty.call(obj, k)) {
+                        this._map[String(k).toLowerCase()] = String(obj[k]);
+                    }
+                }
+            }
+        }
+    }
+    get(name) {
+        if (!name) return null;
+        var v = this._map[String(name).toLowerCase()];
+        return v === undefined ? null : v;
+    }
+    has(name) {
+        return Object.prototype.hasOwnProperty.call(this._map, String(name).toLowerCase());
+    }
+    set(name, value) {
+        this._map[String(name).toLowerCase()] = String(value);
+    }
+    append(name, value) {
+        var key = String(name).toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(this._map, key)) {
+            this._map[key] += ", " + value;
+        } else {
+            this._map[key] = String(value);
+        }
+    }
+    delete(name) {
+        delete this._map[String(name).toLowerCase()];
+    }
+    forEach(fn) {
+        for (var k in this._map) fn(this._map[k], k, this);
+    }
+    entries() {
+        var map = this._map;
+        return Object.keys(map).map(function(k) { return [k, map[k]]; });
+    }
+    toJSON() {
+        return this._map;
+    }
+}
+globalThis.Headers = Headers;
+
 var fetchApi = function(url, init) {
     var method = (init && init.method) ? init.method.toUpperCase() : "GET";
-    var headers = (init && init.headers) ? JSON.parse(JSON.stringify(init.headers)) : {};
+    var headersObj = {};
+    if (init && init.headers) {
+        if (init.headers instanceof Headers) {
+            headersObj = init.headers.toJSON();
+        } else if (typeof init.headers === 'object') {
+            for (var hk in init.headers) {
+                if (Object.prototype.hasOwnProperty.call(init.headers, hk)) {
+                    headersObj[String(hk).toLowerCase()] = String(init.headers[hk]);
+                }
+            }
+        }
+    }
     var body = null;
     
     if (init && init.body) {
         if (init.body instanceof FormData) {
             body = init.body.toString();
-            var hasContentType = Object.keys(headers).some(function(k) { return k.toLowerCase() === 'content-type'; });
-            if (!hasContentType) headers['content-type'] = 'application/x-www-form-urlencoded';
+            var hasContentType = Object.keys(headersObj).some(function(k) { return k.toLowerCase() === 'content-type'; });
+            if (!hasContentType) headersObj['content-type'] = 'application/x-www-form-urlencoded';
         } else if (typeof init.body === "string") {
             body = init.body;
         } else {
@@ -955,28 +1021,20 @@ var fetchApi = function(url, init) {
     }
     
     if (init && init.referrer) {
-        headers['Referer'] = init.referrer;
+        headersObj['referer'] = init.referrer;
     }
     
-    var headersJson = JSON.stringify(headers);
+    var headersJson = JSON.stringify(headersObj);
     var resultStr = __dantotsuFetch.fetch(url, method, headersJson, body);
     var result = JSON.parse(resultStr);
-    var responseHeaders = result.headers || {};
-    responseHeaders.get = function(key) {
-        if (!key) return null;
-        var lk = key.toLowerCase();
-        for (var k in result.headers) {
-            if (k.toLowerCase() === lk) return result.headers[k];
-        }
-        return null;
-    };
+    var respHeaders = new Headers(result.headers || {});
     return Promise.resolve({
         status: result.statusCode,
         statusText: result.reasonPhrase,
         ok: result.statusCode >= 200 && result.statusCode < 300,
         url: result.url || url,
-        headers: responseHeaders,
-        text: function() { return Promise.resolve(result.body); },
+        headers: respHeaders,
+        text: function() { return Promise.resolve(result.body || ""); },
         json: function() { 
             try {
                 return Promise.resolve(JSON.parse(result.body));
@@ -984,16 +1042,24 @@ var fetchApi = function(url, init) {
                 return Promise.resolve({});
             }
         },
-        body: result.body
+        body: result.body || ""
     });
 };
 
 var fetchText = function(url, init) {
-    return fetchApi(url, init).then(function(res) { return res.text(); });
+    return fetchApi(url, init).then(function(res) { 
+        return res.text(); 
+    }).catch(function() { 
+        return ""; 
+    });
 };
 
 var fetch = fetchApi;
 globalThis.fetch = fetchApi;
+globalThis.TextEncoder = TextEncoder;
+globalThis.TextDecoder = TextDecoder;
+globalThis.btoa = btoa;
+globalThis.atob = atob;
 """.trimIndent()
 
     private val HTMLPARSER_JS = """

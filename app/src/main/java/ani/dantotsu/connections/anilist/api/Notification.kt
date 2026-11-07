@@ -77,8 +77,10 @@ data class Notification(
     val id: Int,
     @SerialName("userId")
     val userId: Int? = null,
-    @SerialName("CommentId")
-    val commentId: Int?,
+    @SerialName("commentId")
+    val commentId: Int? = null,
+    @SerialName("threadId")
+    val threadId: Int? = null,
     @SerialName("type")
     val notificationType: String,
     @SerialName("activityId")
@@ -107,7 +109,7 @@ data class Notification(
     val message: MessageActivity? = null,
     @SerialName("activity")
     val activity: ActivityUnion? = null,
-    @SerialName("Thread")
+    @SerialName("thread")
     val thread: Thread? = null,
     @SerialName("comment")
     val comment: ThreadComment? = null,

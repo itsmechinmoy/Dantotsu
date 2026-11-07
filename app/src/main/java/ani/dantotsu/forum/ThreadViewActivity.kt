@@ -54,7 +54,9 @@ class ThreadViewActivity : AppCompatActivity() {
         }
 
         threadId = intent.getIntExtra("threadId", -1)
-        if (threadId == -1) {
+        if (threadId <= 0) {
+            snackString("Error loading thread")
+            openLinkInCustomTab("https://anilist.co/forum")
             finish()
             return
         }
@@ -112,6 +114,11 @@ class ThreadViewActivity : AppCompatActivity() {
                 if (t != null) {
                     thread = t
                     bindThread(t)
+                } else {
+                    snackString("Unable to load thread in app. Tap to view on AniList.")
+                    binding.threadBarTitle.setOnClickListener {
+                        openLinkInCustomTab("https://anilist.co/forum/thread/$threadId")
+                    }
                 }
             }
         }

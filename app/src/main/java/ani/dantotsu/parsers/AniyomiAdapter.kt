@@ -14,6 +14,9 @@ import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.NO_HOSTER_LIST
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.copyFrom
 import eu.kanade.tachiyomi.animesource.model.SEpisode
@@ -346,18 +349,24 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
 
                         videos.map { video ->
                             val resolved = resolveVideo(source, video)
-                            val title = if (
-                                hoster.hosterName.isBlank() ||
-                                hoster.hosterName == NO_HOSTER_LIST
-                            ) {
-                                resolved.videoTitle
-                            } else {
+                            val named = hoster.hosterName.isNotBlank() &&
+                                hoster.hosterName != NO_HOSTER_LIST
+                            val title = if (named) {
                                 "${hoster.hosterName} - ${resolved.videoTitle}"
+                            } else {
+                                resolved.videoTitle
                             }
 
                             resolved.copy(
                                 videoTitle = title,
-                                initialized = true
+                                initialized = true,
+                                memo = if (named) {
+                                    JsonObject(
+                                        resolved.memo + ("hoster" to JsonPrimitive(hoster.hosterName))
+                                    )
+                                } else {
+                                    resolved.memo
+                                }
                             )
                         }
                     }
@@ -844,14 +853,16 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
             aniVideo.headers?.toMultimap()?.mapValues { it.value.joinToString() } ?: mapOf()
 
 
+        val hosterName = (aniVideo.memo["hoster"] as? JsonPrimitive)?.contentOrNull
         return Video(
             number,
             format!!,
             FileUrl(videoUrl, headersMap),
             null,
-            null,
+            hosterName,
             parseDrmInfo(aniVideo.internalData),
-            preferred = aniVideo.preferred
+            preferred = aniVideo.preferred,
+            hoster = hosterName
         )
     }
 
