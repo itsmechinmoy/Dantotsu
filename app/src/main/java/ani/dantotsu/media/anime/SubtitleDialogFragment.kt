@@ -1167,7 +1167,8 @@ itemBinding.subtitleTitle.text = accurateName
 itemBinding.subtitleDetails.text = "${getString(R.string.embedded_stream_subs)} • ${item.label ?: "Track ${item.flatIndex + 1}"}"
 
 val uniqueKey = "Embedded:$accurateName"
-val isSelected = effectiveOnlineId == null && (if (savedLang != null) savedLang == uniqueKey else item.group.isTrackSelected(item.trackIndex))
+val isTrackActive = if (savedLang != null) savedLang == uniqueKey else item.group.isTrackSelected(item.trackIndex)
+val isSelected = effectiveOnlineId == null && isTrackActive
 if (isSelected) {
     itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
     itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor

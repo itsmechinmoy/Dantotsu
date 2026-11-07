@@ -1497,34 +1497,59 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         audios: List<Pair<String, String>>
     ): String {
         val command = StringBuilder()
+        appendRemuxInputs(command, videoTs, forceMpegTs, subtitles, audios)
+        appendRemuxStreamMappings(command, subtitles.size, audios.size)
+        appendRemuxCodecs(command, subtitles)
+        appendRemuxMetadata(command, subtitles, audios)
+        command.append("-y -ignore_unknown \"$outputPath\"")
+        return command.toString()
+    }
+
+    private fun appendRemuxInputs(
+        command: StringBuilder,
+        videoTs: File,
+        forceMpegTs: Boolean,
+        subtitles: List<Pair<String, String>>,
+        audios: List<Pair<String, String>>
+    ) {
         if (forceMpegTs) {
-            command.append("-f mpegts -i "${videoTs.absolutePath}" ")
+            command.append("-f mpegts -i \"${videoTs.absolutePath}\" ")
         } else {
-            command.append("-i "${videoTs.absolutePath}" ")
+            command.append("-i \"${videoTs.absolutePath}\" ")
         }
         for (sub in subtitles) {
-            command.append("-i "${sub.first}" ")
+            command.append("-i \"${sub.first}\" ")
         }
         for (audio in audios) {
             val audioPath = audio.first
             val forceAudioTs = audioPath.endsWith(".ts", ignoreCase = true) &&
                 runCatching { isLikelyMpegTs(File(audioPath)) }.getOrDefault(false)
             if (forceAudioTs) {
-                command.append("-f mpegts -i "$audioPath" ")
+                command.append("-f mpegts -i \"$audioPath\" ")
             } else {
-                command.append("-i "$audioPath" ")
+                command.append("-i \"$audioPath\" ")
             }
         }
+    }
 
+    private fun appendRemuxStreamMappings(
+        command: StringBuilder,
+        subtitlesCount: Int,
+        audiosCount: Int
+    ) {
         command.append("-map 0:v:0 -map 0:a? ")
-
-        for (i in subtitles.indices) {
+        for (i in 0 until subtitlesCount) {
             command.append("-map ${1 + i}? ")
         }
-        for (i in audios.indices) {
-            command.append("-map ${1 + subtitles.size + i}? ")
+        for (i in 0 until audiosCount) {
+            command.append("-map ${1 + subtitlesCount + i}? ")
         }
+    }
 
+    private fun appendRemuxCodecs(
+        command: StringBuilder,
+        subtitles: List<Pair<String, String>>
+    ) {
         if (subtitles.isNotEmpty()) {
             val allAss = subtitles.all { it.first.endsWith(".ass", ignoreCase = true) || it.first.endsWith(".ssa", ignoreCase = true) }
             if (allAss) {
@@ -1535,17 +1560,22 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         } else {
             command.append("-c copy ")
         }
-        for ((index, sub) in subtitles.withIndex()) {
-            command.append("-metadata:s:s:$index language="${sub.second}" ")
-        }
-        for ((index, audio) in audios.withIndex()) {
-            command.append("-metadata:s:a:${index + 1} language="${audio.second}" ")
-        }
-        command.append("-y -ignore_unknown "$outputPath"")
-        return command.toString()
     }
 
-    private fun assertHasPlayableVideo(path: String) {
+    private fun appendRemuxMetadata(
+        command: StringBuilder,
+        subtitles: List<Pair<String, String>>,
+        audios: List<Pair<String, String>>
+    ) {
+        for ((index, sub) in subtitles.withIndex()) {
+            command.append("-metadata:s:s:$index language=\"${sub.second}\" ")
+        }
+        for ((index, audio) in audios.withIndex()) {
+            command.append("-metadata:s:a:${index + 1} language=\"${audio.second}\" ")
+        }
+    }
+
+        private fun assertHasPlayableVideo(path: String) {
         val probePath = uriMap[path]?.let { uri ->
             runCatching { FFmpegKitConfig.getSafParameter(context, uri, "r") }.getOrNull()
         } ?: path

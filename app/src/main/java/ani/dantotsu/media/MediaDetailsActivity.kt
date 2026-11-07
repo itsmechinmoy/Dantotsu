@@ -48,6 +48,11 @@ import ani.dantotsu.media.manga.MangaReadFragment
 import ani.dantotsu.media.novel.NovelReadFragment
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.openLinkInBrowser
+import ani.dantotsu.toPx
+import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.LifecycleOwner
 import ani.dantotsu.others.AndroidBug5497Workaround
 import ani.dantotsu.others.ImageViewDialog
 import ani.dantotsu.others.getSerialized
@@ -782,3 +787,33 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         private val mediaCache = android.util.LruCache<Int, Media>(10)
     }
 }
+
+fun setupMediaScrollTop(
+    recyclerView: RecyclerView,
+    scrollTopView: View,
+    gridLayoutManager: GridLayoutManager,
+    navBarHeight: Int,
+    scrolledToTopLiveData: LiveData<Boolean>?,
+    lifecycleOwner: LifecycleOwner
+) {
+    scrollTopView.setOnClickListener {
+        recyclerView.scrollToPosition(10)
+        recyclerView.smoothScrollToPosition(0)
+    }
+    recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+            super.onScrolled(recyclerView, dx, dy)
+            val position = gridLayoutManager.findFirstVisibleItemPosition()
+            if (position > 2) {
+                scrollTopView.translationY = -(navBarHeight + 12.toPx).toFloat()
+                scrollTopView.visibility = View.VISIBLE
+            } else {
+                scrollTopView.visibility = View.GONE
+            }
+        }
+    })
+    scrolledToTopLiveData?.observe(lifecycleOwner) {
+        if (it) recyclerView.scrollToPosition(0)
+    }
+}
+

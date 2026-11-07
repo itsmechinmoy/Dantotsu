@@ -239,7 +239,7 @@ class MediaInfoFragment : Fragment() {
         binding.mediaInfoDuration.text = formatEpisodeDuration(episodeDuration)
         binding.mediaInfoDurationContainer.visibility = View.VISIBLE
         binding.mediaInfoSeasonContainer.visibility = View.VISIBLE
-        val seasonInfo = "${(media.anime.season ?: "??")} ${(media.anime.seasonYear ?: "??")}"
+        val seasonInfo = "${media.anime.season ?: "??"} ${media.anime.seasonYear ?: "??"}"
         binding.mediaInfoSeason.text = seasonInfo
 
         if (media.anime.mainStudio != null) {
