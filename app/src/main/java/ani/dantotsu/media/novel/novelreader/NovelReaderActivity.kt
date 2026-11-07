@@ -227,12 +227,34 @@ class NovelReaderActivity : AppCompatActivity() {
     }
 
     private fun setupViews() {
+        setupNavigationControls()
+        setupTtsControls()
+        setupAutoScrollControls()
+        setupSliderControls()
+        onVolumeUp = { binding.novelReaderNextChapter.performClick() }
+        onVolumeDown = { binding.novelReaderPreviousChapter.performClick() }
+    }
+
+    private fun setupNavigationControls() {
         binding.novelReaderBack.setOnClickListener { finish() }
         binding.novelReaderSettings.setSafeOnClickListener {
             NovelReaderSettingsDialogFragment.newInstance()
                 .show(supportFragmentManager, NovelReaderSettingsDialogFragment.TAG)
         }
+        binding.novelReaderNextChap.setOnClickListener { binding.novelReaderNextChapter.performClick() }
+        binding.novelReaderNextChapter.setOnClickListener {
+            navigateToNextChapter()
+        }
+        binding.novelReaderPrevChap.setOnClickListener { binding.novelReaderPreviousChapter.performClick() }
+        binding.novelReaderPreviousChapter.setOnClickListener {
+            navigateToPreviousChapter()
+        }
+        binding.novelReaderAutoScroll.setOnClickListener {
+            toggleAutoScroll()
+        }
+    }
 
+    private fun setupTtsControls() {
         binding.novelReaderTts.setOnClickListener {
             if (ttsNavigator != null && binding.novelReaderTtsCard.visibility == View.VISIBLE) {
                 stopTts()
@@ -240,8 +262,6 @@ class NovelReaderActivity : AppCompatActivity() {
                 startTts()
             }
         }
-
-        // Floating TTS Controls
         binding.novelReaderTtsPlayPause.setOnClickListener {
             toggleTts()
         }
@@ -260,21 +280,9 @@ class NovelReaderActivity : AppCompatActivity() {
             binding.novelReaderTtsSpeed.text = "${speed}x"
             ttsNavigator?.submitPreferences(AndroidTtsPreferences(speed = speed))
         }
+    }
 
-        binding.novelReaderNextChap.setOnClickListener { binding.novelReaderNextChapter.performClick() }
-        binding.novelReaderNextChapter.setOnClickListener {
-            navigateToNextChapter()
-        }
-
-        binding.novelReaderPrevChap.setOnClickListener { binding.novelReaderPreviousChapter.performClick() }
-        binding.novelReaderPreviousChapter.setOnClickListener {
-            navigateToPreviousChapter()
-        }
-
-        binding.novelReaderAutoScroll.setOnClickListener {
-            toggleAutoScroll()
-        }
-
+    private fun setupAutoScrollControls() {
         binding.autoScrollPlayPause.setOnClickListener {
             if (autoScroll.isRunning) {
                 autoScroll.stop()
@@ -283,41 +291,28 @@ class NovelReaderActivity : AppCompatActivity() {
                 startAutoScroll()
             }
         }
-
         binding.autoScrollSpeedUp.setOnClickListener {
             val newSpeed = (autoScroll.speed + 0.5f).coerceAtMost(10f)
             autoScroll.speed = newSpeed
             PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_AUTO_SCROLL_SPEED, newSpeed)
             snackString("${newSpeed}x")
         }
-
         binding.autoScrollSpeedDown.setOnClickListener {
             val newSpeed = (autoScroll.speed - 0.5f).coerceAtLeast(0.5f)
             autoScroll.speed = newSpeed
             PrefManager.setCustomVal(ExtraNovelReaderPrefs.PREF_AUTO_SCROLL_SPEED, newSpeed)
             snackString("${newSpeed}x")
         }
+    }
 
+    private fun setupSliderControls() {
         binding.novelReaderSlider.setLabelFormatter { value ->
-            val total = totalPositionsCount
-            if (total > 0) {
-                val pos = (value * total).toInt().coerceIn(1, total)
-                "$pos / $total (${(value * 100).toInt()}%)"
-            } else {
-                "${(value * 100).toInt()}%"
-            }
+            formatProgressionText(value.toDouble())
         }
 
         binding.novelReaderSlider.addOnChangeListener { _, value, fromUser ->
             if (fromUser) {
-                val total = totalPositionsCount
-                val text = if (total > 0) {
-                    val pos = (value * total).toInt().coerceIn(1, total)
-                    "$pos / $total  (${(value * 100).toInt()}%)"
-                } else {
-                    "${(value * 100).toInt()}%"
-                }
-                binding.novelReaderPageNumber.text = text
+                binding.novelReaderPageNumber.text = formatProgressionText(value.toDouble())
             }
         }
 
@@ -332,66 +327,69 @@ class NovelReaderActivity : AppCompatActivity() {
             }
 
             override fun onStopTrackingTouch(slider: Slider) {
-                val targetProgression = slider.value.toDouble()
-                isNavigatingFromSlider = true
-                binding.progress.visibility = View.VISIBLE
-                val themeBg = getThemeColor(com.google.android.material.R.attr.colorSurface)
-                binding.novelReaderFragmentContainer.setBackgroundColor(themeBg)
+                handleSliderNavigation(slider.value.toDouble())
+            }
+        })
+    }
 
-                scope.launch {
-                    try {
-                        val session = ani.dantotsu.media.novel.NovelReaderSession
-                        if (session.isActive() && session.chapters.isNotEmpty()) {
-                            val targetChapterIndex = (targetProgression * (session.chapters.size - 1))
-                                .roundToInt()
-                                .coerceIn(0, session.chapters.size - 1)
-                            if (targetChapterIndex != session.currentIndex) {
-                                session.currentIndex = targetChapterIndex
-                                loadStreamingChapter(direction = 0)
-                            }
-                        } else {
-                            val pub = currentPublication ?: return@launch
-                            val targetLocator = pub.locateProgression(targetProgression)
-                            if (targetLocator != null) {
-                                visualNavigator?.go(targetLocator)
-                            } else {
-                                val readingOrder = pub.readingOrder
-                                if (readingOrder.isNotEmpty()) {
-                                    val contentLinks = readingOrder.filter { link ->
-                                        val type = link.mediaType.toString()
-                                        type.contains("html") || type.contains("xml")
-                                    }.ifEmpty { readingOrder }
-                                    val targetIndex = (targetProgression * (contentLinks.size - 1)).toInt().coerceIn(0, contentLinks.size - 1)
-                                    visualNavigator?.go(contentLinks[targetIndex])
-                                }
-                            }
-                        }
-                    } finally {
-                        isSliderDragging = false
-                        // Safety timeout: if locator observer has not reset navigating flag within 1200ms, reset it
-                        scope.launch {
-                            kotlinx.coroutines.delay(1200)
-                            if (isNavigatingFromSlider) {
-                                isNavigatingFromSlider = false
-                                binding.progress.visibility = View.GONE
-                                if (wasAutoScrolling) {
-                                    wasAutoScrolling = false
-                                    val currentWv = findActiveWebView(binding.novelReaderFragmentContainer)
-                                    if (currentWv != null) {
-                                        attachAutoScroll(currentWv)
-                                        autoScroll.start()
-                                        binding.autoScrollPlayPause.setImageResource(R.drawable.ic_round_pause_24)
-                                    }
-                                }
-                            }
+    private fun handleSliderNavigation(targetProgression: Double) {
+        isNavigatingFromSlider = true
+        binding.progress.visibility = View.VISIBLE
+        val themeBg = getThemeColor(com.google.android.material.R.attr.colorSurface)
+        binding.novelReaderFragmentContainer.setBackgroundColor(themeBg)
+
+        scope.launch {
+            try {
+                val session = ani.dantotsu.media.novel.NovelReaderSession
+                if (session.isActive() && session.chapters.isNotEmpty()) {
+                    val targetChapterIndex = (targetProgression * (session.chapters.size - 1))
+                        .roundToInt()
+                        .coerceIn(0, session.chapters.size - 1)
+                    if (targetChapterIndex != session.currentIndex) {
+                        session.currentIndex = targetChapterIndex
+                        loadStreamingChapter(direction = 0)
+                    }
+                } else {
+                    val pub = currentPublication ?: return@launch
+                    val targetLocator = pub.locateProgression(targetProgression)
+                    if (targetLocator != null) {
+                        visualNavigator?.go(targetLocator)
+                    } else {
+                        val readingOrder = pub.readingOrder
+                        if (readingOrder.isNotEmpty()) {
+                            val contentLinks = readingOrder.filter { link ->
+                                val type = link.mediaType.toString()
+                                type.contains("html") || type.contains("xml")
+                            }.ifEmpty { readingOrder }
+                            val targetIndex = (targetProgression * (contentLinks.size - 1)).toInt().coerceIn(0, contentLinks.size - 1)
+                            visualNavigator?.go(contentLinks[targetIndex])
                         }
                     }
                 }
+            } finally {
+                isSliderDragging = false
+                scheduleSliderSafetyTimeout()
             }
-        })
+        }
+    }
 
-        onVolumeUp = { binding.novelReaderNextChapter.performClick() }
-        onVolumeDown = { binding.novelReaderPreviousChapter.performClick() }
+    private fun scheduleSliderSafetyTimeout() {
+        scope.launch {
+            kotlinx.coroutines.delay(1200)
+            if (isNavigatingFromSlider) {
+                isNavigatingFromSlider = false
+                binding.progress.visibility = View.GONE
+                if (wasAutoScrolling) {
+                    wasAutoScrolling = false
+                    val currentWv = findActiveWebView(binding.novelReaderFragmentContainer)
+                    if (currentWv != null) {
+                        attachAutoScroll(currentWv)
+                        autoScroll.start()
+                        binding.autoScrollPlayPause.setImageResource(R.drawable.ic_round_pause_24)
+                    }
+                }
+            }
+        }
     }
 
     private fun loadStreamingChapter(direction: Int) {
@@ -622,10 +620,10 @@ class NovelReaderActivity : AppCompatActivity() {
 
         override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
             val inflater = android.view.LayoutInflater.from(parent.context)
-            val textView = (convertView as? TextView)
+            val textView = convertView as? TextView
                 ?: inflater.inflate(R.layout.item_dropdown, parent, false) as TextView
 
-            val isSelected = (position == selectedIndex)
+            val isSelected = position == selectedIndex
             val original = items.getOrElse(position) { "" }
 
             val primaryColor = parent.context.obtainStyledAttributes(intArrayOf(androidx.appcompat.R.attr.colorPrimary)).let { a ->
@@ -732,89 +730,92 @@ class NovelReaderActivity : AppCompatActivity() {
         locatorJob?.cancel()
         locatorJob = visualNavigator?.currentLocator?.onEach { locator ->
             latestLocator = locator
-            val session = ani.dantotsu.media.novel.NovelReaderSession
-            val pub = currentPublication
-            if (session.isActive()) {
-                updateSelectedChapterInSpinner(session.currentIndex)
-            } else if (pub != null) {
-                val toc = pub.tableOfContents
-                val currentHref = locator.href.toString()
-                val idx = if (toc.isNotEmpty()) {
-                    toc.indexOfFirst {
-                        val h = it.href.toString()
-                        h == currentHref || currentHref.endsWith(h) || currentHref.contains(h)
-                    }
-                } else {
-                    pub.readingOrder.indexOfFirst {
-                        val h = it.href.toString()
-                        h == currentHref || currentHref.endsWith(h) || currentHref.contains(h)
-                    }
-                }
-                if (idx >= 0) {
-                    updateSelectedChapterInSpinner(idx)
-                }
-            }
+            updateSpinnerFromLocator(locator)
             isTransitioningChapter = false
             chapterTransitionCooldown = 45
             endOfChapterFrames = 0
 
-            if (isNavigatingFromSlider) {
-                isNavigatingFromSlider = false
-                binding.progress.visibility = View.GONE
-                if (wasAutoScrolling) {
-                    wasAutoScrolling = false
-                    val currentWv = findActiveWebView(binding.novelReaderFragmentContainer)
-                    if (currentWv != null) {
-                        attachAutoScroll(currentWv)
-                        autoScroll.start()
-                        binding.autoScrollPlayPause.setImageResource(R.drawable.ic_round_pause_24)
-                    }
-                }
-            }
+            resetSliderNavigationState()
 
             val currentFont = PrefManager.getCustomVal(ExtraNovelReaderPrefs.PREF_FONT_FAMILY, "Default")
             applyFontDirectlyToWebView(fontName = currentFont)
 
-            val rawProgression = locator.locations.totalProgression
-            val progression = if (rawProgression != null) {
-                rawProgression
-            } else if (session.isActive() && session.chapters.isNotEmpty()) {
-                val intra = locator.locations.progression ?: 0.0
-                ((session.currentIndex + intra) / session.chapters.size).coerceIn(0.0, 1.0)
-            } else if (pub != null && pub.readingOrder.isNotEmpty()) {
-                val idx = pub.readingOrder.indexOfFirst {
-                    it.href.toString() == locator.href.toString() || it.href == locator.href
-                }.coerceAtLeast(0)
-                val intra = locator.locations.progression ?: 0.0
-                val range = chapterRanges.getOrNull(idx)
-                if (range != null) {
-                    (range.first + intra * (range.second - range.first)).coerceIn(0.0, 1.0)
-                } else {
-                    ((idx + intra) / pub.readingOrder.size).coerceIn(0.0, 1.0)
-                }
-            } else {
-                locator.locations.progression ?: return@onEach
-            }
-
-            if (!isSliderDragging && !isNavigatingFromSlider) {
-                binding.novelReaderSlider.value = progression.toFloat().coerceIn(0f, 1f)
-            }
-            val total = totalPositionsCount
-            val text = if (total > 0) {
-                val pos = (progression * total).toInt().coerceIn(1, total)
-                "$pos / $total  (${(progression * 100).toInt()}%)"
-            } else if (session.isActive() && session.chapters.isNotEmpty()) {
-                val currentChap = session.currentIndex + 1
-                val totalChap = session.chapters.size
-                "Ch. $currentChap / $totalChap  (${(progression * 100).toInt()}%)"
-            } else {
-                "${(progression * 100).toInt()}%"
-            }
-            binding.novelReaderPageNumber.text = text
+            val progression = calculateLocatorProgression(locator) ?: return@onEach
+            updateReaderProgressUi(progression)
             readerOverlay.progressFraction = progression.toFloat()
             PrefManager.setCustomVal("${sanitizedBookId}_locator", locator.toJSON().toString())
         }?.launchIn(scope)
 
+        setupVisualNavigatorInputListener()
+    }
+
+    private fun updateSpinnerFromLocator(locator: Locator) {
+        val session = ani.dantotsu.media.novel.NovelReaderSession
+        val pub = currentPublication
+        if (session.isActive()) {
+            updateSelectedChapterInSpinner(session.currentIndex)
+        } else if (pub != null) {
+            val toc = pub.tableOfContents
+            val currentHref = locator.href.toString()
+            val idx = if (toc.isNotEmpty()) {
+                toc.indexOfFirst {
+                    val h = it.href.toString()
+                    h == currentHref || currentHref.endsWith(h) || currentHref.contains(h)
+                }
+            } else {
+                pub.readingOrder.indexOfFirst {
+                    val h = it.href.toString()
+                    h == currentHref || currentHref.endsWith(h) || currentHref.contains(h)
+                }
+            }
+            if (idx >= 0) {
+                updateSelectedChapterInSpinner(idx)
+            }
+        }
+    }
+
+    private fun resetSliderNavigationState() {
+        if (isNavigatingFromSlider) {
+            isNavigatingFromSlider = false
+            binding.progress.visibility = View.GONE
+            if (wasAutoScrolling) {
+                wasAutoScrolling = false
+                val currentWv = findActiveWebView(binding.novelReaderFragmentContainer)
+                if (currentWv != null) {
+                    attachAutoScroll(currentWv)
+                    autoScroll.start()
+                    binding.autoScrollPlayPause.setImageResource(R.drawable.ic_round_pause_24)
+                }
+            }
+        }
+    }
+
+    private fun calculateLocatorProgression(locator: Locator): Double? {
+        val rawProgression = locator.locations.totalProgression
+        val session = ani.dantotsu.media.novel.NovelReaderSession
+        val pub = currentPublication
+        return if (rawProgression != null) {
+            rawProgression
+        } else if (session.isActive() && session.chapters.isNotEmpty()) {
+            val intra = locator.locations.progression ?: 0.0
+            ((session.currentIndex + intra) / session.chapters.size).coerceIn(0.0, 1.0)
+        } else if (pub != null && pub.readingOrder.isNotEmpty()) {
+            val idx = pub.readingOrder.indexOfFirst {
+                it.href.toString() == locator.href.toString() || it.href == locator.href
+            }.coerceAtLeast(0)
+            val intra = locator.locations.progression ?: 0.0
+            val range = chapterRanges.getOrNull(idx)
+            if (range != null) {
+                (range.first + intra * (range.second - range.first)).coerceIn(0.0, 1.0)
+            } else {
+                ((idx + intra) / pub.readingOrder.size).coerceIn(0.0, 1.0)
+            }
+        } else {
+            locator.locations.progression
+        }
+    }
+
+    private fun setupVisualNavigatorInputListener() {
         visualNavigator?.addInputListener(object : InputListener {
             override fun onTap(event: TapEvent): Boolean {
                 if (autoScroll.isRunning) {
@@ -826,6 +827,28 @@ class NovelReaderActivity : AppCompatActivity() {
                 return true
             }
         })
+    }
+
+    private fun updateReaderProgressUi(progression: Double) {
+        if (!isSliderDragging && !isNavigatingFromSlider) {
+            binding.novelReaderSlider.value = progression.toFloat().coerceIn(0f, 1f)
+            binding.novelReaderPageNumber.text = formatProgressionText(progression)
+        }
+    }
+
+    private fun formatProgressionText(progression: Double): String {
+        val total = totalPositionsCount
+        val session = ani.dantotsu.media.novel.NovelReaderSession
+        return if (total > 0) {
+            val pos = (progression * total).toInt().coerceIn(1, total)
+            "$pos / $total  (${(progression * 100).toInt()}%)"
+        } else if (session.isActive() && session.chapters.isNotEmpty()) {
+            val currentChap = session.currentIndex + 1
+            val totalChap = session.chapters.size
+            "Ch. $currentChap / $totalChap  (${(progression * 100).toInt()}%)"
+        } else {
+            "${(progression * 100).toInt()}%"
+        }
     }
 
     // region Text Selection & Actions
@@ -1041,40 +1064,16 @@ class NovelReaderActivity : AppCompatActivity() {
         val webViews = if (targetWv != null) listOf(targetWv) else findAllWebViews(binding.novelReaderFragmentContainer)
         if (webViews.isEmpty()) return
 
-        val cssFont = when (effectiveFont) {
-            "Default" -> null
-            "Sans-Serif" -> "sans-serif"
-            "Serif" -> "serif"
-            "Monospace" -> "monospace"
-            "Cursive" -> "cursive"
-            "OpenDyslexic" -> "'OpenDyslexic', sans-serif"
-            "AccessibleDfA" -> "'AccessibleDfA', sans-serif"
-            "IA Writer Duospace" -> "'IA Writer Duospace', monospace"
-            "Poppins" -> "'Poppins', sans-serif"
-            else -> "'$effectiveFont', sans-serif"
-        }
-
-        val hasPoppinsAssets = runCatching {
-            assets.open("fonts/poppins.ttf").use { }
-            assets.open("fonts/poppins_bold.ttf").use { }
-            true
-        }.getOrDefault(false)
-
-        val fontFaceCss = if (effectiveFont == "Poppins" && hasPoppinsAssets) {
-            "@font-face { font-family: 'Poppins'; src: url('https://readium/assets/fonts/poppins.ttf') format('truetype'); font-weight: normal; font-style: normal; } " +
-            "@font-face { font-family: 'Poppins'; src: url('https://readium/assets/fonts/poppins_bold.ttf') format('truetype'); font-weight: bold; font-style: normal; }"
-        } else ""
-
+        val cssFont = resolveCssFont(effectiveFont)
+        val fontFaceCss = buildFontFaceCss(effectiveFont)
         val fontRule = if (cssFont != null) {
             "body, p, span, div, h1, h2, h3, h4, h5, h6, li, a, blockquote { font-family: $cssFont !important; }"
         } else ""
 
         val fontCombined = (fontFaceCss + " " + fontRule).trim().replace("\n", " ").replace("'", "\\'")
-
         val boldRule = if (isBold) {
             "body, p, span, div, h1, h2, h3, h4, h5, h6, li, a, em, b, strong, blockquote { font-weight: 700 !important; }"
         } else ""
-
         val boldCombined = boldRule.trim().replace("\n", " ").replace("'", "\\'")
 
         val js = """
@@ -1111,6 +1110,34 @@ class NovelReaderActivity : AppCompatActivity() {
         for (wv in webViews) {
             wv.evaluateJavascript(js, null)
         }
+    }
+
+    private fun resolveCssFont(effectiveFont: String): String? {
+        return when (effectiveFont) {
+            "Default" -> null
+            "Sans-Serif" -> "sans-serif"
+            "Serif" -> "serif"
+            "Monospace" -> "monospace"
+            "Cursive" -> "cursive"
+            "OpenDyslexic" -> "'OpenDyslexic', sans-serif"
+            "AccessibleDfA" -> "'AccessibleDfA', sans-serif"
+            "IA Writer Duospace" -> "'IA Writer Duospace', monospace"
+            "Poppins" -> "'Poppins', sans-serif"
+            else -> "'$effectiveFont', sans-serif"
+        }
+    }
+
+    private fun buildFontFaceCss(effectiveFont: String): String {
+        val hasPoppinsAssets = runCatching {
+            assets.open("fonts/poppins.ttf").use { }
+            assets.open("fonts/poppins_bold.ttf").use { }
+            true
+        }.getOrDefault(false)
+
+        return if (effectiveFont == "Poppins" && hasPoppinsAssets) {
+            "@font-face { font-family: 'Poppins'; src: url('https://readium/assets/fonts/poppins.ttf') format('truetype'); font-weight: normal; font-style: normal; } " +
+            "@font-face { font-family: 'Poppins'; src: url('https://readium/assets/fonts/poppins_bold.ttf') format('truetype'); font-weight: bold; font-style: normal; }"
+        } else ""
     }
 
     private fun buildEpubPreferences(): EpubPreferences {
@@ -1237,7 +1264,7 @@ class NovelReaderActivity : AppCompatActivity() {
                     updateProgressFromScroll(activeWv)
                 }
                 val canScrollDown = activeWv.canScrollVertically(1)
-                val isActuallyScrollable = (activeWv.contentHeight * activeWv.scale) > (activeWv.height + 100)
+                val isActuallyScrollable = activeWv.contentHeight * activeWv.scale > activeWv.height + 100
                 if (isActuallyScrollable && !canScrollDown) {
                     endOfChapterFrames++
                     if (endOfChapterFrames > 45) {
@@ -1259,29 +1286,37 @@ class NovelReaderActivity : AppCompatActivity() {
         } else {
             val pub = currentPublication
             if (pub != null && pub.readingOrder.isNotEmpty()) {
-                val currentHref = latestLocator?.href
-                val currentIndex = if (currentHref != null) {
-                    pub.readingOrder.indexOfFirst {
-                        it.href.toString() == currentHref.toString() || it.href == currentHref
-                    }
-                } else -1
-                val targetIndex = if (currentIndex >= 0) currentIndex + 1 else 1
-                if (targetIndex < pub.readingOrder.size) {
-                    val nextLink = pub.readingOrder[targetIndex]
-                    val nextLocator = pub.locatorFromLink(nextLink)
-                    if (nextLocator != null) {
-                        visualNavigator?.go(nextLocator, animated = false)
-                    } else {
-                        visualNavigator?.go(nextLink, animated = false)
-                    }
-                } else {
-                    isTransitioningChapter = false
-                    snackString("Reached end of book")
-                }
+                navigateToNextPublicationChapter(pub)
             } else {
                 (visualNavigator as? OverflowableNavigator)?.goForward(animated = false)
             }
         }
+        scheduleChapterTransitionReset()
+    }
+
+    private fun navigateToNextPublicationChapter(pub: org.readium.r2.shared.publication.Publication) {
+        val currentHref = latestLocator?.href
+        val currentIndex = if (currentHref != null) {
+            pub.readingOrder.indexOfFirst {
+                it.href.toString() == currentHref.toString() || it.href == currentHref
+            }
+        } else -1
+        val targetIndex = if (currentIndex >= 0) currentIndex + 1 else 1
+        if (targetIndex < pub.readingOrder.size) {
+            val nextLink = pub.readingOrder[targetIndex]
+            val nextLocator = pub.locatorFromLink(nextLink)
+            if (nextLocator != null) {
+                visualNavigator?.go(nextLocator, animated = false)
+            } else {
+                visualNavigator?.go(nextLink, animated = false)
+            }
+        } else {
+            isTransitioningChapter = false
+            snackString("Reached end of book")
+        }
+    }
+
+    private fun scheduleChapterTransitionReset() {
         scope.launch {
             kotlinx.coroutines.delay(3500)
             if (isTransitioningChapter) {
@@ -1296,24 +1331,28 @@ class NovelReaderActivity : AppCompatActivity() {
         } else {
             val pub = currentPublication
             if (pub != null && pub.readingOrder.isNotEmpty()) {
-                val currentHref = latestLocator?.href
-                val currentIndex = if (currentHref != null) {
-                    pub.readingOrder.indexOfFirst {
-                        it.href.toString() == currentHref.toString() || it.href == currentHref
-                    }
-                } else -1
-                val targetIndex = if (currentIndex > 0) currentIndex - 1 else 0
-                if (targetIndex >= 0 && targetIndex < pub.readingOrder.size && targetIndex != currentIndex) {
-                    val prevLink = pub.readingOrder[targetIndex]
-                    val prevLocator = pub.locatorFromLink(prevLink)
-                    if (prevLocator != null) {
-                        visualNavigator?.go(prevLocator, animated = false)
-                    } else {
-                        visualNavigator?.go(prevLink, animated = false)
-                    }
-                }
+                navigateToPreviousPublicationChapter(pub)
             } else {
                 (visualNavigator as? OverflowableNavigator)?.goBackward(animated = false)
+            }
+        }
+    }
+
+    private fun navigateToPreviousPublicationChapter(pub: org.readium.r2.shared.publication.Publication) {
+        val currentHref = latestLocator?.href
+        val currentIndex = if (currentHref != null) {
+            pub.readingOrder.indexOfFirst {
+                it.href.toString() == currentHref.toString() || it.href == currentHref
+            }
+        } else -1
+        val targetIndex = if (currentIndex > 0) currentIndex - 1 else 0
+        if (targetIndex >= 0 && targetIndex < pub.readingOrder.size && targetIndex != currentIndex) {
+            val prevLink = pub.readingOrder[targetIndex]
+            val prevLocator = pub.locatorFromLink(prevLink)
+            if (prevLocator != null) {
+                visualNavigator?.go(prevLocator, animated = false)
+            } else {
+                visualNavigator?.go(prevLink, animated = false)
             }
         }
     }
@@ -1433,11 +1472,21 @@ class NovelReaderActivity : AppCompatActivity() {
         } else {
             pub.readingOrder.size
         }
-
         if (totalChapters <= 0) return
 
-        val chapterIndex = if (session.isActive()) {
-            session.currentIndex.coerceIn(0, totalChapters - 1)
+        val chapterIndex = resolveCurrentChapterIndex(session, pub)
+        val overallProgression = calculateScrollProgression(session, chapterProgress, chapterIndex, totalChapters)
+
+        readerOverlay.progressFraction = overallProgression.toFloat()
+        updateReaderProgressUi(overallProgression)
+    }
+
+    private fun resolveCurrentChapterIndex(
+        session: ani.dantotsu.media.novel.NovelReaderSession,
+        pub: org.readium.r2.shared.publication.Publication
+    ): Int {
+        return if (session.isActive()) {
+            session.currentIndex.coerceIn(0, session.chapters.size - 1)
         } else {
             val currentHref = latestLocator?.href
             val idx = if (currentHref != null) {
@@ -1447,8 +1496,15 @@ class NovelReaderActivity : AppCompatActivity() {
             } else -1
             if (idx >= 0) idx else 0
         }
+    }
 
-        val overallProgression = if (session.isActive() && session.chapters.isNotEmpty()) {
+    private fun calculateScrollProgression(
+        session: ani.dantotsu.media.novel.NovelReaderSession,
+        chapterProgress: Float,
+        chapterIndex: Int,
+        totalChapters: Int
+    ): Double {
+        return if (session.isActive() && session.chapters.isNotEmpty()) {
             ((session.currentIndex + chapterProgress) / session.chapters.size).toDouble().coerceIn(0.0, 1.0)
         } else if (chapterRanges.isNotEmpty()) {
             val range = chapterRanges.getOrNull(chapterIndex)
@@ -1459,25 +1515,6 @@ class NovelReaderActivity : AppCompatActivity() {
             }
         } else {
             ((chapterIndex + chapterProgress) / totalChapters).toDouble().coerceIn(0.0, 1.0)
-        }
-
-        readerOverlay.progressFraction = overallProgression.toFloat()
-
-        // Also update the slider and page number text during auto-scroll
-        if (!isSliderDragging && !isNavigatingFromSlider) {
-            binding.novelReaderSlider.value = overallProgression.toFloat().coerceIn(0f, 1f)
-            val total = totalPositionsCount
-            val text = if (total > 0) {
-                val pos = ((overallProgression * total).toInt()).coerceIn(1, total)
-                "$pos / $total  (${(overallProgression * 100).toInt()}%)"
-            } else if (session.isActive() && session.chapters.isNotEmpty()) {
-                val currentChap = session.currentIndex + 1
-                val totalChap = session.chapters.size
-                "Ch. $currentChap / $totalChap  (${(overallProgression * 100).toInt()}%)"
-            } else {
-                "${(overallProgression * 100).toInt()}%"
-            }
-            binding.novelReaderPageNumber.text = text
         }
     }
     // endregion
