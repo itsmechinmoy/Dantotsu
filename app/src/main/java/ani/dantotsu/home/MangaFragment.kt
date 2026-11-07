@@ -162,6 +162,53 @@ class MangaFragment : Fragment() {
                 super.onScrolled(v, dx, dy)
             }
         })
+        setupAdapterReadyObserver()
+
+                var oldIncludeList = true
+
+        mangaPageAdapter.onIncludeListClick = { checked ->
+            oldIncludeList = !checked
+            loading = true
+            model.aniMangaSearchResults.results.clear()
+            popularAdaptor.notifyDataSetChanged()
+            scope.launch(Dispatchers.IO) {
+                model.loadPopular("MANGA", sort = Anilist.sortBy[1], onList = checked)
+            }
+        }
+
+        model.getPopular().observe(viewLifecycleOwner) {
+            if (it != null) {
+                HomePageAdapterHelper.handlePopularResults(
+                    it, model, popularAdaptor, progressAdaptor, oldIncludeList,
+                    { updated -> oldIncludeList = updated },
+                    { msg -> snackString(msg) },
+                    getString(R.string.jobless_message)
+                )
+                loading = false
+            }
+        }
+
+        fun load() = scope.launch(Dispatchers.Main) {
+            mangaPageAdapter.updateAvatar()
+        }
+
+        setupRefreshObserver(popularAdaptor, scope)
+    }
+
+    override fun onResume() {
+        if (!model.loaded) Refresh.activity[this.hashCode()]!!.postValue(true)
+        //make sure mangaPageAdapter is initialized
+        if (mangaPageAdapter.trendingViewPager != null) {
+            binding.root.requestApplyInsets()
+            binding.root.requestLayout()
+        }
+        if (this::mangaPageAdapter.isInitialized && _binding != null) {
+            mangaPageAdapter.updateNotificationCount()
+        }
+        super.onResume()
+    }
+
+    private fun setupAdapterReadyObserver() {
         mangaPageAdapter.ready.observe(viewLifecycleOwner) { i ->
             if (i == true) {
                 model.getPopularNovel().observe(viewLifecycleOwner) {
@@ -216,38 +263,17 @@ class MangaFragment : Fragment() {
                 }
                 binding.mangaPageScrollTop.translationY =
                     -(navBarHeight + (bottomBarOrNull?.height ?: 0) + (bottomBarOrNull?.marginBottom ?: 0)).toFloat()
-
             }
         }
+    }
 
-        var oldIncludeList = true
-
-        mangaPageAdapter.onIncludeListClick = { checked ->
-            oldIncludeList = !checked
-            loading = true
-            model.aniMangaSearchResults.results.clear()
-            popularAdaptor.notifyDataSetChanged()
-            scope.launch(Dispatchers.IO) {
-                model.loadPopular("MANGA", sort = Anilist.sortBy[1], onList = checked)
-            }
-        }
-
-        model.getPopular().observe(viewLifecycleOwner) {
-            if (it != null) {
-                HomePageAdapterHelper.handlePopularResults(
-                    it, model, popularAdaptor, progressAdaptor, oldIncludeList,
-                    { updated -> oldIncludeList = updated },
-                    { msg -> snackString(msg) },
-                    getString(R.string.jobless_message)
-                )
-                loading = false
-            }
-        }
-
+    private fun setupRefreshObserver(
+        popularAdaptor: MediaAdaptor,
+        scope: androidx.lifecycle.LifecycleCoroutineScope
+    ) {
         fun load() = scope.launch(Dispatchers.Main) {
             mangaPageAdapter.updateAvatar()
         }
-
         var running = false
         val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(true) }
         live.observe(viewLifecycleOwner) {
@@ -290,19 +316,6 @@ class MangaFragment : Fragment() {
                 }
             }
         }
-    }
-
-    override fun onResume() {
-        if (!model.loaded) Refresh.activity[this.hashCode()]!!.postValue(true)
-        //make sure mangaPageAdapter is initialized
-        if (mangaPageAdapter.trendingViewPager != null) {
-            binding.root.requestApplyInsets()
-            binding.root.requestLayout()
-        }
-        if (this::mangaPageAdapter.isInitialized && _binding != null) {
-            mangaPageAdapter.updateNotificationCount()
-        }
-        super.onResume()
     }
 
 }

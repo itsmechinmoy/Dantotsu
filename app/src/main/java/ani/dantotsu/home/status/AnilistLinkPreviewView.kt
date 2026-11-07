@@ -35,13 +35,17 @@ class AnilistLinkPreviewView @JvmOverloads constructor(
 
     private fun showPreview(media: Media) {
         removeAllViews()
-        previewBinding = ItemAnilistLinkPreviewBinding.inflate(
+        val binding = ItemAnilistLinkPreviewBinding.inflate(
             LayoutInflater.from(context),
             this,
             true
         )
+        previewBinding = binding
+        bindPreviewDetails(binding, media)
+    }
 
-        previewBinding?.apply {
+    private fun bindPreviewDetails(binding: ItemAnilistLinkPreviewBinding, media: Media) {
+        binding.apply {
             media.cover?.let { coverUrl ->
                 previewCoverImage.loadImage(coverUrl)
             }
@@ -66,26 +70,7 @@ class AnilistLinkPreviewView @JvmOverloads constructor(
                     ""
                 }
             }
-            val animeData = media.anime
-            val mangaData = media.manga
-            val episodesOrChapters = when {
-                animeData != null && animeData.totalEpisodes != null -> {
-                    val eps = animeData.totalEpisodes
-                    if (eps == 0) null else "$eps Episodes"
-                }
-                mangaData != null && mangaData.totalChapters != null -> {
-                    val chaps = mangaData.totalChapters
-                    if (chaps == 0) null else "$chaps Chapters"
-                }
-                else -> null
-            }
-
-            if (episodesOrChapters != null) {
-                previewEpisodes.text = episodesOrChapters
-                previewEpisodes.isVisible = true
-            } else {
-                previewEpisodes.isVisible = false
-            }
+            bindEpisodesOrChapters(binding, media)
 
             previewCard.setOnClickListener {
                 val intent = Intent(context, MediaDetailsActivity::class.java).apply {
@@ -96,6 +81,29 @@ class AnilistLinkPreviewView @JvmOverloads constructor(
                 }
                 context.startActivity(intent)
             }
+        }
+    }
+
+    private fun bindEpisodesOrChapters(binding: ItemAnilistLinkPreviewBinding, media: Media) {
+        val animeData = media.anime
+        val mangaData = media.manga
+        val episodesOrChapters = when {
+            animeData != null && animeData.totalEpisodes != null -> {
+                val eps = animeData.totalEpisodes
+                if (eps == 0) null else "$eps Episodes"
+            }
+            mangaData != null && mangaData.totalChapters != null -> {
+                val chaps = mangaData.totalChapters
+                if (chaps == 0) null else "$chaps Chapters"
+            }
+            else -> null
+        }
+
+        if (episodesOrChapters != null) {
+            binding.previewEpisodes.text = episodesOrChapters
+            binding.previewEpisodes.isVisible = true
+        } else {
+            binding.previewEpisodes.isVisible = false
         }
     }
 
