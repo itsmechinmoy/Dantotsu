@@ -91,76 +91,56 @@ class MainActivity : AppCompatActivity() {
     @kotlin.OptIn(DelicateCoroutinesApi::class)
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
     @OptIn(UnstableApi::class)
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
+    private fun checkLaunchPreconditions(): Boolean {
         if (!isTaskRoot && intent.hasCategory(Intent.CATEGORY_LAUNCHER) && intent.action == Intent.ACTION_MAIN) {
             finish()
-            return
+            return false
         }
+        return true
+    }
 
-        ThemeManager(this).applyTheme()
-
-        //get FRAGMENT_CLASS_NAME from intent
-        val fragment = intent.getStringExtra("FRAGMENT_CLASS_NAME")
-
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
+    private fun checkCalculatorLock() {
         if (!CalcActivity.hasPermission) {
-            val pin: String = PrefManager.getVal(PrefName.AppPassword)
-            if (pin.isNotEmpty()) {
-                ContextCompat.startActivity(
-                    this@MainActivity,
-                    Intent(this@MainActivity, CalcActivity::class.java)
-                        .putExtra("code", pin)
-                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK),
-                    null
-                )
+            if (PrefManager.getVal<Boolean>(PrefName.Calculator)) {
+                startActivity(Intent(this, CalcActivity::class.java))
                 finish()
-                return
             }
         }
-        TaskScheduler.scheduleSingleWork(this)
-        IdMapper.warm(this)
-
         if (Intent.ACTION_VIEW == intent.action) {
-            handleViewIntent(intent)
+            CalcActivity.hasPermission = false
         }
+    }
 
+    private fun setupBottomNavBarBackground(): Int {
         val bottomNavBar = findViewById<AnimatedBottomBar>(R.id.navbar)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-
             val backgroundDrawable = bottomNavBar.background as GradientDrawable
-            val currentColor = backgroundDrawable.color?.defaultColor ?: 0
-            val semiTransparentColor = (currentColor and 0x00FFFFFF) or 0xF9000000.toInt()
-            backgroundDrawable.setColor(semiTransparentColor)
-            bottomNavBar.background = backgroundDrawable
+            val nightModeFlags = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+            if (nightModeFlags == Configuration.UI_MODE_NIGHT_YES) {
+                backgroundDrawable.setColor(ContextCompat.getColor(this, R.color.nav_dark))
+            } else {
+                backgroundDrawable.setColor(ContextCompat.getColor(this, R.color.nav_light))
+            }
         }
-        bottomNavBar.background = ContextCompat.getDrawable(this, R.drawable.bottom_nav_gray)
+        return try {
+            (resources.getDimension(R.dimen.navbar_height) / resources.displayMetrics.density).toInt()
+        } catch (_: Exception) {
+            48
+        }
+    }
 
-        val offset = try {
-            val statusBarHeightId = resources.getIdentifier("status_bar_height", "dimen", "android")
-            resources.getDimensionPixelSize(statusBarHeightId)
-        } catch (e: Exception) {
-            statusBarHeight
-        }
+    private fun setupIncognitoAndRescueIcons(offset: Int) {
         val layoutParams = binding.incognito.layoutParams as ViewGroup.MarginLayoutParams
-        layoutParams.topMargin = 11 * offset / 12
+        layoutParams.bottomMargin = navBarHeight + offset
         binding.incognito.layoutParams = layoutParams
 
         val rescueLayoutParams = binding.rescueModeIcon.layoutParams as ViewGroup.MarginLayoutParams
-        rescueLayoutParams.topMargin = 11 * offset / 12
+        rescueLayoutParams.bottomMargin = navBarHeight + offset
         binding.rescueModeIcon.layoutParams = rescueLayoutParams
 
-      
         fun syncRescueIconMargin(incognitoOn: Boolean) {
             val p = binding.rescueModeIcon.layoutParams as ViewGroup.MarginLayoutParams
-            p.marginStart = if (incognitoOn) {
-                (54f * resources.displayMetrics.density).toInt()
-            } else {
-                (16f * resources.displayMetrics.density).toInt()
-            }
+            p.marginEnd = ((if (incognitoOn) 44 else 12) * resources.displayMetrics.density).toInt()
             binding.rescueModeIcon.layoutParams = p
         }
         syncRescueIconMargin(PrefManager.getVal(PrefName.Incognito))
@@ -168,32 +148,29 @@ class MainActivity : AppCompatActivity() {
         incognitoLiveData = PrefManager.getLiveVal(
             PrefName.Incognito,
             false
-        ).asLiveBool()
+        )
         incognitoLiveData.observe(this) {
+            syncRescueIconMargin(it)
             if (it) {
                 val slideDownAnim = ObjectAnimator.ofFloat(
                     binding.incognito,
-                    View.TRANSLATION_Y,
-                    -(200f + statusBarHeight),
+                    "translationY",
+                    -100f,
                     0f
                 )
-                slideDownAnim.duration = 200
+                slideDownAnim.duration = 500
                 slideDownAnim.start()
                 binding.incognito.visibility = View.VISIBLE
-                if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) syncRescueIconMargin(true)
             } else {
-                val slideUpAnim = ObjectAnimator.ofFloat(
+                val slideDownAnim = ObjectAnimator.ofFloat(
                     binding.incognito,
-                    View.TRANSLATION_Y,
+                    "translationY",
                     0f,
-                    -(200f + statusBarHeight)
+                    -100f
                 )
-                slideUpAnim.duration = 200
-                slideUpAnim.start()
-                Handler(Looper.getMainLooper()).postDelayed({
-                    binding.incognito.visibility = View.GONE
-                    if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) syncRescueIconMargin(false)
-                }, 200)
+                slideDownAnim.duration = 500
+                slideDownAnim.start()
+                binding.incognito.visibility = View.GONE
             }
         }
 
@@ -203,31 +180,28 @@ class MainActivity : AppCompatActivity() {
                 syncRescueIconMargin(PrefManager.getVal(PrefName.Incognito))
                 val slideDownAnim = ObjectAnimator.ofFloat(
                     binding.rescueModeIcon,
-                    View.TRANSLATION_Y,
-                    -(200f + statusBarHeight),
+                    "translationY",
+                    -100f,
                     0f
                 )
-                slideDownAnim.duration = 200
+                slideDownAnim.duration = 500
                 slideDownAnim.start()
                 binding.rescueModeIcon.visibility = View.VISIBLE
             } else {
-                val slideUpAnim = ObjectAnimator.ofFloat(
+                val slideDownAnim = ObjectAnimator.ofFloat(
                     binding.rescueModeIcon,
-                    View.TRANSLATION_Y,
+                    "translationY",
                     0f,
-                    -(200f + statusBarHeight)
+                    -100f
                 )
-                slideUpAnim.duration = 200
-                slideUpAnim.start()
-                //wait for animation to finish
-                Handler(Looper.getMainLooper()).postDelayed(
-                    { binding.rescueModeIcon.visibility = View.GONE },
-                    200
-                )
+                slideDownAnim.duration = 500
+                slideDownAnim.start()
+                binding.rescueModeIcon.visibility = View.GONE
             }
         }
-        binding.rescueModeIcon.setOnClickListener {
-            PrefManager.setVal(PrefName.RescueMode, false)
+
+        binding.incognito.setOnClickListener {
+            PrefManager.setVal(PrefName.Incognito, false)
             val intent = Intent(this, MainActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
             startActivity(intent)
@@ -236,33 +210,39 @@ class MainActivity : AppCompatActivity() {
             overridePendingTransition(0, 0)
         }
         incognitoNotification(this)
+    }
 
-        var doubleBackToExitPressedOnce = false
-        onBackPressedDispatcher.addCallback(this) {
-            if (doubleBackToExitPressedOnce) {
-                finish()
+    private fun setupSplashAnimation() {
+        var splash: ActivitySplashBinding? = null
+        if (savedInstanceState == null) {
+            splash = ActivitySplashBinding.inflate(layoutInflater)
+            splash.root.findViewById<ImageView>(R.id.splashImage).apply {
+                val splashImages = listOf(
+                    R.drawable.splash_0,
+                    R.drawable.splash_1,
+                    R.drawable.splash_2,
+                    R.drawable.splash_3,
+                    R.drawable.splash_4,
+                    R.drawable.splash_5,
+                    R.drawable.splash_6,
+                    R.drawable.splash_7,
+                    R.drawable.splash_8,
+                    R.drawable.splash_9,
+                )
+                setImageResource(splashImages.random())
             }
-            doubleBackToExitPressedOnce = true
-            snackString(this@MainActivity.getString(R.string.back_to_exit)).apply {
-                this?.addCallback(object : BaseTransientBottomBar.BaseCallback<Snackbar>() {
-                    override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                        super.onDismissed(transientBottomBar, event)
-                        doubleBackToExitPressedOnce = false
-                    }
-                })
+            splash.root.findViewById<ImageView>(R.id.splashIcon).apply {
+                (drawable as Animatable).start()
             }
+            binding.root.addView(splash.root)
+            splash.root.updatePadding(
+                top = statusBarHeight,
+                bottom = navBarHeight
+            )
         }
 
-        binding.root.isMotionEventSplittingEnabled = false
-
-        lifecycleScope.launch {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                val splash = SplashScreenBinding.inflate(layoutInflater)
-                binding.root.addView(splash.root)
-                (splash.splashImage.drawable as Animatable).start()
-
-                delay(200)
-
+        fun removeSplash() {
+            if (splash != null) {
                 ObjectAnimator.ofFloat(
                     splash.root,
                     View.TRANSLATION_Y,
@@ -279,98 +259,76 @@ class MainActivity : AppCompatActivity() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             splashScreen.setOnExitAnimationListener { splashScreenView ->
-                ObjectAnimator.ofFloat(
-                    splashScreenView,
-                    View.TRANSLATION_Y,
-                    0f,
-                    -splashScreenView.height.toFloat()
-                ).apply {
-                    interpolator = AnticipateInterpolator()
-                    duration = 200L
-                    doOnEnd { splashScreenView.remove() }
-                    start()
-                }
+                splashScreenView.remove()
+                removeSplash()
             }
+        } else {
+            removeSplash()
         }
 
+        val checkReview = PrefManager.getVal<Boolean>(PrefName.ExtensionsAutoUpdate) &&
+                PrefManager.getVal<Boolean>(PrefName.ExtensionsAutoUpdateCheck)
+        if (checkReview) {
+            snack(
+                view = binding.root,
+                message = R.string.extensions_auto_update_review,
+                anchor = binding.navbar
+            )
+                ?.setDuration(Snackbar.LENGTH_SHORT)
+                ?.setAction(R.string.review) {
+                    startActivity(Intent(this, ExtensionsActivity::class.java))
+                }
+        }
+        window.navigationBarColor = ContextCompat.getColor(this, android.R.color.transparent)
+    }
 
-        binding.root.doOnAttach {
-            initActivity(this)
-            val preferences: SourcePreferences = Injekt.get()
-            if (preferences.animeExtensionUpdatesCount()
-                    .get() > 0 || preferences.mangaExtensionUpdatesCount().get() > 0
+    private fun setupMainViewPager(fragment: String?, offset: Int) {
+        val navbar = findViewById<AnimatedBottomBar>(R.id.navbar)
+        val mainViewPager = findViewById<ViewPager2>(R.id.mainViewPager)
+        mainViewPager.isUserInputEnabled = false
+        mainViewPager.offscreenPageLimit = 4
+        mainViewPager.adapter = MainViewPagerAdapter(this)
+
+        navbar.setPadding(0, 0, 0, navBarHeight + offset)
+        navbar.setOnTabSelectListener(object : AnimatedBottomBar.OnTabSelectListener {
+            override fun onTabSelected(
+                lastIndex: Int,
+                lastTab: AnimatedBottomBar.Tab?,
+                newIndex: Int,
+                newTab: AnimatedBottomBar.Tab
             ) {
-                snackString(R.string.extension_updates_available)
-                    ?.setDuration(Snackbar.LENGTH_SHORT)
-                    ?.setAction(R.string.review) {
-                        startActivity(Intent(this, ExtensionsActivity::class.java))
-                    }
+                navbar.animate().translationZ(12f).setDuration(200).start()
+                selectedOption = newIndex
+                mainViewPager.setCurrentItem(newIndex, false)
             }
-            window.navigationBarColor = ContextCompat.getColor(this, android.R.color.transparent)
-            selectedOption = if (intent.getBooleanExtra("goToHome", false)) {
-                1
-            } else if (fragment != null) {
-                when (fragment) {
-                    AnimeFragment::class.java.name -> 0
-                    HomeFragment::class.java.name -> 1
-                    MangaFragment::class.java.name -> 2
-                    else -> 1
-                }
-            } else {
-                PrefManager.getVal(PrefName.DefaultStartUpTab)
-            }
-            val navbar = binding.includedNavbar.navbar
-            bottomBar = navbar
-            navbar.visibility = View.VISIBLE
-            binding.mainProgressBar.visibility = View.GONE
-            val mainViewPager = binding.viewpager
-            mainViewPager.isUserInputEnabled = false
-            mainViewPager.adapter =
-                ViewPagerAdapter(supportFragmentManager, lifecycle)
-            mainViewPager.setPageTransformer(ZoomOutPageTransformer())
-            navbar.selectTabAt(selectedOption)
-            navbar.setOnTabSelectListener(object :
-                AnimatedBottomBar.OnTabSelectListener {
-                override fun onTabSelected(
-                    lastIndex: Int,
-                    lastTab: AnimatedBottomBar.Tab?,
-                    newIndex: Int,
-                    newTab: AnimatedBottomBar.Tab
-                ) {
-                    navbar.animate().translationZ(12f).setDuration(200).start()
-                    selectedOption = newIndex
-                    mainViewPager.setCurrentItem(newIndex, false)
-                }
-            })
-            if (mainViewPager.currentItem != selectedOption) {
-                mainViewPager.post {
-                    mainViewPager.setCurrentItem(
-                        selectedOption,
-                        false
-                    )
-                }
-            }
-            binding.includedNavbar.navbarContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                bottomMargin = navBarHeight
-            }
+        })
+
+        val tab = when (fragment) {
+            "ANIME" -> 0
+            "MANGA" -> 2
+            "SETTINGS" -> 3
+            else -> 1
         }
+        navbar.selectTabAt(tab)
+        mainViewPager.setCurrentItem(tab, false)
+    }
 
-        var launched = false
-        intent.extras?.let { extras ->
-            val fragmentToLoad = extras.getString("FRAGMENT_TO_LOAD")
-            val mediaId = extras.getInt("mediaId", -1)
-            val commentId = extras.getInt("commentId", -1)
-            val activityId = extras.getInt("activityId", -1)
-
-            if (fragmentToLoad != null && mediaId != -1 && commentId != -1) {
-                val detailIntent = Intent(this, MediaDetailsActivity::class.java).apply {
-                    putExtra("FRAGMENT_TO_LOAD", fragmentToLoad)
-                    putExtra("mediaId", mediaId)
-                    putExtra("commentId", commentId)
-                }
-                launched = true
-                startActivity(detailIntent)
-            } else if (fragmentToLoad == "FEED" && activityId != -1) {
+    private fun handleStartupIntents() {
+        val short = intent.getStringExtra("shortcut")
+        val navbar = findViewById<AnimatedBottomBar>(R.id.navbar)
+        val mainViewPager = findViewById<ViewPager2>(R.id.mainViewPager)
+        if (short != null) {
+            val tab = when (short) {
+                "anime" -> 0
+                "manga" -> 2
+                "settings" -> 3
+                else -> 1
+            }
+            navbar.selectTabAt(tab)
+            mainViewPager.setCurrentItem(tab, false)
+        } else {
+            val activityId = intent.getIntExtra("activityId", 0)
+            if (activityId != 0) {
                 if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
                     val feedIntent = Intent(this, FeedActivity::class.java).apply {
                         putExtra("FRAGMENT_TO_LOAD", "NOTIFICATIONS")
@@ -379,102 +337,152 @@ class MainActivity : AppCompatActivity() {
                     launched = true
                     startActivity(feedIntent)
                 }
-            } else if (fragmentToLoad == "NOTIFICATIONS" && activityId != -1) {
-                Logger.log("MainActivity, onCreate: $activityId")
-                if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-                    val notificationIntent = Intent(this, NotificationActivity::class.java).apply {
-                        putExtra("activityId", activityId)
-                    }
-                    launched = true
-                    startActivity(notificationIntent)
-                }
+            } else {
+                handleMediaIntent()
             }
         }
+    }
+
+    private fun handleMediaIntent() {
         val offlineMode: Boolean = PrefManager.getVal(PrefName.OfflineMode)
         if (!isOnline(this)) {
-            snackString(this@MainActivity.getString(R.string.no_internet_connection))
-            startActivity(Intent(this, NoInternet::class.java))
+            if (!offlineMode) {
+                PrefManager.setVal(PrefName.OfflineMode, true)
+                snackString(getString(R.string.no_internet_offline_mode))
+            }
         } else {
             if (offlineMode) {
-                snackString(this@MainActivity.getString(R.string.no_internet_connection))
-                startActivity(Intent(this, NoInternet::class.java))
-            } else {
-                val model: AnilistHomeViewModel by viewModels()
+                snackString(getString(R.string.offline_mode_active))
+            }
+        }
 
-                //Load Data
-                if (!load && !launched) {
-                    scope.launch(Dispatchers.IO) {
-                        model.loadMain(this@MainActivity)
-                        val id = intent.extras?.getInt("mediaId", 0)?.takeIf { it != 0 }
-                            ?: intent.extras?.getInt("media", 0) ?: 0
-                        val isMAL = intent.extras?.getBoolean("mal") ?: false
-                        val cont = intent.extras?.getBoolean("continue") ?: false
-                        val mediaType = intent.extras?.getString("mediaType")
-                        if (id != 0) {
-                            val media = withContext(Dispatchers.IO) {
-                                Anilist.query.getMedia(id, isMAL, mediaType)
-                            }
-                            if (media != null) {
-                                media.cameFromContinue = cont
-                                startActivity(
-                                    Intent(this@MainActivity, MediaDetailsActivity::class.java)
-                                        .putExtra("media", media as Serializable)
-                                )
-                            } else {
-                                snackString(this@MainActivity.getString(R.string.anilist_not_found))
-                            }
-                        }
-                        val username = intent.extras?.getString("username")
-                        if (username != null) {
-                            val nameInt = username.toIntOrNull()
-                            if (nameInt != null) {
-                                startActivity(
-                                    Intent(this@MainActivity, ProfileActivity::class.java)
-                                        .putExtra("userId", nameInt)
-                                )
-                            } else {
-                                startActivity(
-                                    Intent(this@MainActivity, ProfileActivity::class.java)
-                                        .putExtra("username", username)
-                                )
-                            }
+        if (intent.data != null) {
+            val data = intent.data
+            var id: Int? = null
+            var authorId: Int? = null
+            var characterId: Int? = null
+            if (data?.pathSegments?.size ?: 0 > 1) {
+                id = data?.pathSegments?.get(1)?.toIntOrNull()
+            }
+            when (data?.pathSegments?.get(0)) {
+                "anime" -> {
+                    if (id != null) {
+                        val mediaIntent = Intent(this, MediaDetailsActivity::class.java)
+                        mediaIntent.putExtra("mediaId", id)
+                        mediaIntent.putExtra("anime", true)
+                        startActivity(mediaIntent)
+                    }
+                }
+                "manga" -> {
+                    if (id != null) {
+                        val mediaIntent = Intent(this, MediaDetailsActivity::class.java)
+                        mediaIntent.putExtra("mediaId", id)
+                        mediaIntent.putExtra("anime", false)
+                        startActivity(mediaIntent)
+                    }
+                }
+                "staff" -> {
+                    authorId = id
+                }
+                "character" -> {
+                    characterId = id
+                }
+            }
+            if (characterId != null) {
+                val charIntent = Intent(this, CharacterDetailsActivity::class.java)
+                charIntent.putExtra("characterId", characterId)
+                startActivity(charIntent)
+            }
+            if (authorId != null) {
+                val authorIntent = Intent(this, AuthorActivity::class.java)
+                authorIntent.putExtra("authorId", authorId)
+                startActivity(authorIntent)
+            }
+        } else {
+            lifecycleScope.launch {
+                val id = intent.extras?.getString("media")?.toIntOrNull()
+                    ?: intent.extras?.getInt("media", 0) ?: 0
+                val isMAL = intent.extras?.getBoolean("mal") ?: false
+                val cont = intent.extras?.getBoolean("continue") ?: false
+                val mediaType = intent.extras?.getString("mediaType")
+                if (id != 0) {
+                    val media = withContext(Dispatchers.IO) {
+                        if (isMAL) {
+                            if (mediaType == "MANGA") MAL.getManga(id) else MAL.getAnime(id)
+                        } else {
+                            Anilist.query.getMedia(id)
                         }
                     }
-                    load = true
-                }
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    if (!(PrefManager.getVal(PrefName.AllowOpeningLinks) as Boolean)) {
-                        CustomBottomDialog.newInstance().apply {
-                            title = "Allow Dantotsu to automatically open Anilist & MAL Links?"
-                            val md = "Open settings & click +Add Links & select Anilist & Mal urls"
-                            addView(TextView(this@MainActivity).apply {
-                                val markWon =
-                                    Markwon.builder(this@MainActivity)
-                                        .usePlugin(SoftBreakAddsNewLinePlugin.create()).build()
-                                markWon.setMarkdown(this, md)
-                            })
-
-                            setNegativeButton(this@MainActivity.getString(R.string.no)) {
-                                PrefManager.setVal(PrefName.AllowOpeningLinks, true)
-                                dismiss()
-                            }
-
-                            setPositiveButton(this@MainActivity.getString(R.string.yes)) {
-                                PrefManager.setVal(PrefName.AllowOpeningLinks, true)
-                                tryWith(true) {
-                                    startActivity(
-                                        Intent(Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS)
-                                            .setData(Uri.parse("package:$packageName"))
-                                    )
-                                }
-                                dismiss()
-                            }
-                        }.show(supportFragmentManager, "dialog")
+                    if (media != null) {
+                        val mediaIntent = Intent(this@MainActivity, MediaDetailsActivity::class.java)
+                        mediaIntent.putExtra("media", media)
+                        mediaIntent.putExtra("continue", cont)
+                        startActivity(mediaIntent)
                     }
                 }
             }
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (!(PrefManager.getVal(PrefName.AllowOpeningLinks) as Boolean)) {
+                CustomBottomDialog.newInstance().apply {
+                    title = "Allow Dantotsu to automatically open Anilist & MAL Links?"
+                    val appName = getString(R.string.app_name)
+                    val message = "Dantotsu can automatically open links from Anilist & MyAnimeList." +
+                            " To enable this feature, please follow the steps below:" +
+                            "\n\n1. Tap 'Settings' below." +
+                            "\n2. In the settings screen, tap 'Open by default'." +
+                            "\n3. Enable 'Open supported links'." +
+                            "\n4. Tap 'Supported web addresses' and enable all links." +
+                            "\n\nNote: If you have official Anilist or MyAnimeList apps installed," +
+                            " you may need to disable 'Open supported links' in their respective settings."
+                    val spannable = SpannableStringBuilder(message)
+                    val boldSpan = StyleSpan(Typeface.BOLD)
+                    spannable.setSpan(
+                        boldSpan,
+                        message.indexOf(appName),
+                        message.indexOf(appName) + appName.length,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                    val regex = Regex("(?<=\\n\\d\\.\\s)[^\\n]+")
+                    val matches = regex.findAll(message)
+                    for (match in matches) {
+                        val start = match.range.first
+                        val end = match.range.last + 1
+                        spannable.setSpan(
+                            StyleSpan(Typeface.BOLD),
+                            start,
+                            end,
+                            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                    val noteStart = message.indexOf("Note:")
+                    spannable.setSpan(
+                        StyleSpan(Typeface.BOLD),
+                        noteStart,
+                        noteStart + 5,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                    this.message = spannable
+                    setNegativeButton("Don't ask again") {
+                        PrefManager.setVal(PrefName.AllowOpeningLinks, true)
+                        dismiss()
+                    }
+                    setPositiveButton("Settings") {
+                        PrefManager.setVal(PrefName.AllowOpeningLinks, true)
+                        val intent = Intent(
+                            Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
+                            Uri.parse("package:$packageName")
+                        )
+                        startActivity(intent)
+                        dismiss()
+                    }
+                }.show(supportFragmentManager, "dialog")
+            }
+        }
+    }
+
+    private fun initPostStartupServices() {
         if (PrefManager.getVal(PrefName.OC)) {
             AudioHelper.run(this, R.raw.audio)
             PrefManager.setVal(PrefName.OC, false)
@@ -487,6 +495,25 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (!checkLaunchPreconditions()) return
+
+        ThemeManager(this).applyTheme()
+        val fragment = intent.getStringExtra("FRAGMENT_CLASS_NAME")
+
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        checkCalculatorLock()
+        val offset = setupBottomNavBarBackground()
+        setupIncognitoAndRescueIcons(offset)
+        setupSplashAnimation()
+        setupMainViewPager(fragment, offset)
+        handleStartupIntents()
+        initPostStartupServices()
     }
 
     override fun onRestart() {
