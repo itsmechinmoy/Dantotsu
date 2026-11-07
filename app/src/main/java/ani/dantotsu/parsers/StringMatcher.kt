@@ -61,7 +61,7 @@ class StringMatcher {
             for (i in 0 until closestIndex) {
                 result.add(list[i])
             }
-            for (i in (closestIndex + 1) until list.size) {
+            for (i in closestIndex + 1 until list.size) {
                 result.add(list[i])
             }
             return result
@@ -80,7 +80,7 @@ class StringMatcher {
             for (i in 0 until closestIndex) {
                 result.add(shows[i])
             }
-            for (i in (closestIndex + 1) until shows.size) {
+            for (i in closestIndex + 1 until shows.size) {
                 result.add(shows[i])
             }
             return result

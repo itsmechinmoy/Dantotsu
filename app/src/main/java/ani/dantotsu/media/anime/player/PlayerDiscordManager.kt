@@ -55,7 +55,7 @@ class PlayerDiscordManager(
 
                 val isPaused = !isPlaying
                 val startTimestamp = if (isPaused) null else now - currentPosMs
-                val endTimestamp = if (isPaused) null else (now - currentPosMs) + safeDurationMs
+                val endTimestamp = if (isPaused) null else now - currentPosMs + safeDurationMs
 
                 val stateText = "Episode : ${episode.number}/${media.anime?.totalEpisodes ?: "??"}"
                 val finalState = if (isPaused) "Paused - $stateText" else stateText

@@ -131,8 +131,8 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             isImportingLists = true
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
-                                    val userId = (Anilist.userid
-                                        ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull())
+                                    val userId = Anilist.userid
+                                        ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull()
                                     if (userId == null) {
                                         withContext(Dispatchers.Main) { toast(getString(R.string.login_to_anilist_first)) }
                                         return@launch
@@ -212,8 +212,8 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             isImportingStatuses = true
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
-                                    val userId = (Anilist.userid
-                                        ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull())
+                                    val userId = Anilist.userid
+                                        ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull()
                                     if (userId == null) {
                                         withContext(Dispatchers.Main) { toast(getString(R.string.login_to_anilist_first)) }
                                         return@launch

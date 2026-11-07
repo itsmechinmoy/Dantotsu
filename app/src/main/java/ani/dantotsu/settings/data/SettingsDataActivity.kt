@@ -108,7 +108,7 @@ class SettingsDataActivity : AppCompatActivity() {
             val availableBytes = availableBlocks * blockSize
             val usedBytes = totalBytes - availableBytes
 
-            val progress = if (totalBytes > 0) ((usedBytes * 100) / totalBytes).toInt() else 0
+            val progress = if (totalBytes > 0) (usedBytes * 100 / totalBytes).toInt() else 0
             binding.storageProgressBar.progress = progress
 
             val freeFormatted = Formatter.formatFileSize(this, availableBytes)

@@ -50,7 +50,7 @@ class Swipy @JvmOverloads constructor(
             if (vertical) {
                 verticalPos = when {
                     !it.canScrollVertically(1) && !it.canScrollVertically(-1) -> {
-                        if (initialDown > (Resources.getSystem().displayMetrics.heightPixels / 2))
+                        if (initialDown > Resources.getSystem().displayMetrics.heightPixels / 2)
                             VerticalPosition.Bottom
                         else
                             VerticalPosition.Top
@@ -63,7 +63,7 @@ class Swipy @JvmOverloads constructor(
             } else {
                 horizontalPos = when {
                     !it.canScrollHorizontally(1) && !it.canScrollHorizontally(-1) -> {
-                        if (initialDown > (Resources.getSystem().displayMetrics.widthPixels / 2))
+                        if (initialDown > Resources.getSystem().displayMetrics.widthPixels / 2)
                             HorizontalPosition.Right
                         else
                             HorizontalPosition.Left

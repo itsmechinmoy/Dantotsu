@@ -519,7 +519,7 @@ object SettingsRegistry {
                 breadcrumbs = "${context.getString(R.string.settings)} > ${context.getString(R.string.accounts)}",
                 targetActivity = SettingsAccountActivity::class.java,
                 highlightKey = context.getString(R.string.enable_rpc),
-                isVisible = (Discord.token != null)
+                isVisible = Discord.token != null
             )
         )
         list.add(
@@ -542,7 +542,7 @@ object SettingsRegistry {
                 breadcrumbs = "${context.getString(R.string.settings)} > ${context.getString(R.string.accounts)}",
                 targetActivity = SettingsAccountActivity::class.java,
                 highlightKey = context.getString(R.string.comments_button),
-                isVisible = (Anilist.token != null)
+                isVisible = Anilist.token != null
             )
         )
 

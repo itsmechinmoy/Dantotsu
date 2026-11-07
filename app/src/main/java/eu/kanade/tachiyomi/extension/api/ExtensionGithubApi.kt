@@ -106,7 +106,7 @@ internal class ExtensionGithubApi {
 
     private fun ByteArray.decompressIfGzipped(): ByteArray {
         if (this.size < 2) return this
-        val isGzip = (this[0].toInt() and 0xFF == 0x1F) && (this[1].toInt() and 0xFF == 0x8B)
+        val isGzip = this[0].toInt() and 0xFF == 0x1F && this[1].toInt() and 0xFF == 0x8B
         if (!isGzip) return this
         return try {
             ByteArrayInputStream(this).source().gzip().buffer().readByteArray()

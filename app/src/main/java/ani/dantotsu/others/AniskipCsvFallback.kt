@@ -91,7 +91,7 @@ class AniskipCsvFallback(context: Context) {
         val dbFile = appContext.getDatabasePath(DB_NAME)
         if (!dbFile.exists() || dbFile.length() == 0L) return true
         val lastUpdated = getLastUpdated()
-        return (System.currentTimeMillis() - lastUpdated) > SYNC_INTERVAL_MS
+        return System.currentTimeMillis() - lastUpdated > SYNC_INTERVAL_MS
     }
 
     suspend fun syncIfNeeded() = withContext(Dispatchers.IO) {

@@ -253,7 +253,7 @@ class ActivityFragment : Fragment() {
         return hasMoreActivities &&
                 !binding.listRecyclerView.canScrollVertically(1) &&
                 !binding.feedRefresh.isVisible && adapter?.itemCount != 0 &&
-                layoutManager == (adapter!!.itemCount - 1)
+                layoutManager == adapter!!.itemCount - 1
 
     }
 

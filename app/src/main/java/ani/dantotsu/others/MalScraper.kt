@@ -72,7 +72,7 @@ object MalScraper {
 
         // 2. Fallback to Jikan API (which uses multi-mirror fallback: Jikan, midnightignite, tenrai)
         try {
-            if (media.anime != null && (media.anime.op.isEmpty() && media.anime.ed.isEmpty())) {
+            if (media.anime != null && media.anime.op.isEmpty() && media.anime.ed.isEmpty()) {
                 val jikanData = MAL.jikan.getAnimeById(malId)
                 if (jikanData != null) {
                     if (media.nameMAL.isNullOrBlank()) {

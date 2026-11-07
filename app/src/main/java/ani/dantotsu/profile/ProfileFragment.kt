@@ -129,7 +129,7 @@ class ProfileFragment : Fragment() {
             (user.statistics.anime.minutesWatched / (24 * 60)).toString()
         binding.statsAnimeMeanScore.text = user.statistics.anime.meanScore.toString()
         binding.statsChaptersRead.text = user.statistics.manga.chaptersRead.toString()
-        binding.statsVolumeRead.text = (user.statistics.manga.volumesRead).toString()
+        binding.statsVolumeRead.text = user.statistics.manga.volumesRead.toString()
         binding.statsMangaMeanScore.text = user.statistics.manga.meanScore.toString()
         initRecyclerView(
             model.getAnimeFav(),

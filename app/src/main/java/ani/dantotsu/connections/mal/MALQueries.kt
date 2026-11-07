@@ -54,7 +54,7 @@ class MALQueries {
             }
         }
 
-        return lastResponse ?: throw (lastException ?: Exception("Request failed after $maxAttempts attempts"))
+        return lastResponse ?: throw lastException ?: Exception("Request failed after $maxAttempts attempts")
     }
 
     suspend fun getUserData(): Boolean {

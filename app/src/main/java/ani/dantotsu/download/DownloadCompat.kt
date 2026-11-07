@@ -94,18 +94,18 @@ class DownloadCompat {
                     Uri.fromFile(banner)
                 } else null
                 val title = mediaModel.mainName()
-                val score = ((if (mediaModel.userScore == 0) (mediaModel.meanScore
-                    ?: 0) else mediaModel.userScore) / 10.0).toString()
+                val score = ((if (mediaModel.userScore == 0) mediaModel.meanScore
+                    ?: 0 else mediaModel.userScore) / 10.0).toString()
                 val isOngoing =
                     mediaModel.status == currContext()?.getString(R.string.status_releasing)
                 val isUserScored = mediaModel.userScore != 0
                 val watchedEpisodes = (mediaModel.userProgress ?: "~").toString()
                 val totalEpisode =
-                    if (mediaModel.anime?.nextAiringEpisode != null) (mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
-                        ?: "~").toString()) else (mediaModel.anime?.totalEpisodes ?: "~").toString()
+                    if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
+                        ?: "~").toString() else (mediaModel.anime?.totalEpisodes ?: "~").toString()
                 val chapters = " Episodes"
                 val totalEpisodesList =
-                    if (mediaModel.anime?.nextAiringEpisode != null) (mediaModel.anime.nextAiringEpisode.toString()) else (mediaModel.anime?.totalEpisodes
+                    if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() else (mediaModel.anime?.totalEpisodes
                         ?: "~").toString()
                 return OfflineAnimeModel(
                     title,
@@ -163,8 +163,8 @@ class DownloadCompat {
                     Uri.fromFile(banner)
                 } else null
                 val title = mediaModel.mainName()
-                val score = ((if (mediaModel.userScore == 0) (mediaModel.meanScore
-                    ?: 0) else mediaModel.userScore) / 10.0).toString()
+                val score = ((if (mediaModel.userScore == 0) mediaModel.meanScore
+                    ?: 0 else mediaModel.userScore) / 10.0).toString()
                 val isOngoing =
                     mediaModel.status == currContext()?.getString(R.string.status_releasing)
                 val isUserScored = mediaModel.userScore != 0

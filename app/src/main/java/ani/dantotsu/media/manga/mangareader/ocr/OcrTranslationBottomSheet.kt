@@ -179,7 +179,7 @@ class OcrTranslationBottomSheet : BottomSheetDialogFragment() {
                                         ModuleInstallStatusUpdate.InstallState.STATE_DOWNLOADING -> {
                                             val info = statusUpdate.progressInfo
                                             if (info != null && info.totalBytesToDownload > 0) {
-                                                val percent = ((info.bytesDownloaded * 100) / info.totalBytesToDownload).toInt()
+                                                val percent = (info.bytesDownloaded * 100 / info.totalBytesToDownload).toInt()
                                                 lifecycleScope.launch(Dispatchers.Main) {
                                                     if (isAdded) binding.ocrStatusText.text = "Downloading Japanese OCR model ($percent%)..."
                                                 }

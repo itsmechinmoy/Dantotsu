@@ -139,13 +139,13 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
 
         binding.readerDirectionText.text =
             resources.getStringArray(R.array.manga_directions)[settings.direction.ordinal]
-        binding.readerDirection.rotation = 90f * (settings.direction.ordinal)
+        binding.readerDirection.rotation = 90f * settings.direction.ordinal
         binding.readerDirection.setOnClickListener {
             settings.direction =
                 Directions[settings.direction.ordinal + 1] ?: Directions.TOP_TO_BOTTOM
             binding.readerDirectionText.text =
                 resources.getStringArray(R.array.manga_directions)[settings.direction.ordinal]
-            binding.readerDirection.rotation = 90f * (settings.direction.ordinal)
+            binding.readerDirection.rotation = 90f * settings.direction.ordinal
             activity.applySettings()
         }
 

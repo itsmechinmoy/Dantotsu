@@ -117,7 +117,7 @@ class HomeFragment : Fragment() {
                 }
 
                 val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
-                val bannerUrl = if (rescueMode) (Anilist.bg ?: MAL.avatar) else Anilist.bg
+                val bannerUrl = if (rescueMode) Anilist.bg ?: MAL.avatar else Anilist.bg
                 blurImage(
                     if (bannerAnimations) currentBinding.homeUserBg else currentBinding.homeUserBgNoKen,
                     bannerUrl
