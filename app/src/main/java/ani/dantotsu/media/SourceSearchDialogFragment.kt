@@ -64,21 +64,7 @@ class SourceSearchDialogFragment : BottomSheetDialogFragment() {
                 binding.searchRecyclerView.visibility = View.GONE
                 binding.searchProgress.visibility = View.VISIBLE
 
-                val source = if (isNovel) {
-                    val novelSourceIndex = media!!.selected!!.sourceIndex.let {
-                        if (it >= model.novelSources.names.size) 0 else it
-                    }
-                    i = novelSourceIndex
-                    model.novelSources[novelSourceIndex]
-                } else if (media!!.anime != null) {
-                    if (i == null) i = media!!.selected?.sourceIndex ?: 0
-                    (if (media!!.isAdult) HAnimeSources else AnimeSources)[i!!]
-                } else {
-                    anime = false
-                    if (i == null) i = media!!.selected?.sourceIndex ?: 0
-                    (if (media!!.isAdult) HMangaSources else MangaSources)[i!!]
-                }
-
+                val source = resolveSource(media!!)
                 fun search() {
                     binding.searchBarText.clearFocus()
                     imm.hideSoftInputFromWindow(binding.searchBarText.windowToken, 0)
@@ -141,4 +127,22 @@ class SourceSearchDialogFragment : BottomSheetDialogFragment() {
         model.responses.value = null
         super.dismiss()
     }
+    private fun resolveSource(media: Media): ShowParser? {
+        return if (isNovel) {
+                    val novelSourceIndex = media!!.selected!!.sourceIndex.let {
+                        if (it >= model.novelSources.names.size) 0 else it
+                    }
+                    i = novelSourceIndex
+                    model.novelSources[novelSourceIndex]
+                } else if (media!!.anime != null) {
+                    if (i == null) i = media!!.selected?.sourceIndex ?: 0
+                    (if (media!!.isAdult) HAnimeSources else AnimeSources)[i!!]
+                } else {
+                    anime = false
+                    if (i == null) i = media!!.selected?.sourceIndex ?: 0
+                    (if (media!!.isAdult) HMangaSources else MangaSources)[i!!]
+                }
+
+    }
+
 }

@@ -187,6 +187,15 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
         binding.mediaListShow.setOnCheckedChangeListener { _, checked ->
             remove = checked
         }
+        setupSaveButton(statuses, statusStrings, removeList)
+    }
+
+    private fun setupSaveButton(
+        statuses: Array<String>,
+        statusStrings: Array<String>,
+        removeList: Set<String>
+    ) {
+        val scope = viewLifecycleOwner.lifecycleScope
         binding.mediaListSave.setOnClickListener {
             val progressText = binding.mediaListProgress.text.toString()
             val scoreText = binding.mediaListScore.text.toString()
@@ -246,7 +255,6 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
             }
         }
     }
-
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null

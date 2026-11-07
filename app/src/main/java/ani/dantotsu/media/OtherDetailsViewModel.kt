@@ -187,9 +187,7 @@ class OtherDetailsViewModel : ViewModel() {
 
     private val author: MutableLiveData<Author> = MutableLiveData(null)
     fun getAuthor(): LiveData<Author> = author
-    suspend fun loadAuthor(m: Author) {
-        if (author.value != null) return
-        if (PrefManager.getVal(PrefName.RescueMode)) {
+    private suspend fun loadAuthorFromJikan(m: Author) {
             tryWithSuspend {
                 val jikanData = MAL.jikan.getPersonFull(m.id)
                 if (jikanData != null) {
@@ -321,7 +319,13 @@ class OtherDetailsViewModel : ViewModel() {
                     m.character = characters
                 }
             }
-            author.postValue(m)
+        author.postValue(m)
+    }
+
+    suspend fun loadAuthor(m: Author) {
+        if (author.value != null) return
+        if (PrefManager.getVal(PrefName.RescueMode)) {
+            loadAuthorFromJikan(m)
             return
         }
         author.postValue(Anilist.query.getAuthorDetails(m))
@@ -390,6 +394,28 @@ class OtherDetailsViewModel : ViewModel() {
         calendar.postValue(cacheToUse)
     }
 
+    private suspend fun fetchWatchingMalData(): Pair<MutableSet<Int>, MutableMap<Int, Int>> {
+        val watchingMalIds = mutableSetOf<Int>()
+        val watchedEpisodesMap = mutableMapOf<Int, Int>()
+        if (MAL.token != null) {
+            tryWithSuspend {
+                var offset = 0
+                do {
+                    val listResp = MAL.query.getUserAnimeList(
+                        status = "watching", limit = 100, offset = offset
+                    )
+                    listResp?.data?.forEach { entry ->
+                        watchingMalIds.add(entry.node.id)
+                        watchedEpisodesMap[entry.node.id] =
+                            entry.listStatus?.numEpisodesWatched ?: 0
+                    }
+                    offset += 100
+                } while (listResp?.paging?.next != null)
+            }
+        }
+        return Pair(watchingMalIds, watchedEpisodesMap)
+    }
+
     private suspend fun loadCalendarFromJikan(showOnlyLibrary: Boolean, showOnlyDubbed: Boolean) {
         if (cachedAllCalendarData == null || cachedLibraryCalendarData == null) {
             val jikan = MAL.jikan
@@ -404,25 +430,7 @@ class OtherDetailsViewModel : ViewModel() {
             val allMap = mutableMapOf<String, MutableList<Media>>()
             val libraryMap = mutableMapOf<String, MutableList<Media>>()
 
-            val watchingMalIds = mutableSetOf<Int>()
-            val watchedEpisodesMap = mutableMapOf<Int, Int>()
-            if (MAL.token != null) {
-                tryWithSuspend {
-                    var offset = 0
-                    do {
-                        val listResp = MAL.query.getUserAnimeList(
-                            status = "watching", limit = 100, offset = offset
-                        )
-                        listResp?.data?.forEach { entry ->
-                            watchingMalIds.add(entry.node.id)
-                            watchedEpisodesMap[entry.node.id] =
-                                entry.listStatus?.numEpisodesWatched ?: 0
-                        }
-                        offset += 100
-                    } while (listResp?.paging?.next != null)
-                }
-            }
-
+            val (watchingMalIds, watchedEpisodesMap) = fetchWatchingMalData()
             for (offsetDay in -1..6) {
                 val cal = Calendar.getInstance()
                 cal.add(Calendar.DAY_OF_YEAR, offsetDay)

@@ -166,109 +166,8 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
             true
         }
 
-        binding.sortByFilter.setOnClickListener {
-            val popupMenu = PopupMenu(requireContext(), it)
-            popupMenu.menuInflater.inflate(R.menu.sortby_filter_menu, popupMenu.menu)
-            popupMenu.setOnMenuItemClickListener { menuItem ->
-                when (menuItem.itemId) {
-                    R.id.sort_by_score -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[0]
-                        binding.sortByFilter.setImageResource(R.drawable.ic_round_area_chart_24)
-                        startBounceZoomAnimation()
-                    }
-
-                    R.id.sort_by_popular -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[1]
-                        binding.sortByFilter.setImageResource(R.drawable.ic_round_filter_peak_24)
-                        startBounceZoomAnimation()
-                    }
-
-                    R.id.sort_by_trending -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[2]
-                        binding.sortByFilter.setImageResource(R.drawable.ic_round_star_graph_24)
-                        startBounceZoomAnimation()
-                    }
-
-                    R.id.sort_by_recent -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[3]
-                        binding.sortByFilter.setImageResource(R.drawable.ic_round_new_releases_24)
-                        startBounceZoomAnimation()
-                    }
-
-                    R.id.sort_by_a_z -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[4]
-                        binding.sortByFilter.setImageResource(R.drawable.ic_round_filter_list_24)
-                        startBounceZoomAnimation()
-                    }
-
-                    R.id.sort_by_z_a -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[5]
-                        binding.sortByFilter.setImageResource(R.drawable.ic_round_filter_list_24_reverse)
-                        startBounceZoomAnimation()
-                    }
-
-                    R.id.sort_by_pure_pain -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[6]
-                        binding.sortByFilter.setImageResource(R.drawable.ic_round_assist_walker_24)
-                        startBounceZoomAnimation()
-                    }
-
-                    R.id.sort_by_favourites -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy.getOrNull(7)
-                        binding.sortByFilter.setImageResource(R.drawable.ic_round_favorite_24)
-                        startBounceZoomAnimation()
-                    }
-
-                    R.id.sort_by_updated -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy.getOrNull(8)
-                        binding.sortByFilter.setImageResource(R.drawable.ic_round_history_24)
-                        startBounceZoomAnimation()
-                    }
-                }
-                true
-            }
-            popupMenu.show()
-        }
-
-        binding.countryFilter.setOnClickListener {
-            val popupMenu = PopupMenu(requireContext(), it)
-            popupMenu.menuInflater.inflate(R.menu.country_filter_menu, popupMenu.menu)
-            popupMenu.setOnMenuItemClickListener { menuItem ->
-                when (menuItem.itemId) {
-                    R.id.country_global -> {
-                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_search_googlefonts)
-                        startBounceZoomAnimation(binding.countryFilter)
-                    }
-
-                    R.id.country_china -> {
-                        activity.aniMangaResult.countryOfOrigin = "CN"
-                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_china_googlefonts)
-                        startBounceZoomAnimation(binding.countryFilter)
-                    }
-
-                    R.id.country_south_korea -> {
-                        activity.aniMangaResult.countryOfOrigin = "KR"
-                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_south_korea_googlefonts)
-                        startBounceZoomAnimation(binding.countryFilter)
-                    }
-
-                    R.id.country_japan -> {
-                        activity.aniMangaResult.countryOfOrigin = "JP"
-                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_japan_googlefonts)
-                        startBounceZoomAnimation(binding.countryFilter)
-                    }
-
-                    R.id.country_taiwan -> {
-                        activity.aniMangaResult.countryOfOrigin = "TW"
-                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_taiwan_googlefonts)
-                        startBounceZoomAnimation(binding.countryFilter)
-                    }
-                }
-                true
-            }
-            popupMenu.show()
-        }
-
+        setupSortByMenu()
+        setupCountryFilterMenu()
         binding.searchFilterApply.setOnClickListener {
             val isRescueModeApply: Boolean = ani.dantotsu.settings.saving.PrefManager.getVal(
                 ani.dantotsu.settings.saving.PrefName.RescueMode
@@ -474,6 +373,115 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
 
     companion object {
         fun newInstance() = SearchFilterBottomDialog()
+    }
+
+    private fun setupSortByMenu() {
+        binding.sortByFilter.setOnClickListener {
+            val popupMenu = PopupMenu(requireContext(), it)
+            popupMenu.menuInflater.inflate(R.menu.sortby_filter_menu, popupMenu.menu)
+            popupMenu.setOnMenuItemClickListener { menuItem ->
+                when (menuItem.itemId) {
+                    R.id.sort_by_score -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[0]
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_area_chart_24)
+                        startBounceZoomAnimation()
+                    }
+
+                    R.id.sort_by_popular -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[1]
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_filter_peak_24)
+                        startBounceZoomAnimation()
+                    }
+
+                    R.id.sort_by_trending -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[2]
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_star_graph_24)
+                        startBounceZoomAnimation()
+                    }
+
+                    R.id.sort_by_recent -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[3]
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_new_releases_24)
+                        startBounceZoomAnimation()
+                    }
+
+                    R.id.sort_by_a_z -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[4]
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_filter_list_24)
+                        startBounceZoomAnimation()
+                    }
+
+                    R.id.sort_by_z_a -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[5]
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_filter_list_24_reverse)
+                        startBounceZoomAnimation()
+                    }
+
+                    R.id.sort_by_pure_pain -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[6]
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_assist_walker_24)
+                        startBounceZoomAnimation()
+                    }
+
+                    R.id.sort_by_favourites -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy.getOrNull(7)
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_favorite_24)
+                        startBounceZoomAnimation()
+                    }
+
+                    R.id.sort_by_updated -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy.getOrNull(8)
+                        binding.sortByFilter.setImageResource(R.drawable.ic_round_history_24)
+                        startBounceZoomAnimation()
+                    }
+                }
+                true
+            }
+            popupMenu.show()
+        }
+
+    }
+
+    private fun setupCountryFilterMenu() {
+        binding.countryFilter.setOnClickListener {
+            val popupMenu = PopupMenu(requireContext(), it)
+            popupMenu.menuInflater.inflate(R.menu.country_filter_menu, popupMenu.menu)
+            popupMenu.setOnMenuItemClickListener { menuItem ->
+                when (menuItem.itemId) {
+                    R.id.country_global -> {
+                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_search_googlefonts)
+                        startBounceZoomAnimation(binding.countryFilter)
+                    }
+
+                    R.id.country_china -> {
+                        activity.aniMangaResult.countryOfOrigin = "CN"
+                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_china_googlefonts)
+                        startBounceZoomAnimation(binding.countryFilter)
+                    }
+
+                    R.id.country_south_korea -> {
+                        activity.aniMangaResult.countryOfOrigin = "KR"
+                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_south_korea_googlefonts)
+                        startBounceZoomAnimation(binding.countryFilter)
+                    }
+
+                    R.id.country_japan -> {
+                        activity.aniMangaResult.countryOfOrigin = "JP"
+                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_japan_googlefonts)
+                        startBounceZoomAnimation(binding.countryFilter)
+                    }
+
+                    R.id.country_taiwan -> {
+                        activity.aniMangaResult.countryOfOrigin = "TW"
+                        binding.countryFilter.setImageResource(R.drawable.ic_round_globe_taiwan_googlefonts)
+                        startBounceZoomAnimation(binding.countryFilter)
+                    }
+                }
+                true
+            }
+            popupMenu.show()
+        }
+
     }
 
 }

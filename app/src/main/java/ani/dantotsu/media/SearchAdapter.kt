@@ -108,65 +108,7 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
         binding.searchFilter.setOnClickListener {
             SearchFilterBottomDialog.newInstance().show(activity.supportFragmentManager, "dialog")
         }
-        binding.searchFilter.setOnLongClickListener {
-            val popupMenu = PopupMenu(activity, binding.searchFilter)
-            popupMenu.menuInflater.inflate(R.menu.sortby_filter_menu, popupMenu.menu)
-            popupMenu.setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    R.id.sort_by_score -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[0]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_popular -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[1]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_trending -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[2]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_recent -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[3]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_a_z -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[4]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_z_a -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[5]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_pure_pain -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[6]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-                }
-                true
-            }
-            popupMenu.show()
-            true
-        }
+        setupFilterLongClick()
         if (activity.aniMangaResult.type != "ANIME") {
             binding.searchByImage.visibility = View.GONE
         }
@@ -329,4 +271,66 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
             return watcher
         }
     }
+    private fun setupFilterLongClick() {
+        binding.searchFilter.setOnLongClickListener {
+            val popupMenu = PopupMenu(activity, binding.searchFilter)
+            popupMenu.menuInflater.inflate(R.menu.sortby_filter_menu, popupMenu.menu)
+            popupMenu.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.sort_by_score -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[0]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_popular -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[1]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_trending -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[2]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_recent -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[3]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_a_z -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[4]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_z_a -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[5]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_pure_pain -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[6]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+                }
+                true
+            }
+            popupMenu.show()
+            true
+        }
+    }
+
 }

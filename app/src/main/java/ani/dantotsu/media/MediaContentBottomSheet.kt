@@ -82,6 +82,10 @@ class MediaContentBottomSheet : BottomSheetDialogFragment() {
             return
         }
 
+        fetchAndDisplayContent(mode, media)
+    }
+
+    private fun fetchAndDisplayContent(mode: String, media: Media) {
         viewLifecycleOwner.lifecycleScope.launch {
             if (mode == MODE_WATCH_ORDER) {
                 val items = withContext(Dispatchers.IO) {
@@ -113,7 +117,6 @@ class MediaContentBottomSheet : BottomSheetDialogFragment() {
             }
         }
     }
-
     private fun displayWatchOrder(
         items: List<MediaDetailsViewModel.WatchOrderItem>,
         media: Media?

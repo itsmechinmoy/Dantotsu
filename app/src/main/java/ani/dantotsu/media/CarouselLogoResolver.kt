@@ -35,49 +35,11 @@ object CarouselLogoResolver {
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         val isMalMode = rescueMode || (media.idMAL != null && media.idMAL == media.id)
 
-        if (isMalMode) {
-            val malId = (media.idMAL ?: media.id).toString()
-            if (malId.isNotBlank() && malId != "0") {
-                logo = fromAniZip("mal_id", malId)
-                    ?: fromAniZip("malId", malId)
-            }
-            if (logo == null && !rescueMode && media.id > 0) {
-                logo = fromAniZip("anilist_id", media.id.toString())
-                    ?: fromAniZip("anilistId", media.id.toString())
-            }
+        logo = if (isMalMode) {
+            resolveMalModeLogo(media, rescueMode)
         } else {
-            // 1. Try AniZip mapping by Anilist ID
-            if (media.id > 0) {
-                logo = fromAniZip("anilist_id", media.id.toString())
-                    ?: fromAniZip("anilistId", media.id.toString())
-            }
-
-            // 2. Try AniZip mapping by MAL ID
-            if (logo == null && media.idMAL != null && media.idMAL!! > 0) {
-                logo = fromAniZip("mal_id", media.idMAL.toString())
-                    ?: fromAniZip("malId", media.idMAL.toString())
-            }
-
-            // 3. Fallback: try IdMappers to resolve MAL ID
-            if (logo == null && media.id > 0) {
-                val ids = runCatching { IdMappers.getIds(media.id) }.getOrNull()
-                if (ids?.malId != null && ids.malId != media.idMAL) {
-                    logo = fromAniZip("mal_id", ids.malId.toString())
-                        ?: fromAniZip("malId", ids.malId.toString())
-                }
-            }
-        }
-
-        // 4. TMDB Fallback
-        if (logo == null && media.id > 0) {
-            val tmdbId = media.idTMDB?.toIntOrNull()
-                ?: runCatching { IdMappers.getIds(media.id)?.tmdbId }.getOrNull()
-            if (tmdbId != null && tmdbId > 0) {
-                val isMovie = media.anime?.totalEpisodes == 1 || media.typeMAL?.equals("Movie", ignoreCase = true) == true
-                logo = TmdbService.getClearLogo(tmdbId, isMovie)
-            }
-        }
-
+            resolveAnilistModeLogo(media)
+        } ?: resolveTmdbLogo(media)
         cache[cacheKey] = logo ?: NO_LOGO
         logo
     }
@@ -149,4 +111,43 @@ object CarouselLogoResolver {
             Logger.log("CarouselLogoResolver error fetching $url: ${it.message}")
         }.getOrNull()
     }
+    private suspend fun resolveMalModeLogo(media: Media, rescueMode: Boolean): String? {
+        val malId = (media.idMAL ?: media.id).toString()
+        var logo: String? = null
+        if (malId.isNotBlank() && malId != "0") {
+            logo = fromAniZip("mal_id", malId) ?: fromAniZip("malId", malId)
+        }
+        if (logo == null && !rescueMode && media.id > 0) {
+            logo = fromAniZip("anilist_id", media.id.toString()) ?: fromAniZip("anilistId", media.id.toString())
+        }
+        return logo
+    }
+
+    private suspend fun resolveAnilistModeLogo(media: Media): String? {
+        var logo: String? = null
+        if (media.id > 0) {
+            logo = fromAniZip("anilist_id", media.id.toString()) ?: fromAniZip("anilistId", media.id.toString())
+        }
+        if (logo == null && media.idMAL != null && media.idMAL!! > 0) {
+            logo = fromAniZip("mal_id", media.idMAL.toString()) ?: fromAniZip("malId", media.idMAL.toString())
+        }
+        if (logo == null && media.id > 0) {
+            val ids = runCatching { IdMappers.getIds(media.id) }.getOrNull()
+            if (ids?.malId != null && ids.malId != media.idMAL) {
+                logo = fromAniZip("mal_id", ids.malId.toString()) ?: fromAniZip("malId", ids.malId.toString())
+            }
+        }
+        return logo
+    }
+
+    private suspend fun resolveTmdbLogo(media: Media): String? {
+        if (media.id <= 0) return null
+        val tmdbId = media.idTMDB?.toIntOrNull()
+            ?: runCatching { IdMappers.getIds(media.id)?.tmdbId }.getOrNull()
+        return if (tmdbId != null && tmdbId > 0) {
+            val isMovie = media.anime?.totalEpisodes == 1 || media.typeMAL?.equals("Movie", ignoreCase = true) == true
+            TmdbService.getClearLogo(tmdbId, isMovie)
+        } else null
+    }
+
 }

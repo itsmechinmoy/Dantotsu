@@ -57,6 +57,43 @@ class StudioActivity : AppCompatActivity() {
             onBackPressedDispatcher.onBackPressed()
         }
 
+        setupStudioFav()
+        model.getStudio().observe(this) {
+            if (it != null) {
+                studio = it
+                loaded = true
+                binding.studioProgressBar.visibility = View.GONE
+                binding.studioRecycler.visibility = View.VISIBLE
+
+                setupStudioRecycler(studio!!, screenWidth)
+            }
+        }
+        val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(true) }
+        live.observe(this) {
+            if (it) {
+                scope.launch {
+                    if (studio != null)
+                        withContext(Dispatchers.IO) { model.loadStudio(studio!!) }
+                    live.postValue(false)
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        if (Refresh.activity.containsKey(this.hashCode())) {
+            Refresh.activity.remove(this.hashCode())
+        }
+        super.onDestroy()
+    }
+
+    override fun onResume() {
+        if (::binding.isInitialized) {
+            binding.studioProgressBar.isGone = loaded
+        }
+        super.onResume()
+    }
+    private fun setupStudioFav() {
         var isFav = false
         binding.studioFav.visibility = if (ani.dantotsu.connections.anilist.Anilist.token != null) View.VISIBLE else View.GONE
         scope.launch(Dispatchers.IO) {
@@ -92,16 +129,12 @@ class StudioActivity : AppCompatActivity() {
             }
         }
 
-        model.getStudio().observe(this) {
-            if (it != null) {
-                studio = it
-                loaded = true
-                binding.studioProgressBar.visibility = View.GONE
-                binding.studioRecycler.visibility = View.VISIBLE
+    }
 
+    private fun setupStudioRecycler(studio: Studio, screenWidth: Float) {
                 val titlePosition = arrayListOf<Int>()
                 val concatAdapter = ConcatAdapter()
-                val map = studio!!.yearMedia ?: return@observe
+                val map = studio.yearMedia ?: return@observe
                 val keys = map.keys.toTypedArray()
                 var pos = 0
 
@@ -128,31 +161,6 @@ class StudioActivity : AppCompatActivity() {
 
                 binding.studioRecycler.adapter = concatAdapter
                 binding.studioRecycler.layoutManager = gridLayoutManager
-            }
-        }
-        val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(true) }
-        live.observe(this) {
-            if (it) {
-                scope.launch {
-                    if (studio != null)
-                        withContext(Dispatchers.IO) { model.loadStudio(studio!!) }
-                    live.postValue(false)
-                }
-            }
-        }
     }
 
-    override fun onDestroy() {
-        if (Refresh.activity.containsKey(this.hashCode())) {
-            Refresh.activity.remove(this.hashCode())
-        }
-        super.onDestroy()
-    }
-
-    override fun onResume() {
-        if (::binding.isInitialized) {
-            binding.studioProgressBar.isGone = loaded
-        }
-        super.onResume()
-    }
 }

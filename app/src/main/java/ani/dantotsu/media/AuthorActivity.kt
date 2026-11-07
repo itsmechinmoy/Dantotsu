@@ -75,48 +75,7 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
             )
         }
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-        val link = if (rescueMode) {
-            "https://myanimelist.net/people/${author.id}"
-        } else {
-            "https://anilist.co/staff/${author.id}"
-        }
-        binding.characterShare.setOnClickListener {
-            val i = Intent(Intent.ACTION_SEND)
-            i.type = "text/plain"
-            i.putExtra(Intent.EXTRA_TEXT, link)
-            startActivity(Intent.createChooser(i, author.name))
-        }
-        binding.characterShare.setOnLongClickListener {
-            openLinkInBrowser(link)
-            true
-        }
-        if (!rescueMode) {
-            lifecycleScope.launch {
-                withContext(Dispatchers.IO) {
-                    author.isFav =
-                        Anilist.query.isUserFav(AnilistMutations.FavType.STAFF, author.id)
-                }
-                withContext(Dispatchers.Main) {
-                    binding.characterFav.setImageResource(
-                        if (author.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
-                    )
-                }
-            }
-            binding.characterFav.setOnClickListener {
-                lifecycleScope.launch {
-                    if (Anilist.mutation.toggleFav(AnilistMutations.FavType.STAFF, author.id)) {
-                        author.isFav = !author.isFav
-                        binding.characterFav.setImageResource(
-                            if (author.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
-                        )
-                    } else {
-                        snackString("Failed to toggle favorite")
-                    }
-                }
-            }
-        } else {
-            binding.characterFav.visibility = View.GONE
-        }
+        setupAuthorHeader(rescueMode)
         model.getAuthor().observe(this) {
             if (it != null) {
                 author = it
@@ -126,54 +85,7 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
                 if (author.yearMedia.isNullOrEmpty()) {
                     binding.characterRecyclerView.visibility = View.GONE
                 }
-                val titlePosition = arrayListOf<Int>()
-                val concatAdapter = ConcatAdapter()
-                val map = author.yearMedia ?: return@observe
-                val keys = map.keys.toTypedArray()
-                var pos = 0
-
-                val gridSize = (screenWidth / 124f).toInt()
-                val gridLayoutManager = GridLayoutManager(this, gridSize)
-                gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                    override fun getSpanSize(position: Int): Int {
-                        return when (position in titlePosition) {
-                            true -> gridSize
-                            else -> 1
-                        }
-                    }
-                }
-                val desc = createDesc(author)
-                if (desc.isNotBlank()) {
-                    binding.authorCharacterDesc.visibility = View.VISIBLE
-                    val markWon = Markwon.builder(this).usePlugin(SoftBreakAddsNewLinePlugin.create())
-                        .usePlugin(SpoilerPlugin()).build()
-                    markWon.setMarkdown(binding.authorCharacterDesc, desc)
-                } else {
-                    binding.authorCharacterDesc.visibility = View.GONE
-                }
-                for (i in keys.indices) {
-                    val medias = map[keys[i]]!!
-                    val empty = if (medias.size >= 4) medias.size % 4 else 4 - medias.size
-                    titlePosition.add(pos)
-                    pos += empty + medias.size + 1
-
-                    concatAdapter.addAdapter(TitleAdapter("${keys[i]} (${medias.size})"))
-                    concatAdapter.addAdapter(MediaAdaptor(0, medias, this, true))
-                    concatAdapter.addAdapter(EmptyAdapter(empty))
-                }
-                binding.characterRecyclerView.adapter = concatAdapter
-                binding.characterRecyclerView.layoutManager = gridLayoutManager
-
-                binding.authorCharactersRecycler.visibility = View.VISIBLE
-                binding.AuthorCharactersText.visibility = View.VISIBLE
-                binding.authorCharactersRecycler.adapter =
-                    CharacterAdapter(author.character ?: arrayListOf())
-                binding.authorCharactersRecycler.layoutManager =
-                    LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-                if (author.character.isNullOrEmpty()) {
-                    binding.authorCharactersRecycler.visibility = View.GONE
-                    binding.AuthorCharactersText.visibility = View.GONE
-                }
+                setupAuthorMediaRecycler(author)
             }
         }
         val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(true) }
@@ -248,4 +160,100 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
                 ContextCompat.getColor(this, R.color.transparent)
         }
     }
+    private fun setupAuthorHeader(rescueMode: Boolean) {
+        val link = if (rescueMode) {
+            "https://myanimelist.net/people/${author.id}"
+        } else {
+            "https://anilist.co/staff/${author.id}"
+        }
+        binding.characterShare.setOnClickListener {
+            val i = Intent(Intent.ACTION_SEND)
+            i.type = "text/plain"
+            i.putExtra(Intent.EXTRA_TEXT, link)
+            startActivity(Intent.createChooser(i, author.name))
+        }
+        binding.characterShare.setOnLongClickListener {
+            openLinkInBrowser(link)
+            true
+        }
+        if (!rescueMode) {
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    author.isFav =
+                        Anilist.query.isUserFav(AnilistMutations.FavType.STAFF, author.id)
+                }
+                withContext(Dispatchers.Main) {
+                    binding.characterFav.setImageResource(
+                        if (author.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
+                    )
+                }
+            }
+            binding.characterFav.setOnClickListener {
+                lifecycleScope.launch {
+                    if (Anilist.mutation.toggleFav(AnilistMutations.FavType.STAFF, author.id)) {
+                        author.isFav = !author.isFav
+                        binding.characterFav.setImageResource(
+                            if (author.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
+                        )
+                    } else {
+                        snackString("Failed to toggle favorite")
+                    }
+                }
+            }
+        } else {
+            binding.characterFav.visibility = View.GONE
+        }
+    }
+
+    private fun setupAuthorMediaRecycler(author: Author) {
+                val titlePosition = arrayListOf<Int>()
+                val concatAdapter = ConcatAdapter()
+                val map = author.yearMedia ?: return@observe
+                val keys = map.keys.toTypedArray()
+                var pos = 0
+
+                val gridSize = (screenWidth / 124f).toInt()
+                val gridLayoutManager = GridLayoutManager(this, gridSize)
+                gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int {
+                        return when (position in titlePosition) {
+                            true -> gridSize
+                            else -> 1
+                        }
+                    }
+                }
+                val desc = createDesc(author)
+                if (desc.isNotBlank()) {
+                    binding.authorCharacterDesc.visibility = View.VISIBLE
+                    val markWon = Markwon.builder(this).usePlugin(SoftBreakAddsNewLinePlugin.create())
+                        .usePlugin(SpoilerPlugin()).build()
+                    markWon.setMarkdown(binding.authorCharacterDesc, desc)
+                } else {
+                    binding.authorCharacterDesc.visibility = View.GONE
+                }
+                for (i in keys.indices) {
+                    val medias = map[keys[i]]!!
+                    val empty = if (medias.size >= 4) medias.size % 4 else 4 - medias.size
+                    titlePosition.add(pos)
+                    pos += empty + medias.size + 1
+
+                    concatAdapter.addAdapter(TitleAdapter("${keys[i]} (${medias.size})"))
+                    concatAdapter.addAdapter(MediaAdaptor(0, medias, this, true))
+                    concatAdapter.addAdapter(EmptyAdapter(empty))
+                }
+                binding.characterRecyclerView.adapter = concatAdapter
+                binding.characterRecyclerView.layoutManager = gridLayoutManager
+
+                binding.authorCharactersRecycler.visibility = View.VISIBLE
+                binding.AuthorCharactersText.visibility = View.VISIBLE
+                binding.authorCharactersRecycler.adapter =
+                    CharacterAdapter(author.character ?: arrayListOf())
+                binding.authorCharactersRecycler.layoutManager =
+                    LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+                if (author.character.isNullOrEmpty()) {
+                    binding.authorCharactersRecycler.visibility = View.GONE
+                    binding.AuthorCharactersText.visibility = View.GONE
+                }
+    }
+
 }
