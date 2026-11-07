@@ -48,7 +48,6 @@ class AndroidAnimeSourceManager(
                     extensions.forEach { extension ->
                         extension.sources.forEach {
                             mutableMap[it.id] = it
-                            registerStubSource(it.toSourceData())
                         }
                     }
                     sourcesMapFlow.value = mutableMap
@@ -76,10 +75,6 @@ class AndroidAnimeSourceManager(
     override fun getStubSources(): List<StubAnimeSource> {
         val onlineSourceIds = getOnlineSources().map { it.id }
         return stubSourcesMap.values.filterNot { it.id in onlineSourceIds }
-    }
-
-    private fun registerStubSource(sourceData: AnimeSourceData) {
-
     }
 
     private fun createStubSource(id: Long): StubAnimeSource {

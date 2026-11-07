@@ -31,7 +31,7 @@ data class MangaChapter(
     fun addImages(image: List<MangaImage>) {
         if (images.isNotEmpty()) return
         image.forEach { images.add(it) }
-        (0..floor((images.size.toFloat() - 1f) / 2).toInt()).forEach {
+        for (it in 0..floor((images.size.toFloat() - 1f) / 2).toInt()) {
             val i = it * 2
             dualPages.add(images[i] to images.getOrNull(i + 1))
         }

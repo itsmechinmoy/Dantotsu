@@ -40,7 +40,7 @@ class PreloadLinearLayoutManager(context: Context, orientation: Int, reverseLayo
         if (layoutDirection == 1) {
             val scrollingOffset =
                 mOrientationHelper.getDecoratedEnd(child) - mOrientationHelper.endAfterPadding
-            (currentPosition + 1 until currentPosition + preloadItemCount + 1).forEach {
+            for (it in currentPosition + 1 until currentPosition + preloadItemCount + 1) {
                 if (it >= 0 && it < state.itemCount) {
                     layoutPrefetchRegistry.addPosition(it, max(0, scrollingOffset))
                 }

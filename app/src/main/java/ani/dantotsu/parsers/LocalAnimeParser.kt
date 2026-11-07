@@ -166,7 +166,7 @@ class LocalVideoExtractor(
                 } finally {
                     try {
                         retriever.release()
-                    } catch (e: Exception) {}
+                    } catch (ignored: Exception) {}
                 }
             }
         }
