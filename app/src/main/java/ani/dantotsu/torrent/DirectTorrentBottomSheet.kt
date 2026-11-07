@@ -129,66 +129,7 @@ class DirectTorrentBottomSheet : BottomSheetDialogFragment() {
         // Setup Linked Media UI
         updateLinkedMediaUi()
 
-        // Link AniList Anime button (supports global or per-season linking)
-        binding.torrentLinkAnilistButton.setOnClickListener {
-            val selectedFolder = currentSelectedFolderKey
-            val isSpecificFolder = selectedFolder != "__ALL__" && selectedFolder.isNotBlank()
-
-            if (isSpecificFolder) {
-                if (folderLinkedMediaMap.containsKey(selectedFolder)) {
-                    folderLinkedMediaMap.remove(selectedFolder)
-                    updateLinkedMediaUi()
-                    toast(getString(R.string.torrent_unlinked))
-                } else {
-                    showAniListSearchDialog(selectedFolder)
-                }
-            } else {
-                if (defaultLinkedMedia != null || folderLinkedMediaMap.isNotEmpty()) {
-                    defaultLinkedMedia = null
-                    folderLinkedMediaMap.clear()
-                    updateLinkedMediaUi()
-                    toast(getString(R.string.torrent_unlinked))
-                } else {
-                    showAniListSearchDialog("__ALL__")
-                }
-            }
-        }
-
-        // Load Button
-        binding.torrentLoadButton.setOnClickListener {
-            val text = binding.torrentInputEditText.text?.toString()?.trim() ?: ""
-            if (text.isNotBlank()) {
-                if (onTorrentSelected != null) {
-                    onTorrentSelected?.invoke(text)
-                    dismiss()
-                    return@setOnClickListener
-                }
-                loadTorrent(text)
-            } else {
-                toast(getString(R.string.torrent_enter_url_or_magnet))
-            }
-        }
-
-        // File Picker Button
-        binding.torrentFilePickerButton.setOnClickListener {
-            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = "*/*"
-                putExtra(
-                    Intent.EXTRA_MIME_TYPES,
-                    arrayOf("application/x-bittorrent", "application/octet-stream")
-                )
-            }
-            filePickerLauncher.launch(intent)
-        }
-
-        // IME Done
-        binding.torrentInputEditText.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                binding.torrentLoadButton.performClick()
-                true
-            } else false
-        }
+        setupActionButtons()
 
         // Auto-load if initial URL was supplied, otherwise check clipboard
         if (!initialUrl.isNullOrBlank()) {
@@ -640,31 +581,7 @@ class DirectTorrentBottomSheet : BottomSheetDialogFragment() {
                     allEpisodesMap[epNum] = ep
                 }
 
-                // If the user linked a real AniList entry (specific season or global), use that Media so
-                // updateProgress() in PlayerProgressManager updates progress for the specific season.
-                val linked = (if (clickedFolder.isNotBlank()) folderLinkedMediaMap[clickedFolder] else null) ?: defaultLinkedMedia
-                val media = if (linked != null) {
-                    linked.copy(
-                        anime = (linked.anime ?: Anime()).copy(
-                            episodes = allEpisodesMap,
-                            selectedEpisode = clickedEpNumber
-                        )
-                    ).also { it.selected = Selected(server = "Torrent") }
-                } else {
-                    // No link — synthetic ID. AniList/MAL tracking is a no-op.
-                    val seasonTitle = if (clickedFolder.isNotBlank()) "${torrent.name ?: torrent.title ?: cleanTitle} - $clickedFolder" else torrent.name ?: torrent.title ?: cleanTitle
-                    Media(
-                        id = kotlin.math.abs((torrent.hash ?: cleanTitle).hashCode() + clickedFolder.hashCode()),
-                        name = seasonTitle,
-                        nameRomaji = seasonTitle,
-                        userPreferredName = seasonTitle,
-                        isAdult = false,
-                        anime = Anime(
-                            episodes = allEpisodesMap,
-                            selectedEpisode = clickedEpNumber
-                        )
-                    ).also { it.selected = Selected(server = "Torrent") }
-                }
+                val media = buildStreamingMedia(torrent, cleanTitle, clickedFolder, clickedEpNumber, allEpisodesMap)
 
                 withContext(Dispatchers.Main) {
                     val bm = _binding ?: return@withContext
@@ -777,4 +694,99 @@ class DirectTorrentBottomSheet : BottomSheetDialogFragment() {
             }
         }
     }
+    private fun setupActionButtons() {
+        // Link AniList Anime button (supports global or per-season linking)
+        binding.torrentLinkAnilistButton.setOnClickListener {
+            val selectedFolder = currentSelectedFolderKey
+            val isSpecificFolder = selectedFolder != "__ALL__" && selectedFolder.isNotBlank()
+
+            if (isSpecificFolder) {
+                if (folderLinkedMediaMap.containsKey(selectedFolder)) {
+                    folderLinkedMediaMap.remove(selectedFolder)
+                    updateLinkedMediaUi()
+                    toast(getString(R.string.torrent_unlinked))
+                } else {
+                    showAniListSearchDialog(selectedFolder)
+                }
+            } else {
+                if (defaultLinkedMedia != null || folderLinkedMediaMap.isNotEmpty()) {
+                    defaultLinkedMedia = null
+                    folderLinkedMediaMap.clear()
+                    updateLinkedMediaUi()
+                    toast(getString(R.string.torrent_unlinked))
+                } else {
+                    showAniListSearchDialog("__ALL__")
+                }
+            }
+        }
+
+        // Load Button
+        binding.torrentLoadButton.setOnClickListener {
+            val text = binding.torrentInputEditText.text?.toString()?.trim() ?: ""
+            if (text.isNotBlank()) {
+                if (onTorrentSelected != null) {
+                    onTorrentSelected?.invoke(text)
+                    dismiss()
+                    return@setOnClickListener
+                }
+                loadTorrent(text)
+            } else {
+                toast(getString(R.string.torrent_enter_url_or_magnet))
+            }
+        }
+
+        // File Picker Button
+        binding.torrentFilePickerButton.setOnClickListener {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(
+                    Intent.EXTRA_MIME_TYPES,
+                    arrayOf("application/x-bittorrent", "application/octet-stream")
+                )
+            }
+            filePickerLauncher.launch(intent)
+        }
+
+        // IME Done
+        binding.torrentInputEditText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                binding.torrentLoadButton.performClick()
+                true
+            } else false
+        }
+
+    }
+
+    private fun buildStreamingMedia(
+        torrent: Torrent,
+        cleanTitle: String,
+        clickedFolder: String,
+        clickedEpNumber: String,
+        allEpisodesMap: MutableMap<String, Episode>
+    ): Media {
+        val linked = (if (clickedFolder.isNotBlank()) folderLinkedMediaMap[clickedFolder] else null) ?: defaultLinkedMedia
+        return if (linked != null) {
+            linked.copy(
+                anime = (linked.anime ?: Anime()).copy(
+                    episodes = allEpisodesMap,
+                    selectedEpisode = clickedEpNumber
+                )
+            ).also { it.selected = Selected(server = "Torrent") }
+        } else {
+            val seasonTitle = if (clickedFolder.isNotBlank()) "${torrent.name ?: torrent.title ?: cleanTitle} - $clickedFolder" else torrent.name ?: torrent.title ?: cleanTitle
+            Media(
+                id = kotlin.math.abs((torrent.hash ?: cleanTitle).hashCode() + clickedFolder.hashCode()),
+                name = seasonTitle,
+                nameRomaji = seasonTitle,
+                userPreferredName = seasonTitle,
+                isAdult = false,
+                anime = Anime(
+                    episodes = allEpisodesMap,
+                    selectedEpisode = clickedEpNumber
+                )
+            ).also { it.selected = Selected(server = "Torrent") }
+        }
+    }
+
 }
