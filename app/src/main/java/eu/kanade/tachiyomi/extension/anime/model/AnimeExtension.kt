@@ -4,17 +4,9 @@ import android.graphics.drawable.Drawable
 import eu.kanade.tachiyomi.animesource.AnimeSource
 import tachiyomi.domain.source.anime.model.AnimeSourceData
 
-sealed class AnimeExtension {
+import eu.kanade.tachiyomi.extension.model.BaseExtension
 
-    abstract val name: String
-    abstract val pkgName: String
-    abstract val versionName: String
-    abstract val versionCode: Long
-    abstract val libVersion: Double
-    abstract val lang: String?
-    abstract val isNsfw: Boolean
-    abstract val hasReadme: Boolean
-    abstract val hasChangelog: Boolean
+sealed class AnimeExtension : BaseExtension {
 
     data class Installed(
         override val name: String,
