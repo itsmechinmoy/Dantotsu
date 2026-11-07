@@ -192,41 +192,7 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
             activity.search()
         }
 
-        textWatcher = object : TextWatcher {
-            override fun afterTextChanged(s: Editable) {}
-
-            override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
-
-            override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-                if (s.toString().isBlank()) {
-                    activity.emptyMediaAdapter()
-                    CoroutineScope(Dispatchers.IO).launch {
-                        delay(200)
-                        activity.runOnUiThread {
-                            setHistoryVisibility(true)
-                        }
-                    }
-                } else {
-                    setHistoryVisibility(false)
-                    searchTitle()
-                }
-            }
-        }
-        binding.searchBarText.addTextChangedListener(textWatcher)
-
-        binding.searchBarText.setOnEditorActionListener { _, actionId, _ ->
-            return@setOnEditorActionListener when (actionId) {
-                EditorInfo.IME_ACTION_SEARCH -> {
-                    searchTitle()
-                    binding.searchBarText.clearFocus()
-                    imm.hideSoftInputFromWindow(binding.searchBarText.windowToken, 0)
-                    true
-                }
-
-                else -> false
-            }
-        }
-        binding.searchBar.setEndIconOnClickListener { searchTitle() }
+        textWatcher = setupSearchInputListeners(binding, activity, imm, { setHistoryVisibility(it) }, { searchTitle() })
 
         binding.searchResultGrid.setOnClickListener {
             it.alpha = 1f
@@ -320,5 +286,47 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
         }
 
         override fun getItemCount(): Int = chips.size
+    }
+    companion object {
+        fun setupSearchInputListeners(
+            binding: ItemSearchSettingsBinding,
+            activity: SearchActivity,
+            imm: InputMethodManager,
+            setHistoryVisibility: (Boolean) -> Unit,
+            searchTitle: () -> Unit
+        ): TextWatcher {
+            val watcher = object : TextWatcher {
+                override fun afterTextChanged(s: Editable) {}
+                override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
+                    if (s.toString().isBlank()) {
+                        activity.emptyMediaAdapter()
+                        CoroutineScope(Dispatchers.IO).launch {
+                            delay(200)
+                            activity.runOnUiThread {
+                                setHistoryVisibility(true)
+                            }
+                        }
+                    } else {
+                        setHistoryVisibility(false)
+                        searchTitle()
+                    }
+                }
+            }
+            binding.searchBarText.addTextChangedListener(watcher)
+            binding.searchBarText.setOnEditorActionListener { _, actionId, _ ->
+                when (actionId) {
+                    EditorInfo.IME_ACTION_SEARCH -> {
+                        searchTitle()
+                        binding.searchBarText.clearFocus()
+                        imm.hideSoftInputFromWindow(binding.searchBarText.windowToken, 0)
+                        true
+                    }
+                    else -> false
+                }
+            }
+            binding.searchBar.setEndIconOnClickListener { searchTitle() }
+            return watcher
+        }
     }
 }
