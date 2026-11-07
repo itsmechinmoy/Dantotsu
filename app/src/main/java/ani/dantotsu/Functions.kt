@@ -167,7 +167,7 @@ import kotlin.time.Duration.Companion.milliseconds
 var statusBarHeight = 0
 var navBarHeight = 0
 private const val MARKDOWN_IMAGE_MAX_SCREEN_SCALE_FACTOR = 2L
-val Int.dp: Float get() = (this / getSystem().displayMetrics.density)
+val Int.dp: Float get() = this / getSystem().displayMetrics.density
 val Float.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
 val Int.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
 val Double.px: Int get() = (this * getSystem().displayMetrics.density).toInt()
@@ -685,7 +685,7 @@ class ZoomOutPageTransformer :
                 0.5f to 0f
             )
             ObjectAnimator.ofFloat(view, "alpha", 0f, 1.0f)
-                .setDuration((200 * (PrefManager.getVal(PrefName.AnimationSpeed) as Float)).toLong())
+                .setDuration((200 * PrefManager.getVal(PrefName.AnimationSpeed) as Float).toLong())
                 .start()
         }
     }
@@ -709,7 +709,7 @@ fun setAnimation(
             Animation.RELATIVE_TO_SELF,
             pivot.second
         )
-        anim.duration = (duration * (PrefManager.getVal(PrefName.AnimationSpeed) as Float)).toLong()
+        anim.duration = (duration * PrefManager.getVal(PrefName.AnimationSpeed) as Float).toLong()
         anim.setInterpolator(context, R.anim.over_shoot)
         viewToAnimate.startAnimation(anim)
     }
@@ -969,7 +969,7 @@ abstract class GesturesListener : GestureDetector.SimpleOnGestureListener() {
 fun View.circularReveal(ex: Int, ey: Int, subX: Boolean, time: Long) {
     ViewAnimationUtils.createCircularReveal(
         this,
-        if (subX) (ex - x.toInt()) else ex,
+        if (subX) ex - x.toInt() else ex,
         ey - y.toInt(),
         0f,
         max(height, width).toFloat()
@@ -1194,7 +1194,7 @@ private val activeTimers = java.util.Collections.synchronizedMap(java.util.WeakH
 
 fun countDown(media: Media, view: ViewGroup) {
     if (media.anime?.nextAiringEpisode != null && media.anime.nextAiringEpisodeTime != null
-        && (media.anime.nextAiringEpisodeTime!! - System.currentTimeMillis() / 1000) <= 86400 * 28.toLong()
+        && media.anime.nextAiringEpisodeTime!! - System.currentTimeMillis() / 1000 <= 86400 * 28.toLong()
     ) {
         activeTimers.remove(view)?.cancel()
         for (i in view.childCount - 1 downTo 0) {
@@ -1273,7 +1273,7 @@ fun MutableMap<String, Genre>.checkId(id: Int): Boolean {
 
 fun MutableMap<String, Genre>.checkGenreTime(genre: String): Boolean {
     if (containsKey(genre))
-        return (System.currentTimeMillis() - get(genre)!!.time) >= (1000 * 60 * 60 * 24 * 7)
+        return System.currentTimeMillis() - get(genre)!!.time >= 1000 * 60 * 60 * 24 * 7
     return true
 }
 
@@ -1361,7 +1361,7 @@ fun snackString(s: String?, activity: Activity? = null, clipboard: String? = nul
                 runOnUiThread {
                     snackBar.view.apply {
                         updateLayoutParams<FrameLayout.LayoutParams> {
-                            gravity = (Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM)
+                            gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
                             width = WRAP_CONTENT
                         }
                         translationY = -(navBarHeight.dp + 32f)
@@ -1486,7 +1486,7 @@ fun getCurrentBrightnessValue(context: Context): Float {
 fun brightnessConverter(it: Float, fromLog: Boolean) =
     clamp(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
-            if (fromLog) log2((it * 256f)) * 12.5f / 100f else 2f.pow(it * 100f / 12.5f) / 256f
+            if (fromLog) log2(it * 256f) * 12.5f / 100f else 2f.pow(it * 100f / 12.5f) / 256f
         else it, 0.001f, 1f
     )
 
