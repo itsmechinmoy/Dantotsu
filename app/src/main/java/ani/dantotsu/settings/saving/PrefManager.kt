@@ -118,7 +118,7 @@ object PrefManager {
                             } catch (_: Exception) {
                                 null
                             }
-                            prefsSet?.mapNotNull { (it as? Any)?.toString() }?.toSet() ?: (prefName.data.default as Set<String>)
+                            prefsSet?.mapNotNull { (it as? Any)?.toString() }?.toSet() ?: prefName.data.default as Set<String>
                         }
                     }
                     stringSet as T
@@ -165,7 +165,7 @@ object PrefManager {
                             } catch (_: Exception) {
                                 null
                             }
-                            prefsSet?.mapNotNull { (it as? Any)?.toString() }?.toSet() ?: (default as? Set<String>)
+                            prefsSet?.mapNotNull { (it as? Any)?.toString() }?.toSet() ?: default as? Set<String>
                         }
                     }
                     stringSet as T?
@@ -183,7 +183,7 @@ object PrefManager {
         return try {
             if (default == null) {
                 val raw = irrelevantPreferences?.all?.get(key)
-                return (raw as? T) ?: default
+                return raw as? T ?: default
             }
             when (default) {
                 is Boolean -> irrelevantPreferences!!.getBoolean(key, default) as T
@@ -270,7 +270,7 @@ object PrefManager {
                             prefsSet?.mapNotNull { (it as? Any)?.toString() }?.toSet()
                         }
                     }
-                    (stringSet ?: (default as? Set<String>)) as T?
+                    (stringSet ?: default as? Set<String>) as T?
                 }
 
                 else -> deserializeClass(key, default, Location.Irrelevant)

@@ -110,9 +110,10 @@ class HeadlessRPC(
     }
 
     private suspend fun postSession(session: DiscordSession) = withContext(Dispatchers.IO) {
-        try {
-            var retryCount = 0
-            while (retryCount < 3) {
+        var retryCount = 0
+        var lastException: Exception? = null
+        while (retryCount < 3) {
+            try {
                 val bearer = tokenManager.getToken()
                 val body = json.encodeToString(DiscordSession.serializer(), session)
                 val (respCode, respBody, retryAfterHeader) = client.newCall(
@@ -124,7 +125,7 @@ class HeadlessRPC(
                 ).execute().use { resp ->
                     Triple(resp.code, resp.body.string(), resp.header("Retry-After")?.toLongOrNull())
                 }
-                
+
                 if (respCode == 429) {
                     val retryAfter = retryAfterHeader ?: 5L
                     val backoffMs = (retryAfter * 1000 + 500) * (retryCount + 1)
@@ -142,6 +143,11 @@ class HeadlessRPC(
                         retryCount++
                         continue
                     }
+                    if (retryCount < 2 && (respCode >= 500 || respCode == 408)) {
+                        retryCount++
+                        kotlinx.coroutines.delay(1000L * retryCount)
+                        continue
+                    }
                     throw IllegalStateException("headless-sessions POST failed: $respCode $respBody")
                 }
 
@@ -151,11 +157,19 @@ class HeadlessRPC(
                     activityToken = responseJson["token"]?.jsonPrimitive?.content
                     PrefManager.setCustomVal("discord_activity_token", activityToken)
                 }
-                break
+                return@withContext
+            } catch (e: Exception) {
+                lastException = e
+                Logger.log("HeadlessRPC: postSession attempt ${retryCount + 1} failed: ${e.message}")
+                retryCount++
+                if (retryCount < 3) {
+                    kotlinx.coroutines.delay(1000L * retryCount)
+                }
             }
-        } catch (e: Exception) {
-            Logger.log("HeadlessRPC: postSession Network Error - ${e.message}")
-            throw e
+        }
+        if (lastException != null) {
+            Logger.log("HeadlessRPC: postSession Network Error after 3 attempts - ${lastException.message}")
+            throw lastException
         }
     }
 

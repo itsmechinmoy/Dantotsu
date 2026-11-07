@@ -85,7 +85,7 @@ class RepoItem(
             }
         }
 
-        if (repoPageUrl != null || (meta?.website?.isNotBlank() == true)) {
+        if (repoPageUrl != null || meta?.website?.isNotBlank() == true) {
             viewBinding.repoNameTextView.setOnClickListener(openRepoPage)
             viewBinding.repoUrlTextView.setOnClickListener(openRepoPage)
         } else {

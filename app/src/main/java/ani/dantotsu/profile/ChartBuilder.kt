@@ -211,7 +211,7 @@ class ChartBuilder {
 
             scrollPos?.let {
                 aaOptions.chart?.scrollablePlotArea(AAScrollablePlotArea().scrollPositionX(scrollPos))
-                aaOptions.chart?.scrollablePlotArea?.minWidth((context.resources.displayMetrics.widthPixels.toFloat() / context.resources.displayMetrics.density) * (namesMax.toFloat() / 18.0f))
+                aaOptions.chart?.scrollablePlotArea?.minWidth(context.resources.displayMetrics.widthPixels.toFloat() / context.resources.displayMetrics.density * (namesMax.toFloat() / 18.0f))
             }
             val allStatData = chartPackets.flatMap { it.statData }
             val min = (allStatData.minOfOrNull { it.toDouble() } ?: 0.0) - 1.0
@@ -300,7 +300,7 @@ class ChartBuilder {
                 return data
             }
             val max = data.maxOf { it.toDouble() }
-            return data.map { (it.toDouble() / max) * 100 }
+            return data.map { it.toDouble() / max * 100 }
         }
 
         private fun setColors(aaOptions: AAOptions, context: Context) {

@@ -170,7 +170,7 @@ open class ImageAdapter(
         val parentArea = sWidth * sHeight * 1f
         val bitmapArea = bitmap.width * bitmap.height * 1f
         val scale =
-            if (parentArea < bitmapArea) (bitmapArea / parentArea) else (parentArea / bitmapArea)
+            if (parentArea < bitmapArea) bitmapArea / parentArea else parentArea / bitmapArea
 
         imageView.maxScale = scale * 1.1f
         imageView.minScale = scale

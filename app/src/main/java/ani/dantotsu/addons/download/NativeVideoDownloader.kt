@@ -1501,7 +1501,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         appendRemuxStreamMappings(command, subtitles.size, audios.size)
         appendRemuxCodecs(command, subtitles)
         appendRemuxMetadata(command, subtitles, audios)
-        command.append("-y -ignore_unknown \"$outputPath\"")
+        command.append("-f matroska -y -ignore_unknown \"$outputPath\"")
         return command.toString()
     }
 
@@ -1555,10 +1555,10 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             if (allAss) {
                 command.append("-c copy ")
             } else {
-                command.append("-c:v copy -c:a copy -c:s srt ")
+                command.append("-c:v copy -c:a copy -c:s copy ")
             }
         } else {
-            command.append("-c copy ")
+            command.append("-c:v copy -c:a copy -c:s copy ")
         }
     }
 

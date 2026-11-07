@@ -115,6 +115,6 @@ class RemoveBordersTransformation(private val white: Boolean, private val thresh
 
     private fun isPixelNotWhite(pixel: Int): Boolean {
         val brightness = Color.red(pixel) + Color.green(pixel) + Color.blue(pixel)
-        return if (white) brightness < (255 - threshHold) else brightness > threshHold
+        return if (white) brightness < 255 - threshHold else brightness > threshHold
     }
 }

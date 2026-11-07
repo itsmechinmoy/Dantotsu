@@ -59,8 +59,8 @@ class ImageSearchResultAdapter(private val searchResults: List<ImageSearchViewMo
     }
 
     private fun toTimestamp(seconds: Double?): String {
-        val minutes = (seconds?.div(60))?.toInt()
-        val remainingSeconds = (seconds?.mod(60.0))?.toInt()
+        val minutes = seconds?.div(60)?.toInt()
+        val remainingSeconds = seconds?.mod(60.0)?.toInt()
 
         val minutesString = minutes.toString().padStart(2, '0')
         val secondsString = remainingSeconds.toString().padStart(2, '0')

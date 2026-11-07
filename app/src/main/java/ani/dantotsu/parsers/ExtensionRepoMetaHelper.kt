@@ -354,7 +354,7 @@ object ExtensionRepoMetaHelper {
 
     private fun ByteArray.decompressIfGzipped(): ByteArray {
         if (size < 2) return this
-        val isGzip = (this[0] == 0x1f.toByte()) && (this[1] == 0x8b.toByte())
+        val isGzip = this[0] == 0x1f.toByte() && this[1] == 0x8b.toByte()
         if (!isGzip) return this
         return try {
             GZIPInputStream(ByteArrayInputStream(this)).use { it.readBytes() }

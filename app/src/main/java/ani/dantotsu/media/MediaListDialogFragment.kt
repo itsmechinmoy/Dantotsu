@@ -277,8 +277,7 @@ class MediaListDialogFragment : BottomSheetDialogFragment() {
                                 val progress =
                                     _binding?.mediaListProgress?.text.toString().toIntOrNull()
                                 val score =
-                                    (_binding?.mediaListScore?.text.toString().toDoubleOrNull()
-                                        ?.times(10))?.toInt()
+                                    _binding?.mediaListScore?.text.toString().toDoubleOrNull()?.times(10)?.toInt()
                                 val progressVolumes =
                                     _binding?.mediaListVolumeProgress?.text.toString().toIntOrNull()
                                 val status =

@@ -99,7 +99,7 @@ class PlayerGestureManager(
                     }
                 }
             playerView.findViewById<View>(androidx.media3.ui.R.id.exo_buffering)?.translationY =
-                (if (orientation == Configuration.ORIENTATION_LANDSCAPE) 0 else (notchHeight + 8.toPx)).dp
+                (if (orientation == Configuration.ORIENTATION_LANDSCAPE) 0 else notchHeight + 8.toPx).dp
             exoBrightnessCont.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 marginEnd = if (orientation == Configuration.ORIENTATION_LANDSCAPE) notchHeight else 0
             }
@@ -320,7 +320,7 @@ class PlayerGestureManager(
                 }
             }
 
-            exoBrightness.value = (getCurrentBrightnessValue(activity) * 10f)
+            exoBrightness.value = getCurrentBrightnessValue(activity) * 10f
             exoBrightness.addOnChangeListener { _, value, _ ->
                 val lp = activity.window.attributes
                 lp.screenBrightness = brightnessConverter((value.takeIf { !it.isNaN() } ?: 0f) / 10, false)

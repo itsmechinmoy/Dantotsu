@@ -257,16 +257,16 @@ fun <T> T.printIt(pre: String = ""): T {
 }
 
 
-fun OkHttpClient.Builder.addGoogleDns() = (
+fun OkHttpClient.Builder.addGoogleDns() =
         addGenericDns(
             "https://dns.google/dns-query",
             listOf(
                 "8.8.4.4",
                 "8.8.8.8"
             )
-        ))
+        )
 
-fun OkHttpClient.Builder.addCloudFlareDns() = (
+fun OkHttpClient.Builder.addCloudFlareDns() =
         addGenericDns(
             "https://cloudflare-dns.com/dns-query",
             listOf(
@@ -277,7 +277,7 @@ fun OkHttpClient.Builder.addCloudFlareDns() = (
             )
         ))
 
-fun OkHttpClient.Builder.addAdGuardDns() = (
+fun OkHttpClient.Builder.addAdGuardDns() =
         addGenericDns(
             "https://dns.adguard.com/dns-query",
             listOf(

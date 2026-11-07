@@ -306,7 +306,9 @@ class NotificationItem(
                 }
                 binding.notificationBannerImage.setOnClickListener {
                     clickCallback(
-                        notification.user?.id ?: 0, null, NotificationClickType.USER
+                        notification.thread?.id ?: notification.threadId ?: 0,
+                        notification.commentId,
+                        NotificationClickType.THREAD
                     )
                 }
             }
@@ -321,7 +323,9 @@ class NotificationItem(
                 }
                 binding.notificationBannerImage.setOnClickListener {
                     clickCallback(
-                        notification.user?.id ?: 0, null, NotificationClickType.USER
+                        notification.thread?.id ?: notification.threadId ?: 0,
+                        notification.commentId,
+                        NotificationClickType.THREAD
                     )
                 }
             }
@@ -336,7 +340,9 @@ class NotificationItem(
                 }
                 binding.notificationBannerImage.setOnClickListener {
                     clickCallback(
-                        notification.user?.id ?: 0, null, NotificationClickType.USER
+                        notification.thread?.id ?: notification.threadId ?: 0,
+                        notification.commentId,
+                        NotificationClickType.THREAD
                     )
                 }
             }
@@ -391,7 +397,9 @@ class NotificationItem(
                 }
                 binding.notificationBannerImage.setOnClickListener {
                     clickCallback(
-                        notification.thread?.id ?: 0, null, NotificationClickType.THREAD
+                        notification.thread?.id ?: notification.threadId ?: 0,
+                        notification.commentId,
+                        NotificationClickType.THREAD
                     )
                 }
             }
@@ -406,7 +414,9 @@ class NotificationItem(
                 }
                 binding.notificationBannerImage.setOnClickListener {
                     clickCallback(
-                        notification.thread?.id ?: 0, notification.commentId, NotificationClickType.THREAD
+                        notification.thread?.id ?: notification.threadId ?: 0,
+                        notification.commentId,
+                        NotificationClickType.THREAD
                     )
                 }
             }

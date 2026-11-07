@@ -78,14 +78,14 @@ class ReaderSettingsActivity : AppCompatActivity() {
 
         binding.readerSettingsDirectionText.text =
             resources.getStringArray(R.array.manga_directions)[defaultSettings.direction.ordinal]
-        binding.readerSettingsDirection.rotation = 90f * (defaultSettings.direction.ordinal)
+        binding.readerSettingsDirection.rotation = 90f * defaultSettings.direction.ordinal
         binding.readerSettingsDirection.setOnClickListener {
             defaultSettings.direction =
                 CurrentReaderSettings.Directions[defaultSettings.direction.ordinal + 1]
                     ?: CurrentReaderSettings.Directions.TOP_TO_BOTTOM
             binding.readerSettingsDirectionText.text =
                 resources.getStringArray(R.array.manga_directions)[defaultSettings.direction.ordinal]
-            binding.readerSettingsDirection.rotation = 90f * (defaultSettings.direction.ordinal)
+            binding.readerSettingsDirection.rotation = 90f * defaultSettings.direction.ordinal
             PrefManager.setVal(PrefName.Direction, defaultSettings.direction.ordinal)
         }
 

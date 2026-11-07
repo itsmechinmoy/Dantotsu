@@ -242,7 +242,7 @@ class Stories @JvmOverloads constructor(
     }
 
     private fun secondsToMillis(seconds: Int): Long {
-        return (seconds.toLong()).times(1000)
+        return seconds.toLong().times(1000)
     }
 
     private fun resetProgressBar(storyIndex: Int) {

@@ -119,7 +119,7 @@ class StudioActivity : AppCompatActivity() {
                     val medias = map[keys[i]]!!
                     val empty = if (medias.size >= 4) medias.size % 4 else 4 - medias.size
                     titlePosition.add(pos)
-                    pos += (empty + medias.size + 1)
+                    pos += empty + medias.size + 1
 
                     concatAdapter.addAdapter(TitleAdapter("${keys[i]} (${medias.size})"))
                     concatAdapter.addAdapter(MediaAdaptor(0, medias, this, true))

@@ -342,7 +342,7 @@ class TorrentServerManager(private val context: Context) {
 
             // Calculate 1% of total file size in pieces (min 2, max 16 pieces, matching qBittorrent formula)
             val numPiecesOnePercent = if (fileSize > 0 && pieceLength > 0) {
-                ((fileSize * 0.01) / pieceLength).toInt().coerceIn(2, 16)
+                (fileSize * 0.01 / pieceLength).toInt().coerceIn(2, 16)
             } else 2
 
             Logger.log("TorrentServerManager: Pre-buffering $numPiecesOnePercent head pieces and $numPiecesOnePercent tail pieces for file $fileIndex")

@@ -506,15 +506,32 @@ abstract class BaseImageAdapter(
         ): Bitmap {
             if (dstWidth <= 0 || dstHeight <= 0) return src
             if (src.width == dstWidth && src.height == dstHeight) return src
-            return when (quality) {
-                CurrentReaderSettings.ImageQuality.FAST ->
-                    Bitmap.createScaledBitmap(src, dstWidth, dstHeight, true)
+            return try {
+                when (quality) {
+                    CurrentReaderSettings.ImageQuality.FAST ->
+                        Bitmap.createScaledBitmap(src, dstWidth, dstHeight, true)
 
-                CurrentReaderSettings.ImageQuality.BALANCED ->
+                    CurrentReaderSettings.ImageQuality.BALANCED ->
+                        scaleBoxFilter(src, dstWidth, dstHeight)
+
+                    CurrentReaderSettings.ImageQuality.LANCZOS -> {
+                        if (src.width * src.height > 6_000_000L || dstWidth * dstHeight > 6_000_000L) {
+                            scaleBoxFilter(src, dstWidth, dstHeight)
+                        } else {
+                            scaleLanczos3(src, dstWidth, dstHeight)
+                        }
+                    }
+                }
+            } catch (_: Throwable) {
+                try {
                     scaleBoxFilter(src, dstWidth, dstHeight)
-
-                CurrentReaderSettings.ImageQuality.LANCZOS ->
-                    scaleLanczos3(src, dstWidth, dstHeight)
+                } catch (_: Throwable) {
+                    try {
+                        Bitmap.createScaledBitmap(src, dstWidth, dstHeight, true)
+                    } catch (_: Throwable) {
+                        src
+                    }
+                }
             }
         }
 
@@ -574,57 +591,85 @@ abstract class BaseImageAdapter(
             val scaleX = srcW.toDouble() / dstW
             val scaleY = srcH.toDouble() / dstH
 
-            // Horizontal pass into intermediate 1D float buffer (RGBA)
-            val intermediate = FloatArray(dstW * srcH * 4)
+            // Precalculate horizontal filter weights once for each destination X coordinate
+            val hStarts = IntArray(dstW)
+            val hWeights = Array(dstW) { FloatArray(0) }
             for (x in 0 until dstW) {
                 val srcXf = (x + 0.5) * scaleX - 0.5
                 val start = (floor(srcXf).toInt() - LANCZOS_A + 1).coerceAtLeast(0)
-                val end   = (floor(srcXf).toInt() + LANCZOS_A).coerceAtMost(srcW - 1)
-                val weights = DoubleArray(end - start + 1) { lanczosKernel(srcXf - (start + it)) }
+                val end = (floor(srcXf).toInt() + LANCZOS_A).coerceAtMost(srcW - 1)
+                val count = end - start + 1
+                val weights = DoubleArray(count) { lanczosKernel(srcXf - (start + it)) }
                 val weightSum = weights.sum().coerceAtLeast(1e-9)
-                val xOffset = x * srcH * 4
-                for (y in 0 until srcH) {
-                    var r = 0.0; var g = 0.0; var b = 0.0; var a = 0.0
-                    for ((i, sx) in (start..end).withIndex()) {
-                        val px = srcPixels[y * srcW + sx]
-                        val w = weights[i]
-                        a += Color.alpha(px) * w
-                        r += Color.red(px) * w
-                        g += Color.green(px) * w
-                        b += Color.blue(px) * w
+                hStarts[x] = start
+                hWeights[x] = FloatArray(count) { (weights[it] / weightSum).toFloat() }
+            }
+
+            // Sliding window cache of horizontally-filtered rows (at most 2 * LANCZOS_A rows in memory at any time)
+            // Memory footprint: ~6 rows * dstW * 4 floats ~= 100 KB instead of 244 MB!
+            val rowCache = HashMap<Int, FloatArray>(16)
+
+            fun getResampledRow(sy: Int): FloatArray {
+                return rowCache.getOrPut(sy) {
+                    val row = FloatArray(dstW * 4)
+                    val srcRowOffset = sy * srcW
+                    for (x in 0 until dstW) {
+                        val start = hStarts[x]
+                        val weights = hWeights[x]
+                        var r = 0f; var g = 0f; var b = 0f; var a = 0f
+                        for (i in 0 until weights.size) {
+                            val px = srcPixels[srcRowOffset + start + i]
+                            val w = weights[i]
+                            a += ((px ushr 24) and 0xFF) * w
+                            r += ((px ushr 16) and 0xFF) * w
+                            g += ((px ushr 8) and 0xFF) * w
+                            b += (px and 0xFF) * w
+                        }
+                        val base = x * 4
+                        row[base] = r
+                        row[base + 1] = g
+                        row[base + 2] = b
+                        row[base + 3] = a
                     }
-                    val base = xOffset + y * 4
-                    intermediate[base    ] = (r / weightSum).toFloat()
-                    intermediate[base + 1] = (g / weightSum).toFloat()
-                    intermediate[base + 2] = (b / weightSum).toFloat()
-                    intermediate[base + 3] = (a / weightSum).toFloat()
+                    row
                 }
             }
 
-            // Vertical pass from intermediate into dst
+            // Vertical pass from intermediate rows directly into dstPixels
             for (y in 0 until dstH) {
                 val srcYf = (y + 0.5) * scaleY - 0.5
                 val start = (floor(srcYf).toInt() - LANCZOS_A + 1).coerceAtLeast(0)
                 val end   = (floor(srcYf).toInt() + LANCZOS_A).coerceAtMost(srcH - 1)
-                val weights = DoubleArray(end - start + 1) { lanczosKernel(srcYf - (start + it)) }
+                val count = end - start + 1
+                val weights = DoubleArray(count) { lanczosKernel(srcYf - (start + it)) }
                 val weightSum = weights.sum().coerceAtLeast(1e-9)
+
+                // Evict rows that will never be used again
+                rowCache.keys.retainAll { it >= start }
+
+                // Pre-warm needed rows
+                for (sy in start..end) {
+                    getResampledRow(sy)
+                }
+
                 val yDstOffset = y * dstW
                 for (x in 0 until dstW) {
-                    var r = 0.0; var g = 0.0; var b = 0.0; var a = 0.0
-                    val xOffset = x * srcH * 4
-                    for ((i, sy) in (start..end).withIndex()) {
-                        val base = xOffset + sy * 4
-                        val w = weights[i]
-                        r += intermediate[base    ] * w
-                        g += intermediate[base + 1] * w
-                        b += intermediate[base + 2] * w
-                        a += intermediate[base + 3] * w
+                    var r = 0f; var g = 0f; var b = 0f; var a = 0f
+                    val base = x * 4
+                    for (i in 0 until count) {
+                        val sy = start + i
+                        val intermediateRow = rowCache[sy] ?: continue
+                        val w = (weights[i] / weightSum).toFloat()
+                        r += intermediateRow[base] * w
+                        g += intermediateRow[base + 1] * w
+                        b += intermediateRow[base + 2] * w
+                        a += intermediateRow[base + 3] * w
                     }
-                    dstPixels[yDstOffset + x] = Color.argb(
-                        (a / weightSum).roundToInt().coerceIn(0, 255),
-                        (r / weightSum).roundToInt().coerceIn(0, 255),
-                        (g / weightSum).roundToInt().coerceIn(0, 255),
-                        (b / weightSum).roundToInt().coerceIn(0, 255)
+                    dstPixels[yDstOffset + x] = (
+                        (a.roundToInt().coerceIn(0, 255) shl 24) or
+                        (r.roundToInt().coerceIn(0, 255) shl 16) or
+                        (g.roundToInt().coerceIn(0, 255) shl 8) or
+                        b.roundToInt().coerceIn(0, 255)
                     )
                 }
             }

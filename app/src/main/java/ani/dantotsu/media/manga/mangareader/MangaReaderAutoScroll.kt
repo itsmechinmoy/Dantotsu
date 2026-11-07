@@ -22,7 +22,7 @@ class MangaReaderAutoScroll {
             if (!isRunning || rv == null) return
 
             if (lastFrameTimeNanos != 0L) {
-                val dt = ((frameTimeNanos - lastFrameTimeNanos).coerceAtMost(50_000_000L)) / 1_000_000_000f
+                val dt = (frameTimeNanos - lastFrameTimeNanos).coerceAtMost(50_000_000L) / 1_000_000_000f
                 // Standardize speed relative to 60fps base:
                 // At 60Hz:  dt ~ 0.0166s -> 60 * dt ~ 1.0 -> speed pixels/frame
                 // At 90Hz:  dt ~ 0.0111s -> 60 * dt ~ 0.67 -> smoother micro-steps

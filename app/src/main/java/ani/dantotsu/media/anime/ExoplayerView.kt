@@ -2022,6 +2022,9 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
 
     override fun onStop() {
         super.onStop()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isInPictureInPictureMode) {
+            playerManager.audioFocusListener?.abandonRequest()
+        }
         if (playerManager.isInitialized) {
             playerManager.exoPlayer?.let { p ->
                 val selEp = media.anime?.selectedEpisode

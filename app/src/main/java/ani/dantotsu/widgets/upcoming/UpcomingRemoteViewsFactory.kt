@@ -38,8 +38,8 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
 
     private fun formatTime(timeUntil: Long): String {
         val days = timeUntil / (1000 * 60 * 60 * 24)
-        val hours = (timeUntil % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-        val minutes = ((timeUntil % (1000 * 60 * 60 * 24)) % (1000 * 60 * 60)) / (1000 * 60)
+        val hours = timeUntil % (1000 * 60 * 60 * 24) / (1000 * 60 * 60)
+        val minutes = timeUntil % (1000 * 60 * 60 * 24) % (1000 * 60 * 60) / (1000 * 60)
         
         return if (timeUntil >= 0) {
             buildString {
@@ -79,7 +79,7 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         
         if (media != null) {
             for (mediaItem in media) {
-                val timeUntilAiring = (mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0)
+                val timeUntilAiring = mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0
                 if (timeUntilAiring <= 0 || mediaItem.anime?.nextAiringEpisode == null) {
                     forceRefresh = true
                     break
@@ -125,7 +125,7 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
                 val seen = mutableSetOf<Int>()
                 media.forEach { mediaItem ->
                     if (seen.add(mediaItem.id)) {
-                        val timeUntilAiring = (mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0)
+                        val timeUntilAiring = mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0
                         if (timeUntilAiring > 0) {
                             val episodeNumber = mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
                             widgetItems.add(

@@ -620,7 +620,7 @@ class DirectTorrentBottomSheet : BottomSheetDialogFragment() {
                         quality = 1080,
                         format = VideoType.CONTAINER,
                         file = FileUrl(sUrl),
-                        size = (stat.length / (1024.0 * 1024.0))
+                        size = stat.length / (1024.0 * 1024.0)
                     )
                     val ext = object : VideoExtractor() {
                         override val server = VideoServer(name = "Torrent Stream", embed = FileUrl(sUrl))
@@ -652,7 +652,7 @@ class DirectTorrentBottomSheet : BottomSheetDialogFragment() {
                     ).also { it.selected = Selected(server = "Torrent") }
                 } else {
                     // No link — synthetic ID. AniList/MAL tracking is a no-op.
-                    val seasonTitle = if (clickedFolder.isNotBlank()) "${torrent.name ?: torrent.title ?: cleanTitle} - $clickedFolder" else (torrent.name ?: torrent.title ?: cleanTitle)
+                    val seasonTitle = if (clickedFolder.isNotBlank()) "${torrent.name ?: torrent.title ?: cleanTitle} - $clickedFolder" else torrent.name ?: torrent.title ?: cleanTitle
                     Media(
                         id = kotlin.math.abs((torrent.hash ?: cleanTitle).hashCode() + clickedFolder.hashCode()),
                         name = seasonTitle,

@@ -55,7 +55,7 @@ class CircleView(context: Context, attrs: AttributeSet?) : View(context, attrs) 
         } else {
             // Scale gap angle down so total gaps never exceed 30% of the circle
             val maxTotalGap = 360f * 0.30f
-            val gapAngle = (maxGapAngle).coerceAtMost(maxTotalGap / parts)
+            val gapAngle = maxGapAngle.coerceAtMost(maxTotalGap / parts)
             val totalGapAngle = gapAngle * parts
             val totalAngle = 360f - totalGapAngle
             val effectiveAngle = totalAngle / parts

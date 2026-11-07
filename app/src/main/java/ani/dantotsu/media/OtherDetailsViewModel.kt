@@ -504,7 +504,7 @@ class OtherDetailsViewModel : ViewModel() {
                             }
 
                             media.relation = if (nextEp != null) {
-                                "Episode $nextEp" + (if (timeStr.isNotBlank()) "\n$timeStr" else "")
+                                "Episode $nextEp" + if (timeStr.isNotBlank()) "\n$timeStr" else ""
                             } else {
                                 timeStr.ifBlank { null }
                             }

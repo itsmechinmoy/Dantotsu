@@ -71,7 +71,7 @@ class EpisodeAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        return (when (viewType) {
+        return when (viewType) {
             0 -> EpisodeListViewHolder(
                 ItemEpisodeListBinding.inflate(
                     LayoutInflater.from(parent.context),

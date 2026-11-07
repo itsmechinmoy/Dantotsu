@@ -77,32 +77,7 @@ class DownloadAddonManager(
         }
     }
 
-    private inner class InstallationListener : AddonListener {
-        override fun onAddonInstalled(result: LoadResult?) {
-            if (result is DownloadLoadResult.Success) {
-                extension = result.extension
-                hasUpdate = false
-                onListenerAction?.invoke(AddonListener.ListenerAction.INSTALL)
-            }
-        }
 
-        override fun onAddonUpdated(result: LoadResult?) {
-            if (result is DownloadLoadResult.Success) {
-                extension = result.extension
-                hasUpdate = false
-                onListenerAction?.invoke(AddonListener.ListenerAction.UPDATE)
-            }
-        }
-
-        override fun onAddonUninstalled(pkgName: String) {
-            if (extension?.pkgName == pkgName) {
-                extension = null
-                hasUpdate = false
-                onListenerAction?.invoke(AddonListener.ListenerAction.UNINSTALL)
-            }
-        }
-
-    }
 
     override fun updateInstallStep(id: Long, step: InstallStep) {
         installer.updateInstallStep(id, step)

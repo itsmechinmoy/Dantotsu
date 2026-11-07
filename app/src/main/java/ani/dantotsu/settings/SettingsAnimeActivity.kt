@@ -74,7 +74,7 @@ class SettingsAnimeActivity : AppCompatActivity() {
                     Settings(
                         type = 1,
                         name = getString(R.string.preferred_download_resolutions),
-                        desc = (PrefManager.getVal<List<String>>(PrefName.PreferredDownloadResolutions)).joinToString(", "),
+                        desc = PrefManager.getVal<List<String>>(PrefName.PreferredDownloadResolutions).joinToString(", "),
                         icon = R.drawable.ic_round_high_quality_24,
                         onClick = {
                             ResolutionPriorityDialog.show(context, null) {

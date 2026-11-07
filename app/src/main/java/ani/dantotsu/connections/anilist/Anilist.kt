@@ -375,7 +375,7 @@ object Anilist {
                     "https://graphql.anilist.co/",
                     headers,
                     requestBody = requestBody,
-                    cacheTime = if (force) 0 else (cache ?: 10)
+                    cacheTime = if (force) 0 else cache ?: 10
                 )
                 val remaining = json.headers["X-RateLimit-Remaining"]?.toIntOrNull() ?: -1
                 Logger.log("Remaining requests: $remaining")

@@ -25,7 +25,7 @@ object PaginationChipHelper {
         val screenWidth = Resources.getSystem().displayMetrics.widthPixels
         var select: Chip? = null
         for (position in arr.indices) {
-            val last = if (position + 1 == arr.size) names.size else (limit * (position + 1))
+            val last = if (position + 1 == arr.size) names.size else limit * (position + 1)
             val chip = ItemChipBinding.inflate(
                 LayoutInflater.from(context),
                 chipGroup,
@@ -36,7 +36,7 @@ object PaginationChipHelper {
             fun selectedChip() {
                 chip.isChecked = true
                 scrollView.smoothScrollTo(
-                    (chip.left - screenWidth / 2) + (chip.width / 2),
+                    chip.left - screenWidth / 2 + chip.width / 2,
                     0
                 )
             }
@@ -64,7 +64,7 @@ object PaginationChipHelper {
         if (select != null) {
             scrollView.post {
                 scrollView.scrollTo(
-                    (select!!.left - screenWidth / 2) + (select!!.width / 2),
+                    select!!.left - screenWidth / 2 + select!!.width / 2,
                     0
                 )
             }

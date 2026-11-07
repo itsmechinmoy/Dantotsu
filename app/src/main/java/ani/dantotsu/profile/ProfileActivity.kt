@@ -298,7 +298,7 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
         with(bindingProfileAppBar) {
             profileUserAvatarContainer.visibility =
                 if (profileUserAvatarContainer.scaleX == 0f) View.GONE else View.VISIBLE
-            val duration = (200 * (PrefManager.getVal(PrefName.AnimationSpeed) as Float)).toLong()
+            val duration = (200 * PrefManager.getVal<Float>(PrefName.AnimationSpeed)).toLong()
             if (percentage >= percent && !isCollapsed) {
                 isCollapsed = true
                 ObjectAnimator.ofFloat(profileUserDataContainer, "translationX", screenWidth)
