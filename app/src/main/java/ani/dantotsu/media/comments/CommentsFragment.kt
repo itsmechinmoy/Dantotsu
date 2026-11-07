@@ -30,6 +30,9 @@ import ani.dantotsu.loadImage
 import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.media.anime.getEpisode
 import ani.dantotsu.media.MediaDetailsActivity
+import ani.dantotsu.media.Media
+import ani.dantotsu.media.Selected
+import ani.dantotsu.media.manga.MangaChapter
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.notifications.comment.MediaNameFetch
 import ani.dantotsu.setBaseline
@@ -104,15 +107,12 @@ class CommentsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // The host can be mid-bail after a process death; it has no views to anchor to.
         if (!activity.bindingReady) return
         val baselineAnchor = activity.binding.mediaBottomBarContainer ?: activity.binding.commentMessageContainer
         baselineAnchor?.let {
-            // If it's the unified container, it already has navBarHeight padding, so don't include it again.
             val includeSystemPaddings = it != activity.binding.mediaBottomBarContainer
             binding.commentsLayout.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
         }
-        //get the media id from the intent
         val mediaId = arguments?.getInt("mediaId") ?: -1
         mediaName = arguments?.getString("mediaName") ?: "unknown"
         if (mediaId == -1) {
@@ -126,15 +126,31 @@ class CommentsFragment : Fragment() {
         backgroundColor = (binding.root.background as? ColorDrawable)?.color ?: 0
 
         val markwon = buildMarkwon(activity, fragment = this@CommentsFragment)
-
         activity.binding.commentUserAvatar.loadImage(Anilist.avatar)
         val markwonEditor = MarkwonEditor.create(markwon)
         val watcher = MarkwonEditorTextWatcher.withProcess(markwonEditor)
         markwonTextWatcher = watcher
         activity.binding.commentInput.addTextChangedListener(watcher)
 
-        val isOfflineOrLocal = !ani.dantotsu.isOnline(activity)
+        setupCommentsRefresh()
 
+        binding.commentsList.adapter = adapter
+        binding.commentsList.layoutManager = LinearLayoutManager(activity)
+        adapter.add(section)
+
+        val model: MediaDetailsViewModel by activityViewModels()
+        model.getMedia().observe(viewLifecycleOwner) { newMedia ->
+            handleMediaUpdate(newMedia)
+        }
+
+        setupSortAndRulesButtons()
+        setupFilterButtons()
+        setupScrollPagination()
+        setupCommentInputUi()
+        setupSendButton()
+    }
+
+    private fun setupCommentsRefresh() {
         binding.commentsRefresh.setOnRefreshListener {
             val refreshOffline = !ani.dantotsu.isOnline(activity)
             if (refreshOffline) {
@@ -155,51 +171,46 @@ class CommentsFragment : Fragment() {
             }
             activity.binding.commentReplyToContainer.visibility = View.GONE
         }
+    }
 
-        binding.commentsList.adapter = adapter
-        binding.commentsList.layoutManager = LinearLayoutManager(activity)
-        adapter.add(section)
+    private fun handleMediaUpdate(newMedia: Media?) {
+        if (newMedia != null && newMedia.id != 0) {
+            val isOfflineOrLocal = !ani.dantotsu.isOnline(activity)
+            isAnime = newMedia.anime != null
+            userProgress = newMedia.userProgress
+            totalEpisodesOrChapters = if (isAnime) newMedia.anime?.totalEpisodes else newMedia.manga?.totalChapters
+            updateCurrentProgressButton()
 
-        val model: MediaDetailsViewModel by activityViewModels()
-        model.getMedia().observe(viewLifecycleOwner) { newMedia ->
-            if (newMedia != null && newMedia.id != 0) {
-                isAnime = newMedia.anime != null
-                userProgress = newMedia.userProgress
-                totalEpisodesOrChapters = if (isAnime)
-                    newMedia.anime?.totalEpisodes
-                else
-                    newMedia.manga?.totalChapters
-                updateCurrentProgressButton()
+            if (!commentsLoaded || newMedia.id != this.mediaId) {
+                this.mediaId = newMedia.id
+                commentsLoaded = true
 
-                if (!commentsLoaded || newMedia.id != this.mediaId) {
-                    this.mediaId = newMedia.id
-                    commentsLoaded = true
-
-                    if (isOfflineOrLocal) {
-                        binding.commentsOfflineText.visibility = View.VISIBLE
-                        binding.commentsListContainer.visibility = View.GONE
-                        binding.openRules.visibility = View.GONE
-                        binding.commentFilter.visibility = View.GONE
-                        binding.commentSort.visibility = View.GONE
-                        binding.commentCurrentProgress.visibility = View.GONE
-                        binding.commentsProgressBar.visibility = View.GONE
-                        activity.binding.commentMessageContainer.visibility = View.GONE
-                    } else if (CommentsAPI.authToken != null) {
-                        lifecycleScope.launch {
-                            val commentId = arguments?.getInt("commentId")
-                            if (commentId != null && commentId > 0) {
-                                loadCommentThread(commentId)
-                            } else {
-                                loadAndDisplayComments()
-                            }
+                if (isOfflineOrLocal) {
+                    binding.commentsOfflineText.visibility = View.VISIBLE
+                    binding.commentsListContainer.visibility = View.GONE
+                    binding.openRules.visibility = View.GONE
+                    binding.commentFilter.visibility = View.GONE
+                    binding.commentSort.visibility = View.GONE
+                    binding.commentCurrentProgress.visibility = View.GONE
+                    binding.commentsProgressBar.visibility = View.GONE
+                    activity.binding.commentMessageContainer.visibility = View.GONE
+                } else if (CommentsAPI.authToken != null) {
+                    lifecycleScope.launch {
+                        val commentId = arguments?.getInt("commentId")
+                        if (commentId != null && commentId > 0) {
+                            loadCommentThread(commentId)
+                        } else {
+                            loadAndDisplayComments()
                         }
-                    } else {
-                        activity.binding.commentMessageContainer.visibility = View.GONE
                     }
+                } else {
+                    activity.binding.commentMessageContainer.visibility = View.GONE
                 }
             }
         }
+    }
 
+    private fun setupSortAndRulesButtons() {
         binding.commentSort.setOnClickListener { sortView ->
             val popup = PopupMenu(activity, sortView)
             popup.setOnMenuItemClickListener { item ->
@@ -241,7 +252,9 @@ class CommentsFragment : Fragment() {
                 show()
             }
         }
+    }
 
+    private fun setupFilterButtons() {
         binding.commentFilter.setOnClickListener {
             activity.customAlertDialog().apply {
                 val customView = DialogEdittextBinding.inflate(layoutInflater)
@@ -305,15 +318,18 @@ class CommentsFragment : Fragment() {
             }
             true
         }
+    }
 
+    private fun setupScrollPagination() {
         var isFetching = false
         binding.commentsList.setOnTouchListener(
             object : View.OnTouchListener {
                 override fun onTouch(v: View?, event: MotionEvent?): Boolean {
                     if (event?.action == MotionEvent.ACTION_UP) {
-                        if (!binding.commentsList.canScrollVertically(1) && !isFetching &&
-                            (binding.commentsList.layoutManager as LinearLayoutManager).findLastVisibleItemPosition() == (binding.commentsList.adapter!!.itemCount - 1)
-                        ) {
+                        val layoutManager = binding.commentsList.layoutManager as? LinearLayoutManager
+                        val lastVisible = layoutManager?.findLastVisibleItemPosition() ?: -1
+                        val totalCount = binding.commentsList.adapter?.itemCount ?: 0
+                        if (!binding.commentsList.canScrollVertically(1) && !isFetching && lastVisible == totalCount - 1) {
                             if (pagesLoaded < totalPages && totalPages > 1) {
                                 binding.commentBottomRefresh.visibility = View.VISIBLE
                                 loadMoreComments()
@@ -324,7 +340,6 @@ class CommentsFragment : Fragment() {
                                     }
                                 }
                             } else {
-                                //snackString("No more comments") fix spam?
                                 Logger.log("No more comments")
                             }
                         }
@@ -355,7 +370,7 @@ class CommentsFragment : Fragment() {
                         )
                     }
                 }
-                //adds additional comments to the section
+
                 private suspend fun updateUIWithComment(comment: Comment) {
                     withContext(Dispatchers.Main) {
                         section.add(
@@ -371,16 +386,14 @@ class CommentsFragment : Fragment() {
                     }
                 }
             })
+    }
 
+    private fun setupCommentInputUi() {
         val limitWatcher = object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
-            }
-
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-            }
-
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
-                if ((activity.binding.commentInput.text.length) > 300) {
+                if (activity.binding.commentInput.text.length > 300) {
                     activity.binding.commentInput.text.delete(
                         300,
                         activity.binding.commentInput.text.length
@@ -405,21 +418,18 @@ class CommentsFragment : Fragment() {
                     activity.binding.commentInput.layoutParams = layoutParams
                 }
                 anim.duration = 300
-
                 anim.start()
                 anim.doOnEnd {
                     activity.binding.commentLabel.visibility = View.VISIBLE
                     activity.binding.commentSend.visibility = View.VISIBLE
                     activity.binding.commentSpoiler.visibility = View.VISIBLE
                     activity.binding.commentGif.visibility = View.VISIBLE
-                    activity.binding.commentLabel.animate().translationX(0f).setDuration(300)
-                        .start()
+                    activity.binding.commentLabel.animate().translationX(0f).setDuration(300).start()
                     activity.binding.commentSend.animate().translationX(0f).setDuration(300).start()
                 }
             }
 
             activity.binding.commentLabel.setOnClickListener {
-                //alert dialog to enter a number, with a cancel and ok button
                 activity.customAlertDialog().apply {
                     val customView = DialogEdittextBinding.inflate(layoutInflater)
                     setTitle("Enter a chapter/episode number tag")
@@ -427,42 +437,22 @@ class CommentsFragment : Fragment() {
                     setPosButton("OK") {
                         val text = customView.dialogEditText.text.toString()
                         tag = text.toIntOrNull()
-                        if (tag == null) {
-                            activity.binding.commentLabel.background = ResourcesCompat.getDrawable(
-                                resources,
-                                R.drawable.ic_label_off_24,
-                                null
-                            )
-                        } else {
-                            activity.binding.commentLabel.background = ResourcesCompat.getDrawable(
-                                resources,
-                                R.drawable.ic_label_24,
-                                null
-                            )
-                        }
+                        val iconRes = if (tag == null) R.drawable.ic_label_off_24 else R.drawable.ic_label_24
+                        activity.binding.commentLabel.background = ResourcesCompat.getDrawable(resources, iconRes, null)
                     }
                     setNeutralButton("Clear") {
                         tag = null
-                        activity.binding.commentLabel.background = ResourcesCompat.getDrawable(
-                            resources,
-                            R.drawable.ic_label_off_24,
-                            null
-                        )
+                        activity.binding.commentLabel.background = ResourcesCompat.getDrawable(resources, R.drawable.ic_label_off_24, null)
                     }
                     setNegButton("Cancel") {
                         tag = null
-                        activity.binding.commentLabel.background = ResourcesCompat.getDrawable(
-                            resources,
-                            R.drawable.ic_label_off_24,
-                            null
-                        )
+                        activity.binding.commentLabel.background = ResourcesCompat.getDrawable(resources, R.drawable.ic_label_off_24, null)
                     }
                     show()
                 }
             }
         }
 
-        // Spoiler toggle button
         activity.binding.commentSpoiler.setOnClickListener {
             isSpoilerMode = !isSpoilerMode
             activity.binding.commentSpoiler.alpha = if (isSpoilerMode) 1f else 0.5f
@@ -472,7 +462,6 @@ class CommentsFragment : Fragment() {
             )
         }
 
-        // GIF picker button
         activity.binding.commentGif.setOnClickListener {
             val gifPicker = GifPickerBottomDialog.newInstance()
             gifPicker.setOnGifSelectedListener { gifUrl ->
@@ -484,13 +473,14 @@ class CommentsFragment : Fragment() {
             }
             gifPicker.show(childFragmentManager, "gifPicker")
         }
+    }
 
+    private fun setupSendButton() {
         activity.binding.commentSend.setOnClickListener {
             if (CommentsAPI.isBanned) {
                 snackString("You are banned from commenting :(")
                 return@setOnClickListener
             }
-
             if (PrefManager.getVal(PrefName.FirstComment)) {
                 showCommentRulesDialog()
             } else {
@@ -548,77 +538,99 @@ class CommentsFragment : Fragment() {
         val currentMedia = model.getMedia().value ?: return
 
         if (isAnime) {
-            val ep = currentMedia.anime?.episodes?.getEpisode(tag)
-            if (ep != null) {
-                model.onEpisodeClick(currentMedia, tag, childFragmentManager, true)
-            } else {
-                snackString("Episode $tag not found for this provider")
+            handleAnimeTagClick(model, currentMedia, tag)
+            return
+        }
+
+        val selected = currentMedia.selected
+        if (selected?.sourceIndex == null) {
+            snackString("Please select an extension first")
+            return
+        }
+        val sourceIndex = selected.sourceIndex
+
+        if (currentMedia.format == "NOVEL") {
+            handleNovelTagClick(model, sourceIndex, tag)
+        } else {
+            handleMangaTagClick(model, currentMedia, selected, sourceIndex, tag)
+        }
+    }
+
+    private fun handleAnimeTagClick(model: MediaDetailsViewModel, currentMedia: Media, tag: String) {
+        val ep = currentMedia.anime?.episodes?.getEpisode(tag)
+        if (ep != null) {
+            model.onEpisodeClick(currentMedia, tag, childFragmentManager, true)
+        } else {
+            snackString("Episode $tag not found for this provider")
+        }
+    }
+
+    private fun handleNovelTagClick(model: MediaDetailsViewModel, sourceIndex: Int, tag: String) {
+        val chapters = model.getNovelChapters().value?.get(sourceIndex)
+        val chpResponse = chapters?.find { it.extra?.get("chapterNumber") == tag }
+        if (chpResponse != null) {
+            lifecycleScope.launch {
+                model.loadBook(chpResponse, sourceIndex)
+                val intent = android.content.Intent(activity, ani.dantotsu.media.novel.novelreader.NovelReaderActivity::class.java)
+                startActivity(intent)
             }
         } else {
-            val selected = currentMedia.selected
-            if (selected?.sourceIndex == null) {
-                snackString("Please select an extension first")
-                return
-            }
-            val sourceIndex = selected.sourceIndex
+            snackString("Novel chapter $tag not found")
+        }
+    }
 
-            val isNovel = currentMedia.format == "NOVEL"
-            if (isNovel) {
-                val chapters = model.getNovelChapters().value?.get(sourceIndex)
-                val chpResponse = chapters?.find { it.extra?.get("chapterNumber") == tag }
-                if (chpResponse != null) {
-                    lifecycleScope.launch {
-                        model.loadBook(chpResponse, sourceIndex)
-                        val intent = android.content.Intent(activity, ani.dantotsu.media.novel.novelreader.NovelReaderActivity::class.java)
-                        startActivity(intent)
-                    }
-                } else {
-                    snackString("Novel chapter $tag not found")
-                }
-            } else {
-                val manga = currentMedia.manga ?: run {
-                    snackString("Manga not available")
-                    return
-                }
-                val cachedChapters = model.getMangaChapters().value?.get(sourceIndex)
-                if (manga.chapters.isNullOrEmpty() && cachedChapters != null) {
-                    manga.chapters = cachedChapters
-                }
+    private fun handleMangaTagClick(
+        model: MediaDetailsViewModel,
+        currentMedia: Media,
+        selected: Selected,
+        sourceIndex: Int,
+        tag: String
+    ) {
+        val manga = currentMedia.manga ?: run {
+            snackString("Manga not available")
+            return
+        }
+        val cachedChapters = model.getMangaChapters().value?.get(sourceIndex)
+        if (manga.chapters.isNullOrEmpty() && cachedChapters != null) {
+            manga.chapters = cachedChapters
+        }
 
-                val chp = manga.chapters?.values?.find { chapterMatchesTag(it.number, tag) }
-                if (chp != null) {
-                    model.continueMedia = false
-                    manga.selectedChapter = chp
-                    model.saveSelected(currentMedia.id, selected)
-                    
-                    ani.dantotsu.media.manga.mangareader.ChapterLoaderDialog.newInstance(chp, true)
-                        .show(childFragmentManager, "dialog")
+        val chp = manga.chapters?.values?.find { chapterMatchesTag(it.number, tag) }
+        if (chp != null) {
+            openMangaChapter(model, currentMedia, selected, chp)
+        } else {
+            lifecycleScope.launch {
+                snackString("Loading chapter for tag...")
+                model.loadMangaChapters(currentMedia, sourceIndex)
+                val refreshedChapters = model.getMangaChapters().value?.get(sourceIndex)
+                if (refreshedChapters != null) {
+                    manga.chapters = refreshedChapters
+                }
+                val foundChp =
+                    manga.chapters?.values?.find { chapterMatchesTag(it.number, tag) }
+                if (foundChp != null) {
+                    openMangaChapter(model, currentMedia, selected, foundChp)
                 } else {
-                    lifecycleScope.launch {
-                        snackString("Loading chapter for tag...")
-                        model.loadMangaChapters(currentMedia, sourceIndex)
-                        val refreshedChapters = model.getMangaChapters().value?.get(sourceIndex)
-                        if (refreshedChapters != null) {
-                            manga.chapters = refreshedChapters
-                        }
-                        val foundChp =
-                            manga.chapters?.values?.find { chapterMatchesTag(it.number, tag) }
-                        if (foundChp != null) {
-                            model.continueMedia = false
-                            manga.selectedChapter = foundChp
-                            model.saveSelected(currentMedia.id, selected)
-                            ani.dantotsu.media.manga.mangareader.ChapterLoaderDialog.newInstance(foundChp, true)
-                                .show(childFragmentManager, "dialog")
-                        } else {
-                            snackString("Chapter $tag not found for this provider")
-                        }
-                    }
+                    snackString("Chapter $tag not found for this provider")
                 }
             }
         }
     }
 
-    private fun chapterMatchesTag(chapterNumber: String, tag: String): Boolean {
+    private fun openMangaChapter(
+        model: MediaDetailsViewModel,
+        currentMedia: Media,
+        selected: Selected,
+        chp: MangaChapter
+    ) {
+        model.continueMedia = false
+        currentMedia.manga?.selectedChapter = chp
+        model.saveSelected(currentMedia.id, selected)
+        ani.dantotsu.media.manga.mangareader.ChapterLoaderDialog.newInstance(chp, true)
+            .show(childFragmentManager, "dialog")
+    }
+
+        private fun chapterMatchesTag(chapterNumber: String, tag: String): Boolean {
         if (chapterNumber == tag) return true
 
         val chapterValue = MediaNameAdapter.findChapterNumber(chapterNumber)
@@ -795,20 +807,7 @@ class CommentsFragment : Fragment() {
         binding.commentsList.visibility = View.VISIBLE
     }
 
-    private suspend fun loadCommentThread(commentId: Int) {
-        binding.commentsProgressBar.visibility = View.VISIBLE
-        binding.commentsList.visibility = View.GONE
-        section.clear()
-
-        val targetComment = withContext(Dispatchers.IO) {
-            CommentsAPI.getSingleComment(commentId)
-        }
-        if (targetComment == null) {
-            loadAndDisplayComments()
-            return
-        }
-
-        // Traverse up to root parent if this is a reply
+    private suspend fun resolveCommentChain(targetComment: Comment): List<Comment> {
         val commentChain = mutableListOf<Comment>()
         commentChain.add(targetComment)
 
@@ -822,60 +821,73 @@ class CommentsFragment : Fragment() {
             currentParentId = parent.parentCommentId
             hops++
         }
+        return commentChain.reversed()
+    }
 
-        // threadList is ordered from root down to targetComment:
-        // [rootComment, ..., parentComment, targetComment]
-        val threadList = commentChain.reversed()
+    private fun renderCommentChain(threadList: List<Comment>, targetComment: Comment) {
+        val markwon = buildMarkwon(activity, fragment = this@CommentsFragment)
+        var currentParentItem: CommentItem? = null
+
+        threadList.forEachIndexed { index, comment ->
+            if (index == 0) {
+                val rootItem = CommentItem(
+                    comment,
+                    markwon,
+                    section,
+                    this@CommentsFragment,
+                    backgroundColor,
+                    0
+                )
+                if (threadList.size > 1) {
+                    rootItem.updateRepliesVisibility(true)
+                }
+                section.add(rootItem)
+                currentParentItem = rootItem
+            } else {
+                val parent = currentParentItem!!
+                val depth = if (parent.commentDepth + 1 > parent.MAX_DEPTH) parent.commentDepth else parent.commentDepth + 1
+                val targetSection = if (parent.commentDepth + 1 > parent.MAX_DEPTH) parent.parentSection else parent.repliesSection
+                if (depth >= parent.MAX_DEPTH) {
+                    parent.registerSubComment(comment.commentId)
+                }
+                val childItem = CommentItem(
+                    comment,
+                    markwon,
+                    targetSection,
+                    this@CommentsFragment,
+                    backgroundColor,
+                    depth
+                )
+                if (index < threadList.size - 1) {
+                    childItem.updateRepliesVisibility(true)
+                }
+                targetSection.add(childItem)
+                currentParentItem = childItem
+            }
+        }
+
+        if (threadList.size == 1 && (targetComment.replyCount ?: 0) > 0) {
+            currentParentItem?.showReplies()
+        }
+    }
+
+    private suspend fun loadCommentThread(commentId: Int) {
+        binding.commentsProgressBar.visibility = View.VISIBLE
+        binding.commentsList.visibility = View.GONE
+        section.clear()
+
+        val targetComment = withContext(Dispatchers.IO) {
+            CommentsAPI.getSingleComment(commentId)
+        }
+        if (targetComment == null) {
+            loadAndDisplayComments()
+            return
+        }
+
+        val threadList = resolveCommentChain(targetComment)
 
         withContext(Dispatchers.Main) {
-            val markwon = buildMarkwon(activity, fragment = this@CommentsFragment)
-            var currentParentItem: CommentItem? = null
-
-            threadList.forEachIndexed { index, comment ->
-                if (index == 0) {
-                    val rootItem = CommentItem(
-                        comment,
-                        markwon,
-                        section,
-                        this@CommentsFragment,
-                        backgroundColor,
-                        0
-                    )
-                    if (threadList.size > 1) {
-                        rootItem.updateRepliesVisibility(true)
-                    }
-                    section.add(rootItem)
-                    currentParentItem = rootItem
-                } else {
-                    val parent = currentParentItem!!
-                    val depth =
-                        if (parent.commentDepth + 1 > parent.MAX_DEPTH) parent.commentDepth else parent.commentDepth + 1
-                    val targetSection =
-                        if (parent.commentDepth + 1 > parent.MAX_DEPTH) parent.parentSection else parent.repliesSection
-                    if (depth >= parent.MAX_DEPTH) {
-                        parent.registerSubComment(comment.commentId)
-                    }
-                    val childItem = CommentItem(
-                        comment,
-                        markwon,
-                        targetSection,
-                        this@CommentsFragment,
-                        backgroundColor,
-                        depth
-                    )
-                    // Expand this child's replies if there are subsequent replies in the chain leading to targetComment
-                    if (index < threadList.size - 1) {
-                        childItem.updateRepliesVisibility(true)
-                    }
-                    targetSection.add(childItem)
-                    currentParentItem = childItem
-                }
-            }
-
-            // If target is the root comment and has replies, show its replies
-            if (threadList.size == 1 && (targetComment.replyCount ?: 0) > 0) {
-                currentParentItem?.showReplies()
-            }
+            renderCommentChain(threadList, targetComment)
         }
 
         binding.commentsProgressBar.visibility = View.GONE

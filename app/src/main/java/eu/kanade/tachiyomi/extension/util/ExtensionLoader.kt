@@ -287,7 +287,7 @@ internal object ExtensionLoader {
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
             ?: emptySequence()
 
-        val extPkgs = (sharedExtPkgs + privateExtPkgs)
+        val extPkgs = sharedExtPkgs + privateExtPkgs
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
                 val privatePkg = privateExtPkgs
@@ -337,7 +337,7 @@ internal object ExtensionLoader {
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
             ?: emptySequence()
 
-        val extPkgs = (sharedExtPkgs + privateExtPkgs)
+        val extPkgs = sharedExtPkgs + privateExtPkgs
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
                 val privatePkg = privateExtPkgs
@@ -387,7 +387,7 @@ internal object ExtensionLoader {
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
             ?: emptySequence()
 
-        val extPkgs = (sharedExtPkgs + privateExtPkgs)
+        val extPkgs = sharedExtPkgs + privateExtPkgs
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
                 val privatePkg = privateExtPkgs
@@ -453,8 +453,7 @@ internal object ExtensionLoader {
             appInfo.fixBasePaths(privateFile.absolutePath)
         }
 
-        val extName = appInfo.metaData?.getString("aniyomix.name")
-            ?: pkgManager.getApplicationLabel(appInfo).toString().substringAfter("Aniyomi: ")
+        val extName = resolveAnimeExtensionName(appInfo, pkgManager)
         val versionName = pkgInfo.versionName
         val versionCode = PackageInfoCompat.getLongVersionCode(pkgInfo)
 
@@ -463,39 +462,10 @@ internal object ExtensionLoader {
             return AnimeLoadResult.Error
         }
 
-        // Validate lib version
-        val rawLib = appInfo.metaData?.get("aniyomix.extensionLib")
-            ?: appInfo.metaData?.get("tachiyomix.extensionLib")
-            ?: appInfo.metaData?.get("tachiyomi.animeextensionLib")
-            ?: appInfo.metaData?.get("aniyomi.animeextensionLib")
-        val libVersion = when (rawLib) {
-            is Number -> rawLib.toDouble().takeUnless { it == 0.0 }
-            is String -> rawLib.toDoubleOrNull()
-            else -> null
-        } ?: run {
-            val parts = versionName.split('.')
-            val major = parts[0].toDoubleOrNull()
-            if (major != null && major >= 10.0) {
-                major
-            } else if (parts.size >= 2) {
-                "${parts[0]}.${parts[1]}".toDoubleOrNull()
-            } else {
-                versionName.toDoubleOrNull()
-            }
-        }
-        val majorLibVersion = libVersion?.toInt()
-        if (libVersion == null || majorLibVersion == null || majorLibVersion < ANIME_LIB_VERSION_MIN || majorLibVersion > ANIME_LIB_VERSION_MAX) {
-            Logger.log(
-                "Lib version is $libVersion, while only versions " +
-                        "$ANIME_LIB_VERSION_MIN to $ANIME_LIB_VERSION_MAX are allowed"
-            )
-            return AnimeLoadResult.Error
-        }
+        val libVersion = validateAnimeLibVersion(appInfo, versionName) ?: return AnimeLoadResult.Error
 
-        val loadNsfwSource = isNsfwAllowed(context)
-        val isNsfw = (appInfo.metaData?.getInt("aniyomix.contentWarning", 0) ?: 0) > 0 ||
-            appInfo.metaData?.getInt("$ANIME_PACKAGE$XX_METADATA_NSFW", 0) == 1
-        if (!loadNsfwSource && isNsfw) {
+        val isNsfw = isAnimeExtensionNsfw(appInfo)
+        if (!isNsfwAllowed(context) && isNsfw) {
             Logger.log("NSFW extension $pkgName not allowed")
             return AnimeLoadResult.Error
         }
@@ -512,64 +482,11 @@ internal object ExtensionLoader {
             return AnimeLoadResult.Error
         }
 
-        val sourcesString = appInfo.metaData?.getString("$ANIME_PACKAGE$XX_METADATA_SOURCE_CLASS")
-            ?: appInfo.metaData?.getString("tachiyomi.animeextension$XX_METADATA_SOURCE_CLASS")
-            ?: appInfo.metaData?.getString("tachiyomix.animeextension$XX_METADATA_SOURCE_CLASS")
-            ?: appInfo.metaData?.getString("aniyomi.animeextension$XX_METADATA_SOURCE_CLASS")
-            ?: appInfo.metaData?.getString("aniyomix.animeextension$XX_METADATA_SOURCE_CLASS")
-            ?: appInfo.metaData?.getString("tachiyomi.animeextension.class")
-            ?: appInfo.metaData?.getString("tachiyomix.animeextension.class")
-            ?: appInfo.metaData?.getString("aniyomi.animeextension.class")
-            ?: appInfo.metaData?.get("$ANIME_PACKAGE$XX_METADATA_SOURCE_CLASS")?.toString()
-            ?: appInfo.metaData?.get("tachiyomi.animeextension.class")?.toString()
-            ?: appInfo.metaData?.get("tachiyomix.animeextension.class")?.toString()
-            ?: appInfo.metaData?.get("aniyomi.animeextension.class")?.toString()
+        val sourcesString = getAnimeSourcesString(appInfo) ?: return AnimeLoadResult.Error
+        val sources = loadAnimeSources(context, appInfo, classLoader, pkgName, extName, sourcesString)
             ?: return AnimeLoadResult.Error
 
-        val sources = sourcesString.split(";")
-            .map {
-                val sourceClass = it.trim()
-                if (sourceClass.startsWith(".")) {
-                    pkgInfo.packageName + sourceClass
-                } else {
-                    sourceClass
-                }
-            }
-            .flatMap {
-                try {
-                    when (val obj = Class.forName(it, false, classLoader).getDeclaredConstructor()
-                        .newInstance()) {
-                        is AnimeSource -> listOf(obj)
-                        is AnimeSourceFactory -> obj.createSources()
-                        else -> throw Exception("Unknown source class type! ${obj.javaClass}")
-                    }
-                } catch (e: LinkageError) {
-                    try {
-                        val fallbackClassLoader = dalvik.system.PathClassLoader(appInfo.sourceDir, null, context.classLoader)
-                        when (val obj = Class.forName(it, false, fallbackClassLoader).getDeclaredConstructor()
-                            .newInstance()) {
-                            is AnimeSource -> listOf(obj)
-                            is AnimeSourceFactory -> obj.createSources()
-                            else -> throw Exception("Unknown source class type! ${obj.javaClass}")
-                        }
-                    } catch (e: Throwable) {
-                        Logger.log("Extension load error (fallback): $extName ($it)")
-                        return AnimeLoadResult.Error
-                    }
-                } catch (e: Throwable) {
-                    Logger.log("Extension load error: $extName ($it)")
-                    return AnimeLoadResult.Error
-                }
-            }
-
-        val langs = sources.filterIsInstance<AnimeCatalogueSource>()
-            .map { it.lang }
-            .toSet()
-        val lang = when (langs.size) {
-            0 -> ""
-            1 -> langs.first()
-            else -> "all"
-        }
+        val lang = resolveAnimeLanguage(sources)
 
         val savedRepo = ani.dantotsu.parsers.ExtensionRepoMetaHelper.getInstalledExtensionRepo(pkgName)
         val extension = AnimeExtension.Installed(
@@ -590,6 +507,127 @@ internal object ExtensionLoader {
             repoName = savedRepo?.second,
         )
         return AnimeLoadResult.Success(extension)
+    }
+
+    private fun resolveAnimeExtensionName(appInfo: ApplicationInfo, pkgManager: PackageManager): String {
+        return appInfo.metaData?.getString("aniyomix.name")
+            ?: pkgManager.getApplicationLabel(appInfo).toString().substringAfter("Aniyomi: ")
+    }
+
+    private fun isAnimeExtensionNsfw(appInfo: ApplicationInfo): Boolean {
+        return (appInfo.metaData?.getInt("aniyomix.contentWarning", 0) ?: 0) > 0 ||
+            appInfo.metaData?.getInt("$ANIME_PACKAGE$XX_METADATA_NSFW", 0) == 1
+    }
+
+    private fun validateAnimeLibVersion(appInfo: ApplicationInfo, versionName: String): Double? {
+        val rawLib = appInfo.metaData?.get("aniyomix.extensionLib")
+            ?: appInfo.metaData?.get("tachiyomix.extensionLib")
+            ?: appInfo.metaData?.get("tachiyomi.animeextensionLib")
+            ?: appInfo.metaData?.get("aniyomi.animeextensionLib")
+        val libVersion = when (rawLib) {
+            is Number -> rawLib.toDouble().takeUnless { it == 0.0 }
+            is String -> rawLib.toDoubleOrNull()
+            else -> null
+        } ?: parseAnimeVersionFallback(versionName)
+        val majorLibVersion = libVersion?.toInt()
+        if (libVersion == null || majorLibVersion == null || majorLibVersion < ANIME_LIB_VERSION_MIN || majorLibVersion > ANIME_LIB_VERSION_MAX) {
+            Logger.log(
+                "Lib version is $libVersion, while only versions " +
+                        "$ANIME_LIB_VERSION_MIN to $ANIME_LIB_VERSION_MAX are allowed"
+            )
+            return null
+        }
+        return libVersion
+    }
+
+    private fun parseAnimeVersionFallback(versionName: String): Double? {
+        val parts = versionName.split('.')
+        val major = parts[0].toDoubleOrNull()
+        return if (major != null && major >= 10.0) {
+            major
+        } else if (parts.size >= 2) {
+            "${parts[0]}.${parts[1]}".toDoubleOrNull()
+        } else {
+            versionName.toDoubleOrNull()
+        }
+    }
+
+    private fun getAnimeSourcesString(appInfo: ApplicationInfo): String? {
+        return appInfo.metaData?.getString("$ANIME_PACKAGE$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.getString("tachiyomi.animeextension$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.getString("tachiyomix.animeextension$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.getString("aniyomi.animeextension$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.getString("aniyomix.animeextension$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.getString("tachiyomi.animeextension.class")
+            ?: appInfo.metaData?.getString("tachiyomix.animeextension.class")
+            ?: appInfo.metaData?.getString("aniyomi.animeextension.class")
+            ?: appInfo.metaData?.get("$ANIME_PACKAGE$XX_METADATA_SOURCE_CLASS")?.toString()
+            ?: appInfo.metaData?.get("tachiyomi.animeextension.class")?.toString()
+            ?: appInfo.metaData?.get("tachiyomix.animeextension.class")?.toString()
+            ?: appInfo.metaData?.get("aniyomi.animeextension.class")?.toString()
+    }
+
+    private fun loadAnimeSources(
+        context: Context,
+        appInfo: ApplicationInfo,
+        classLoader: ClassLoader,
+        pkgName: String,
+        extName: String,
+        sourcesString: String
+    ): List<AnimeSource>? {
+        val sources = mutableListOf<AnimeSource>()
+        val classNames = sourcesString.split(";").map {
+            val sourceClass = it.trim()
+            if (sourceClass.startsWith(".")) pkgName + sourceClass else sourceClass
+        }
+        for (className in classNames) {
+            val loaded = tryInstantiateAnimeSource(context, appInfo, classLoader, extName, className)
+                ?: return null
+            sources.addAll(loaded)
+        }
+        return sources
+    }
+
+    private fun tryInstantiateAnimeSource(
+        context: Context,
+        appInfo: ApplicationInfo,
+        classLoader: ClassLoader,
+        extName: String,
+        className: String
+    ): List<AnimeSource>? {
+        return try {
+            instantiateAnimeSourceFromClassLoader(className, classLoader)
+        } catch (e: LinkageError) {
+            try {
+                val fallbackClassLoader = dalvik.system.PathClassLoader(appInfo.sourceDir, null, context.classLoader)
+                instantiateAnimeSourceFromClassLoader(className, fallbackClassLoader)
+            } catch (e: Throwable) {
+                Logger.log("Extension load error (fallback): $extName ($className)")
+                null
+            }
+        } catch (e: Throwable) {
+            Logger.log("Extension load error: $extName ($className)")
+            null
+        }
+    }
+
+    private fun instantiateAnimeSourceFromClassLoader(className: String, classLoader: ClassLoader): List<AnimeSource> {
+        return when (val obj = Class.forName(className, false, classLoader).getDeclaredConstructor().newInstance()) {
+            is AnimeSource -> listOf(obj)
+            is AnimeSourceFactory -> obj.createSources()
+            else -> throw Exception("Unknown source class type! ${obj.javaClass}")
+        }
+    }
+
+    private fun resolveAnimeLanguage(sources: List<AnimeSource>): String {
+        val langs = sources.filterIsInstance<AnimeCatalogueSource>()
+            .map { it.lang }
+            .toSet()
+        return when (langs.size) {
+            0 -> ""
+            1 -> langs.first()
+            else -> "all"
+        }
     }
 
     private fun loadMangaExtension(
@@ -617,25 +655,7 @@ internal object ExtensionLoader {
             return MangaLoadResult.Error
         }
 
-        // Validate lib version
-        val rawLib = appInfo.metaData?.get("tachiyomix.extensionLib")
-            ?: appInfo.metaData?.get("tachiyomi.extensionLib")
-            ?: appInfo.metaData?.get("mihon.extensionLib")
-        val libVersion = when (rawLib) {
-            is Number -> rawLib.toDouble().takeUnless { it == 0.0 }
-            is String -> rawLib.toDoubleOrNull()
-            else -> null
-        } ?: run {
-            val parts = versionName.split('.')
-            if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDoubleOrNull() else versionName.toDoubleOrNull()
-        }
-        if (libVersion == null || libVersion < MANGA_LIB_VERSION_MIN || libVersion > (MANGA_LIB_VERSION_MAX + 0.09)) {
-            Logger.log(
-                "Lib version is $libVersion, while only versions " +
-                        "$MANGA_LIB_VERSION_MIN to $MANGA_LIB_VERSION_MAX are allowed"
-            )
-            return MangaLoadResult.Error
-        }
+        val libVersion = validateMangaLibVersion(appInfo, versionName) ?: return MangaLoadResult.Error
 
         val loadNsfwSource = isNsfwAllowed(context)
         val isNsfw = appInfo.metaData?.getInt("$MANGA_PACKAGE$XX_METADATA_NSFW", 0) == 1
@@ -656,57 +676,11 @@ internal object ExtensionLoader {
             return MangaLoadResult.Error
         }
 
-        val sourcesClassString = appInfo.metaData?.getString("$MANGA_PACKAGE$XX_METADATA_SOURCE_CLASS")
-            ?: appInfo.metaData?.getString("tachiyomi.extension.class")
-            ?: appInfo.metaData?.getString("tachiyomix.extension.class")
-            ?: appInfo.metaData?.get("$MANGA_PACKAGE$XX_METADATA_SOURCE_CLASS")?.toString()
+        val sourcesClassString = getMangaSourcesString(appInfo) ?: return MangaLoadResult.Error
+        val sources = loadMangaSources(context, appInfo, classLoader, pkgName, extName, sourcesClassString)
             ?: return MangaLoadResult.Error
 
-        val sources = sourcesClassString
-            .split(";")
-            .map {
-                val sourceClass = it.trim()
-                if (sourceClass.startsWith(".")) {
-                    pkgInfo.packageName + sourceClass
-                } else {
-                    sourceClass
-                }
-            }
-            .flatMap {
-                try {
-                    when (val obj = Class.forName(it, false, classLoader)
-                        .getDeclaredConstructor().newInstance()) {
-                        is MangaSource -> listOf(obj)
-                        is SourceFactory -> obj.createSources()
-                        else -> throw Exception("Unknown source class type! ${obj.javaClass}")
-                    }
-                } catch (e: LinkageError) {
-                    try {
-                        val fallbackClassLoader = dalvik.system.PathClassLoader(appInfo.sourceDir, null, context.classLoader)
-                        when (val obj = Class.forName(it, false, fallbackClassLoader)
-                            .getDeclaredConstructor().newInstance()) {
-                            is MangaSource -> listOf(obj)
-                            is SourceFactory -> obj.createSources()
-                            else -> throw Exception("Unknown source class type! ${obj.javaClass}")
-                        }
-                    } catch (e: Throwable) {
-                        Logger.log("Extension load error (fallback): $extName ($it)")
-                        return MangaLoadResult.Error
-                    }
-                } catch (e: Throwable) {
-                    Logger.log("Extension load error: $extName ($it)")
-                    return MangaLoadResult.Error
-                }
-            }
-
-        val langs = sources.filterIsInstance<CatalogueSource>()
-            .map { it.lang }
-            .toSet()
-        val lang = when (langs.size) {
-            0 -> ""
-            1 -> langs.first()
-            else -> "all"
-        }
+        val lang = resolveMangaLanguage(sources)
 
         val savedRepo = ani.dantotsu.parsers.ExtensionRepoMetaHelper.getInstalledExtensionRepo(pkgName)
         val extension = MangaExtension.Installed(
@@ -727,6 +701,105 @@ internal object ExtensionLoader {
             repoName = savedRepo?.second,
         )
         return MangaLoadResult.Success(extension)
+    }
+
+    private fun validateMangaLibVersion(appInfo: ApplicationInfo, versionName: String): Double? {
+        val rawLib = appInfo.metaData?.get("tachiyomix.extensionLib")
+            ?: appInfo.metaData?.get("tachiyomi.extensionLib")
+            ?: appInfo.metaData?.get("mihon.extensionLib")
+        val libVersion = when (rawLib) {
+            is Number -> rawLib.toDouble().takeUnless { it == 0.0 }
+            is String -> rawLib.toDoubleOrNull()
+            else -> null
+        } ?: run {
+            val parts = versionName.split('.')
+            if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDoubleOrNull() else versionName.toDoubleOrNull()
+        }
+        if (libVersion == null || libVersion < MANGA_LIB_VERSION_MIN || libVersion > (MANGA_LIB_VERSION_MAX + 0.09)) {
+            Logger.log(
+                "Lib version is $libVersion, while only versions " +
+                        "$MANGA_LIB_VERSION_MIN to $MANGA_LIB_VERSION_MAX are allowed"
+            )
+            return null
+        }
+        return libVersion
+    }
+
+    private fun getMangaSourcesString(appInfo: ApplicationInfo): String? {
+        return appInfo.metaData?.getString("$MANGA_PACKAGE$XX_METADATA_SOURCE_CLASS")
+            ?: appInfo.metaData?.getString("tachiyomi.extension.class")
+            ?: appInfo.metaData?.getString("tachiyomix.extension.class")
+            ?: appInfo.metaData?.get("$MANGA_PACKAGE$XX_METADATA_SOURCE_CLASS")?.toString()
+    }
+
+    private fun loadMangaSources(
+        context: Context,
+        appInfo: ApplicationInfo,
+        classLoader: ClassLoader,
+        pkgName: String,
+        extName: String,
+        sourcesClassString: String
+    ): List<MangaSource>? {
+        val sources = mutableListOf<MangaSource>()
+        val classNames = sourcesClassString
+            .split(";")
+            .map {
+                val sourceClass = it.trim()
+                if (sourceClass.startsWith(".")) {
+                    pkgName + sourceClass
+                } else {
+                    sourceClass
+                }
+            }
+        for (className in classNames) {
+            val loaded = tryInstantiateMangaSource(context, appInfo, classLoader, extName, className)
+                ?: return null
+            sources.addAll(loaded)
+        }
+        return sources
+    }
+
+    private fun tryInstantiateMangaSource(
+        context: Context,
+        appInfo: ApplicationInfo,
+        classLoader: ClassLoader,
+        extName: String,
+        className: String
+    ): List<MangaSource>? {
+        return try {
+            instantiateMangaSourceFromClassLoader(className, classLoader)
+        } catch (e: LinkageError) {
+            try {
+                val fallbackClassLoader = dalvik.system.PathClassLoader(appInfo.sourceDir, null, context.classLoader)
+                instantiateMangaSourceFromClassLoader(className, fallbackClassLoader)
+            } catch (e: Throwable) {
+                Logger.log("Extension load error (fallback): $extName ($className)")
+                null
+            }
+        } catch (e: Throwable) {
+            Logger.log("Extension load error: $extName ($className)")
+            null
+        }
+    }
+
+    private fun instantiateMangaSourceFromClassLoader(className: String, classLoader: ClassLoader): List<MangaSource> {
+        return when (val obj = Class.forName(className, false, classLoader)
+            .getDeclaredConstructor().newInstance()) {
+            is MangaSource -> listOf(obj)
+            is SourceFactory -> obj.createSources()
+            else -> throw Exception("Unknown source class type! ${obj.javaClass}")
+        }
+    }
+
+    private fun resolveMangaLanguage(sources: List<MangaSource>): String {
+        val langs = sources.filterIsInstance<CatalogueSource>()
+            .map { it.lang }
+            .toSet()
+        return when (langs.size) {
+            0 -> ""
+            1 -> langs.first()
+            else -> "all"
+        }
     }
 
     private fun loadNovelExtension(
@@ -761,42 +834,13 @@ internal object ExtensionLoader {
         }
 
         val novelInterfaceInstance = try {
-            val rawLabel = appInfo.loadLabel(context.packageManager).toString()
-            val cleanLabel = rawLabel.replace(" ", "").replace("-", "").replace("'", "")
-            val pkgSuffix = pkgName.substringAfterLast('.')
-            val metaDataClass = appInfo.metaData?.getString("dantotsu.novelextension.class")
-                ?: appInfo.metaData?.getString("tachiyomi.novelextension.class")
-
-            val candidateNames = mutableListOf<String>()
-            metaDataClass?.let { candidateNames.add(it) }
-            candidateNames.add("$pkgName.$cleanLabel")
-            candidateNames.add("$pkgName.${cleanLabel.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}")
-            candidateNames.add("$pkgName.$pkgSuffix")
-            candidateNames.add("$pkgName.${pkgSuffix.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}")
-            candidateNames.add("ani.dantotsu.extension.novel.$pkgSuffix.$cleanLabel")
-            candidateNames.add("ani.dantotsu.extension.novel.$pkgSuffix.${pkgSuffix.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}")
-            if (pkgName.contains('.')) {
-                candidateNames.add("${pkgName.substringBeforeLast('.')}.$pkgSuffix.$cleanLabel")
-            }
-
-            var loadedClass: Class<*>? = null
-            for (cand in candidateNames.distinct()) {
-                try {
-                    loadedClass = classLoader.loadClass(cand)
-                    if (loadedClass != null) break
-                } catch (_: ClassNotFoundException) {}
-            }
+            val loadedClass = findNovelExtensionClass(context, appInfo, classLoader, pkgName)
             if (loadedClass == null) {
                 Logger.log("No valid novel extension class found for $extName in $pkgName")
                 return NovelLoadResult.Error(ClassNotFoundException("No entry class found for $extName in $pkgName"))
             }
 
-            val instance = loadedClass.getDeclaredConstructor().newInstance()
-            val parsedInterface = if (instance is NovelInterface) {
-                instance
-            } else {
-                createNovelInterfaceProxy(instance)
-            }
+            val parsedInterface = instantiateNovelExtension(loadedClass)
             if (parsedInterface == null) {
                 Logger.log("Loaded class ${loadedClass.name} does not implement NovelInterface")
                 return NovelLoadResult.Error(ClassCastException("${loadedClass.name} does not implement NovelInterface"))
@@ -822,7 +866,49 @@ internal object ExtensionLoader {
         return NovelLoadResult.Success(extension)
     }
 
-    private fun createNovelInterfaceProxy(instance: Any): NovelInterface? {
+    private fun findNovelExtensionClass(
+        context: Context,
+        appInfo: ApplicationInfo,
+        classLoader: ClassLoader,
+        pkgName: String
+    ): Class<*>? {
+        val rawLabel = appInfo.loadLabel(context.packageManager).toString()
+        val cleanLabel = rawLabel.replace(" ", "").replace("-", "").replace("'", "")
+        val pkgSuffix = pkgName.substringAfterLast('.')
+        val metaDataClass = appInfo.metaData?.getString("dantotsu.novelextension.class")
+            ?: appInfo.metaData?.getString("tachiyomi.novelextension.class")
+
+        val candidateNames = mutableListOf<String>()
+        metaDataClass?.let { candidateNames.add(it) }
+        candidateNames.add("$pkgName.$cleanLabel")
+        candidateNames.add("$pkgName.${cleanLabel.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}")
+        candidateNames.add("$pkgName.$pkgSuffix")
+        candidateNames.add("$pkgName.${pkgSuffix.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}")
+        candidateNames.add("ani.dantotsu.extension.novel.$pkgSuffix.$cleanLabel")
+        candidateNames.add("ani.dantotsu.extension.novel.$pkgSuffix.${pkgSuffix.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}")
+        if (pkgName.contains('.')) {
+            candidateNames.add("${pkgName.substringBeforeLast('.')}.$pkgSuffix.$cleanLabel")
+        }
+
+        for (cand in candidateNames.distinct()) {
+            try {
+                val loadedClass = classLoader.loadClass(cand)
+                if (loadedClass != null) return loadedClass
+            } catch (_: ClassNotFoundException) {}
+        }
+        return null
+    }
+
+    private fun instantiateNovelExtension(loadedClass: Class<*>): NovelInterface? {
+        val instance = loadedClass.getDeclaredConstructor().newInstance()
+        return if (instance is NovelInterface) {
+            instance
+        } else {
+            createNovelInterfaceProxy(instance)
+        }
+    }
+
+        private fun createNovelInterfaceProxy(instance: Any): NovelInterface? {
         if (instance is NovelInterface) return instance
         return try {
             val instanceClass = instance.javaClass
@@ -862,44 +948,53 @@ internal object ExtensionLoader {
      * @param pkgInfo The package info of the application.
      */
     private fun isPackageAnExtension(type: MediaType, pkgInfo: PackageInfo): Boolean {
-        if (type == MediaType.NOVEL) {
-            val meta = pkgInfo.applicationInfo?.metaData
-            val hasFeature = pkgInfo.reqFeatures.orEmpty().any {
-                it.name == "dantotsu.novelextension" || it.name == "ani.dantotsu.novelextension"
-            }
-            if (hasFeature) return true
-            return pkgInfo.packageName.startsWith("ani.dantotsu.extension.novel") ||
-                    pkgInfo.packageName.contains(".extension.novel") ||
-                    meta?.containsKey("dantotsu.novelextension.class") == true
-        }
-        val meta = pkgInfo.applicationInfo?.metaData
-        val hasFeature = pkgInfo.reqFeatures.orEmpty().any {
-            when (type) {
-                MediaType.ANIME -> it.name == ANIME_PACKAGE || it.name == "aniyomi.animeextension" || it.name == "tachiyomi.animeextension" || it.name == "tachiyomix.animeextension" || it.name == "aniyomix.animeextension"
-                MediaType.MANGA -> it.name == MANGA_PACKAGE || it.name == "tachiyomi.extension" || it.name == "tachiyomix.extension" || it.name == "mihon.extension" || it.name == "aniyomi.extension"
-                else -> false
-            }
-        }
-        if (hasFeature) return true
-
         return when (type) {
-            MediaType.ANIME -> pkgInfo.packageName.startsWith("eu.kanade.tachiyomi.animeextension") ||
-                    pkgInfo.packageName.startsWith("aniyomi.animeextension") ||
-                    meta?.containsKey("tachiyomi.animeextension.class") == true ||
-                    meta?.containsKey("tachiyomix.animeextension.class") == true ||
-                    meta?.containsKey("aniyomi.animeextension.class") == true ||
-                    meta?.containsKey("aniyomix.name") == true ||
-                    meta?.containsKey("aniyomix.extensionLib") == true
-            MediaType.MANGA -> pkgInfo.packageName.startsWith("eu.kanade.tachiyomi.extension") ||
-                    pkgInfo.packageName.startsWith("mihon.extension") ||
-                    meta?.containsKey("tachiyomi.extension.class") == true ||
-                    meta?.containsKey("tachiyomix.extension.class") == true ||
-                    meta?.containsKey("tachiyomi.extension") == true
-            else -> false
+            MediaType.NOVEL -> isNovelPackageAnExtension(pkgInfo)
+            MediaType.ANIME -> isAnimePackageAnExtension(pkgInfo)
+            MediaType.MANGA -> isMangaPackageAnExtension(pkgInfo)
         }
     }
 
-    private data class ExtensionInfo(
+    private fun isNovelPackageAnExtension(pkgInfo: PackageInfo): Boolean {
+        val meta = pkgInfo.applicationInfo?.metaData
+        val hasFeature = pkgInfo.reqFeatures.orEmpty().any {
+            it.name == "dantotsu.novelextension" || it.name == "ani.dantotsu.novelextension"
+        }
+        if (hasFeature) return true
+        return pkgInfo.packageName.startsWith("ani.dantotsu.extension.novel") ||
+                pkgInfo.packageName.contains(".extension.novel") ||
+                meta?.containsKey("dantotsu.novelextension.class") == true
+    }
+
+    private fun isAnimePackageAnExtension(pkgInfo: PackageInfo): Boolean {
+        val meta = pkgInfo.applicationInfo?.metaData
+        val hasFeature = pkgInfo.reqFeatures.orEmpty().any {
+            it.name == ANIME_PACKAGE || it.name == "aniyomi.animeextension" || it.name == "tachiyomi.animeextension" || it.name == "tachiyomix.animeextension" || it.name == "aniyomix.animeextension"
+        }
+        if (hasFeature) return true
+        return pkgInfo.packageName.startsWith("eu.kanade.tachiyomi.animeextension") ||
+                pkgInfo.packageName.startsWith("aniyomi.animeextension") ||
+                meta?.containsKey("tachiyomi.animeextension.class") == true ||
+                meta?.containsKey("tachiyomix.animeextension.class") == true ||
+                meta?.containsKey("aniyomi.animeextension.class") == true ||
+                meta?.containsKey("aniyomix.name") == true ||
+                meta?.containsKey("aniyomix.extensionLib") == true
+    }
+
+    private fun isMangaPackageAnExtension(pkgInfo: PackageInfo): Boolean {
+        val meta = pkgInfo.applicationInfo?.metaData
+        val hasFeature = pkgInfo.reqFeatures.orEmpty().any {
+            it.name == MANGA_PACKAGE || it.name == "tachiyomi.extension" || it.name == "tachiyomix.extension" || it.name == "mihon.extension" || it.name == "aniyomi.extension"
+        }
+        if (hasFeature) return true
+        return pkgInfo.packageName.startsWith("eu.kanade.tachiyomi.extension") ||
+                pkgInfo.packageName.startsWith("mihon.extension") ||
+                meta?.containsKey("tachiyomi.extension.class") == true ||
+                meta?.containsKey("tachiyomix.extension.class") == true ||
+                meta?.containsKey("tachiyomi.extension") == true
+    }
+
+        private data class ExtensionInfo(
         val packageInfo: PackageInfo,
         val isShared: Boolean,
     )

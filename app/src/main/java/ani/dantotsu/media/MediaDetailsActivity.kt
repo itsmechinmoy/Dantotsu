@@ -71,6 +71,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 
 class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener {
+    private var isFavSyncRunning = false
     lateinit var launcher: LauncherWrapper
     lateinit var binding: ActivityMediaBinding
 
@@ -96,8 +97,39 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val initialMedia = resolveInitialMedia(savedInstanceState)
+        if (initialMedia == null) {
+            snackString("No media found")
+            finish()
+            return
+        }
+        this.media = initialMedia
+        intent.putExtra("media", media as java.io.Serializable)
+        intent.putExtra("mediaId", media.id)
+        launcher = LauncherWrapper(this, ActivityResultContracts.OpenDocumentTree())
+
+        mediaSingleton = null
+        ThemeManager(this).applyTheme(MediaSingleton.bitmap)
+        initActivity(this)
+        MediaSingleton.bitmap = null
+
+        setupWindowAndViews()
+
+        val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        val isDownload = intent.getBooleanExtra("download", false)
+        media.selected = model.loadSelected(media, isDownload)
+
+        setupMediaHeader(bannerAnimations)
+        setupAddToListButton(rescueMode)
+        setupMediaObservers(rescueMode, bannerAnimations, isDownload)
+        setupViewPagerAndTabs(rescueMode, isDownload)
+        setupRefreshObserver()
+    }
+
+    private fun resolveInitialMedia(savedInstanceState: Bundle?): Media? {
         val savedId = savedInstanceState?.getInt("saved_media_id", -1)?.takeIf { it != -1 }
-        var media: Media = intent.getSerialized("media")
+        var resolvedMedia: Media = intent.getSerialized("media")
             ?: savedId?.let { mediaCache.get(it) }
             ?: savedInstanceState?.getSerialized("saved_media")
             ?: mediaSingleton
@@ -105,39 +137,30 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         val id = intent.getIntExtra("mediaId", -1).takeIf { it != -1 }
             ?: savedId
             ?: -1
-        if (id != -1 && media.name == "No media found") {
-            val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-            runBlocking(Dispatchers.IO) {
-                if (rescueMode) {
-                    val animeNode = MAL.query.getAnimeDetails(id)
-                    if (animeNode != null) {
-                        media = Media(animeNode, true)
-                    } else {
-                        val mangaNode = MAL.query.getMangaDetails(id)
-                        media = if (mangaNode != null) Media(mangaNode, false)
-                        else emptyMedia()
-                    }
+        if (id != -1 && resolvedMedia.name == "No media found") {
+            resolvedMedia = fetchRescueMedia(id)
+        }
+        return if (resolvedMedia.name == "No media found") null else resolvedMedia
+    }
+
+    private fun fetchRescueMedia(id: Int): Media {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        return runBlocking(Dispatchers.IO) {
+            if (rescueMode) {
+                val animeNode = MAL.query.getAnimeDetails(id)
+                if (animeNode != null) {
+                    Media(animeNode, true)
                 } else {
-                    media = Anilist.query.getMedia(id, false) ?: emptyMedia()
+                    val mangaNode = MAL.query.getMangaDetails(id)
+                    if (mangaNode != null) Media(mangaNode, false) else emptyMedia()
                 }
+            } else {
+                Anilist.query.getMedia(id, false) ?: emptyMedia()
             }
         }
-        this.media = media
-        if (media.name == "No media found") {
-            snackString(media.name)
-            finish()
-            return
-        }
-        intent.putExtra("media", media as java.io.Serializable)
-        intent.putExtra("mediaId", media.id)
-        val contract = ActivityResultContracts.OpenDocumentTree()
-        launcher = LauncherWrapper(this, contract)
+    }
 
-        mediaSingleton = null
-        ThemeManager(this).applyTheme(MediaSingleton.bitmap)
-        initActivity(this)
-        MediaSingleton.bitmap = null
-
+    private fun setupWindowAndViews() {
         binding = ActivityMediaBinding.inflate(layoutInflater)
         setContentView(binding.root)
         screenWidth = resources.displayMetrics.widthPixels.toFloat()
@@ -147,13 +170,9 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             syncExtensionPrefsUi()
         }
 
-        // Ui init
-
-
         binding.mediaBottomBarContainer?.setPadding(0, 0, 0, navBarHeight)
 
         AndroidBug5497Workaround.assistActivity(this) { keyboardVisible ->
-            // Optionally hide nav bar when keyboard is visible
             navBar.visibility = if (keyboardVisible) View.GONE else View.VISIBLE
         }
         binding.mediaBanner.updateLayoutParams { height += statusBarHeight }
@@ -164,59 +183,47 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         binding.mediaCollapsing.minimumHeight = statusBarHeight
 
         binding.mediaTitle.isSelected = true
-
         mMaxScrollSize = binding.mediaAppBar.totalScrollRange
         binding.mediaAppBar.addOnOffsetChangedListener(this)
 
         binding.mediaHome.setOnClickListener {
-            val intent = Intent(this, MainActivity::class.java).apply {
+            val homeIntent = Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 putExtra("goToHome", true)
             }
-            startActivity(intent)
+            startActivity(homeIntent)
             finish()
         }
 
         binding.mediaClose.setOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
+    }
 
-        val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
+    private fun setupMediaHeader(bannerAnimations: Boolean) {
         if (bannerAnimations) {
             val adi = AccelerateDecelerateInterpolator()
+            val animSpeed: Float = PrefManager.getVal(PrefName.AnimationSpeed)
             val generator = RandomTransitionGenerator(
-                (10000 + 15000 * ((PrefManager.getVal(PrefName.AnimationSpeed) as Float))).toLong(),
+                (10000 + 15000 * animSpeed).toLong(),
                 adi
             )
             binding.mediaBanner.setTransitionGenerator(generator)
         }
-        val banner =
-            if (bannerAnimations) binding.mediaBanner else binding.mediaBannerNoKen
-        val viewPager = binding.mediaViewPager
-        viewPager.offscreenPageLimit = 2
-        viewPager.isUserInputEnabled = false
-        viewPager.setPageTransformer(ZoomOutPageTransformer())
-
-
-        val isDownload = intent.getBooleanExtra("download", false)
-        media.selected = model.loadSelected(media, isDownload)
+        val banner = if (bannerAnimations) binding.mediaBanner else binding.mediaBannerNoKen
 
         binding.mediaCoverImage.loadImage(media.cover)
         binding.mediaCoverImage.setOnLongClickListener {
             val coverTitle = getString(R.string.cover, media.userPreferredName)
-            ImageViewDialog.newInstance(
-                this,
-                coverTitle,
-                media.cover
-            )
+            ImageViewDialog.newInstance(this, coverTitle, media.cover)
         }
 
         blurImage(banner, media.banner ?: media.cover)
         val gestureDetector = GestureDetector(this, object : GesturesListener() {
             override fun onDoubleClick(event: MotionEvent) {
-                if (!(PrefManager.getVal(PrefName.BannerAnimations) as Boolean))
+                if (!(PrefManager.getVal(PrefName.BannerAnimations) as Boolean)) {
                     snackString(getString(R.string.enable_banner_animations))
-                else {
+                } else {
                     binding.mediaBanner.restart()
                     binding.mediaBanner.performClick()
                 }
@@ -232,7 +239,8 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                 banner.performClick()
             }
         })
-        banner.setOnTouchListener { _, motionEvent -> gestureDetector.onTouchEvent(motionEvent);true }
+        banner.setOnTouchListener { _, motionEvent -> gestureDetector.onTouchEvent(motionEvent); true }
+
         if (PrefManager.getVal(PrefName.Incognito)) {
             val mediaTitle = "    ${media.userPreferredName}"
             binding.mediaTitle.text = mediaTitle
@@ -256,139 +264,140 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             "#222222"
         )
         binding.mediaStatus.text = media.status ?: ""
-        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+    }
 
-        fun fav(media: Media):  PopImageButton? {
-            //Fav Button
-            return if (Anilist.userid != null && !rescueMode) {
-                if (media.isFav) binding.mediaFav.setImageDrawable(
-                    AppCompatResources.getDrawable(
-                        this,
-                        R.drawable.ic_round_favorite_24
-                    )
+    private fun createFavButton(targetMedia: Media, rescueMode: Boolean): PopImageButton? {
+        return if (Anilist.userid != null && !rescueMode) {
+            if (targetMedia.isFav) {
+                binding.mediaFav.setImageDrawable(
+                    AppCompatResources.getDrawable(this, R.drawable.ic_round_favorite_24)
                 )
-
-                PopImageButton(
-                    scope,
-                    binding.mediaFav,
-                    R.drawable.ic_round_favorite_24,
-                    R.drawable.ic_round_favorite_border_24,
-                    R.color.bg_opp,
-                    R.color.violet_400,
-                    media.isFav
-                ) {
-                    media.isFav = it
-                    Anilist.mutation.toggleFav(media.anime != null, media.id)
-                    Refresh.all()
-                }
-            } else {
-                binding.mediaFav.visibility = View.GONE
-                null
             }
-        }
-        var isFavSyncRunning = false
-        fun syncMediaFavStateIfNeeded(favButton: PopImageButton?) {
-            if (rescueMode || Anilist.userid == null || favButton == null || media.isFav || isFavSyncRunning) return
-            isFavSyncRunning = true
-            scope.launch {
-                try {
-                    val favType = if (media.anime != null) {
-                        ani.dantotsu.connections.anilist.AnilistMutations.FavType.ANIME
-                    } else {
-                        ani.dantotsu.connections.anilist.AnilistMutations.FavType.MANGA
-                    }
-                    val isUserFav = withContext(Dispatchers.IO) {
-                        Anilist.query.isUserFav(favType, media.id)
-                    }
-                    if (isUserFav) {
-                        media.isFav = true
-                        if (!favButton.clicked) favButton.clicked()
-                    }
-                } finally {
-                    isFavSyncRunning = false
-                }
+            PopImageButton(
+                scope,
+                binding.mediaFav,
+                R.drawable.ic_round_favorite_24,
+                R.drawable.ic_round_favorite_border_24,
+                R.color.bg_opp,
+                R.color.violet_400,
+                targetMedia.isFav
+            ) {
+                targetMedia.isFav = it
+                Anilist.mutation.toggleFav(targetMedia.anime != null, targetMedia.id)
+                Refresh.all()
             }
+        } else {
+            binding.mediaFav.visibility = View.GONE
+            null
         }
+    }
 
-        @SuppressLint("ResourceType")
-        fun total() {
-            val text = SpannableStringBuilder().apply {
-
-                val white =
-                    this@MediaDetailsActivity.getThemeColor(com.google.android.material.R.attr.colorOnBackground)
-                if (media.userStatus != null) {
-                    append(if (media.anime != null) getString(R.string.watched_num) else getString(R.string.read_num))
-                    val colorSecondary =
-                        getThemeColor(com.google.android.material.R.attr.colorSecondary)
-                    bold { color(colorSecondary) { append("${media.userProgress}") } }
-                    append(
-                        if (media.anime != null) getString(R.string.episodes_out_of) else getString(
-                            R.string.chapters_out_of
-                        )
-                    )
+    private fun syncMediaFavStateIfNeeded(favButton: PopImageButton?, rescueMode: Boolean) {
+        if (rescueMode || Anilist.userid == null || favButton == null || media.isFav || isFavSyncRunning) return
+        isFavSyncRunning = true
+        scope.launch {
+            try {
+                val favType = if (media.anime != null) {
+                    ani.dantotsu.connections.anilist.AnilistMutations.FavType.ANIME
                 } else {
-                    append(
-                        if (media.anime != null) getString(R.string.episodes_total_of) else getString(
-                            R.string.chapters_total_of
-                        )
-                    )
+                    ani.dantotsu.connections.anilist.AnilistMutations.FavType.MANGA
                 }
-                if (media.anime != null) {
-                    if (media.anime!!.nextAiringEpisode != null) {
-                        bold { color(white) { append("${media.anime!!.nextAiringEpisode}") } }
-                        append(" / ")
-                    }
-                    bold { color(white) { append("${media.anime!!.totalEpisodes ?: "??"}") } }
-                } else
-                    bold { color(white) { append("${media.manga!!.totalChapters ?: "??"}") } }
+                val isUserFav = withContext(Dispatchers.IO) {
+                    Anilist.query.isUserFav(favType, media.id)
+                }
+                if (isUserFav) {
+                    media.isFav = true
+                    if (!favButton.clicked) favButton.clicked()
+                }
+            } finally {
+                isFavSyncRunning = false
             }
-            binding.mediaTotal.text = text
         }
+    }
 
-        fun progress() {
-            val statuses: Array<String> = resources.getStringArray(R.array.status)
-            val statusStrings =
-                if (media.manga == null) resources.getStringArray(R.array.status_anime) else resources.getStringArray(
-                    R.array.status_manga
-                )
-            val userStatus =
-                if (media.userStatus != null) statusStrings[statuses.indexOf(media.userStatus).coerceAtLeast(0)] else statusStrings[0]
-
+    @SuppressLint("ResourceType")
+    private fun updateMediaTotalText() {
+        val text = SpannableStringBuilder().apply {
+            val white = this@MediaDetailsActivity.getThemeColor(com.google.android.material.R.attr.colorOnBackground)
             if (media.userStatus != null) {
-                binding.mediaTotal.visibility = View.VISIBLE
-                binding.mediaAddToList.text = userStatus
-            } else {
-                binding.mediaAddToList.setText(R.string.add_list)
-            }
-            total()
-            binding.mediaAddToList.setOnClickListener {
-                if (rescueMode) {
-                    if (MAL.token != null) {
-                        if (supportFragmentManager.findFragmentByTag("dialog") == null)
-                            MediaListDialogFragment().show(supportFragmentManager, "dialog")
-                    } else snackString("Please login to MAL")
-                } else if (Anilist.userid != null) {
-                    if (supportFragmentManager.findFragmentByTag("dialog") == null)
-                        MediaListDialogFragment().show(supportFragmentManager, "dialog")
-                } else snackString(getString(R.string.please_login_anilist))
-            }
-            binding.mediaAddToList.setOnLongClickListener {
-                PrefManager.setCustomVal(
-                    "${media.id}_progressDialog",
-                    true,
+                append(if (media.anime != null) getString(R.string.watched_num) else getString(R.string.read_num))
+                val colorSecondary = getThemeColor(com.google.android.material.R.attr.colorSecondary)
+                bold { color(colorSecondary) { append("${media.userProgress}") } }
+                append(
+                    if (media.anime != null) getString(R.string.episodes_out_of) else getString(
+                        R.string.chapters_out_of
+                    )
                 )
-                snackString(getString(R.string.auto_update_reset))
-                true
+            } else {
+                append(
+                    if (media.anime != null) getString(R.string.episodes_total_of) else getString(
+                        R.string.chapters_total_of
+                    )
+                )
+            }
+            if (media.anime != null) {
+                if (media.anime!!.nextAiringEpisode != null) {
+                    bold { color(white) { append("${media.anime!!.nextAiringEpisode}") } }
+                    append(" / ")
+                }
+                bold { color(white) { append("${media.anime!!.totalEpisodes ?: "??"}") } }
+            } else {
+                bold { color(white) { append("${media.manga!!.totalChapters ?: "??"}") } }
             }
         }
-        progress()
+        binding.mediaTotal.text = text
+    }
 
-        model.getMedia().observe(this) {
-            if (it != null) {
+    private fun updateMediaProgressUi(rescueMode: Boolean) {
+        val statuses: Array<String> = resources.getStringArray(R.array.status)
+        val statusStrings = if (media.manga == null) {
+            resources.getStringArray(R.array.status_anime)
+        } else {
+            resources.getStringArray(R.array.status_manga)
+        }
+        val userStatus = if (media.userStatus != null) {
+            statusStrings[statuses.indexOf(media.userStatus).coerceAtLeast(0)]
+        } else {
+            statusStrings[0]
+        }
+
+        if (media.userStatus != null) {
+            binding.mediaTotal.visibility = View.VISIBLE
+            binding.mediaAddToList.text = userStatus
+        } else {
+            binding.mediaAddToList.setText(R.string.add_list)
+        }
+        updateMediaTotalText()
+    }
+
+    private fun setupAddToListButton(rescueMode: Boolean) {
+        updateMediaProgressUi(rescueMode)
+        binding.mediaAddToList.setOnClickListener {
+            if (rescueMode) {
+                if (MAL.token != null) {
+                    if (supportFragmentManager.findFragmentByTag("dialog") == null) {
+                        MediaListDialogFragment().show(supportFragmentManager, "dialog")
+                    }
+                } else snackString("Please login to MAL")
+            } else if (Anilist.userid != null) {
+                if (supportFragmentManager.findFragmentByTag("dialog") == null) {
+                    MediaListDialogFragment().show(supportFragmentManager, "dialog")
+                }
+            } else snackString(getString(R.string.please_login_anilist))
+        }
+        binding.mediaAddToList.setOnLongClickListener {
+            PrefManager.setCustomVal("${media.id}_progressDialog", true)
+            snackString(getString(R.string.auto_update_reset))
+            true
+        }
+    }
+
+    private fun setupMediaObservers(rescueMode: Boolean, bannerAnimations: Boolean, isDownload: Boolean) {
+        model.getMedia().observe(this) { updatedMedia ->
+            if (updatedMedia != null) {
                 val oldId = media.id
-                media = it
+                media = updatedMedia
 
-                // mapping button for LOCAL media
                 if (media.format?.startsWith("LOCAL") == true) {
                     binding.mediaMapping?.visibility = View.VISIBLE
                     binding.mediaMapping?.setOnClickListener {
@@ -400,27 +409,26 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                             isAnime = isAnime,
                             isNovel = isNovel
                         ) { _ ->
-                            // Re-trigger it
-                            val updatedMedia = media.copy(id = 0)
+                            val updated = media.copy(id = 0)
                             model.loading = false
-                            model.loadMedia(updatedMedia)
+                            model.loadMedia(updated)
                         }
                         dialog.show(supportFragmentManager, "localMapping")
                     }
                 }
 
                 scope.launch {
-                    val favIcon = fav(it)
-                    syncMediaFavStateIfNeeded(favIcon)
+                    val favIcon = createFavButton(updatedMedia, rescueMode)
+                    syncMediaFavStateIfNeeded(favIcon, rescueMode)
                     if (media.isFav != favIcon?.clicked) favIcon?.clicked()
                 }
 
-
                 binding.mediaNotify.setOnClickListener {
-                    val i = Intent(Intent.ACTION_SEND)
-                    i.type = "text/plain"
-                    i.putExtra(Intent.EXTRA_TEXT, media.shareLink)
-                    startActivity(Intent.createChooser(i, media.userPreferredName))
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, media.shareLink)
+                    }
+                    startActivity(Intent.createChooser(shareIntent, media.userPreferredName))
                 }
                 binding.mediaNotify.setOnLongClickListener {
                     openLinkInBrowser(media.shareLink)
@@ -433,35 +441,59 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                 if (oldId == 0 && media.id != 0) {
                     if (media.format?.startsWith("LOCAL") == true) {
                         binding.mediaCoverImage.loadImage(media.cover)
-                        blurImage(if (bannerAnimations) binding.mediaBanner else binding.mediaBannerNoKen, media.banner ?: media.cover)
+                        val bannerView = if (bannerAnimations) binding.mediaBanner else binding.mediaBannerNoKen
+                        blurImage(bannerView, media.banner ?: media.cover)
                     }
                 }
-                progress()
+                updateMediaProgressUi(rescueMode)
             }
         }
+    }
+
+    private fun setupViewPagerAndTabs(rescueMode: Boolean, isDownload: Boolean) {
+        val viewPager = binding.mediaViewPager
+        viewPager.offscreenPageLimit = 2
+        viewPager.isUserInputEnabled = false
+        viewPager.setPageTransformer(ZoomOutPageTransformer())
+
         adult = media.isAdult
+        setupViewPagerAdapter(viewPager)
+
+        val commentsEnabled = PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1 && !rescueMode
+        selected = if (!commentsEnabled && media.selected!!.window == 2) 1 else media.selected!!.window
+        binding.mediaTitle.translationX = -screenWidth
+
+        setupBottomNavTabs(commentsEnabled, rescueMode, isDownload)
+    }
+
+    private fun setupViewPagerAdapter(viewPager: androidx.viewpager2.widget.ViewPager2) {
         if (media.anime != null) {
-            viewPager.adapter =
-                ViewPagerAdapter(
-                    supportFragmentManager,
-                    lifecycle,
-                    SupportedMedia.ANIME,
-                    media,
-                    intent.getIntExtra("commentId", -1)
-                )
-        } else if (media.manga != null) {
             viewPager.adapter = ViewPagerAdapter(
                 supportFragmentManager,
                 lifecycle,
-                if (media.format == "NOVEL" || media.format == "LOCAL_NOVEL" || media.format == "LIGHT_NOVEL") SupportedMedia.NOVEL else SupportedMedia.MANGA,
+                SupportedMedia.ANIME,
+                media,
+                intent.getIntExtra("commentId", -1)
+            )
+        } else if (media.manga != null) {
+            val supportedMedia = if (media.format == "NOVEL" || media.format == "LOCAL_NOVEL" || media.format == "LIGHT_NOVEL") {
+                SupportedMedia.NOVEL
+            } else {
+                SupportedMedia.MANGA
+            }
+            viewPager.adapter = ViewPagerAdapter(
+                supportFragmentManager,
+                lifecycle,
+                supportedMedia,
                 media,
                 intent.getIntExtra("commentId", -1)
             )
             anime = false
         }
-        selected = if (PrefManager.getVal<Int>(PrefName.CommentsEnabled) != 1 && media.selected!!.window == 2 || rescueMode && media.selected!!.window == 2) 1 else media.selected!!.window
-        binding.mediaTitle.translationX = -screenWidth
+    }
 
+    private fun setupBottomNavTabs(commentsEnabled: Boolean, rescueMode: Boolean, isDownload: Boolean) {
+        val viewPager = binding.mediaViewPager
         val infoTab = navBar.createTab(R.drawable.ic_round_info_24, R.string.info, R.id.info)
         val watchTab = if (anime) {
             navBar.createTab(R.drawable.ic_round_movie_filter_24, R.string.watch, R.id.watch)
@@ -470,25 +502,25 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         } else {
             navBar.createTab(R.drawable.ic_round_import_contacts_24, R.string.read, R.id.read)
         }
-        val commentTab =
-            navBar.createTab(R.drawable.ic_round_comment_24, R.string.comments, R.id.comment)
+        val commentTab = navBar.createTab(R.drawable.ic_round_comment_24, R.string.comments, R.id.comment)
         navBar.addTab(infoTab)
         navBar.addTab(watchTab)
-        if (PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1 && !rescueMode) {
+        if (commentsEnabled) {
             navBar.addTab(commentTab)
         }
         if (model.continueMedia == null && media.cameFromContinue) {
             model.continueMedia = PrefManager.getVal(PrefName.ContinueMedia)
             selected = 1
         }
-        if (intent.getStringExtra("FRAGMENT_TO_LOAD") != null && PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1 && !rescueMode) selected = 2
-        if (viewPager.currentItem != selected) viewPager.post {
-            viewPager.setCurrentItem(selected, false)
+        if (intent.getStringExtra("FRAGMENT_TO_LOAD") != null && commentsEnabled) {
+            selected = 2
+        }
+        if (viewPager.currentItem != selected) {
+            viewPager.post { viewPager.setCurrentItem(selected, false) }
         }
         binding.commentInputLayout.isVisible = selected == 2
 
-        // Ensure that if we are returning from the comments tab, we go back to the media content tab
-        if (selected == 2 && (PrefManager.getVal<Int>(PrefName.CommentsEnabled) != 1 || rescueMode)) {
+        if (selected == 2 && !commentsEnabled) {
             selected = 1
         }
         navBar.selectTabAt(selected)
@@ -507,7 +539,9 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                 model.saveSelected(media.id, sel)
             }
         })
+    }
 
+    private fun setupRefreshObserver() {
         val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(true) }
         live.observe(this) {
             if (it) {
@@ -613,7 +647,8 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
 
         binding.mediaCover.visibility =
             if (binding.mediaCover.scaleX == 0f) View.GONE else View.VISIBLE
-        val duration = (200 * (PrefManager.getVal(PrefName.AnimationSpeed) as Float)).toLong()
+        val animSpeed: Float = PrefManager.getVal(PrefName.AnimationSpeed)
+        val duration = (200 * animSpeed).toLong()
         if (percentage >= percent && !isCollapsed) {
             isCollapsed = true
             ObjectAnimator.ofFloat(binding.mediaTitle, "translationX", 0f).setDuration(duration)
