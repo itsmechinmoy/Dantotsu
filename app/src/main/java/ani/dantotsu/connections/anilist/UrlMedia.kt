@@ -65,56 +65,7 @@ class UrlMedia : Activity() {
         val isMAL = uri.getBooleanQueryParameter("mal", false) || uri.getQueryParameter("source")?.equals("mal", ignoreCase = true) == true
         val continueMedia = uri.getBooleanQueryParameter("continue", false) || action == "watch" || action == "read"
 
-        when (action) {
-            "anime", "watch" -> {
-                val id = idStr?.toIntOrNull() ?: uri.getQueryParameter("id")?.toIntOrNull()
-                if (id != null && id > 0) {
-                    loadMedia = id
-                    startMainActivity(
-                        this,
-                        createMediaBundle(id, isMAL, continueMedia, "ANIME")
-                    )
-                } else {
-                    startMainActivity(this)
-                }
-            }
-            "manga", "read" -> {
-                val id = idStr?.toIntOrNull() ?: uri.getQueryParameter("id")?.toIntOrNull()
-                if (id != null && id > 0) {
-                    loadMedia = id
-                    startMainActivity(
-                        this,
-                        createMediaBundle(id, isMAL, continueMedia, "MANGA")
-                    )
-                } else {
-                    startMainActivity(this)
-                }
-            }
-            "media", "open" -> {
-                val id = idStr?.toIntOrNull() ?: uri.getQueryParameter("id")?.toIntOrNull()
-                val type = (uri.getQueryParameter("type") ?: "ANIME").uppercase()
-                if (id != null && id > 0) {
-                    loadMedia = id
-                    startMainActivity(
-                        this,
-                        createMediaBundle(id, isMAL, continueMedia, type)
-                    )
-                } else {
-                    startMainActivity(this)
-                }
-            }
-            "user", "u", "profile" -> {
-                val username = idStr ?: uri.getQueryParameter("username") ?: uri.getQueryParameter("name")
-                if (!username.isNullOrEmpty()) {
-                    startMainActivity(this, createUserBundle(username))
-                } else {
-                    startMainActivity(this)
-                }
-            }
-            else -> {
-                startMainActivity(this)
-            }
-        }
+        dispatchDantotsuScheme(action, idStr, isMAL, continueMedia, uri)
     }
 
     private fun handleHttpScheme(data: Uri) {
@@ -192,4 +143,63 @@ class UrlMedia : Activity() {
             putString("username", username)
         }
     }
+    private fun dispatchDantotsuScheme(
+        action: String,
+        idStr: String?,
+        isMAL: Boolean,
+        continueMedia: Boolean,
+        uri: Uri
+    ) {
+        when (action) {
+            "anime", "watch" -> {
+                val id = idStr?.toIntOrNull() ?: uri.getQueryParameter("id")?.toIntOrNull()
+                if (id != null && id > 0) {
+                    loadMedia = id
+                    startMainActivity(
+                        this,
+                        createMediaBundle(id, isMAL, continueMedia, "ANIME")
+                    )
+                } else {
+                    startMainActivity(this)
+                }
+            }
+            "manga", "read" -> {
+                val id = idStr?.toIntOrNull() ?: uri.getQueryParameter("id")?.toIntOrNull()
+                if (id != null && id > 0) {
+                    loadMedia = id
+                    startMainActivity(
+                        this,
+                        createMediaBundle(id, isMAL, continueMedia, "MANGA")
+                    )
+                } else {
+                    startMainActivity(this)
+                }
+            }
+            "media", "open" -> {
+                val id = idStr?.toIntOrNull() ?: uri.getQueryParameter("id")?.toIntOrNull()
+                val type = (uri.getQueryParameter("type") ?: "ANIME").uppercase()
+                if (id != null && id > 0) {
+                    loadMedia = id
+                    startMainActivity(
+                        this,
+                        createMediaBundle(id, isMAL, continueMedia, type)
+                    )
+                } else {
+                    startMainActivity(this)
+                }
+            }
+            "user", "u", "profile" -> {
+                val username = idStr ?: uri.getQueryParameter("username") ?: uri.getQueryParameter("name")
+                if (!username.isNullOrEmpty()) {
+                    startMainActivity(this, createUserBundle(username))
+                } else {
+                    startMainActivity(this)
+                }
+            }
+            else -> {
+                startMainActivity(this)
+            }
+        }
+    }
+
 }

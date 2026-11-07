@@ -402,26 +402,7 @@ object Anilist {
                 }
 
                 if (json.code == 403 || json.code == 400) {
-                    val message = runCatching {
-                        val root = Json.parseToJsonElement(json.text).jsonObject
-                        val firstError = root["errors"]?.jsonArray?.firstOrNull()?.jsonObject
-                        val validationObj = firstError?.get("validation")?.jsonObject
-                        if (validationObj != null) {
-                            val validationMessages = validationObj.values.flatMap { elem ->
-                                (elem as? kotlinx.serialization.json.JsonArray)?.mapNotNull {
-                                    it.jsonPrimitive.contentOrNull
-                                } ?: emptyList()
-                            }
-                            if (validationMessages.isNotEmpty()) {
-                                validationMessages.joinToString("\n")
-                            } else {
-                                firstError["message"]?.jsonPrimitive?.contentOrNull
-                            }
-                        } else {
-                            firstError?.get("message")?.jsonPrimitive?.contentOrNull
-                        }
-                    }.getOrNull() ?: "Forbidden (error ${json.code})"
-
+                    val message = extractGraphQLForbiddenMessage(json.text, json.code)
                     lastError = message
                     if (message.contains("disabled", ignoreCase = true)) {
                         anilistDisabledSignal = true
@@ -430,9 +411,9 @@ object Anilist {
                     } else {
                         if (!show) snackString("Error fetching Anilist data: $message")
                     }
-
                     throw Exception(message)
                 }
+
                 if (!json.text.startsWith("{")) {
                     anilistDisabledSignal = true
                     val downMsg = (currContext()?.getString(R.string.anilist_down) ?: "AniList is down") + " (error: ${json.code})"
@@ -459,4 +440,26 @@ object Anilist {
             null
         }
     }
+    fun extractGraphQLForbiddenMessage(text: String, code: Int): String {
+        return runCatching {
+            val root = Json.parseToJsonElement(text).jsonObject
+            val firstError = root["errors"]?.jsonArray?.firstOrNull()?.jsonObject
+            val validationObj = firstError?.get("validation")?.jsonObject
+            if (validationObj != null) {
+                val validationMessages = validationObj.values.flatMap { elem ->
+                    (elem as? kotlinx.serialization.json.JsonArray)?.mapNotNull {
+                        it.jsonPrimitive.contentOrNull
+                    } ?: emptyList()
+                }
+                if (validationMessages.isNotEmpty()) {
+                    validationMessages.joinToString("\n")
+                } else {
+                    firstError["message"]?.jsonPrimitive?.contentOrNull
+                }
+            } else {
+                firstError?.get("message")?.jsonPrimitive?.contentOrNull
+            }
+        }.getOrNull() ?: "Forbidden (error $code)"
+    }
+
 }
