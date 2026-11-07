@@ -113,16 +113,15 @@ class NovelReadFragment : Fragment(),
                     sourceMedia = media,
                     coverUrl = novelDownloadPackage.coverUrl,
                     retries = 2,
-                    lnReaderParser = parser
+                    simultaneousDownloads = 2,
+                    parser = parser
                 )
+
                 NovelServiceDataSingleton.downloadQueue.offer(downloadTask)
-                CoroutineScope(Dispatchers.IO).launch {
-                    val intent = Intent(context, NovelDownloaderService::class.java)
-                    withContext(Dispatchers.Main) {
-                        ContextCompat.startForegroundService(requireContext(), intent)
-                    }
-                    NovelServiceDataSingleton.isServiceRunning = true
-                }
+                NovelServiceDataSingleton.isServiceRunning = true
+
+                val intent = Intent(it, NovelDownloaderService::class.java)
+                ContextCompat.startForegroundService(it, intent)
             }
             if (!StoragePermissions.hasDirAccess(it)) {
                 (it as MediaDetailsActivity).accessAlertDialog(it.launcher) { success ->
@@ -138,88 +137,14 @@ class NovelReadFragment : Fragment(),
         }
     }
 
-    override fun downloadedCheckWithStart(novel: ShowResponse): Boolean {
-        if (media.format == "LOCAL" || media.format == "LOCAL_NOVEL" || novel.link.startsWith("content://") || novel.link.startsWith("file://")) {
-            try {
-                val fileUri = android.net.Uri.parse(novel.link)
-                val intent = Intent(requireContext(), NovelReaderActivity::class.java).apply {
-                    action = Intent.ACTION_VIEW
-                    setDataAndType(fileUri, "application/epub+zip")
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                }
-                startActivity(intent)
-                return true
-            } catch (e: Exception) {
-                Logger.log(e)
-                return false
-            }
+    private fun hasEpubOrZipFiles(dir: androidx.documentfile.provider.DocumentFile): Boolean {
+        return dir.listFiles().any {
+            it.isFile && (it.name?.endsWith(".epub", ignoreCase = true) == true || it.type == "application/epub+zip")
         }
-
-        val downloadsManager = Injekt.get<DownloadsManager>()
-        val downloadedItem = downloadsManager.novelDownloadedTypes.firstOrNull {
-            (it.titleName.equals(media.mainName(), ignoreCase = true) ||
-             it.titleName.equals(media.name, ignoreCase = true) ||
-             it.titleName.equals(media.nameRomaji, ignoreCase = true) ||
-             it.titleName.equals(novel.extra?.get("title"), ignoreCase = true)) &&
-            (it.chapterName.equals(novel.name, ignoreCase = true) ||
-             it.chapterName.equals(novel.name.findValidName(), ignoreCase = true))
-        }
-
-        val titleToSearch = downloadedItem?.titleName ?: novel.extra?.get("title") ?: media.mainName()
-        val chapterToSearch = downloadedItem?.chapterName ?: novel.name
-
-        val directory = DownloadsManager.findSubDirectory(
-            context ?: currContext()!!,
-            MediaType.NOVEL,
-            titleToSearch,
-            chapterToSearch
-        ) ?: DownloadsManager.getSubDirectory(
-            context ?: currContext()!!,
-            MediaType.NOVEL,
-            false,
-            titleToSearch,
-            chapterToSearch
-        )
-
-        val file = directory?.findFile("0.epub")
-            ?: directory?.listFiles()?.firstOrNull {
-                it.isFile && (it.name?.endsWith(".epub", ignoreCase = true) == true || it.type == "application/epub+zip")
-            }
-            ?: directory?.listFiles()?.firstOrNull {
-                it.isFile && it.length() > 0 && it.name != "cover.jpg" && it.name != "media.json" && !it.name.orEmpty().startsWith(".")
-            }
-
-        if (file != null && file.exists()) {
-            try {
-                val fileUri = file.uri
-                val intent = Intent(requireContext(), NovelReaderActivity::class.java).apply {
-                    action = Intent.ACTION_VIEW
-                    setDataAndType(fileUri, "application/epub+zip")
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                }
-                startActivity(intent)
-                return true
-            } catch (e: Exception) {
-                Logger.log(e)
-                return false
-            }
-        }
-        return false
     }
 
-    override fun downloadedCheck(novel: ShowResponse): Boolean {
-        if (media.format == "LOCAL" || media.format == "LOCAL_NOVEL" || novel.link.startsWith("content://") || novel.link.startsWith("file://")) return true
-
-        val downloadsManager = Injekt.get<DownloadsManager>()
-        val isIndexed = downloadsManager.novelDownloadedTypes.any {
-            (it.titleName.equals(media.mainName(), ignoreCase = true) ||
-             it.titleName.equals(media.name, ignoreCase = true) ||
-             it.titleName.equals(media.nameRomaji, ignoreCase = true) ||
-             it.titleName.equals(novel.extra?.get("title"), ignoreCase = true)) &&
-            (it.chapterName.equals(novel.name, ignoreCase = true) ||
-             it.chapterName.equals(novel.name.findValidName(), ignoreCase = true))
-        }
-        if (isIndexed) return true
+    override fun downloadedCheckWithStart(novel: ShowResponse): Boolean {
+        if (media.format == "LOCAL" || media.format == "LOCAL_NOVEL") return true
 
         val titleToSearch = novel.extra?.get("title") ?: media.mainName()
         val dir = DownloadsManager.findSubDirectory(
@@ -227,20 +152,63 @@ class NovelReadFragment : Fragment(),
             MediaType.NOVEL,
             titleToSearch,
             novel.name
-        )
-        return dir != null && (dir.findFile("0.epub") != null || dir.listFiles().any { it.isFile && it.name?.endsWith(".epub", ignoreCase = true) == true })
+        ) ?: return false
+
+        return try {
+            if (hasEpubOrZipFiles(dir)) return true
+            val downloadsManager = Injekt.get<DownloadsManager>()
+            findMatchingDownloadedType(downloadsManager, novel) != null
+        } catch (e: Exception) {
+            Logger.log(e)
+            false
+        }
+    }
+
+    private fun findMatchingDownloadedType(
+        downloadsManager: DownloadsManager,
+        novel: ShowResponse
+    ): DownloadedType? {
+        val extraTitle = novel.extra?.get("title")
+        val validName = novel.name.findValidName()
+        return downloadsManager.novelDownloadedTypes.firstOrNull { item ->
+            val titleMatches = item.titleName.equals(media.mainName(), ignoreCase = true) ||
+                    item.titleName.equals(media.name, ignoreCase = true) ||
+                    item.titleName.equals(media.nameRomaji, ignoreCase = true) ||
+                    (extraTitle != null && item.titleName.equals(extraTitle, ignoreCase = true))
+            val chapterMatches = item.chapterName.equals(novel.name, ignoreCase = true) ||
+                    item.chapterName.equals(validName, ignoreCase = true)
+            titleMatches && chapterMatches
+        }
+    }
+
+    private fun hasEpubFilesOnDisk(novel: ShowResponse): Boolean {
+        val titleToSearch = novel.extra?.get("title") ?: media.mainName()
+        val dir = DownloadsManager.findSubDirectory(
+            context ?: currContext()!!,
+            MediaType.NOVEL,
+            titleToSearch,
+            novel.name
+        ) ?: return false
+
+        return dir.findFile("0.epub") != null || dir.listFiles().any {
+            it.isFile && it.name?.endsWith(".epub", ignoreCase = true) == true
+        }
+    }
+
+    override fun downloadedCheck(novel: ShowResponse): Boolean {
+        if (media.format == "LOCAL" || media.format == "LOCAL_NOVEL" ||
+            novel.link.startsWith("content://") || novel.link.startsWith("file://")
+        ) return true
+
+        val downloadsManager = Injekt.get<DownloadsManager>()
+        if (findMatchingDownloadedType(downloadsManager, novel) != null) return true
+
+        return hasEpubFilesOnDisk(novel)
     }
 
     override fun deleteDownload(novel: ShowResponse) {
         val downloadsManager = Injekt.get<DownloadsManager>()
-        val downloadedItem = downloadsManager.novelDownloadedTypes.firstOrNull {
-            (it.titleName.equals(media.mainName(), ignoreCase = true) ||
-             it.titleName.equals(media.name, ignoreCase = true) ||
-             it.titleName.equals(media.nameRomaji, ignoreCase = true) ||
-             it.titleName.equals(novel.extra?.get("title"), ignoreCase = true)) &&
-            (it.chapterName.equals(novel.name, ignoreCase = true) ||
-             it.chapterName.equals(novel.name.findValidName(), ignoreCase = true))
-        }
+        val downloadedItem = findMatchingDownloadedType(downloadsManager, novel)
         val titleToUse = downloadedItem?.titleName ?: novel.extra?.get("title") ?: media.mainName()
         val chapterToUse = downloadedItem?.chapterName ?: novel.name.findValidName()
         downloadsManager.removeDownload(
@@ -254,34 +222,32 @@ class NovelReadFragment : Fragment(),
 
     private val downloadStatusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (!this@NovelReadFragment::novelResponseAdapter.isInitialized) return
             when (intent.action) {
                 ACTION_DOWNLOAD_STARTED -> {
-                    val link = intent.getStringExtra(EXTRA_NOVEL_LINK)
-                    link?.let {
-                        novelResponseAdapter.startDownload(it)
-                    }
+                    val novelLink = intent.getStringExtra(EXTRA_NOVEL_LINK)
+                    novelLink?.let { novelResponseAdapter.startDownload(it) }
                 }
 
                 ACTION_DOWNLOAD_FINISHED -> {
-                    val link = intent.getStringExtra(EXTRA_NOVEL_LINK)
-                    link?.let {
-                        novelResponseAdapter.stopDownload(it)
-                    }
+                    val novelLink = intent.getStringExtra(EXTRA_NOVEL_LINK)
+                    novelLink?.let { novelResponseAdapter.stopDownload(it) }
                 }
 
                 ACTION_DOWNLOAD_FAILED -> {
-                    val link = intent.getStringExtra(EXTRA_NOVEL_LINK)
-                    link?.let {
+                    val novelLink = intent.getStringExtra(EXTRA_NOVEL_LINK)
+                    novelLink?.let {
                         novelResponseAdapter.purgeDownload(it)
                     }
                 }
 
                 ACTION_DOWNLOAD_PROGRESS -> {
-                    val link = intent.getStringExtra(EXTRA_NOVEL_LINK)
+                    val novelLink = intent.getStringExtra(EXTRA_NOVEL_LINK)
                     val progress = intent.getIntExtra("progress", 0)
-                    link?.let {
-                        novelResponseAdapter.updateDownloadProgress(it, progress)
+                    novelLink?.let {
+                        novelResponseAdapter.updateDownloadProgress(
+                            it,
+                            progress
+                        )
                     }
                 }
             }
@@ -289,127 +255,95 @@ class NovelReadFragment : Fragment(),
     }
 
     fun onNovelClick(novel: ShowResponse) {
-        if (novelResponseAdapter.isDownloading(novel.link)) {
-            return
-        }
-        ani.dantotsu.settings.saving.PrefManager.setCustomVal("${media.id}_last_read_volume", novel.name)
+        val isLnReader = source in 0 until model.novelSources.names.size
+                && model.novelSources[source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
 
-        if (isShowingChapters) {
-            if (!downloadedCheckWithStart(novel)) {
-                onChapterClick(novel)
+        if (isLnReader) {
+            val position = currentChapterResponses?.indexOf(novel) ?: 0
+            val intent = Intent(requireContext(), NovelReaderActivity::class.java).apply {
+                putExtra("media", media)
+                putExtra("novel_title", novel.name)
+                putExtra("chapter_index", position)
+                putExtra("chapter_responses", ArrayList(currentChapterResponses ?: emptyList()))
+                putExtra("source_index", source)
             }
-            return
-        }
-
-        if (downloadedCheckWithStart(novel)) {
-            return
-        }
-
-        val isOfflineSource = source in 0 until model.novelSources.names.size &&
-                (model.novelSources.names[source] == "Downloaded" || model.novelSources.names[source] == "Local")
-        if (isOfflineSource) {
-            snackString("File not found or corrupted")
-            return
-        }
-
-        val parser = model.novelSources[source] as? ani.dantotsu.parsers.novel.LnReaderNovelParser
-        if (parser != null) {
-            // LNReader handling
-            headerAdapter.progress?.visibility = View.VISIBLE
-            lifecycleScope.launch(Dispatchers.IO) {
-                model.overrideNovelChapters(source, novel, media.id)
-                model.loadNovelChapters(media, source, invalidate = true)
-            }
+            startActivity(intent)
         } else {
-            // EPUB source
-            val bookDialog = BookDialog.newInstance(novelName, novel, source)
-            bookDialog.setCallback(object : BookDialog.Callback {
-                override fun onDownloadTriggered(link: String) {
-                    downloadTrigger(
-                        NovelDownloadPackage(
-                            link,
-                            media.cover ?: novel.coverUrl.url,
-                            novel.name,
-                            novel.link
-                        )
-                    )
-                    bookDialog.dismiss()
+            val intent = Intent(requireContext(), NovelReaderActivity::class.java).apply {
+                val extras = Bundle().apply {
+                    putParcelable("media", media)
+                    putString("novel_title", novel.name)
+                    putString("novel_link", novel.link)
+                    putString("novel_cover", novel.coverUrl.url)
+                    putSerializable("novel_headers", novel.coverUrl.headers as java.io.Serializable)
+                    putInt("source_index", source)
+                    putString("actual_novel_title", novel.name)
+                    putInt("user_progress", media.userProgress ?: 0)
                 }
-            })
-            bookDialog.show(parentFragmentManager, "dialog")
+                putExtras(extras)
+            }
+            startActivity(intent)
         }
     }
 
-    private fun onChapterClick(chapter: ShowResponse) {
-        val parser = model.novelSources[source] as? ani.dantotsu.parsers.novel.LnReaderNovelParser
-            ?: return
-
-        NovelReaderSession.chapters = currentChapterLinks
-        NovelReaderSession.currentIndex = currentChapterLinks.indexOfFirst { it.url == chapter.link }.coerceAtLeast(0)
-        NovelReaderSession.parser = parser
-
-        val intent = Intent(requireContext(), NovelReaderActivity::class.java)
+    fun onChapterClick(novel: ShowResponse, position: Int) {
+        val intent = Intent(requireContext(), NovelReaderActivity::class.java).apply {
+            putExtra("media", media)
+            putExtra("novel_title", novel.name)
+            putExtra("chapter_index", position)
+            putExtra("chapter_responses", ArrayList(currentChapterResponses ?: emptyList()))
+            putExtra("source_index", source)
+        }
         startActivity(intent)
     }
 
-    fun onBackFromChapters(): Boolean {
-        if (isShowingChapters) {
-            isShowingChapters = false
-            headerAdapter.clearChips()
-            novelResponseAdapter.clear()
-            storedSearchResults?.let { novelResponseAdapter.submitList(it) }
-            novelResponseAdapter.updateType(style)
-            return true
-        }
-        return false
+    fun onBackFromChapters() {
+        isShowingChapters = false
+        headerAdapter.clearChips()
+        novelResponseAdapter.clear()
+        val responses = storedSearchResults ?: response ?: emptyList()
+        val sortedList = if (reverse) responses.reversed() else responses
+        novelResponseAdapter.submitList(sortedList)
+        headerAdapter.updateContinue(responses)
     }
 
     fun resetChapterState() {
         isShowingChapters = false
         currentChapterLinks = emptyList()
         currentChapterResponses = null
+        storedSearchResults = null
+    }
+
+    fun overrideNovelSource(novel: ShowResponse, newSourceIndex: Int) {
+        source = newSourceIndex
+        isShowingChapters = false
         headerAdapter.clearChips()
         novelResponseAdapter.clear()
+        headerAdapter.startLoading()
+        search(novel.name, newSourceIndex, save = true)
     }
 
-    fun overrideNovelSource(selected: ShowResponse) {
-        resetChapterState()
-        headerAdapter.progress?.visibility = View.VISIBLE
-        lifecycleScope.launch(Dispatchers.IO) {
-            model.overrideNovelChapters(source, selected, media.id)
-            model.loadNovelChapters(media, source, invalidate = true)
-        }
-    }
-
-    fun onChipClicked(page: Int, s: Int, e: Int) {
-        this.page = page
+    fun onChipClicked(i: Int, s: Int, e: Int) {
+        media.selected?.chip = i
         start = s
         end = e
-        media.selected?.chip = page
-        if (media.selected != null) {
-            model.saveSelected(media.id, media.selected!!)
-        }
+        model.saveSelected(media.id, media.selected!!)
         reloadChapters()
     }
-    
+
     private fun reloadChapters() {
-        val listToDisplay = if (isShowingChapters) currentChapterResponses else response
-        if (listToDisplay != null) {
-            var chunk = listToDisplay
-            if (isShowingChapters && end != null) {
-                val safeEnd = minOf(end!!, chunk.size - 1)
-                if (start <= safeEnd && start < chunk.size) {
-                    chunk = chunk.slice(start..safeEnd)
-                } else {
-                    chunk = emptyList()
-                }
-            }
-            novelResponseAdapter.clear()
-            val sortedList = if (reverse) chunk.reversed() else chunk
-            novelResponseAdapter.submitList(sortedList)
+        val chapters = currentChapterResponses ?: return
+        var chunk = chapters
+        if (end != null) {
+            chunk = chunk.slice(start..end!!)
         }
+        val sorted = if (reverse) chunk.reversed() else chunk
+        novelResponseAdapter.clear()
+        novelResponseAdapter.submitList(sorted)
+        novelResponseAdapter.updateType(style)
+        headerAdapter.updateContinue(chapters)
     }
-    
+
     private fun updateChaptersTabs() {
         val chapterResponses = currentChapterResponses ?: return
         val total = chapterResponses.size
@@ -417,21 +351,16 @@ class NovelReadFragment : Fragment(),
         start = 0
         end = null
         val limit = when {
-            (divisions < 25) -> 25
-            (divisions < 50) -> 50
+            divisions < 25 -> 25
+            divisions < 50 -> 50
             else -> 100
         }
         headerAdapter.clearChips()
         if (total > limit) {
             val arr = chapterResponses.map { it.name }.toTypedArray()
-            val stored = kotlin.math.ceil((total).toDouble() / limit).toInt()
+            val stored = kotlin.math.ceil(total.toDouble() / limit).toInt()
 
-            val lastReadName = PrefManager.getCustomVal("${media.id}_last_read_volume", "")
-            var targetIndex = if (lastReadName.isNotBlank()) chapterResponses.indexOfFirst { it.name == lastReadName } else -1
-            if (targetIndex == -1 && (media.userProgress ?: 0) > 0) {
-                targetIndex = ((media.userProgress ?: 1) - 1).coerceIn(0, chapterResponses.size - 1)
-            }
-
+            val targetIndex = findTargetChapterIndex(chapterResponses)
             val targetChip = if (targetIndex >= 0) (targetIndex / limit).coerceIn(0, stored - 1) else 0
             val position = if ((media.selected?.chip ?: 0) == 0 && targetChip > 0) {
                 media.selected?.chip = targetChip
@@ -439,7 +368,7 @@ class NovelReadFragment : Fragment(),
             } else {
                 (media.selected?.chip ?: 0).coerceIn(0, stored - 1)
             }
-            val last = if (position + 1 == stored) total else (limit * (position + 1))
+            val last = if (position + 1 == stored) total else limit * (position + 1)
             start = limit * position
             end = last - 1
             headerAdapter.updateChips(
@@ -451,37 +380,66 @@ class NovelReadFragment : Fragment(),
         }
     }
 
+    private fun findTargetChapterIndex(chapterResponses: List<ShowResponse>): Int {
+        val lastReadName = PrefManager.getCustomVal("${media.id}_last_read_volume", "")
+        var targetIndex = if (lastReadName.isNotBlank()) {
+            chapterResponses.indexOfFirst { it.name == lastReadName }
+        } else {
+            -1
+        }
+        if (targetIndex == -1 && (media.userProgress ?: 0) > 0) {
+            targetIndex = ((media.userProgress ?: 1) - 1).coerceIn(0, chapterResponses.size - 1)
+        }
+        return targetIndex
+    }
+
     var response: List<ShowResponse>? = null
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        val intentFilter = IntentFilter().apply {
-            addAction(ACTION_DOWNLOAD_STARTED)
-            addAction(ACTION_DOWNLOAD_FINISHED)
-            addAction(ACTION_DOWNLOAD_FAILED)
-            addAction(ACTION_DOWNLOAD_PROGRESS)
-        }
+        registerDownloadReceiver()
+        adjustRecyclerBottomPadding()
+        val gridLayoutManager = setupRecyclerLayout()
+        setupSwipeRefresh()
+        setupScrollTop(gridLayoutManager)
+        setupMediaObserver()
+        observeNovelResponses()
+        observeNovelChapters()
+    }
 
+    private fun registerDownloadReceiver() {
         if (!isReceiverRegistered) {
+            val filter = IntentFilter().apply {
+                addAction(ACTION_DOWNLOAD_STARTED)
+                addAction(ACTION_DOWNLOAD_FINISHED)
+                addAction(ACTION_DOWNLOAD_FAILED)
+                addAction(ACTION_DOWNLOAD_PROGRESS)
+            }
             ContextCompat.registerReceiver(
                 requireContext(),
                 downloadStatusReceiver,
-                intentFilter,
+                filter,
                 ContextCompat.RECEIVER_EXPORTED
             )
             isReceiverRegistered = true
         }
+    }
 
-        val mediaDetailsActivity = activity as? MediaDetailsActivity
-        if (mediaDetailsActivity?.bindingReady == true) {
-            val actBinding = mediaDetailsActivity.binding
-            val baselineAnchor = actBinding.mediaBottomBarContainer ?: actBinding.commentMessageContainer
-            baselineAnchor?.let {
-                val includeSystemPaddings = it != actBinding.mediaBottomBarContainer
-                binding.mediaSourceRecycler.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
-                binding.mediaSourceRecycler.clipToPadding = false
+    private fun adjustRecyclerBottomPadding() {
+        (activity as? MediaDetailsActivity)?.let { detailsAct ->
+            if (detailsAct.bindingReady) {
+                val actBinding = detailsAct.binding
+                val anchor = actBinding.mediaBottomBarContainer ?: actBinding.commentMessageContainer
+                if (anchor != null) {
+                    val navBarPad = anchor != actBinding.mediaBottomBarContainer
+                    binding.mediaSourceRecycler.setBaseline(anchor, includeSystemNavBar = navBarPad)
+                    binding.mediaSourceRecycler.clipToPadding = false
+                }
             }
         }
+    }
 
+    private fun setupRecyclerLayout(): androidx.recyclerview.widget.GridLayoutManager {
         val screenWidth = resources.displayMetrics.widthPixels.dp
         var maxGridSize = (screenWidth / 100f).roundToInt()
         maxGridSize = max(4, maxGridSize - (maxGridSize % 2))
@@ -489,7 +447,6 @@ class NovelReadFragment : Fragment(),
         val gridLayoutManager = androidx.recyclerview.widget.GridLayoutManager(requireContext(), maxGridSize)
         gridLayoutManager.spanSizeLookup = object : androidx.recyclerview.widget.GridLayoutManager.SpanSizeLookup() {
             override fun getSpanSize(position: Int): Int {
-
                 if (position == 0 && ::headerAdapter.isInitialized) return maxGridSize
                 return when (style) {
                     1 -> 1
@@ -498,7 +455,10 @@ class NovelReadFragment : Fragment(),
             }
         }
         binding.mediaSourceRecycler.layoutManager = gridLayoutManager
+        return gridLayoutManager
+    }
 
+    private fun setupSwipeRefresh() {
         binding.mediaSourceSwipeRefresh.apply {
             val primaryColor = PrefManager.getVal<Int>(PrefName.PrimaryColor)
             setColorSchemeColors(primaryColor)
@@ -521,7 +481,9 @@ class NovelReadFragment : Fragment(),
                 }
             }
         }
+    }
 
+    private fun setupScrollTop(gridLayoutManager: androidx.recyclerview.widget.GridLayoutManager) {
         binding.ScrollTop.setOnClickListener {
             binding.mediaSourceRecycler.scrollToPosition(10)
             binding.mediaSourceRecycler.smoothScrollToPosition(0)
@@ -529,7 +491,6 @@ class NovelReadFragment : Fragment(),
         binding.mediaSourceRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
-
                 val position = gridLayoutManager.findFirstVisibleItemPosition()
                 if (position > 2) {
                     binding.ScrollTop.translationY = -(navBarHeight + 12.toPx).toFloat()
@@ -542,46 +503,54 @@ class NovelReadFragment : Fragment(),
         model.scrolledToTop.observe(viewLifecycleOwner) {
             if (it) binding.mediaSourceRecycler.scrollToPosition(0)
         }
+    }
 
+    private fun setupMediaObserver() {
         continueEp = model.continueMedia ?: false
         model.getMedia().observe(viewLifecycleOwner) {
             if (it != null) {
-                media = it
-                novelName = media.userPreferredName
-                progress = View.GONE
-                binding.mediaInfoProgressBar.visibility = progress
-                if (!loaded) {
-                    val sel = media.selected
-                    source = sel?.sourceIndex ?: 0
-                    val isLocal = sel?.server == "Local" || media.format == "LOCAL_NOVEL" || media.format == "LOCAL"
-                    searchQuery = if (isLocal) (media.name ?: media.nameRomaji) else (sel?.server ?: media.name ?: media.nameRomaji)
-                    headerAdapter = NovelReadAdapter(media, this, model.novelSources)
-                    novelResponseAdapter = NovelResponseAdapter(
-                        this,
-                        this,
-                        this
-                    )
-
-                    binding.mediaSourceRecycler.adapter =
-                        ConcatAdapter(headerAdapter, novelResponseAdapter)
-                    loaded = true
-
-                    val isLnReader = source in 0 until model.novelSources.names.size
-                            && model.novelSources[source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
-                    if (isLnReader) {
-                        sourceRequested = true
-                        binding.mediaSourceRecycler.post { headerAdapter.startLoading() }
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            model.loadNovelChapters(media, source)
-                        }
-                    } else {
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            search(searchQuery, source, auto = sel?.server == null || isLocal)
-                        }, 100)
-                    }
-                }
+                handleMediaLoaded(it)
             }
         }
+    }
+
+    private fun handleMediaLoaded(it: Media) {
+        media = it
+        novelName = media.userPreferredName
+        progress = View.GONE
+        binding.mediaInfoProgressBar.visibility = progress
+        if (!loaded) {
+            initializeAdaptersAndQuery()
+        }
+    }
+
+    private fun initializeAdaptersAndQuery() {
+        val sel = media.selected
+        source = sel?.sourceIndex ?: 0
+        val isLocal = sel?.server == "Local" || media.format == "LOCAL_NOVEL" || media.format == "LOCAL"
+        searchQuery = if (isLocal) media.name ?: media.nameRomaji else sel?.server ?: media.name ?: media.nameRomaji
+        headerAdapter = NovelReadAdapter(media, this, model.novelSources)
+        novelResponseAdapter = NovelResponseAdapter(this, this, this)
+
+        binding.mediaSourceRecycler.adapter = ConcatAdapter(headerAdapter, novelResponseAdapter)
+        loaded = true
+
+        val isLnReader = source in 0 until model.novelSources.names.size &&
+                model.novelSources[source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
+        if (isLnReader) {
+            sourceRequested = true
+            binding.mediaSourceRecycler.post { headerAdapter.startLoading() }
+            lifecycleScope.launch(Dispatchers.IO) {
+                model.loadNovelChapters(media, source)
+            }
+        } else {
+            Handler(Looper.getMainLooper()).postDelayed({
+                search(searchQuery, source, auto = sel?.server == null || isLocal)
+            }, 100)
+        }
+    }
+
+    private fun observeNovelResponses() {
         model.novelResponses.observe(viewLifecycleOwner) {
             if (it != null && sourceRequested) {
                 response = it
@@ -593,37 +562,39 @@ class NovelReadFragment : Fragment(),
                 headerAdapter.handleSourceNotFound(it.isEmpty())
             }
         }
+    }
 
+    private fun observeNovelChapters() {
         model.getNovelChapters().observe(viewLifecycleOwner) { loadedChapters ->
             if (loadedChapters != null && loadedChapters.containsKey(source)) {
-                searching = false
-                val chapters = loadedChapters[source]
-                if (!chapters.isNullOrEmpty()) {
-                    isShowingChapters = true
-                    currentChapterResponses = chapters
-                    currentChapterLinks = chapters.map { ch ->
-                        val headers = mutableMapOf("X-Chapter-Name" to ch.name)
-                        ch.extra?.get("releaseTime")?.let { headers["X-Release-Time"] = it }
-                        ch.extra?.get("chapterNumber")?.let { headers["X-Chapter-Number"] = it }
-                        ani.dantotsu.FileUrl(ch.link, headers)
-                    }
-                    updateChaptersTabs()
-                    novelResponseAdapter.clear()
-                    var chunk = chapters
-                    if (end != null) {
-                        chunk = chunk.slice(start..end!!)
-                    }
-                    val sorted = if (reverse) chunk.reversed() else chunk
-                    novelResponseAdapter.submitList(sorted)
-                    novelResponseAdapter.updateType(style) 
-                    headerAdapter.updateContinue(chapters)
-                    headerAdapter.progress?.visibility = View.GONE
-                    headerAdapter.handleSourceNotFound(false)
-                } else {
-                    headerAdapter.progress?.visibility = View.GONE
-                    headerAdapter.handleSourceNotFound(true)
-                }
+                handleLoadedChapters(loadedChapters[source])
             }
+        }
+    }
+
+    private fun handleLoadedChapters(chapters: List<ShowResponse>?) {
+        searching = false
+        if (!chapters.isNullOrEmpty()) {
+            isShowingChapters = true
+            currentChapterResponses = chapters
+            currentChapterLinks = chapters.map { ch ->
+                val headers = mutableMapOf("X-Chapter-Name" to ch.name)
+                ch.extra?.get("releaseTime")?.let { headers["X-Release-Time"] = it }
+                ch.extra?.get("chapterNumber")?.let { headers["X-Chapter-Number"] = it }
+                ani.dantotsu.FileUrl(ch.link, headers)
+            }
+            updateChaptersTabs()
+            novelResponseAdapter.clear()
+            val chunk = if (end != null) chapters.slice(start..end!!) else chapters
+            val sorted = if (reverse) chunk.reversed() else chunk
+            novelResponseAdapter.submitList(sorted)
+            novelResponseAdapter.updateType(style)
+            headerAdapter.updateContinue(chapters)
+            headerAdapter.progress?.visibility = View.GONE
+            headerAdapter.handleSourceNotFound(false)
+        } else {
+            headerAdapter.progress?.visibility = View.GONE
+            headerAdapter.handleSourceNotFound(true)
         }
     }
 
@@ -638,7 +609,7 @@ class NovelReadFragment : Fragment(),
             searchQuery = query
             sourceRequested = true
             headerAdapter.startLoading()
-            
+
             val isLnReader = source in 0 until model.novelSources.names.size
                     && model.novelSources[source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
 
@@ -733,10 +704,10 @@ class NovelReadFragment : Fragment(),
             val progressChapterIndex = (chapters.indexOfFirst {
                 ani.dantotsu.media.MediaNameAdapter.findChapterNumber(it.name)?.toInt() == selected
             } + 1).coerceAtLeast(0)
-            
+
             val endIndex = (progressChapterIndex + n).coerceAtMost(chapters.size)
             val chaptersToDownload = chapters.subList(progressChapterIndex, endIndex)
-            
+
             for (chapter in chaptersToDownload) {
                 try {
                     downloadNovelSequentially(chapter)
@@ -810,9 +781,12 @@ class NovelReadFragment : Fragment(),
             requireContext().customAlertDialog().apply {
                 setTitle(pkg.name)
                 val msg = buildString {
-                    append("Package: ${pkg.pkgName}\n")
-                    append("Version: ${pkg.versionName}\n")
-                    pkg.repository?.let { append("Repository: $it\n") }
+                    append("Package: ${pkg.pkgName}
+")
+                    append("Version: ${pkg.versionName}
+")
+                    pkg.repository?.let { append("Repository: $it
+") }
                     append("Sources: ${pkg.sources.size}")
                 }
                 setMessage(msg)

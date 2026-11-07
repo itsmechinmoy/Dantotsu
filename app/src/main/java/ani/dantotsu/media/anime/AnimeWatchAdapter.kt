@@ -117,6 +117,14 @@ class AnimeWatchAdapter(
         val binding = holder.binding
         _binding = binding
 
+        setupHeaderControls(binding)
+        val source = setupSourceAndDub(binding)
+        setupActionButtons(binding, source)
+        handleEpisodes()
+        setupResetProgress(binding)
+    }
+
+    private fun setupHeaderControls(binding: ItemMediaSourceBinding) {
         binding.faqbutton.setOnClickListener {
             startActivity(
                 fragment.requireContext(),
@@ -132,6 +140,23 @@ class AnimeWatchAdapter(
                 fragment.requireContext().startActivity(intent)
             }
         }
+
+        // Wrong Title
+        binding.mediaSourceSearch.setOnClickListener {
+            SourceSearchDialogFragment().show(
+                fragment.requireActivity().supportFragmentManager,
+                null
+            )
+        }
+        val offline = !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
+
+        binding.mediaSourceNameContainer.isGone = offline
+        binding.mediaSourceSettings.isGone = offline
+        binding.mediaSourceSearch.isGone = offline
+        binding.mediaSourceTitle.isGone = offline
+    }
+
+    private fun setupSourceAndDub(binding: ItemMediaSourceBinding): Int {
         binding.animeSourceDubbed.isChecked = media.selected!!.preferDub
         binding.animeSourceDubbedText.text =
             if (media.selected!!.preferDub) binding.root.context.getString(R.string.dubbed) else binding.root.context.getString(
@@ -147,20 +172,6 @@ class AnimeWatchAdapter(
                 )
             if (!changing) fragment.onDubClicked(isChecked)
         }
-
-        // Wrong Title
-        binding.mediaSourceSearch.setOnClickListener {
-            SourceSearchDialogFragment().show(
-                fragment.requireActivity().supportFragmentManager,
-                null
-            )
-        }
-        val offline = !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
-
-        binding.mediaSourceNameContainer.isGone = offline
-        binding.mediaSourceSettings.isGone = offline
-        binding.mediaSourceSearch.isGone = offline
-        binding.mediaSourceTitle.isGone = offline
 
         // Source Selection
         var source =
@@ -230,9 +241,10 @@ class AnimeWatchAdapter(
                 fragment.openSettings(ext.extension)
             }
         }
+        return source
+    }
 
-        // Icons
-
+    private fun setupActionButtons(binding: ItemMediaSourceBinding, source: Int) {
         // Subscribe
         subscribe = MediaDetailsActivity.PopImageButton(
             fragment.lifecycleScope,
@@ -264,185 +276,229 @@ class AnimeWatchAdapter(
 
         // Nested Button
         binding.mediaNestedButton.setOnClickListener {
-            val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
-            dialogBinding.apply {
-                var refresh = false
-                var run = false
-                var reversed = media.selected!!.recyclerReversed
-                var style =
-                    media.selected!!.recyclerStyle ?: PrefManager.getVal(PrefName.AnimeDefaultView)
+            showNestedOptionsDialog(source)
+        }
+    }
 
-                mediaSourceTop.rotation = if (reversed) -90f else 90f
-                sortText.text = if (reversed) "Down to Up" else "Up to Down"
-                mediaSourceTop.setOnClickListener {
-                    reversed = !reversed
-                    mediaSourceTop.rotation = if (reversed) -90f else 90f
-                    sortText.text = if (reversed) "Down to Up" else "Up to Down"
-                    run = true
+    private fun setupResetProgress(binding: ItemMediaSourceBinding) {
+        //clear progress
+        binding.sourceTitle.setOnLongClickListener {
+            showResetProgressDialog()
+            true
+        }
+    }
+
+    private fun showResetProgressDialog() {
+        fragment.requireContext().customAlertDialog().apply {
+            setTitle(" Delete Progress for all episodes of ${media.nameRomaji}")
+            setMessage("This will delete all the locally stored progress for all episodes")
+            setPosButton(R.string.ok) {
+                val prefix = "${media.id}_"
+                val regex = Regex("^${prefix}\\d+$")
+
+                PrefManager.getAllCustomValsForMedia(prefix)
+                    .keys
+                    .filter { it.matches(regex) }
+                    .onEach { key -> PrefManager.removeCustomVal(key) }
+                snackString("Deleted the progress of all Episodes for ${media.nameRomaji}")
+            }
+            setNegButton(R.string.no)
+            show()
+        }
+    }
+
+    private fun showNestedOptionsDialog(source: Int) {
+        val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
+        dialogBinding.apply {
+            var refresh = false
+            var run = false
+            var reversed = media.selected!!.recyclerReversed
+            var style =
+                media.selected!!.recyclerStyle ?: PrefManager.getVal(PrefName.AnimeDefaultView)
+
+            setupSortControls(dialogBinding) {
+                reversed = !reversed
+                run = true
+                reversed
+            }
+
+            setupMetadataControls(dialogBinding) {
+                refresh = true
+            }
+
+            setupStyleControls(dialogBinding, style) { selectedStyle ->
+                style = selectedStyle
+                run = true
+            }
+
+            setupWebviewContainer(dialogBinding, source) {
+                refresh = true
+            }
+
+            setupDownloadAndProgressControls(dialogBinding)
+
+            fragment.requireContext().customAlertDialog().apply {
+                setTitle("Options")
+                setCustomView(dialogBinding.root)
+                setPosButton("OK") {
+                    if (run) fragment.onIconPressed(style, reversed)
+                    if (downloadNo.text.toString() != "0") {
+                        fragment.multiDownload(n = downloadNo.text.toString().toInt())
+                    }
+                    if (refresh) fragment.loadEpisodes(source, true)
                 }
+                setNegButton("Cancel") {
+                    if (refresh) fragment.loadEpisodes(source, true)
+                }
+                show()
+            }
+        }
+    }
 
-                var metadataApi = PrefManager.getVal<Int>(PrefName.EpisodeMetadataSource) // 0 or 1
+    private fun setupSortControls(
+        dialogBinding: DialogLayoutBinding,
+        onToggleSort: () -> Boolean
+    ) {
+        dialogBinding.apply {
+            val initialReversed = media.selected!!.recyclerReversed
+            mediaSourceTop.rotation = if (initialReversed) -90f else 90f
+            sortText.text = if (initialReversed) "Down to Up" else "Up to Down"
+            mediaSourceTop.setOnClickListener {
+                val newReversed = onToggleSort()
+                mediaSourceTop.rotation = if (newReversed) -90f else 90f
+                sortText.text = if (newReversed) "Down to Up" else "Up to Down"
+            }
+        }
+    }
+
+    private fun setupMetadataControls(
+        dialogBinding: DialogLayoutBinding,
+        onRefreshNeeded: () -> Unit
+    ) {
+        dialogBinding.apply {
+            var metadataApi = PrefManager.getVal<Int>(PrefName.EpisodeMetadataSource) // 0 or 1
+            metadataApiText.text = if (metadataApi == 0) "Kitsu" else "AniZip"
+            metadataApiTop.setOnClickListener {
+                metadataApi = if (metadataApi == 0) 1 else 0
                 metadataApiText.text = if (metadataApi == 0) "Kitsu" else "AniZip"
-                metadataApiTop.setOnClickListener {
-                    metadataApi = if (metadataApi == 0) 1 else 0
-                    metadataApiText.text = if (metadataApi == 0) "Kitsu" else "AniZip"
-                    PrefManager.setVal(PrefName.EpisodeMetadataSource, metadataApi)
-                    
-                    if (metadataApi == 0) {
-                        fragment.loadKitsuEpisodesAsync()
-                    }
-                    refresh = true
+                PrefManager.setVal(PrefName.EpisodeMetadataSource, metadataApi)
+
+                if (metadataApi == 0) {
+                    fragment.loadKitsuEpisodesAsync()
                 }
-                
-                // Grids
-                var selected = when (style) {
-                    0 -> mediaSourceList
-                    1 -> mediaSourceGrid
-                    2 -> mediaSourceCompact
-                    else -> mediaSourceList
-                }
-                when (style) {
-                    0 -> layoutText.setText(R.string.list)
-                    1 -> layoutText.setText(R.string.grid)
-                    2 -> layoutText.setText(R.string.compact)
-                    else -> mediaSourceList
-                }
+                onRefreshNeeded()
+            }
+        }
+    }
+
+    private fun setupStyleControls(
+        dialogBinding: DialogLayoutBinding,
+        initialStyle: Int,
+        onStyleSelected: (Int) -> Unit
+    ) {
+        dialogBinding.apply {
+            var selected = when (initialStyle) {
+                0 -> mediaSourceList
+                1 -> mediaSourceGrid
+                2 -> mediaSourceCompact
+                else -> mediaSourceList
+            }
+            when (initialStyle) {
+                0 -> layoutText.setText(R.string.list)
+                1 -> layoutText.setText(R.string.grid)
+                2 -> layoutText.setText(R.string.compact)
+                else -> mediaSourceList
+            }
+            selected.alpha = 1f
+            fun selectButton(btn: ImageButton) {
+                selected.alpha = 0.33f
+                selected = btn
                 selected.alpha = 1f
-                fun selected(it: ImageButton) {
-                    selected.alpha = 0.33f
-                    selected = it
-                    selected.alpha = 1f
+            }
+            mediaSourceList.setOnClickListener {
+                selectButton(it as ImageButton)
+                layoutText.setText(R.string.list)
+                onStyleSelected(0)
+            }
+            mediaSourceGrid.setOnClickListener {
+                selectButton(it as ImageButton)
+                layoutText.setText(R.string.grid)
+                onStyleSelected(1)
+            }
+            mediaSourceCompact.setOnClickListener {
+                selectButton(it as ImageButton)
+                layoutText.setText(R.string.compact)
+                onStyleSelected(2)
+            }
+        }
+    }
+
+    private fun setupWebviewContainer(
+        dialogBinding: DialogLayoutBinding,
+        source: Int,
+        onRefreshNeeded: () -> Unit
+    ) {
+        dialogBinding.apply {
+            mediaWebviewContainer.setOnClickListener {
+                if (!WebViewUtil.supportsWebView(fragment.requireContext())) {
+                    toast(R.string.webview_not_installed)
                 }
-                mediaSourceList.setOnClickListener {
-                    selected(it as ImageButton)
-                    style = 0
-                    layoutText.setText(R.string.list)
-                    run = true
-                }
-                mediaSourceGrid.setOnClickListener {
-                    selected(it as ImageButton)
-                    style = 1
-                    layoutText.setText(R.string.grid)
-                    run = true
-                }
-                mediaSourceCompact.setOnClickListener {
-                    selected(it as ImageButton)
-                    style = 2
-                    layoutText.setText(R.string.compact)
-                    run = true
-                }
-                mediaWebviewContainer.setOnClickListener {
-                    if (!WebViewUtil.supportsWebView(fragment.requireContext())) {
-                        toast(R.string.webview_not_installed)
-                    }
-                    // Start CookieCatcher activity
-                    if (watchSources.names.isNotEmpty() && source in 0 until watchSources.names.size) {
-                        val sourceAHH = watchSources[source] as? DynamicAnimeParser
-                        val sourceHttp =
-                            sourceAHH?.extension?.sources?.firstOrNull() as? AnimeHttpSource
-                        val url = sourceHttp?.baseUrl
-                        url?.let {
-                            refresh = true
-                            val headersMap = try {
-                                sourceHttp.headers.toMultimap()
-                                    .mapValues { it.value.getOrNull(0) ?: "" }
-                            } catch (e: Exception) {
-                                emptyMap()
-                            }
-                            val intent =
-                                Intent(fragment.requireContext(), CookieCatcher::class.java)
-                                    .putExtra("url", url)
-                                    .putExtra("headers", headersMap as HashMap<String, String>)
-                            startActivity(fragment.requireContext(), intent, null)
+                // Start CookieCatcher activity
+                if (watchSources.names.isNotEmpty() && source in 0 until watchSources.names.size) {
+                    val sourceAHH = watchSources[source] as? DynamicAnimeParser
+                    val sourceHttp =
+                        sourceAHH?.extension?.sources?.firstOrNull() as? AnimeHttpSource
+                    val url = sourceHttp?.baseUrl
+                    url?.let {
+                        onRefreshNeeded()
+                        val headersMap = try {
+                            sourceHttp.headers.toMultimap()
+                                .mapValues { it.value.getOrNull(0) ?: "" }
+                        } catch (e: Exception) {
+                            emptyMap()
                         }
+                        val intent =
+                            Intent(fragment.requireContext(), CookieCatcher::class.java)
+                                .putExtra("url", url)
+                                .putExtra("headers", headersMap as HashMap<String, String>)
+                        startActivity(fragment.requireContext(), intent, null)
                     }
-                }
-
-                //implement Multi download
-                downloadNo.setText("0")
-                if (media.format == "LOCAL") {
-                    animeDownloadContainer.visibility = View.GONE
-                    mediaWebviewContainer.visibility = View.GONE
-                }
-                mediaDownloadTop.setOnClickListener {
-                    // Alert dialog asking for the number of Episodes to download
-                    fragment.requireContext().customAlertDialog().apply {
-                        setTitle("Multi Episode Downloader")
-                        setMessage("Enter the number of episodes to download")
-                        val input = NumberPicker(currContext())
-                        input.minValue = 1
-                        input.maxValue = 20
-                        input.value = 1
-                        setCustomView(input)
-                        setPosButton(R.string.ok) {
-                            downloadNo.setText("${input.value}")
-                        }
-                        setNegButton(R.string.cancel)
-                        show()
-                    }
-                }
-
-                resetProgress.setOnClickListener {
-                    fragment.requireContext().customAlertDialog().apply {
-                        setTitle(" Delete Progress for all episodes of ${media.nameRomaji}")
-                        setMessage("This will delete all the locally stored progress for all episodes")
-                        setPosButton(R.string.ok) {
-                            val prefix = "${media.id}_"
-                            val regex = Regex("^${prefix}\\d+$")
-
-                            PrefManager.getAllCustomValsForMedia(prefix)
-                                .keys
-                                .filter { it.matches(regex) }
-                                .onEach { key -> PrefManager.removeCustomVal(key) }
-                            snackString("Deleted the progress of all Episodes for ${media.nameRomaji}")
-                        }
-                        setNegButton(R.string.no)
-                        show()
-                    }
-                }
-
-                resetProgressDef.text = getString(currContext()!!, R.string.clear_stored_episode)
-
-                //animeDownloadContainer.visibility = View.GONE
-                fragment.requireContext().customAlertDialog().apply {
-                    setTitle("Options")
-                    setCustomView(dialogBinding.root)
-                    setPosButton("OK") {
-                        if (run) fragment.onIconPressed(style, reversed)
-                        if (downloadNo.text.toString() != "0") {
-                            fragment.multiDownload(n = downloadNo.text.toString().toInt())
-                        }
-                        if (refresh) fragment.loadEpisodes(source, true)
-                    }
-                    setNegButton("Cancel") {
-                        if (refresh) fragment.loadEpisodes(source, true)
-                    }
-                    show()
                 }
             }
         }
-        // Episode Handling
-        handleEpisodes()
+    }
 
-        //clear progress
-        binding.sourceTitle.setOnLongClickListener {
-            fragment.requireContext().customAlertDialog().apply {
-                setTitle(" Delete Progress for all episodes of ${media.nameRomaji}")
-                setMessage("This will delete all the locally stored progress for all episodes")
-                setPosButton(R.string.ok) {
-                    val prefix = "${media.id}_"
-                    val regex = Regex("^${prefix}\\d+$")
-
-                    PrefManager.getAllCustomValsForMedia(prefix)
-                        .keys
-                        .filter { it.matches(regex) }
-                        .onEach { key -> PrefManager.removeCustomVal(key) }
-                    snackString("Deleted the progress of all Episodes for ${media.nameRomaji}")
-                }
-                setNegButton(R.string.no)
-                show()
+    private fun setupDownloadAndProgressControls(dialogBinding: DialogLayoutBinding) {
+        dialogBinding.apply {
+            //implement Multi download
+            downloadNo.setText("0")
+            if (media.format == "LOCAL") {
+                animeDownloadContainer.visibility = View.GONE
+                mediaWebviewContainer.visibility = View.GONE
             }
-            true
+            mediaDownloadTop.setOnClickListener {
+                // Alert dialog asking for the number of Episodes to download
+                fragment.requireContext().customAlertDialog().apply {
+                    setTitle("Multi Episode Downloader")
+                    setMessage("Enter the number of episodes to download")
+                    val input = NumberPicker(currContext())
+                    input.minValue = 1
+                    input.maxValue = 20
+                    input.value = 1
+                    setCustomView(input)
+                    setPosButton(R.string.ok) {
+                        downloadNo.setText("${input.value}")
+                    }
+                    setNegButton(R.string.cancel)
+                    show()
+                }
+            }
+
+            resetProgress.setOnClickListener {
+                showResetProgressDialog()
+            }
+
+            resetProgressDef.text = getString(currContext()!!, R.string.clear_stored_episode)
         }
     }
 
@@ -457,7 +513,7 @@ class AnimeWatchAdapter(
             val screenWidth = fragment.screenWidth.px
             var select: Chip? = null
             for (position in arr.indices) {
-                val last = if (position + 1 == arr.size) names.size else (limit * (position + 1))
+                val last = if (position + 1 == arr.size) names.size else limit * (position + 1)
                 val chip =
                     ItemChipBinding.inflate(
                         LayoutInflater.from(fragment.context),
@@ -468,7 +524,7 @@ class AnimeWatchAdapter(
                 fun selected() {
                     chip.isChecked = true
                     binding.mediaWatchChipScroll.smoothScrollTo(
-                        (chip.left - screenWidth / 2) + (chip.width / 2),
+                        chip.left - screenWidth / 2 + chip.width / 2,
                         0
                     )
                 }
@@ -493,7 +549,7 @@ class AnimeWatchAdapter(
 
                 chip.setOnClickListener {
                     selected()
-                    fragment.onChipClicked(position, limit * (position), last - 1)
+                    fragment.onChipClicked(position, limit * position, last - 1)
                 }
                 binding.mediaSourceChipGroup.addView(chip)
                 if (selected == position) {
@@ -505,7 +561,7 @@ class AnimeWatchAdapter(
                 binding.mediaWatchChipScroll.apply {
                     post {
                         scrollTo(
-                            (select.left - screenWidth / 2) + (select.width / 2),
+                            select.left - screenWidth / 2 + select.width / 2,
                             0
                         )
                     }
@@ -518,173 +574,200 @@ class AnimeWatchAdapter(
     }
 
     fun handleEpisodes() {
-        val binding = _binding
-        if (binding != null) {
-            if (media.anime?.episodes != null && media.anime.episodes!!.isNotEmpty()) {
-                val episodes = media.anime.episodes!!.keys.toTypedArray()
+        val binding = _binding ?: return
+        val animeEpisodes = media.anime?.episodes
+        if (animeEpisodes.isNullOrEmpty()) {
+            binding.sourceContinue.visibility = View.GONE
+            binding.sourceNotFound.visibility = View.GONE
+            binding.faqbutton.visibility = View.GONE
+            clearChips()
+            binding.sourceProgressBar.visibility = View.VISIBLE
+            return
+        }
 
-                val anilistEp = (media.userProgress ?: 0).plus(1)
-                val appEp = PrefManager.getCustomVal<String?>(
-                    "${media.id}_current_ep", ""
-                )?.let { MediaNameAdapter.findEpisodeNumber(it)?.toInt() ?: it.toIntOrNull() } ?: 1
+        val episodes = animeEpisodes.keys.toTypedArray()
+        if (isUserProgressFinished(episodes)) {
+            binding.sourceContinue.visibility = View.GONE
+            binding.sourceProgressBar.visibility = View.GONE
+            return
+        }
 
-                val maxAvailableEp = episodes.maxOfOrNull { key ->
-                    MediaNameAdapter.findEpisodeNumber(key) ?: media.anime?.episodes?.get(key)?.number?.let { MediaNameAdapter.findEpisodeNumber(it) } ?: 0f
-                } ?: episodes.size.toFloat()
+        val continueEp = resolveContinueEpisodeKey(episodes)
+        if (continueEp != null && continueEp in episodes) {
+            bindContinueEpisode(binding, continueEp)
+        } else {
+            binding.sourceContinue.visibility = View.GONE
+        }
 
-                // If user progress already completed all available episodes, hide continue button
-                if (media.userProgress != null && media.userProgress!!.toFloat() >= maxAvailableEp && (media.userProgress ?: 0) >= appEp) {
-                    binding.sourceContinue.visibility = View.GONE
-                    binding.sourceProgressBar.visibility = View.GONE
-                    return
-                }
+        binding.sourceProgressBar.visibility = View.GONE
+        updateSourceNotFoundState(binding)
+    }
 
-                // Prefer appEp if it has active in-progress data below the completion threshold,
-                // to avoid jumping to the next episode while the user is still mid-episode.
-                val appEpKey = episodes.find { key ->
-                    val epObj = media.anime?.episodes?.get(key)
-                    MediaNameAdapter.findEpisodeNumber(key)?.toInt() == appEp ||
+    private fun isUserProgressFinished(episodes: Array<String>): Boolean {
+        val userProgress = media.userProgress ?: return false
+        val appEp = PrefManager.getCustomVal<String?>(
+            "${media.id}_current_ep", ""
+        )?.let { MediaNameAdapter.findEpisodeNumber(it)?.toInt() ?: it.toIntOrNull() } ?: 1
+
+        val maxAvailableEp = episodes.maxOfOrNull { key ->
+            MediaNameAdapter.findEpisodeNumber(key)
+                ?: media.anime?.episodes?.get(key)?.number?.let { MediaNameAdapter.findEpisodeNumber(it) }
+                ?: 0f
+        } ?: episodes.size.toFloat()
+
+        return userProgress.toFloat() >= maxAvailableEp && userProgress >= appEp
+    }
+
+    private fun checkAppEpHasActiveProgress(episodes: Array<String>, appEp: Int): Boolean {
+        val appEpKey = episodes.find { key ->
+            val epObj = media.anime?.episodes?.get(key)
+            MediaNameAdapter.findEpisodeNumber(key)?.toInt() == appEp ||
                     (epObj?.number != null && MediaNameAdapter.findEpisodeNumber(epObj.number)?.toInt() == appEp)
-                } ?: episodes.getOrNull(appEp - 1)
-                val appEpHasActiveProgress = appEpKey != null && run {
-                    val cleanNum = MediaNameAdapter.findEpisodeNumber(appEpKey)?.let {
-                        if (it % 1 == 0f) it.toInt().toString() else it.toString()
-                    }
-                    val curr = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}", null, Long::class.java)
-                        ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}", null, Long::class.java) }
-                    val max = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}_max", null, Long::class.java)
-                        ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}_max", null, Long::class.java) }
-                    if (curr != null && max != null && max > 0L) {
-                        (curr.toFloat() / max.toFloat()) < PrefManager.getVal<Float>(PrefName.WatchPercentage)
-                    } else false
-                }
-                val targetEpNum = if (anilistEp > appEp && !appEpHasActiveProgress) anilistEp.toFloat() else appEp.toFloat()
+        } ?: episodes.getOrNull(appEp - 1) ?: return false
 
-                // Find matching episode key in media.anime.episodes
-                var matchingKey: String? = episodes.find { key ->
-                    val epObj = media.anime.episodes?.get(key)
-                    MediaNameAdapter.findEpisodeNumber(key) == targetEpNum ||
+        val cleanNum = MediaNameAdapter.findEpisodeNumber(appEpKey)?.let {
+            if (it % 1 == 0f) it.toInt().toString() else it.toString()
+        }
+        val curr = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}", null, Long::class.java)
+            ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}", null, Long::class.java) }
+        val max = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}_max", null, Long::class.java)
+            ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}_max", null, Long::class.java) }
+        return if (curr != null && max != null && max > 0L) {
+            curr.toFloat() / max.toFloat() < PrefManager.getVal<Float>(PrefName.WatchPercentage)
+        } else false
+    }
+
+    private fun findMatchingEpisodeKey(episodes: Array<String>, targetEpNum: Float): String? {
+        val directMatch = episodes.find { key ->
+            val epObj = media.anime?.episodes?.get(key)
+            MediaNameAdapter.findEpisodeNumber(key) == targetEpNum ||
                     (epObj?.number != null && MediaNameAdapter.findEpisodeNumber(epObj.number) == targetEpNum)
-                }
+        }
+        if (directMatch != null) return directMatch
+        val targetIdx = targetEpNum.toInt() - 1
+        return if (targetIdx in episodes.indices) episodes[targetIdx] else null
+    }
 
-                if (matchingKey == null) {
-                    val targetIdx = targetEpNum.toInt() - 1
-                    if (targetIdx in episodes.indices) {
-                        matchingKey = episodes[targetIdx]
-                    }
-                }
+    private fun advanceContinueEpisodeIfWatched(
+        binding: ItemMediaSourceBinding,
+        episodes: Array<String>,
+        continueEp: String
+    ): String? {
+        handleProgress(
+            binding.itemMediaProgressCont,
+            binding.itemMediaProgress,
+            binding.itemMediaProgressEmpty,
+            media.id,
+            continueEp
+        )
+        val progressWeight = (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight
+        if (progressWeight <= PrefManager.getVal<Float>(PrefName.WatchPercentage)) {
+            return continueEp
+        }
+        val nextIdx = episodes.indexOf(continueEp) + 1
+        if (nextIdx !in episodes.indices) {
+            return null
+        }
+        val nextEp = episodes[nextIdx]
+        handleProgress(
+            binding.itemMediaProgressCont,
+            binding.itemMediaProgress,
+            binding.itemMediaProgressEmpty,
+            media.id,
+            nextEp
+        )
+        return nextEp
+    }
 
-                var continueEp = matchingKey
-                if (continueEp != null && episodes.contains(continueEp)) {
-                    handleProgress(
-                        binding.itemMediaProgressCont,
-                        binding.itemMediaProgress,
-                        binding.itemMediaProgressEmpty,
-                        media.id,
-                        continueEp
-                    )
-                    val progressWeight = (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight
-                    if (progressWeight > PrefManager.getVal<Float>(PrefName.WatchPercentage)) {
-                        val e = episodes.indexOf(continueEp)
-                        if (e != -1 && e + 1 < episodes.size) {
-                            continueEp = episodes[e + 1]
-                            handleProgress(
-                                binding.itemMediaProgressCont,
-                                binding.itemMediaProgress,
-                                binding.itemMediaProgressEmpty,
-                                media.id,
-                                continueEp
-                            )
-                        } else {
-                            // User watched the last available episode
-                            continueEp = null
-                        }
-                    }
+    private fun resolveContinueEpisodeKey(episodes: Array<String>): String? {
+        val anilistEp = (media.userProgress ?: 0).plus(1)
+        val appEp = PrefManager.getCustomVal<String?>(
+            "${media.id}_current_ep", ""
+        )?.let { MediaNameAdapter.findEpisodeNumber(it)?.toInt() ?: it.toIntOrNull() } ?: 1
 
-                    if (continueEp != null && episodes.contains(continueEp)) {
-                        binding.sourceContinue.visibility = View.VISIBLE
-                        val ep = media.anime.episodes!![continueEp]!!
+        val appEpHasActiveProgress = checkAppEpHasActiveProgress(episodes, appEp)
+        val targetEpNum = if (anilistEp > appEp && !appEpHasActiveProgress) anilistEp.toFloat() else appEp.toFloat()
 
-                        val cleanedTitle = ep.title?.let { MediaNameAdapter.removeEpisodeNumber(it) }
+        val matchingKey = findMatchingEpisodeKey(episodes, targetEpNum) ?: return null
+        if (!episodes.contains(matchingKey)) return null
 
-                        binding.itemMediaImage.loadImage(
-                            ep.thumb ?: FileUrl[media.banner ?: media.cover], 0
-                        )
-                        if (ep.filler) binding.itemEpisodeFillerView.visibility = View.VISIBLE
+        val binding = _binding ?: return matchingKey
+        return advanceContinueEpisodeIfWatched(binding, episodes, matchingKey)
+    }
 
-                        binding.mediaSourceContinueText.text =
-                            binding.root.context.getString(
-                                R.string.continue_episode, ep.number, if (ep.filler)
-                                    binding.root.context.getString(R.string.filler_tag)
-                                else
-                                    "", cleanedTitle
-                            )
-                        binding.sourceContinue.setOnClickListener {
-                            fragment.onEpisodeClick(continueEp)
-                        }
-                        if (fragment.continueEp) {
-                            if (
-                                (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams)
-                                    .weight < PrefManager.getVal<Float>(PrefName.WatchPercentage)
-                            ) {
-                                binding.sourceContinue.performClick()
-                                fragment.continueEp = false
-                            }
-                        }
-                    } else {
-                        binding.sourceContinue.visibility = View.GONE
-                    }
-                } else {
-                    binding.sourceContinue.visibility = View.GONE
-                }
+    private fun bindContinueEpisode(binding: ItemMediaSourceBinding, continueEp: String) {
+        val ep = media.anime?.episodes?.get(continueEp) ?: return
+        binding.sourceContinue.visibility = View.VISIBLE
+        val cleanedTitle = ep.title?.let { MediaNameAdapter.removeEpisodeNumber(it) }
 
-                binding.sourceProgressBar.visibility = View.GONE
+        binding.itemMediaImage.loadImage(
+            ep.thumb ?: FileUrl[media.banner ?: media.cover], 0
+        )
+        if (ep.filler) binding.itemEpisodeFillerView.visibility = View.VISIBLE
 
-                val sourceFound = media.anime.episodes!!.isNotEmpty()
-                val isDownloadedSource =
-                    watchSources[media.selected!!.sourceIndex] is OfflineAnimeParser
-
-                if (isDownloadedSource) {
-                    binding.sourceNotFound.text = if (sourceFound) {
-                        binding.root.context.getString(R.string.source_not_found)
-                    } else {
-                        binding.root.context.getString(R.string.download_not_found)
-                    }
-                } else {
-                    binding.sourceNotFound.text =
-                        binding.root.context.getString(R.string.source_not_found)
-                }
-
-                binding.sourceNotFound.isGone = sourceFound
-                binding.faqbutton.isGone = sourceFound
-
-                if (!sourceFound && PrefManager.getVal(PrefName.SearchSources) && autoSelect) {
-                    if (binding.mediaSource.adapter.count > media.selected!!.sourceIndex + 1) {
-                        val nextIndex = media.selected!!.sourceIndex + 1
-                        binding.mediaSource.setText(
-                            binding.mediaSource.adapter
-                                .getItem(nextIndex).toString(), false
-                        )
-                        fragment.onSourceChange(nextIndex).apply {
-                            binding.mediaSourceTitle.text = showUserText
-                            showUserTextListener =
-                                { MainScope().launch { binding.mediaSourceTitle.text = it } }
-                            binding.animeSourceDubbed.isChecked = selectDub
-                            binding.animeSourceDubbedCont.isVisible = isDubAvailableSeparately()
-                            setLanguageList(0, nextIndex)
-                        }
-                        subscribeButton(false)
-                        fragment.loadEpisodes(nextIndex, false)
-                    }
-                }
-                binding.mediaSource.setOnClickListener { autoSelect = false }
-            } else {
-                binding.sourceContinue.visibility = View.GONE
-                binding.sourceNotFound.visibility = View.GONE
-                binding.faqbutton.visibility = View.GONE
-                clearChips()
-                binding.sourceProgressBar.visibility = View.VISIBLE
+        binding.mediaSourceContinueText.text =
+            binding.root.context.getString(
+                R.string.continue_episode, ep.number, if (ep.filler)
+                    binding.root.context.getString(R.string.filler_tag)
+                else
+                    "", cleanedTitle
+            )
+        binding.sourceContinue.setOnClickListener {
+            fragment.onEpisodeClick(continueEp)
+        }
+        if (fragment.continueEp) {
+            if (
+                (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams)
+                    .weight < PrefManager.getVal<Float>(PrefName.WatchPercentage)
+            ) {
+                binding.sourceContinue.performClick()
+                fragment.continueEp = false
             }
+        }
+    }
+
+    private fun updateSourceNotFoundState(binding: ItemMediaSourceBinding) {
+        val sourceFound = media.anime?.episodes?.isNotEmpty() == true
+        val isDownloadedSource =
+            watchSources[media.selected!!.sourceIndex] is OfflineAnimeParser
+
+        if (isDownloadedSource) {
+            binding.sourceNotFound.text = if (sourceFound) {
+                binding.root.context.getString(R.string.source_not_found)
+            } else {
+                binding.root.context.getString(R.string.download_not_found)
+            }
+        } else {
+            binding.sourceNotFound.text =
+                binding.root.context.getString(R.string.source_not_found)
+        }
+
+        binding.sourceNotFound.isGone = sourceFound
+        binding.faqbutton.isGone = sourceFound
+
+        if (!sourceFound && PrefManager.getVal(PrefName.SearchSources) && autoSelect) {
+            tryAutoSelectNextSource(binding)
+        }
+        binding.mediaSource.setOnClickListener { autoSelect = false }
+    }
+
+    private fun tryAutoSelectNextSource(binding: ItemMediaSourceBinding) {
+        if (binding.mediaSource.adapter.count > media.selected!!.sourceIndex + 1) {
+            val nextIndex = media.selected!!.sourceIndex + 1
+            binding.mediaSource.setText(
+                binding.mediaSource.adapter
+                    .getItem(nextIndex).toString(), false
+            )
+            fragment.onSourceChange(nextIndex).apply {
+                binding.mediaSourceTitle.text = showUserText
+                showUserTextListener =
+                    { MainScope().launch { binding.mediaSourceTitle.text = it } }
+                binding.animeSourceDubbed.isChecked = selectDub
+                binding.animeSourceDubbedCont.isVisible = isDubAvailableSeparately()
+                setLanguageList(0, nextIndex)
+            }
+            subscribeButton(false)
+            fragment.loadEpisodes(nextIndex, false)
         }
     }
 
@@ -693,77 +776,85 @@ class AnimeWatchAdapter(
         if (watchSources is AnimeSources) {
             val parser = watchSources[source] as? DynamicAnimeParser
             if (parser != null) {
-                (watchSources[source] as? DynamicAnimeParser)?.let { ext ->
-                    ext.sourceLanguage = lang
+                val languages = parser.extension.sources.map {
+                    LanguageMapper.getLanguageName(it.lang)
                 }
-                try {
-                    binding?.mediaSourceLanguage?.setText(parser.extension.sources[lang].lang)
-                } catch (e: IndexOutOfBoundsException) {
-                    binding?.mediaSourceLanguage?.setText(
-                        parser.extension.sources.firstOrNull()?.lang ?: "Unknown"
+                if (languages.size > 1) {
+                    binding?.mediaSourceLanguageContainer?.visibility = View.VISIBLE
+                    binding?.mediaSourceLanguage?.setAdapter(
+                        ArrayAdapter(
+                            fragment.requireContext(),
+                            R.layout.item_dropdown,
+                            languages
+                        )
                     )
+                    binding?.mediaSourceLanguage?.setText(
+                        languages.getOrNull(lang) ?: languages.first(),
+                        false
+                    )
+                } else {
+                    binding?.mediaSourceLanguageContainer?.visibility = View.GONE
                 }
-                val adapter = ArrayAdapter(
-                    fragment.requireContext(),
-                    R.layout.item_dropdown,
-                    parser.extension.sources.map { LanguageMapper.getLanguageName(it.lang) }
-                )
-                val items = adapter.count
-
-                binding?.mediaSourceLanguageContainer?.visibility =
-                    if (items > 1) View.VISIBLE else View.GONE
-                binding?.mediaSourceLanguage?.setAdapter(adapter)
-
+            } else {
+                binding?.mediaSourceLanguageContainer?.visibility = View.GONE
             }
         }
     }
 
     fun updateScanlatorDropdown() {
         val binding = _binding ?: return
-        if (options.size > 1) {
-            binding.mediaSourceScanlatorContainer.visibility = View.VISIBLE
-            binding.mediaSourceScanlatorContainer.hint = currActivity()?.getString(R.string.season)
-
-            val allText = currActivity()?.getString(R.string.all_seasons) ?: "All Seasons"
-            val dropdownItems = listOf(allText) + options
-
-            if (media.selected?.scanlators == null && hiddenScanlators.isEmpty()) {
-                val defaultSeason = options.firstOrNull()
-                if (defaultSeason != null) {
-                    hiddenScanlators.addAll(options.filter { it != defaultSeason })
-                }
-            }
-
-            val selectedText = if (hiddenScanlators.isEmpty() || hiddenScanlators.size >= options.size) {
-                allText
-            } else {
-                val shown = options.firstOrNull { it !in hiddenScanlators }
-                shown ?: allText
-            }
-
-            binding.mediaSourceScanlator.setText(selectedText, false)
-            val adapter = ArrayAdapter(
-                fragment.requireContext(),
-                R.layout.item_dropdown,
-                dropdownItems
-            )
-            binding.mediaSourceScanlator.setAdapter(adapter)
-            binding.mediaSourceScanlator.setOnItemClickListener { _, _, i, _ ->
-                if (i == 0) {
-                    hiddenScanlators.clear()
-                } else {
-                    val selectedOption = options.getOrNull(i - 1)
-                    hiddenScanlators.clear()
-                    if (selectedOption != null) {
-                        hiddenScanlators.addAll(options.filter { it != selectedOption })
-                    }
-                }
-                fragment.onScanlatorChange(hiddenScanlators)
-                scanlatorSelectionListener?.onScanlatorsSelected()
-            }
-        } else {
+        if (options.size <= 1) {
             binding.mediaSourceScanlatorContainer.visibility = View.GONE
+            return
         }
+
+        binding.mediaSourceScanlatorContainer.visibility = View.VISIBLE
+        binding.mediaSourceScanlatorContainer.hint = currActivity()?.getString(R.string.season)
+
+        ensureInitialHiddenScanlators()
+
+        val allText = currActivity()?.getString(R.string.all_seasons) ?: "All Seasons"
+        val selectedText = determineActiveScanlatorLabel(allText)
+
+        binding.mediaSourceScanlator.setText(selectedText, false)
+        val adapter = ArrayAdapter(
+            fragment.requireContext(),
+            R.layout.item_dropdown,
+            listOf(allText) + options
+        )
+        binding.mediaSourceScanlator.setAdapter(adapter)
+        binding.mediaSourceScanlator.setOnItemClickListener { _, _, i, _ ->
+            onScanlatorDropdownItemSelected(i)
+        }
+    }
+
+    private fun ensureInitialHiddenScanlators() {
+        if (media.selected?.scanlators == null && hiddenScanlators.isEmpty()) {
+            val defaultSeason = options.firstOrNull()
+            if (defaultSeason != null) {
+                hiddenScanlators.addAll(options.filter { it != defaultSeason })
+            }
+        }
+    }
+
+    private fun determineActiveScanlatorLabel(allText: String): String {
+        return if (hiddenScanlators.isEmpty() || hiddenScanlators.size >= options.size) {
+            allText
+        } else {
+            options.firstOrNull { it !in hiddenScanlators } ?: allText
+        }
+    }
+
+    private fun onScanlatorDropdownItemSelected(i: Int) {
+        hiddenScanlators.clear()
+        if (i > 0) {
+            val selectedOption = options.getOrNull(i - 1)
+            if (selectedOption != null) {
+                hiddenScanlators.addAll(options.filter { it != selectedOption })
+            }
+        }
+        fragment.onScanlatorChange(hiddenScanlators)
+        scanlatorSelectionListener?.onScanlatorsSelected()
     }
 
     override fun getItemCount(): Int = 1
