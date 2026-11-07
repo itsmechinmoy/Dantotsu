@@ -77,9 +77,25 @@ class SettingsNotificationActivity : AppCompatActivity() {
                 else getString(R.string.do_not_update)
             }
             val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
+            val allSettings = ArrayList<Settings>().apply {
+                addAll(buildSubscriptionSettings(context, timeNames))
+                addAll(buildAnilistNotificationSettings(context, aTimeNames, aItems, cTimeNames, cItems))
+                addAll(buildBehaviorSettings(context))
+            }
             settingsRecyclerView.adapter = SettingsAdapter(
-                arrayListOf(
-                    Settings(
+                allSettings,
+                highlightKey = highlightKey
+            )
+            settingsRecyclerView.apply {
+                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
+                setHasFixedSize(true)
+            }
+        }
+    }
+    private fun buildSubscriptionSettings(context: Context, timeNames: Array<String>): List<Settings> {
+        var curTime = PrefManager.getVal<Int>(PrefName.SubscriptionNotificationInterval)
+        return listOf(
+Settings(
                         type = 1,
                         name = getString(
                             R.string.subscriptions_checking_time_s,
@@ -302,8 +318,19 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                 }
                             }
                         }
-                    ),
-                    Settings(
+                    )
+        )
+    }
+
+    private fun buildAnilistNotificationSettings(
+        context: Context,
+        aTimeNames: List<Int>,
+        aItems: List<String>,
+        cTimeNames: List<Int>,
+        cItems: List<String>
+    ): List<Settings> {
+        return listOf(
+Settings(
                         type = 1,
                         name = getString(R.string.anilist_notification_filters),
                         desc = getString(R.string.anilist_notification_filters_desc),
@@ -394,8 +421,13 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                 show()
                             }
                         }
-                    ),
-                    Settings(
+                    )
+        )
+    }
+
+    private fun buildBehaviorSettings(context: Context): List<Settings> {
+        return listOf(
+Settings(
                         type = 2,
                         name = getString(R.string.notification_for_checking_subscriptions),
                         desc = getString(R.string.notification_for_checking_subscriptions_desc),
@@ -460,13 +492,6 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             }
                         },
                     ),
-                ),
-                highlightKey = highlightKey
-            )
-            settingsRecyclerView.apply {
-                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-                setHasFixedSize(true)
-            }
-        }
+        )
     }
 }
