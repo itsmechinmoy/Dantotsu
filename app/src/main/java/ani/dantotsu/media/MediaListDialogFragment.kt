@@ -45,326 +45,255 @@ class MediaListDialogFragment : BottomSheetDialogFragment() {
         return binding.root
     }
 
+    private fun setupStatusAndProgress(media: Media, statusStrings: Array<String>, statuses: Array<String>) {
+        val userStatus = if (media.userStatus != null) {
+            statusStrings[statuses.indexOf(media.userStatus).coerceAtLeast(0)]
+        } else {
+            statusStrings[0]
+        }
+
+        binding.mediaListStatus.setText(userStatus)
+        binding.mediaListStatus.setAdapter(
+            ArrayAdapter(requireContext(), R.layout.item_dropdown, statusStrings)
+        )
+
+        var total: Int? = null
+        binding.mediaListProgress.setText(if (media.userProgress != null) media.userProgress.toString() else "")
+        if (media.anime?.totalEpisodes != null) {
+            total = media.anime.totalEpisodes
+            binding.mediaListProgress.filters = arrayOf(
+                InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
+                LengthFilter(total.toString().length)
+            )
+        } else if (media.manga?.totalChapters != null) {
+            total = media.manga.totalChapters
+            binding.mediaListProgress.filters = arrayOf(
+                InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
+                LengthFilter(total.toString().length)
+            )
+        }
+        binding.mediaListProgressLayout.suffixText = " / ${total ?: '?'}"
+    }
+
+    private fun setupVolumeProgress(media: Media) {
+        if (media.manga != null) {
+            binding.mediaListVolumeProgressLayout.visibility = View.VISIBLE
+            val volumeTotal = media.manga.totalVolumes
+            binding.mediaListVolumeProgress.setText(if (media.userVolumeProgress != null) media.userVolumeProgress.toString() else "")
+            if (volumeTotal != null) {
+                binding.mediaListVolumeProgress.filters = arrayOf(
+                    InputFilterMinMax(0.0, volumeTotal.toDouble()),
+                    LengthFilter(volumeTotal.toString().length)
+                )
+            }
+            binding.mediaListVolumeProgressLayout.suffixText = " / ${volumeTotal ?: '?'}"
+        } else {
+            binding.mediaListVolumeProgressLayout.visibility = View.GONE
+        }
+    }
+
+    private fun setupDatePickers(media: Media, statusStrings: Array<String>): Pair<DatePickerHelper, DatePickerHelper> {
+        val start = DatePickerHelper(requireContext(), binding.mediaListStartLayout, media.userStartedAt)
+        binding.mediaListStart.setText(start.date.toString())
+        binding.mediaListStart.setOnClickListener {
+            tryWith(false) {
+                if (!start.dialog.isShowing) start.dialog.show()
+            }
+        }
+        binding.mediaListStart.setOnFocusChangeListener { _, b ->
+            tryWith(false) {
+                if (b && !start.dialog.isShowing) start.dialog.show()
+            }
+        }
+
+        val end = DatePickerHelper(requireContext(), binding.mediaListEndLayout, media.userCompletedAt)
+        binding.mediaListEnd.setText(end.date.toString())
+        binding.mediaListEnd.setOnClickListener {
+            tryWith(false) {
+                if (!end.dialog.isShowing) end.dialog.show()
+            }
+        }
+        binding.mediaListEnd.setOnFocusChangeListener { _, b ->
+            tryWith(false) {
+                if (b && !end.dialog.isShowing) end.dialog.show()
+            }
+        }
+
+        binding.mediaListStatus.setOnItemClickListener { _, _, position, _ ->
+            if (position == 2) {
+                if (start.date == null) {
+                    start.date = FuzzyDate().getToday()
+                    binding.mediaListStart.setText(start.date.toString())
+                }
+                end.date = FuzzyDate().getToday()
+                binding.mediaListEnd.setText(end.date.toString())
+            }
+            if (position == 1 && start.date == null) {
+                start.date = FuzzyDate().getToday()
+                binding.mediaListStart.setText(start.date.toString())
+            }
+        }
+        return start to end
+    }
+
+    private fun setupScoreAndNotes(media: Media, statusStrings: Array<String>) {
+        binding.mediaListScore.setText(if (media.userScore != 0) (media.userScore.toDouble() / 10).toString() else "")
+        binding.mediaListScore.filters = arrayOf(
+            InputFilterMinMax(0.0, 10.0),
+            LengthFilter(4)
+        )
+
+        binding.mediaListProgress.setOnFocusChangeListener { _, b ->
+            if (b) {
+                if (binding.mediaListStatus.text.toString() == statusStrings[0]) {
+                    binding.mediaListStatus.setText(statusStrings[1], false)
+                }
+                val init = if (binding.mediaListProgress.text.toString() != "") binding.mediaListProgress.text.toString() else "0"
+                binding.mediaListProgress.setText(init)
+            }
+        }
+
+        val repeats = if (media.manga == null) R.string.total_rewatches else R.string.total_rereads
+        binding.mediaListRepeatLayout.hint = getString(repeats)
+        binding.mediaListRepeat.setText(if (media.userRepeat != 0) media.userRepeat.toString() else "")
+
+        binding.mediaListNotes.setText(media.userNotes ?: "")
+
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            binding.mediaListPrivate.visibility = View.GONE
+        } else {
+            binding.mediaListPrivate.visibility = View.VISIBLE
+        }
+        binding.mediaListPrivate.isChecked = media.isListPrivate ?: false
+        binding.mediaListPrivate.setOnCheckedChangeListener { _, checked ->
+            media.isListPrivate = checked
+        }
+    }
+
+    private fun setupCustomLists(media: Media) {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (!rescueMode && media.inCustomListsOf != null) {
+            binding.mediaListCustomListContainer.visibility = View.VISIBLE
+            binding.mediaListCustomListContainer.removeAllViews()
+            media.inCustomListsOf.forEach {
+                CheckBox(requireContext()).apply {
+                    text = it.key
+                    isChecked = it.value
+                    setOnCheckedChangeListener { _, isChecked ->
+                        media.inCustomListsOf[it.key] = isChecked
+                    }
+                    binding.mediaListCustomListContainer.addView(this)
+                }
+            }
+        } else {
+            binding.mediaListCustomListContainer.visibility = View.GONE
+        }
+    }
+
+    private fun setupActionButtons(
+        media: Media,
+        start: DatePickerHelper,
+        end: DatePickerHelper,
+        statuses: Array<String>,
+        statusStrings: Array<String>,
+        scope: CoroutineScope
+    ) {
+        binding.mediaListSave.setOnClickListener {
+            binding.mediaListLayout.visibility = View.GONE
+            binding.mediaListProgressBar.visibility = View.VISIBLE
+
+            val score = ((binding.mediaListScore.text.toString().toDoubleOrNull() ?: 0.0) * 10).toInt()
+            val progress = binding.mediaListProgress.text.toString().toIntOrNull()
+            val volumeProgress = binding.mediaListVolumeProgress.text.toString().toIntOrNull()
+            val repeat = binding.mediaListRepeat.text.toString().toIntOrNull()
+            val notes = binding.mediaListNotes.text.toString()
+            val status = statuses[statusStrings.indexOf(binding.mediaListStatus.text.toString())]
+            val startD = start.date
+            val endD = end.date
+            val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+
+            if (rescueMode) {
+                val pending = PendingProgressUpdate(
+                    mediaId = media.id,
+                    idMAL = media.idMAL,
+                    anime = media.anime != null,
+                    progress = progress,
+                    volumeProgress = volumeProgress,
+                    score = score,
+                    repeat = repeat,
+                    notes = notes,
+                    status = status,
+                    startedAt = startD,
+                    completedAt = endD
+                )
+                scope.launch {
+                    val ok = tryWithSuspend(post = false) {
+                        MAL.setMediaListStatus(pending)
+                    } == true
+                    if (ok) {
+                        Refresh.all()
+                        dismissAllowingStateLoss()
+                    } else {
+                        binding.mediaListProgressBar.visibility = View.GONE
+                        binding.mediaListLayout.visibility = View.VISIBLE
+                    }
+                }
+            } else {
+                media.saveList(
+                    scope,
+                    score = score,
+                    progress = progress,
+                    progressVolumes = volumeProgress,
+                    repeat = repeat,
+                    notes = notes,
+                    status = status,
+                    private = media.isListPrivate ?: false,
+                    startedAt = startD,
+                    completedAt = endD,
+                    customList = media.inCustomListsOf?.mapNotNull { if (it.value) it.key else null }
+                ) {
+                    Refresh.all()
+                    dismissAllowingStateLoss()
+                }
+            }
+        }
+
+        binding.mediaListDelete.setOnClickListener {
+            scope.launch {
+                media.deleteFromList(scope, onSuccess = {
+                    Refresh.all()
+                    snackString(getString(R.string.deleted_from_list))
+                    dismissAllowingStateLoss()
+                })
+            }
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
         binding.mediaListContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> { bottomMargin += navBarHeight }
-        var media: Media?
         val model: MediaDetailsViewModel by activityViewModels()
         val scope = viewLifecycleOwner.lifecycleScope
 
-        model.getMedia().observe(this) { it ->
-            media = it
+        model.getMedia().observe(viewLifecycleOwner) { media ->
             if (media != null) {
                 binding.mediaListProgressBar.visibility = View.GONE
                 binding.mediaListLayout.visibility = View.VISIBLE
 
                 val statuses: Array<String> = resources.getStringArray(R.array.status)
-                val statusStrings =
-                    if (media?.manga == null) resources.getStringArray(R.array.status_anime) else resources.getStringArray(
-                        R.array.status_manga
-                    )
-                val userStatus =
-                    if (media!!.userStatus != null) statusStrings[statuses.indexOf(media!!.userStatus).coerceAtLeast(0)] else statusStrings[0]
-
-                binding.mediaListStatus.setText(userStatus)
-                binding.mediaListStatus.setAdapter(
-                    ArrayAdapter(
-                        requireContext(),
-                        R.layout.item_dropdown,
-                        statusStrings
-                    )
-                )
-
-
-                var total: Int? = null
-                binding.mediaListProgress.setText(if (media!!.userProgress != null) media!!.userProgress.toString() else "")
-                if (media!!.anime != null) if (media!!.anime!!.totalEpisodes != null) {
-                    total = media!!.anime!!.totalEpisodes!!;
-                    binding.mediaListProgress.filters =
-                        arrayOf(
-                            InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
-                            LengthFilter(total.toString().length)
-                        )
-                } else if (media!!.manga != null) if (media!!.manga!!.totalChapters != null) {
-                    total = media!!.manga!!.totalChapters!!;
-                    binding.mediaListProgress.filters =
-                        arrayOf(
-                            InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
-                            LengthFilter(total.toString().length)
-                        )
-                }
-                binding.mediaListProgressLayout.suffixText = " / ${total ?: '?'}"
-                binding.mediaListProgressLayout.suffixTextView.updateLayoutParams {
-                    height = ViewGroup.LayoutParams.MATCH_PARENT
-                }
-                binding.mediaListProgressLayout.suffixTextView.gravity = Gravity.CENTER
-
-                val volumeTotal = media?.manga?.totalVolumes
-                if (media?.manga != null) {
-                    binding.mediaListVolumeProgressLayout.visibility = View.VISIBLE
-                    binding.mediaListVolumeProgress.setText(
-                        media?.userProgressVolumes?.toString() ?: ""
-                    )
-                    if (volumeTotal != null) {
-                        binding.mediaListVolumeProgress.filters = arrayOf(
-                            InputFilterMinMax(0.0, volumeTotal.toDouble()),
-                            LengthFilter(volumeTotal.toString().length)
-                        )
-                    }
-                    binding.mediaListVolumeProgressLayout.suffixText = " / ${volumeTotal ?: "?"}"
-                    binding.mediaListVolumeProgressLayout.suffixTextView.updateLayoutParams {
-                        height = ViewGroup.LayoutParams.MATCH_PARENT
-                    }
-                    binding.mediaListVolumeProgressLayout.suffixTextView.gravity = Gravity.CENTER
+                val statusStrings = if (media.manga == null) {
+                    resources.getStringArray(R.array.status_anime)
                 } else {
-                    binding.mediaListVolumeProgressLayout.visibility = View.GONE
+                    resources.getStringArray(R.array.status_manga)
                 }
 
-                binding.mediaListScore.setText(
-                    if (media!!.userScore != 0) media!!.userScore.div(
-                        10.0
-                    ).toString() else ""
-                )
-                binding.mediaListScore.filters =
-                    arrayOf(InputFilterMinMax(0.0, 10.0), LengthFilter(10.0.toString().length))
-                binding.mediaListScoreLayout.suffixTextView.updateLayoutParams {
-                    height = ViewGroup.LayoutParams.MATCH_PARENT
-                }
-                binding.mediaListScoreLayout.suffixTextView.gravity = Gravity.CENTER
-
-                val start = DatePickerFragment(requireActivity(), media!!.userStartedAt)
-                val end = DatePickerFragment(requireActivity(), media!!.userCompletedAt)
-                binding.mediaListStart.setText(media!!.userStartedAt.toStringOrEmpty())
-                binding.mediaListStart.setOnClickListener {
-                    tryWith(false) {
-                        if (!start.dialog.isShowing) start.dialog.show()
-                    }
-                }
-                binding.mediaListStart.setOnFocusChangeListener { _, b ->
-                    tryWith(false) {
-                        if (b && !start.dialog.isShowing) start.dialog.show()
-                    }
-                }
-                binding.mediaListEnd.setText(media!!.userCompletedAt.toStringOrEmpty())
-                binding.mediaListEnd.setOnClickListener {
-                    tryWith(false) {
-                        if (!end.dialog.isShowing) end.dialog.show()
-                    }
-                }
-                binding.mediaListEnd.setOnFocusChangeListener { _, b ->
-                    tryWith(false) {
-                        if (b && !end.dialog.isShowing) end.dialog.show()
-                    }
-                }
-                start.dialog.setOnDismissListener { _binding?.mediaListStart?.setText(start.date.toStringOrEmpty()) }
-                end.dialog.setOnDismissListener { _binding?.mediaListEnd?.setText(end.date.toStringOrEmpty()) }
-
-
-                fun onComplete() {
-                    if (total != null) binding.mediaListProgress.setText(total.toString())
-                    if (volumeTotal != null) {
-                        binding.mediaListVolumeProgress.setText(volumeTotal.toString())
-                    }
-                    if (start.date.year == null) {
-                        start.date = FuzzyDate().getToday()
-                        binding.mediaListStart.setText(start.date.toString())
-                    }
-                    end.date = FuzzyDate().getToday()
-                    binding.mediaListEnd.setText(end.date.toString())
-                }
-
-                var startBackupDate: FuzzyDate? = null
-                var endBackupDate: FuzzyDate? = null
-                var progressBackup: String? = null
-                binding.mediaListStatus.setOnItemClickListener { _, _, i, _ ->
-                    if (i == 2 && total != null) {
-                        startBackupDate = start.date
-                        endBackupDate = end.date
-                        progressBackup = binding.mediaListProgress.text.toString()
-                        onComplete()
-                    } else {
-                        if (progressBackup != null) binding.mediaListProgress.setText(progressBackup)
-                        if (startBackupDate != null) {
-                            binding.mediaListStart.setText(startBackupDate.toStringOrEmpty())
-                            start.date = startBackupDate
-                        }
-                        if (endBackupDate != null) {
-                            binding.mediaListEnd.setText(endBackupDate.toStringOrEmpty())
-                            end.date = endBackupDate
-                        }
-                    }
-                }
-
-                binding.mediaListIncrement.setOnClickListener {
-                    if (binding.mediaListStatus.text.toString() == statusStrings[0]) binding.mediaListStatus.setText(
-                        statusStrings[1],
-                        false
-                    )
-                    val init =
-                        if (binding.mediaListProgress.text.toString() != "") binding.mediaListProgress.text.toString()
-                            .toInt() else 0
-                    if (init < (total ?: 5000)) {
-                        val progressText = "${init + 1}"
-                        binding.mediaListProgress.setText(progressText)
-                    }
-                    if (total != null && init + 1 == total) {
-                        binding.mediaListStatus.setText(statusStrings[2], false)
-                        onComplete()
-                    }
-                }
-
-                binding.mediaListDecrement.setOnClickListener {
-                    val init =
-                        if (binding.mediaListProgress.text.toString() != "") binding.mediaListProgress.text.toString()
-                            .toInt() else 0
-                    if (init > 0) {
-                        val progressText = "${init - 1}"
-                        binding.mediaListProgress.setText(progressText)
-                    }
-                }
-
-                val isRescueMode = PrefManager.getVal<Boolean>(PrefName.RescueMode)
-                if (isRescueMode) {
-                    binding.mediaListPrivate.apply { (parent as? ViewGroup)?.removeView(this) }
-                } else {
-                    binding.mediaListPrivate.visibility = View.VISIBLE
-                }
-                binding.mediaListPrivate.isChecked = media?.isListPrivate ?: false
-                binding.mediaListPrivate.setOnCheckedChangeListener { _, checked ->
-                    media?.isListPrivate = checked
-                }
-                val removeList = PrefManager.getCustomVal<Set<String>>("removeList", emptySet())
-                var remove: Boolean? = null
-                binding.mediaListShow.isChecked = media?.id?.toString() in removeList
-                binding.mediaListShow.setOnCheckedChangeListener { _, checked ->
-                    remove = checked
-                }
-                media?.userRepeat?.apply {
-                    binding.mediaListRewatch.setText(this.toString())
-                }
-
-                media?.notes?.apply {
-                    binding.mediaListNotes.setText(this)
-                }
-
-                if (media?.inCustomListsOf?.isEmpty() != false || isRescueMode)
-                    binding.mediaListAddCustomList.apply {
-                        (parent as? ViewGroup)?.removeView(this)
-                    }
-
-                if (!isRescueMode) {
-                    media?.inCustomListsOf?.forEach {
-                        MaterialSwitch(requireContext()).apply {
-                            isChecked = it.value
-                            text = it.key
-                            setOnCheckedChangeListener { _, isChecked ->
-                                media?.inCustomListsOf?.put(it.key, isChecked)
-                            }
-                            binding.mediaListCustomListContainer.addView(this)
-                        }
-                    }
-                }
-
-
-                binding.mediaListSave.setOnClickListener {
-                    val progressText = binding.mediaListProgress.text.toString()
-                    val scoreText = binding.mediaListScore.text.toString()
-                    val statusText = binding.mediaListStatus.text.toString()
-                    val rewatchText = binding.mediaListRewatch.text?.toString()
-                    val notesText = binding.mediaListNotes.text?.toString()
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            if (media != null) {
-                                val progress =
-                                    _binding?.mediaListProgress?.text.toString().toIntOrNull()
-                                val score =
-                                    _binding?.mediaListScore?.text.toString().toDoubleOrNull()?.times(10)?.toInt()
-                                val progressVolumes =
-                                    _binding?.mediaListVolumeProgress?.text.toString().toIntOrNull()
-                                val status =
-                                    statuses[statusStrings.indexOf(statusText).coerceAtLeast(0)]
-                                val rewatch = rewatchText?.toIntOrNull()
-                                val notes = notesText
-                                val startD = start.date
-                                val endD = end.date
-                                val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-                                if (rescueMode) {
-                                    val pending = PendingProgressUpdate(
-                                        mediaId = media!!.id,
-                                        idMAL = media!!.idMAL,
-                                        isAnime = media!!.anime != null,
-                                        progress = progress ?: 0,
-                                        status = status,
-                                        score = score,
-                                        rewatch = rewatch,
-                                        notes = notes,
-                                        isPrivate = media?.isListPrivate ?: false,
-                                        startDate = startD,
-                                        endDate = endD,
-                                        customLists = media?.inCustomListsOf
-                                            ?.mapNotNull { if (it.value) it.key else null },
-                                    )
-                                    val existing: List<PendingProgressUpdate> =
-                                        PrefManager.getVal(PrefName.PendingProgressUpdates, listOf())
-                                    val updated = existing.filterNot { it.mediaId == media!!.id } + pending
-                                    PrefManager.setVal(PrefName.PendingProgressUpdates, updated)
-                                } else {
-                                    Anilist.mutation.editList(
-                                        mediaID = media!!.id,
-                                        progress = progress,
-                                        progressVolumes = progressVolumes,
-                                        score = score,
-                                        repeat = rewatch,
-                                        notes = notes,
-                                        status = status,
-                                        private = media?.isListPrivate ?: false,
-                                        startedAt = startD,
-                                        completedAt = endD,
-                                        customList = media?.inCustomListsOf?.mapNotNull { if (it.value) it.key else null }
-                                    )
-                                }
-                                MAL.query.editList(
-                                    media!!.idMAL,
-                                    media!!.anime != null,
-                                    progress,
-                                    score,
-                                    status,
-                                    rewatch,
-                                    startD,
-                                    endD
-                                )
-                            }
-                        }
-                        if (remove == true) {
-                            PrefManager.setCustomVal("removeList", removeList.plus(media!!.id.toString()))
-                        } else if (remove == false) {
-                            PrefManager.setCustomVal("removeList", removeList.minus(media!!.id.toString()))
-                        }
-                        Refresh.all()
-                        snackString(getString(R.string.list_updated))
-                        dismissAllowingStateLoss()
-                    }
-                }
-
-                binding.mediaListDelete.setOnClickListener {
-                    scope.launch {
-                        media?.deleteFromList(scope, onSuccess = {
-                            Refresh.all()
-                            snackString(getString(R.string.deleted_from_list))
-                            dismissAllowingStateLoss()
-                        }, onError = { e ->
-                            withContext(Dispatchers.Main) {
-                                snackString(
-                                    getString(
-                                        R.string.delete_fail_reason, e.message
-                                    )
-                                )
-                            }
-                        }, onNotFound = {
-                            snackString(getString(R.string.no_list_id))
-                        })
-
-                    }
-                }
+                setupStatusAndProgress(media, statusStrings, statuses)
+                setupVolumeProgress(media)
+                val (start, end) = setupDatePickers(media, statusStrings)
+                setupScoreAndNotes(media, statusStrings)
+                setupCustomLists(media)
+                setupActionButtons(media, start, end, statuses, statusStrings, scope)
             }
         }
     }
