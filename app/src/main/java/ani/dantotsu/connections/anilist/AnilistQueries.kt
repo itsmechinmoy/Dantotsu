@@ -1490,22 +1490,48 @@ fun userMediaDetails(media: Media): Media {
         adultOnly: Boolean
     ): String {
         val fields = mutableListOf<String>()
-        fields.add(""""type":"$type"""")
-        fields.add(""""isAdult":${if (adultOnly) true else isAdult}""")
-        if (onList != null) fields.add(""""onList":$onList""")
-        if (page != null) fields.add(""""page":"$page"""")
-        if (id != null) fields.add(""""id":"$id"""")
-        if (type == "ANIME" && seasonYear != null) fields.add(""""seasonYear":"$seasonYear"""")
-        if (type == "MANGA" && startYear != null) fields.add(""""yearGreater":${startYear}0000,"yearLesser":${startYear + 1}0000""")
-        if (season != null) fields.add(""""season":"$season"""")
-        if (search != null) fields.add(""""search":"$search"""")
-        if (source != null) fields.add(""""source":"$source"""")
-        if (sort != null) fields.add(""""sort":"$sort"""")
-        if (status != null) fields.add(""""status":"$status"""")
-        if (format != null) fields.add(""""format":"${format.replace(" ", "_")}"""")
-        if (countryOfOrigin != null) fields.add(""""countryOfOrigin":"$countryOfOrigin"""")
+        fields.add("\"type\":\"$type\"")
+        fields.add("\"isAdult\":${if (adultOnly) true else isAdult}")
+        if (onList != null) fields.add("\"onList\":$onList")
+        if (page != null) fields.add("\"page\":\"$page\"")
+        if (id != null) fields.add("\"id\":\"$id\"")
+        if (search != null) fields.add("\"search\":\"$search\"")
+        if (sort != null) fields.add("\"sort\":\"$sort\"")
+        appendDateAndSeasonFields(fields, type, startYear, seasonYear, season)
+        appendFilterFields(fields, status, source, format, countryOfOrigin)
         appendListFields(fields, genres, excludedGenres, tags, excludedTags)
         return "{${fields.joinToString(",")}}".prepare()
+    }
+
+    private fun appendDateAndSeasonFields(
+        fields: MutableList<String>,
+        type: String,
+        startYear: Int?,
+        seasonYear: Int?,
+        season: String?
+    ) {
+        if (type == "ANIME" && seasonYear != null) {
+            fields.add("\"seasonYear\":\"$seasonYear\"")
+        }
+        if (type == "MANGA" && startYear != null) {
+            fields.add("\"yearGreater\":${startYear}0000,\"yearLesser\":${startYear + 1}0000")
+        }
+        if (season != null) {
+            fields.add("\"season\":\"$season\"")
+        }
+    }
+
+    private fun appendFilterFields(
+        fields: MutableList<String>,
+        status: String?,
+        source: String?,
+        format: String?,
+        countryOfOrigin: String?
+    ) {
+        if (status != null) fields.add("\"status\":\"$status\"")
+        if (source != null) fields.add("\"source\":\"$source\"")
+        if (format != null) fields.add("\"format\":\"${format.replace(" ", "_")}\"")
+        if (countryOfOrigin != null) fields.add("\"countryOfOrigin\":\"$countryOfOrigin\"")
     }
 
     private fun appendListFields(
@@ -1516,16 +1542,16 @@ fun userMediaDetails(media: Media): Media {
         excludedTags: MutableList<String>?
     ) {
         if (!genres.isNullOrEmpty()) {
-            fields.add(""""genres":[${genres.joinToString { ""$it"" }}]""")
+            fields.add("\"genres\":[${genres.joinToString { "\"$it\"" }}]")
         }
         if (!excludedGenres.isNullOrEmpty()) {
-            fields.add(""""excludedGenres":[${excludedGenres.joinToString { ""${it.replace("Not ", "")}"" }}]""")
+            fields.add("\"excludedGenres\":[${excludedGenres.joinToString { "\"${it.replace("Not ", "")}\"" }}]")
         }
         if (!tags.isNullOrEmpty()) {
-            fields.add(""""tags":[${tags.joinToString { ""$it"" }}]""")
+            fields.add("\"tags\":[${tags.joinToString { "\"$it\"" }}]")
         }
         if (!excludedTags.isNullOrEmpty()) {
-            fields.add(""""excludedTags":[${excludedTags.joinToString { ""${it.replace("Not ", "")}"" }}]""")
+            fields.add("\"excludedTags\":[${excludedTags.joinToString { "\"${it.replace("Not ", "")}\"" }}]")
         }
     }
 
@@ -2281,3 +2307,4 @@ data class UserBioResponse(
         ) : java.io.Serializable
     }
 }
+
