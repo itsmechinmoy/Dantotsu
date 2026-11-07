@@ -781,12 +781,9 @@ class NovelReadFragment : Fragment(),
             requireContext().customAlertDialog().apply {
                 setTitle(pkg.name)
                 val msg = buildString {
-                    append("Package: ${pkg.pkgName}
-")
-                    append("Version: ${pkg.versionName}
-")
-                    pkg.repository?.let { append("Repository: $it
-") }
+                    append("Package: ${pkg.pkgName}\n")
+                    append("Version: ${pkg.versionName}\n")
+                    pkg.repository?.let { append("Repository: $it\n") }
                     append("Sources: ${pkg.sources.size}")
                 }
                 setMessage(msg)
