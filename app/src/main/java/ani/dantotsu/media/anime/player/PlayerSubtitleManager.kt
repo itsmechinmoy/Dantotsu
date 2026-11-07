@@ -300,12 +300,12 @@ class PlayerSubtitleManager(
             millis = parts[2].padEnd(3, '0').take(3).toLongOrNull() ?: 0L
         } else return timeStr
 
-        val totalMs = (hours * 3600000L) + (mins * 60000L) + (secs * 1000L) + millis
+        val totalMs = hours * 3600000L + mins * 60000L + secs * 1000L + millis
         val newTotalMs = (totalMs + delayMs).coerceAtLeast(0L)
 
         val newHours = newTotalMs / 3600000L
-        val newMins = (newTotalMs % 3600000L) / 60000L
-        val newSecs = (newTotalMs % 60000L) / 1000L
+        val newMins = newTotalMs % 3600000L / 60000L
+        val newSecs = newTotalMs % 60000L / 1000L
         val newMillis = newTotalMs % 1000L
 
         return "%02d:%02d:%02d%s%03d".format(newHours, newMins, newSecs, delimiter, newMillis)
@@ -319,13 +319,13 @@ class PlayerSubtitleManager(
         val secs = parts[2].toLongOrNull() ?: 0L
         val centis = parts[3].padEnd(2, '0').take(2).toLongOrNull() ?: 0L
 
-        val totalMs = (hours * 3600000L) + (mins * 60000L) + (secs * 1000L) + (centis * 10L)
+        val totalMs = hours * 3600000L + mins * 60000L + secs * 1000L + centis * 10L
         val newTotalMs = (totalMs + delayMs).coerceAtLeast(0L)
 
         val newHours = newTotalMs / 3600000L
-        val newMins = (newTotalMs % 3600000L) / 60000L
-        val newSecs = (newTotalMs % 60000L) / 1000L
-        val newCentis = (newTotalMs % 1000L) / 10L
+        val newMins = newTotalMs % 3600000L / 60000L
+        val newSecs = newTotalMs % 60000L / 1000L
+        val newCentis = newTotalMs % 1000L / 10L
 
         return "%d:%02d:%02d.%02d".format(newHours, newMins, newSecs, newCentis)
     }
