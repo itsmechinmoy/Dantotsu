@@ -21,6 +21,7 @@ import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.LiveData
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.ConcatAdapter
@@ -115,6 +116,14 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        setupDownloadReceiver()
+        val gridLayoutManager = setupRecyclerLayout()
+        setupSwipeRefresh()
+        setupScrollTop(gridLayoutManager)
+        observeViewModel()
+    }
+
+    private fun setupDownloadReceiver() {
         val intentFilter = IntentFilter().apply {
             addAction(ACTION_DOWNLOAD_STARTED)
             addAction(ACTION_DOWNLOAD_FINISHED)
@@ -131,8 +140,9 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
             )
             isReceiverRegistered = true
         }
+    }
 
-
+    private fun setupRecyclerLayout(): GridLayoutManager {
         binding.mediaSourceRecycler.updatePadding(bottom = binding.mediaSourceRecycler.paddingBottom + navBarHeight)
         screenWidth = resources.displayMetrics.widthPixels.dp
 
@@ -140,7 +150,6 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
         maxGridSize = max(4, maxGridSize - (maxGridSize % 2))
 
         val gridLayoutManager = GridLayoutManager(requireContext(), maxGridSize)
-
         gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
             override fun getSpanSize(position: Int): Int {
                 val style = episodeAdapter.getItemViewType(position)
@@ -156,9 +165,11 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
                 }
             }
         }
-
         binding.mediaSourceRecycler.layoutManager = gridLayoutManager
+        return gridLayoutManager
+    }
 
+    private fun setupSwipeRefresh() {
         binding.mediaSourceSwipeRefresh.apply {
             val primaryColor = PrefManager.getVal<Int>(PrefName.PrimaryColor)
             setColorSchemeColors(primaryColor)
@@ -168,23 +179,33 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
                     isRefreshing = false
                     return@setOnRefreshListener
                 }
-                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                    val ctx = context
-                    val offline = (ctx != null && !isOnline(ctx)) || PrefManager.getVal(PrefName.OfflineMode)
-                    val isLocal = model.watchSources?.list?.getOrNull(media.selected!!.sourceIndex)?.name == "Local"
-                    if (!offline && !isLocal) {
-                        launch { model.loadKitsuEpisodes(media, force = true) }
-                        launch { model.loadAnifyEpisodes(media, force = true) }
-                        launch { model.loadFillerEpisodes(media, force = true) }
-                    }
-                    model.loadEpisodes(media, media.selected!!.sourceIndex, invalidate = true)
-                    withContext(Dispatchers.Main) {
-                        _binding?.mediaSourceSwipeRefresh?.isRefreshing = false
-                    }
+                loadMediaEpisodes(media, force = true)
+            }
+        }
+    }
+
+    private fun loadMediaEpisodes(media: Media, force: Boolean = false) {
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            val ctx = context
+            val offline = (ctx != null && !isOnline(ctx)) || PrefManager.getVal(PrefName.OfflineMode)
+            val isLocal = model.watchSources?.list?.getOrNull(media.selected!!.sourceIndex)?.name == "Local"
+            if (offline && !isLocal && !force) {
+                media.selected!!.sourceIndex = model.watchSources!!.list.lastIndex
+            } else if (!offline && !isLocal) {
+                launch { model.loadKitsuEpisodes(media, force = force) }
+                launch { model.loadAnifyEpisodes(media, force = force) }
+                launch { model.loadFillerEpisodes(media, force = force) }
+            }
+            model.loadEpisodes(media, media.selected!!.sourceIndex, invalidate = force)
+            if (force) {
+                withContext(Dispatchers.Main) {
+                    _binding?.mediaSourceSwipeRefresh?.isRefreshing = false
                 }
             }
         }
+    }
 
+    private fun setupScrollTop(gridLayoutManager: GridLayoutManager) {
         binding.ScrollTop.setOnClickListener {
             binding.mediaSourceRecycler.scrollToPosition(10)
             binding.mediaSourceRecycler.smoothScrollToPosition(0)
@@ -205,176 +226,165 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
         model.scrolledToTop.observe(viewLifecycleOwner) {
             if (it) binding.mediaSourceRecycler.scrollToPosition(0)
         }
+    }
 
+    private fun observeViewModel() {
         continueEp = model.continueMedia ?: false
-        model.getMedia().observe(viewLifecycleOwner) {
-            if (it != null) {
-                if (this::media.isInitialized) {
-                    if (it.anime != null && it.anime?.episodes == null) {
-                        it.anime?.episodes = media.anime?.episodes
-                    }
-                }
-                media = it
-                media.selected = model.loadSelected(media)
-                if (media.format == "LOCAL") {
-                    val localSourceIndex = AnimeSources.list.indexOfFirst { parser -> parser.name == "Local" }
-                        .takeIf { parserIndex -> parserIndex >= 0 } ?: 0
-                    media.selected!!.sourceIndex = localSourceIndex
-                }
+        model.getMedia().observe(viewLifecycleOwner) { initOrReloadMedia(it) }
+        model.getEpisodes().observe(viewLifecycleOwner) { onEpisodesLoaded(it) }
+        observeMetadataUpdate(model.getKitsuEpisodes()) { media.anime?.kitsuEpisodes = it }
+        observeMetadataUpdate(model.getFillerEpisodes()) { media.anime?.fillerEpisodes = it }
+        observeMetadataUpdate(model.getAnifyEpisodes()) { media.anime?.anifyEpisodes = it }
+    }
 
-                subscribed =
-                    SubscriptionHelper.getSubscriptions().containsKey(media.id)
-
-                style = media.selected!!.recyclerStyle
-                reverse = media.selected!!.recyclerReversed
-
-                progress = View.GONE
-                binding.mediaInfoProgressBar.visibility = progress
-
-                if (!loaded) {
-                    model.watchSources = if (media.isAdult) HAnimeSources else AnimeSources
-
-                    val offlineMode =
-                        model.watchSources!!.isDownloadedSource(media.selected!!.sourceIndex)
-
-                    headerAdapter = AnimeWatchAdapter(it, this, model.watchSources!!)
-                    headerAdapter.scanlatorSelectionListener = this
-                    episodeAdapter =
-                        EpisodeAdapter(
-                            style ?: PrefManager.getVal(PrefName.AnimeDefaultView),
-                            media,
-                            this,
-                            offlineMode = offlineMode
-                        )
-
-                    binding.mediaSourceRecycler.adapter =
-                        ConcatAdapter(headerAdapter, episodeAdapter)
-
-                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                        val ctx = context
-                        val offline =
-                            (ctx != null && !isOnline(ctx)) || PrefManager.getVal(PrefName.OfflineMode)
-                        val isLocal = model.watchSources!!.list.getOrNull(media.selected!!.sourceIndex)?.name == "Local"
-                        if (offline && !isLocal) {
-                            media.selected!!.sourceIndex = model.watchSources!!.list.lastIndex
-                        } else if (!offline && !isLocal) {
-                            launch { model.loadKitsuEpisodes(media) }
-                            launch { model.loadAnifyEpisodes(media) }
-                            launch { model.loadFillerEpisodes(media) }
-                        }
-                        model.loadEpisodes(media, media.selected!!.sourceIndex)
-                    }
-                    loaded = true
-                } else {
-                    reload()
-                }
-            }
-        }
-        model.getEpisodes().observe(viewLifecycleOwner) { loadedEpisodes ->
-            if (loadedEpisodes != null) {
-                val episodes = loadedEpisodes[media.selected!!.sourceIndex]
-                if (episodes != null) {
-                    val currentSourceName = model.watchSources?.get(media.selected!!.sourceIndex)?.name ?: ""
-                    val isTorrentSource = currentSourceName.equals("Torrent", ignoreCase = true) ||
-                        episodes.values.any { it.extra?.containsKey("torrentHash") == true }
-
-                    val metadataPriority = PrefManager.getVal<Int>(PrefName.EpisodeMetadataSource)
-                    episodes.forEach { (i, episode) ->
-                        val epNum = episode.number
-                        if (!isTorrentSource) {
-                            // 1. Jikan (Lowest for metadata, only source for filler flag)
-                            if (media.anime?.fillerEpisodes != null) {
-                                val fillerEp = media.anime!!.fillerEpisodes!![epNum]
-                                    ?: media.anime!!.fillerEpisodes!!.getEpisode(epNum)
-                                if (fillerEp != null) {
-                                    episode.filler = fillerEp.filler
-                                    episode.date = fillerEp.date ?: episode.date
-                                }
-                            }
-
-                            val applyKitsu = {
-                                if (media.anime?.kitsuEpisodes != null) {
-                                    val kitsuEp = media.anime!!.kitsuEpisodes!![epNum]
-                                        ?: media.anime!!.kitsuEpisodes!!.getEpisode(epNum)
-                                    if (kitsuEp != null) {
-                                        episode.desc = kitsuEp.desc ?: episode.desc
-                                        episode.thumb = kitsuEp.thumb ?: episode.thumb
-                                    }
-                                }
-                            }
-
-                            val applyAniZip = {
-                                if (media.anime?.anifyEpisodes != null) {
-                                    val anifyEp = media.anime!!.anifyEpisodes!![epNum]
-                                        ?: media.anime!!.anifyEpisodes!!.getEpisode(epNum)
-                                    if (anifyEp != null) {
-                                        episode.desc = anifyEp.desc ?: episode.desc
-                                        episode.thumb = anifyEp.thumb ?: episode.thumb
-                                        episode.rating = anifyEp.extra?.get("rating") ?: episode.rating
-                                        val airDate = anifyEp.extra?.get("airDate")
-                                        if (!airDate.isNullOrBlank()) {
-                                            episode.date = airDate.substringBefore("T")
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (metadataPriority == 0) {
-                                applyAniZip()
-                                applyKitsu()
-                            } else {
-                                applyKitsu()
-                                applyAniZip()
-                            }
-
-                            // Title fallback order: AniZip English -> Kitsu -> Jikan/MAL -> "Episode X"
-                            val anifyTitle = cleanTitle((media.anime?.anifyEpisodes?.get(epNum) ?: media.anime?.anifyEpisodes?.getEpisode(epNum))?.title)
-                            val kitsuTitle = cleanTitle((media.anime?.kitsuEpisodes?.get(epNum) ?: media.anime?.kitsuEpisodes?.getEpisode(epNum))?.title)
-                            val jikanTitle = cleanTitle((media.anime?.fillerEpisodes?.get(epNum) ?: media.anime?.fillerEpisodes?.getEpisode(epNum))?.title)
-                            episode.title = anifyTitle ?: kitsuTitle ?: jikanTitle ?: buildFallbackEpisodeTitle(i, episode)
-                        } else {
-                            // For torrent/magnet streams, preserve real file names and file size descriptions
-                            if (episode.title.isNullOrBlank()) {
-                                episode.title = episode.sEpisode?.name ?: buildFallbackEpisodeTitle(i, episode)
-                            }
-                        }
-                    }
-                    media.anime?.episodes = episodes
-                    headerAdapter.options = getScanlators(episodes)
-                    if (headerAdapter.options.size > 1) {
-                        if (media.selected!!.scanlators != null) {
-                            headerAdapter.hiddenScanlators = media.selected!!.scanlators!!.toMutableList()
-                        }
-                    } else {
-                        headerAdapter.hiddenScanlators.clear()
-                    }
-                    updateEpisodes()
-                }
-            }
-        }
-
-        model.getKitsuEpisodes().observe(viewLifecycleOwner) { i ->
-            if (i != null) {
-                media.anime?.kitsuEpisodes = i
+    private fun <T> observeMetadataUpdate(
+        liveData: LiveData<T>,
+        applyData: (T) -> Unit
+    ) {
+        liveData.observe(viewLifecycleOwner) { data ->
+            if (data != null) {
+                applyData(data)
                 if (loaded) {
                     loadEpisodes(media.selected!!.sourceIndex, false)
                 }
             }
         }
+    }
 
-        model.getFillerEpisodes().observe(viewLifecycleOwner) { i ->
-            if (i != null) {
-                media.anime?.fillerEpisodes = i
-                if (loaded) {
-                    loadEpisodes(media.selected!!.sourceIndex, false)
-                }
+    private fun initOrReloadMedia(it: Media?) {
+        if (it == null) return
+        if (this::media.isInitialized) {
+            if (it.anime != null && it.anime?.episodes == null) {
+                it.anime?.episodes = media.anime?.episodes
             }
         }
-        model.getAnifyEpisodes().observe(viewLifecycleOwner) { i ->
-            if (i != null) {
-                media.anime?.anifyEpisodes = i
-                if (loaded) {
-                    loadEpisodes(media.selected!!.sourceIndex, false)
+        media = it
+        media.selected = model.loadSelected(media)
+        if (media.format == "LOCAL") {
+            val localSourceIndex = AnimeSources.list.indexOfFirst { parser -> parser.name == "Local" }
+                .takeIf { parserIndex -> parserIndex >= 0 } ?: 0
+            media.selected!!.sourceIndex = localSourceIndex
+        }
+
+        subscribed = SubscriptionHelper.getSubscriptions().containsKey(media.id)
+        style = media.selected!!.recyclerStyle
+        reverse = media.selected!!.recyclerReversed
+
+        progress = View.GONE
+        binding.mediaInfoProgressBar.visibility = progress
+
+        if (!loaded) {
+            setupInitialMediaAdapters(it)
+            loadMediaEpisodes(media, force = false)
+            loaded = true
+        } else {
+            reload()
+        }
+    }
+
+    private fun setupInitialMediaAdapters(mediaItem: Media) {
+        model.watchSources = if (mediaItem.isAdult) HAnimeSources else AnimeSources
+        val offlineMode = model.watchSources!!.isDownloadedSource(media.selected!!.sourceIndex)
+
+        headerAdapter = AnimeWatchAdapter(mediaItem, this, model.watchSources!!)
+        headerAdapter.scanlatorSelectionListener = this
+        episodeAdapter = EpisodeAdapter(
+            style ?: PrefManager.getVal(PrefName.AnimeDefaultView),
+            mediaItem,
+            this,
+            offlineMode = offlineMode
+        )
+
+        binding.mediaSourceRecycler.adapter = ConcatAdapter(headerAdapter, episodeAdapter)
+    }
+
+    private fun onEpisodesLoaded(loadedEpisodes: Map<Int, Map<String, Episode>>?) {
+        if (loadedEpisodes == null) return
+        val episodes = loadedEpisodes[media.selected!!.sourceIndex] ?: return
+        val currentSourceName = model.watchSources?.get(media.selected!!.sourceIndex)?.name ?: ""
+        val isTorrentSource = currentSourceName.equals("Torrent", ignoreCase = true) ||
+            episodes.values.any { it.extra?.containsKey("torrentHash") == true }
+
+        val metadataPriority = PrefManager.getVal<Int>(PrefName.EpisodeMetadataSource)
+        episodes.forEach { (i, episode) ->
+            enrichEpisode(episode, i, isTorrentSource, metadataPriority)
+        }
+        media.anime?.episodes = episodes
+        headerAdapter.options = getScanlators(episodes)
+        if (headerAdapter.options.size > 1) {
+            if (media.selected!!.scanlators != null) {
+                headerAdapter.hiddenScanlators = media.selected!!.scanlators!!.toMutableList()
+            }
+        } else {
+            headerAdapter.hiddenScanlators.clear()
+        }
+        updateEpisodes()
+    }
+
+    private fun enrichEpisode(
+        episode: Episode,
+        indexKey: String,
+        isTorrentSource: Boolean,
+        metadataPriority: Int
+    ) {
+        val epNum = episode.number
+        if (!isTorrentSource) {
+            applyFillerMetadata(episode, epNum)
+            if (metadataPriority == 0) {
+                applyAniZipMetadata(episode, epNum)
+                applyKitsuMetadata(episode, epNum)
+            } else {
+                applyKitsuMetadata(episode, epNum)
+                applyAniZipMetadata(episode, epNum)
+            }
+            episode.title = resolveEpisodeTitle(episode, indexKey, epNum)
+        } else {
+            if (episode.title.isNullOrBlank()) {
+                episode.title = episode.sEpisode?.name ?: buildFallbackEpisodeTitle(indexKey, episode)
+            }
+        }
+    }
+
+    private fun resolveEpisodeTitle(episode: Episode, indexKey: String, epNum: String): String {
+        val anifyTitle = cleanTitle((media.anime?.anifyEpisodes?.get(epNum) ?: media.anime?.anifyEpisodes?.getEpisode(epNum))?.title)
+        val kitsuTitle = cleanTitle((media.anime?.kitsuEpisodes?.get(epNum) ?: media.anime?.kitsuEpisodes?.getEpisode(epNum))?.title)
+        val jikanTitle = cleanTitle((media.anime?.fillerEpisodes?.get(epNum) ?: media.anime?.fillerEpisodes?.getEpisode(epNum))?.title)
+        return anifyTitle ?: kitsuTitle ?: jikanTitle ?: buildFallbackEpisodeTitle(indexKey, episode)
+    }
+
+    private fun applyFillerMetadata(episode: Episode, epNum: String) {
+        if (media.anime?.fillerEpisodes != null) {
+            val fillerEp = media.anime!!.fillerEpisodes!![epNum]
+                ?: media.anime!!.fillerEpisodes!!.getEpisode(epNum)
+            if (fillerEp != null) {
+                episode.filler = fillerEp.filler
+                episode.date = fillerEp.date ?: episode.date
+            }
+        }
+    }
+
+    private fun applyKitsuMetadata(episode: Episode, epNum: String) {
+        if (media.anime?.kitsuEpisodes != null) {
+            val kitsuEp = media.anime!!.kitsuEpisodes!![epNum]
+                ?: media.anime!!.kitsuEpisodes!!.getEpisode(epNum)
+            if (kitsuEp != null) {
+                episode.desc = kitsuEp.desc ?: episode.desc
+                episode.thumb = kitsuEp.thumb ?: episode.thumb
+            }
+        }
+    }
+
+    private fun applyAniZipMetadata(episode: Episode, epNum: String) {
+        if (media.anime?.anifyEpisodes != null) {
+            val anifyEp = media.anime!!.anifyEpisodes!![epNum]
+                ?: media.anime!!.anifyEpisodes!!.getEpisode(epNum)
+            if (anifyEp != null) {
+                episode.desc = anifyEp.desc ?: episode.desc
+                episode.thumb = anifyEp.thumb ?: episode.thumb
+                episode.rating = anifyEp.extra?.get("rating") ?: episode.rating
+                val airDate = anifyEp.extra?.get("airDate")
+                if (!airDate.isNullOrBlank()) {
+                    episode.date = airDate.substringBefore("T")
                 }
             }
         }
@@ -413,88 +423,110 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
     }
 
     private fun updateEpisodes() {
-        val loadedEpisodes = model.getEpisodes().value
-        if (loadedEpisodes != null) {
-            val episodes = loadedEpisodes[media.selected!!.sourceIndex]
-            if (episodes != null) {
-                val filteredEpisodes = if (headerAdapter.options.size > 1 && headerAdapter.hiddenScanlators.isNotEmpty()) {
-                    episodes.filterNot { (_, episode) ->
-                        (episode.sEpisode?.scanlator ?: "Unknown") in headerAdapter.hiddenScanlators
-                    }
-                } else {
-                    episodes
-                }
-                media.anime?.episodes = filteredEpisodes.toMutableMap()
+        val loadedEpisodes = model.getEpisodes().value ?: return
+        val episodes = loadedEpisodes[media.selected!!.sourceIndex] ?: return
+        val filteredEpisodes = filterHiddenScanlators(episodes)
+        media.anime?.episodes = filteredEpisodes.toMutableMap()
+        setupEpisodePagination(filteredEpisodes)
+        headerAdapter.subscribeButton(true)
+        reload()
+    }
 
-                val total = filteredEpisodes.size
-                val divisions = total.toDouble() / 10
-                start = 0
-                end = null
-                val limit = when {
-                    (divisions < 25) -> 25
-                    (divisions < 50) -> 50
-                    else -> 100
-                }
-                headerAdapter.clearChips()
-                if (total > limit) {
-                    val arr = filteredEpisodes.keys.toTypedArray()
-                    val stored = ceil((total).toDouble() / limit).toInt()
-
-                    val anilistEp = (media.userProgress ?: 0).plus(1)
-                    val appEp = PrefManager.getCustomVal<String?>(
-                        "${media.id}_current_ep", ""
-                    )?.let { MediaNameAdapter.findEpisodeNumber(it)?.toInt() ?: it.toIntOrNull() } ?: 1
-                    val appEpKey = arr.find { key ->
-                        val epObj = filteredEpisodes[key]
-                        MediaNameAdapter.findEpisodeNumber(key)?.toInt() == appEp ||
-                        (epObj?.number != null && MediaNameAdapter.findEpisodeNumber(epObj.number)?.toInt() == appEp)
-                    } ?: arr.getOrNull(appEp - 1)
-                    val appEpHasActiveProgress = appEpKey != null && run {
-                        val cleanNum = MediaNameAdapter.findEpisodeNumber(appEpKey)?.let {
-                            if (it % 1 == 0f) it.toInt().toString() else it.toString()
-                        }
-                        val curr = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}", null, Long::class.java)
-                            ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}", null, Long::class.java) }
-                        val max = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}_max", null, Long::class.java)
-                            ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}_max", null, Long::class.java) }
-                        if (curr != null && max != null && max > 0L) {
-                            (curr.toFloat() / max.toFloat()) < PrefManager.getVal<Float>(PrefName.WatchPercentage)
-                        } else false
-                    }
-                    val targetEpNum = if (anilistEp > appEp && !appEpHasActiveProgress) anilistEp.toFloat() else appEp.toFloat()
-
-                    var targetIndex = arr.indexOfFirst { key ->
-                        val epObj = filteredEpisodes[key]
-                        MediaNameAdapter.findEpisodeNumber(key) == targetEpNum ||
-                        (epObj?.number != null && MediaNameAdapter.findEpisodeNumber(epObj.number) == targetEpNum)
-                    }
-                    if (targetIndex == -1) {
-                        val targetIdx = targetEpNum.toInt() - 1
-                        if (targetIdx in arr.indices) {
-                            targetIndex = targetIdx
-                        }
-                    }
-
-                    val targetChip = if (targetIndex >= 0) (targetIndex / limit).coerceIn(0, stored - 1) else 0
-                    val position = if (media.selected!!.chip == 0 && targetChip > 0) {
-                        media.selected!!.chip = targetChip
-                        targetChip
-                    } else {
-                        MathUtils.clamp(media.selected!!.chip, 0, stored - 1)
-                    }
-                    val last = if (position + 1 == stored) total else (limit * (position + 1))
-                    start = limit * (position)
-                    end = last - 1
-                    headerAdapter.updateChips(
-                        limit,
-                        arr,
-                        (1..stored).toList().toTypedArray(),
-                        position
-                    )
-                }
-                headerAdapter.subscribeButton(true)
-                reload()
+    private fun filterHiddenScanlators(episodes: Map<String, Episode>): Map<String, Episode> {
+        return if (headerAdapter.options.size > 1 && headerAdapter.hiddenScanlators.isNotEmpty()) {
+            episodes.filterNot { (_, episode) ->
+                (episode.sEpisode?.scanlator ?: "Unknown") in headerAdapter.hiddenScanlators
             }
+        } else {
+            episodes
+        }
+    }
+
+    private fun setupEpisodePagination(filteredEpisodes: Map<String, Episode>) {
+        val total = filteredEpisodes.size
+        val divisions = total.toDouble() / 10
+        start = 0
+        end = null
+        val limit = when {
+            divisions < 25 -> 25
+            divisions < 50 -> 50
+            else -> 100
+        }
+        headerAdapter.clearChips()
+        if (total > limit) {
+            val arr = filteredEpisodes.keys.toTypedArray()
+            val stored = ceil(total.toDouble() / limit).toInt()
+            val position = calculateSelectedChipPosition(filteredEpisodes, arr, limit, stored)
+            val last = if (position + 1 == stored) total else limit * (position + 1)
+            start = limit * position
+            end = last - 1
+            headerAdapter.updateChips(
+                limit,
+                arr,
+                (1..stored).toList().toTypedArray(),
+                position
+            )
+        }
+    }
+
+    private fun hasActiveProgress(appEpKey: String?): Boolean {
+        if (appEpKey == null) return false
+        val cleanNum = MediaNameAdapter.findEpisodeNumber(appEpKey)?.let {
+            if (it % 1 == 0f) it.toInt().toString() else it.toString()
+        }
+        val curr = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}", null, Long::class.java)
+            ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}", null, Long::class.java) }
+        val max = PrefManager.getNullableCustomVal("${media.id}_${appEpKey}_max", null, Long::class.java)
+            ?: cleanNum?.let { PrefManager.getNullableCustomVal("${media.id}_${it}_max", null, Long::class.java) }
+        return if (curr != null && max != null && max > 0L) {
+            curr.toFloat() / max.toFloat() < PrefManager.getVal<Float>(PrefName.WatchPercentage)
+        } else false
+    }
+
+    private fun findTargetEpisodeIndex(
+        filteredEpisodes: Map<String, Episode>,
+        arr: Array<String>,
+        targetEpNum: Float
+    ): Int {
+        var targetIndex = arr.indexOfFirst { key ->
+            val epObj = filteredEpisodes[key]
+            MediaNameAdapter.findEpisodeNumber(key) == targetEpNum ||
+            (epObj?.number != null && MediaNameAdapter.findEpisodeNumber(epObj.number) == targetEpNum)
+        }
+        if (targetIndex == -1) {
+            val targetIdx = targetEpNum.toInt() - 1
+            if (targetIdx in arr.indices) {
+                targetIndex = targetIdx
+            }
+        }
+        return targetIndex
+    }
+
+    private fun calculateSelectedChipPosition(
+        filteredEpisodes: Map<String, Episode>,
+        arr: Array<String>,
+        limit: Int,
+        stored: Int
+    ): Int {
+        val anilistEp = (media.userProgress ?: 0).plus(1)
+        val appEp = PrefManager.getCustomVal<String?>(
+            "${media.id}_current_ep", ""
+        )?.let { MediaNameAdapter.findEpisodeNumber(it)?.toInt() ?: it.toIntOrNull() } ?: 1
+        val appEpKey = arr.find { key ->
+            val epObj = filteredEpisodes[key]
+            MediaNameAdapter.findEpisodeNumber(key)?.toInt() == appEp ||
+            (epObj?.number != null && MediaNameAdapter.findEpisodeNumber(epObj.number)?.toInt() == appEp)
+        } ?: arr.getOrNull(appEp - 1)
+
+        val targetEpNum = if (anilistEp > appEp && !hasActiveProgress(appEpKey)) anilistEp.toFloat() else appEp.toFloat()
+        val targetIndex = findTargetEpisodeIndex(filteredEpisodes, arr, targetEpNum)
+        val targetChip = if (targetIndex >= 0) (targetIndex / limit).coerceIn(0, stored - 1) else 0
+
+        return if (media.selected!!.chip == 0 && targetChip > 0) {
+            media.selected!!.chip = targetChip
+            targetChip
+        } else {
+            MathUtils.clamp(media.selected!!.chip, 0, stored - 1)
         }
     }
 
@@ -504,15 +536,14 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
         val episodes = media.anime?.episodes?.values?.toList()
 
         val progressEpisodeIndex =
-            if(episodeNumber == null){
+            if (episodeNumber == null) {
                 (episodes?.indexOfFirst {
                     MediaNameAdapter.findEpisodeNumber(it.number)?.toInt() == selected
                 } ?: 0) + 1
-            }
-            else{
-                (episodes?.indexOfFirst {
+            } else {
+                episodes?.indexOfFirst {
                     it.number == episodeNumber
-                } ?: 0)
+                } ?: 0
             }
 
         if (progressEpisodeIndex < 0 || n < 1 || episodes == null) return
@@ -971,7 +1002,7 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
                     .slice(start..(end ?: (media.anime!!.episodes!!.size - 1)))
             )
             if (reverse)
-                arr = (arr.reversed() as? ArrayList<Episode>) ?: arr
+                arr = arr.reversed() as? ArrayList<Episode> ?: ArrayList(arr.reversed())
         }
         episodeAdapter.arr = arr
         episodeAdapter.updateType(style ?: PrefManager.getVal(PrefName.AnimeDefaultView))

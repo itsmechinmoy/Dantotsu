@@ -1,6 +1,7 @@
 package ani.dantotsu.media
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -91,283 +92,290 @@ class MediaAdaptor(
     @SuppressLint("ClickableViewAccessibility")
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (type) {
-            0 -> {
-                val b = (holder as MediaViewHolder).binding
-                setAnimation(activity, b.root)
-                val media = mediaList?.getOrNull(position)
-                if (media != null) {
-                    val density = activity.resources.displayMetrics.density
-                    if (media.id < 0) {
-                        b.itemCompactTitle.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                            width = (108 * density).toInt()
-                            height = (12 * density).toInt()
-                            bottomMargin = (4 * density).toInt()
-                            topMargin = (4 * density).toInt()
-                        }
-                        b.itemCompactTitle.background = ContextCompat.getDrawable(b.root.context, R.drawable.skeleton_text_placeholder)
-                        b.itemCompactTitle.text = ""
+            0 -> bindCompactViewHolder(holder as MediaViewHolder, position)
+            1 -> bindLargeViewHolder(holder as MediaLargeViewHolder, position)
+            2 -> bindPageViewHolder(holder as MediaPageViewHolder, position)
+            3 -> bindPageSmallViewHolder(holder as MediaPageSmallViewHolder, position)
+        }
+    }
 
-                        b.itemCompactProgressContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                            width = (54 * density).toInt()
-                            height = (8 * density).toInt()
-                            topMargin = (2 * density).toInt()
-                        }
-                        b.itemCompactProgressContainer.background = ContextCompat.getDrawable(b.root.context, R.drawable.skeleton_stats_placeholder)
-                        b.itemCompactUserProgress.text = ""
-                        b.itemCompactTotal.text = ""
-                        b.itemCompactScoreBG.isVisible = false
-                        b.itemCompactOngoing.isVisible = false
-                        b.itemCompactType.isVisible = false
-                        b.itemCompactImage.setImageResource(R.drawable.skeleton_cover_placeholder)
-                        b.itemCompactUnreadBadge.isVisible = false
-                    } else {
-                        b.itemCompactTitle.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                            width = (108 * density).toInt()
-                            height = ViewGroup.LayoutParams.WRAP_CONTENT
-                            bottomMargin = 0
-                            topMargin = 0
-                        }
-                        b.itemCompactTitle.background = null
+    private fun bindCompactViewHolder(holder: MediaViewHolder, position: Int) {
+        val b = holder.binding
+        setAnimation(activity, b.root)
+        val media = mediaList?.getOrNull(position) ?: return
+        val density = activity.resources.displayMetrics.density
+        if (media.id < 0) {
+            bindCompactSkeleton(b, density)
+        } else {
+            bindCompactContent(b, media, density)
+        }
+        b.itemCompactProgressContainer.visibility = if (fav) View.GONE else View.VISIBLE
+    }
 
-                        b.itemCompactProgressContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                            width = ViewGroup.LayoutParams.MATCH_PARENT
-                            height = ViewGroup.LayoutParams.WRAP_CONTENT
-                            topMargin = 0
-                        }
-                        b.itemCompactProgressContainer.background = null
-                        b.itemCompactScoreBG.isVisible = true
-                        b.itemCompactImage.loadImage(media.cover)
-                        b.itemCompactOngoing.isVisible =
-                            media.status == b.root.context.getString(R.string.status_releasing)
-                        b.itemCompactTitle.text = media.userPreferredName
-                        b.itemCompactScore.text =
-                            ((if (media.userScore == 0) (media.meanScore
-                                ?: 0) else media.userScore) / 10.0).toString()
-                        b.itemCompactScoreBG.background = ContextCompat.getDrawable(
-                            b.root.context,
-                            (if (media.userScore != 0) R.drawable.item_user_score else R.drawable.item_score)
-                        )
-                        b.itemCompactUserProgress.text = (media.userProgress ?: "~").toString()
-                        if (media.relation != null) {
-                            b.itemCompactRelation.text = "${media.relation}  "
-                            b.itemCompactType.visibility = View.VISIBLE
+    private fun bindCompactSkeleton(b: ItemMediaCompactBinding, density: Float) {
+        b.itemCompactTitle.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            width = (108 * density).toInt()
+            height = (12 * density).toInt()
+            bottomMargin = (4 * density).toInt()
+            topMargin = (4 * density).toInt()
+        }
+        b.itemCompactTitle.background = ContextCompat.getDrawable(b.root.context, R.drawable.skeleton_text_placeholder)
+        b.itemCompactTitle.text = ""
 
-                            if (media.relation!!.contains("\n")) {
-                                b.itemCompactRelation.apply {
-                                    isSingleLine = false
-                                    maxLines = 2
-                                    ellipsize = TextUtils.TruncateAt.START
+        b.itemCompactProgressContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            width = (54 * density).toInt()
+            height = (8 * density).toInt()
+            topMargin = (2 * density).toInt()
+        }
+        b.itemCompactProgressContainer.background = ContextCompat.getDrawable(b.root.context, R.drawable.skeleton_stats_placeholder)
+        b.itemCompactUserProgress.text = ""
+        b.itemCompactTotal.text = ""
+        b.itemCompactScoreBG.isVisible = false
+        b.itemCompactOngoing.isVisible = false
+        b.itemCompactType.isVisible = false
+        b.itemCompactImage.setImageResource(R.drawable.skeleton_cover_placeholder)
+        b.itemCompactUnreadBadge.isVisible = false
+    }
 
-                                    includeFontPadding = false
-                                    setLineSpacing(0f, 0.9f)
-                                }
-                            } else {
-                                b.itemCompactRelation.isSingleLine = true
-                                b.itemCompactRelation.maxLines = 1
-                            }
-                        } else {
-                            b.itemCompactType.visibility = View.GONE
-                        }
-                        
-                        if (media.anime != null) {
-                            if (media.relation != null) b.itemCompactTypeImage.setImageDrawable(
-                                AppCompatResources.getDrawable(
-                                    activity,
-                                    R.drawable.ic_round_movie_filter_24
-                                )
-                            )
-                            b.itemCompactTotal.text =
-                                " | ${if (media.anime.nextAiringEpisode != null) (media.anime.nextAiringEpisode.toString() + " | " + (media.anime.totalEpisodes ?: "~").toString()) else (media.anime.totalEpisodes ?: "~").toString()}"
-                        } else if (media.manga != null) {
-                            if (media.relation != null) b.itemCompactTypeImage.setImageDrawable(
-                                AppCompatResources.getDrawable(
-                                    activity,
-                                    R.drawable.ic_round_import_contacts_24
-                                )
-                            )
-                            val chapters = media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
-                            if (media.manga.totalChapters == null && chapters != null) {
-                                media.manga.totalChapters = chapters
-                            }
-                            b.itemCompactTotal.text = " | ${chapters ?: "~"}"
-                        }
-                        bindCompactUnreadBadge(b, media)
-                    }
-                    b.itemCompactProgressContainer.visibility = if (fav) View.GONE else View.VISIBLE
+    private fun bindCompactContent(b: ItemMediaCompactBinding, media: Media, density: Float) {
+        b.itemCompactTitle.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            width = (108 * density).toInt()
+            height = ViewGroup.LayoutParams.WRAP_CONTENT
+            bottomMargin = 0
+            topMargin = 0
+        }
+        b.itemCompactTitle.background = null
+
+        b.itemCompactProgressContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            width = ViewGroup.LayoutParams.MATCH_PARENT
+            height = ViewGroup.LayoutParams.WRAP_CONTENT
+            topMargin = 0
+        }
+        b.itemCompactProgressContainer.background = null
+        b.itemCompactScoreBG.isVisible = true
+        b.itemCompactImage.loadImage(media.cover)
+        b.itemCompactOngoing.isVisible =
+            media.status == b.root.context.getString(R.string.status_releasing)
+        b.itemCompactTitle.text = media.userPreferredName
+        b.itemCompactScore.text = formatScore(media)
+        b.itemCompactScoreBG.background = ContextCompat.getDrawable(
+            b.root.context,
+            getScoreBackgroundRes(media)
+        )
+        b.itemCompactUserProgress.text = (media.userProgress ?: "~").toString()
+        bindCompactRelation(b, media)
+        bindCompactMediaTotal(b, media)
+        bindCompactUnreadBadge(b, media)
+    }
+
+    private fun bindCompactRelation(b: ItemMediaCompactBinding, media: Media) {
+        if (media.relation != null) {
+            b.itemCompactRelation.text = "${media.relation}  "
+            b.itemCompactType.visibility = View.VISIBLE
+
+            if (media.relation!!.contains("\n")) {
+                b.itemCompactRelation.apply {
+                    isSingleLine = false
+                    maxLines = 2
+                    ellipsize = TextUtils.TruncateAt.START
+
+                    includeFontPadding = false
+                    setLineSpacing(0f, 0.9f)
                 }
+            } else {
+                b.itemCompactRelation.isSingleLine = true
+                b.itemCompactRelation.maxLines = 1
             }
+        } else {
+            b.itemCompactType.visibility = View.GONE
+        }
+    }
 
-            1 -> {
-                val b = (holder as MediaLargeViewHolder).binding
-                setAnimation(activity, b.root)
-                val media = mediaList?.get(position)
-                if (media != null) {
-                    b.itemCompactImage.loadImage(media.cover)
-                    blurImage(b.itemCompactBanner, media.banner ?: media.cover)
-                    b.itemCompactOngoing.isVisible =
-                        media.status == b.root.context.getString(R.string.status_releasing)
-                    b.itemCompactTitle.text = media.userPreferredName
-                    b.itemCompactScore.text =
-                        ((if (media.userScore == 0) (media.meanScore
-                            ?: 0) else media.userScore) / 10.0).toString()
-                    b.itemCompactScoreBG.background = ContextCompat.getDrawable(
-                        b.root.context,
-                        (if (media.userScore != 0) R.drawable.item_user_score else R.drawable.item_score)
+    private fun bindCompactMediaTotal(b: ItemMediaCompactBinding, media: Media) {
+        if (media.anime != null) {
+            if (media.relation != null) {
+                b.itemCompactTypeImage.setImageDrawable(
+                    AppCompatResources.getDrawable(
+                        activity,
+                        R.drawable.ic_round_movie_filter_24
                     )
-                    if (media.anime != null) {
-                        val itemTotal = " " + if ((media.anime.totalEpisodes
-                                ?: 0) != 1
-                        ) b.root.context.getString(R.string.episode_plural) else b.root.context.getString(
-                            R.string.episode_singular
-                        )
-                        b.itemTotal.text = itemTotal
-                        b.itemCompactTotal.text =
-                            if (media.anime.nextAiringEpisode != null) (media.anime.nextAiringEpisode.toString() + " / " + (media.anime.totalEpisodes
-                                ?: "??").toString()) else (media.anime.totalEpisodes
-                                ?: "??").toString()
-                    } else if (media.manga != null) {
-                        val itemTotal = " " + if ((media.manga.totalChapters
-                                ?: 0) != 1
-                        ) b.root.context.getString(R.string.chapter_plural) else b.root.context.getString(
-                            R.string.chapter_singular
-                        )
-                        b.itemTotal.text = itemTotal
-                        val totalCh = media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
-                        if (media.manga.totalChapters == null && totalCh != null) media.manga.totalChapters = totalCh
-                        b.itemCompactTotal.text = "${totalCh ?: "??"}"
-                    }
-                    if (position == mediaList.size - 2 && viewPager != null) viewPager.post {
-                        val start = mediaList.size
-                        mediaList.addAll(mediaList)
-                        val end = mediaList.size - start
-                        notifyItemRangeInserted(start, end)
-                    }
-                }
+                )
             }
-
-            2 -> {
-                val b = (holder as MediaPageViewHolder).binding
-                val media = mediaList?.get(position)
-                if (media != null) {
-
-                    val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
-                    b.itemCompactImage.loadImage(media.cover)
-                    if (bannerAnimations)
-                        b.itemCompactBanner.setTransitionGenerator(
-                            RandomTransitionGenerator(
-                                (10000 + 15000 * ((PrefManager.getVal(PrefName.AnimationSpeed)) as Float)).toLong(),
-                                AccelerateDecelerateInterpolator()
-                            )
-                        )
-                    blurImage(
-                        if (bannerAnimations) b.itemCompactBanner else b.itemCompactBannerNoKen,
-                        media.banner ?: media.cover
+            b.itemCompactTotal.text = " | " + formatAnimeEpisodesForCompact(media)
+        } else if (media.manga != null) {
+            if (media.relation != null) {
+                b.itemCompactTypeImage.setImageDrawable(
+                    AppCompatResources.getDrawable(
+                        activity,
+                        R.drawable.ic_round_import_contacts_24
                     )
-                    b.itemCompactOngoing.isVisible =
-                        media.status == b.root.context.getString(R.string.status_releasing)
-                    b.itemCompactTitle.text = media.userPreferredName
-                    bindCarouselLogo(media, b.itemCompactTitle, b.itemCompactLogo)
-                    b.itemCompactScore.text =
-                        ((if (media.userScore == 0) (media.meanScore
-                            ?: 0) else media.userScore) / 10.0).toString()
-                    b.itemCompactScoreBG.background = ContextCompat.getDrawable(
-                        b.root.context,
-                        (if (media.userScore != 0) R.drawable.item_user_score else R.drawable.item_score)
-                    )
-                    if (media.anime != null) {
-                        b.itemTotal.text = " " + if ((media.anime.totalEpisodes
-                                ?: 0) != 1
-                        ) b.root.context.getString(R.string.episode_plural)
-                        else b.root.context.getString(R.string.episode_singular)
-                        b.itemCompactTotal.text =
-                            if (media.anime.nextAiringEpisode != null) (media.anime.nextAiringEpisode.toString() + " / " + (media.anime.totalEpisodes
-                                ?: "??").toString()) else (media.anime.totalEpisodes
-                                ?: "??").toString()
-                    } else if (media.manga != null) {
-                        b.itemTotal.text = " " + if ((media.manga.totalChapters
-                                ?: 0) != 1
-                        ) b.root.context.getString(R.string.chapter_plural)
-                        else b.root.context.getString(R.string.chapter_singular)
-                        val totalCh = media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
-                        if (media.manga.totalChapters == null && totalCh != null) media.manga.totalChapters = totalCh
-                        b.itemCompactTotal.text = "${totalCh ?: "??"}"
-                    }
-                    @SuppressLint("NotifyDataSetChanged")
-                    if (position == mediaList.size - 2 && viewPager != null) viewPager.post {
-                        val size = mediaList.size
-                        mediaList.addAll(mediaList)
-                        notifyItemRangeInserted(size - 1, mediaList.size)
-                    }
-                }
+                )
             }
+            b.itemCompactTotal.text = " | " + formatMangaChapters(media)
+        }
+    }
 
-            3 -> {
-                val b = (holder as MediaPageSmallViewHolder).binding
-                val media = mediaList?.get(position)
-                if (media != null) {
-                    val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
-                    b.itemCompactImage.loadImage(media.cover)
-                    if (bannerAnimations)
-                        b.itemCompactBanner.setTransitionGenerator(
-                            RandomTransitionGenerator(
-                                (10000 + 15000 * ((PrefManager.getVal(PrefName.AnimationSpeed) as Float))).toLong(),
-                                AccelerateDecelerateInterpolator()
-                            )
-                        )
-                    blurImage(
-                        if (bannerAnimations) b.itemCompactBanner else b.itemCompactBannerNoKen,
-                        media.banner ?: media.cover
-                    )
-                    b.itemCompactOngoing.isVisible =
-                        media.status == b.root.context.getString(R.string.status_releasing)
-                    b.itemCompactTitle.text = media.userPreferredName
-                    bindCarouselLogo(
-                        media,
-                        b.itemCompactTitle,
-                        b.itemCompactLogo,
-                        b.itemCompactSynopsis,
-                        b.itemCompactLogoContainer
-                    )
-                    b.itemCompactScore.text =
-                        ((if (media.userScore == 0) (media.meanScore
-                            ?: 0) else media.userScore) / 10.0).toString()
-                    b.itemCompactScoreBG.background = ContextCompat.getDrawable(
-                        b.root.context,
-                        (if (media.userScore != 0) R.drawable.item_user_score else R.drawable.item_score)
-                    )
-                    if (media.genres.isNotEmpty()) {
-                        b.itemCompactGenres.text = media.genres.joinToString(" • ")
-                    } else if (media.tags.isNotEmpty()) {
-                        b.itemCompactGenres.text = media.tags.take(3).joinToString(" • ")
-                    } else {
-                        b.itemCompactGenres.text = ""
-                    }
-                    b.itemCompactStatus.text = media.status ?: ""
-                    if (media.anime != null) {
-                        b.itemTotal.text = " " + if ((media.anime.totalEpisodes
-                                ?: 0) != 1
-                        ) b.root.context.getString(R.string.episode_plural)
-                        else b.root.context.getString(R.string.episode_singular)
-                        b.itemCompactTotal.text =
-                            if (media.anime.nextAiringEpisode != null) (media.anime.nextAiringEpisode.toString() + " / " + (media.anime.totalEpisodes
-                                ?: "??").toString()) else (media.anime.totalEpisodes
-                                ?: "??").toString()
-                    } else if (media.manga != null) {
-                        b.itemTotal.text = " " + if ((media.manga.totalChapters
-                                ?: 0) != 1
-                        ) b.root.context.getString(R.string.chapter_plural)
-                        else b.root.context.getString(R.string.chapter_singular)
-                        val totalCh = media.manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
-                        if (media.manga.totalChapters == null && totalCh != null) media.manga.totalChapters = totalCh
-                        b.itemCompactTotal.text = "${totalCh ?: "??"}"
-                    }
-                    @SuppressLint("NotifyDataSetChanged")
-                    if (position == mediaList.size - 2 && viewPager != null) viewPager.post {
-                        val size = mediaList.size
-                        mediaList.addAll(mediaList)
-                        notifyItemRangeInserted(size - 1, mediaList.size)
-                    }
-                }
+    private fun bindLargeViewHolder(holder: MediaLargeViewHolder, position: Int) {
+        val b = holder.binding
+        setAnimation(activity, b.root)
+        val media = mediaList?.getOrNull(position) ?: return
+        b.itemCompactImage.loadImage(media.cover)
+        blurImage(b.itemCompactBanner, media.banner ?: media.cover)
+        b.itemCompactOngoing.isVisible =
+            media.status == b.root.context.getString(R.string.status_releasing)
+        b.itemCompactTitle.text = media.userPreferredName
+        b.itemCompactScore.text = formatScore(media)
+        b.itemCompactScoreBG.background = ContextCompat.getDrawable(
+            b.root.context,
+            getScoreBackgroundRes(media)
+        )
+        bindMediaTotals(b.root.context, media, b.itemTotal, b.itemCompactTotal)
+        handleInfiniteScroll(position)
+    }
+
+    private fun bindPageViewHolder(holder: MediaPageViewHolder, position: Int) {
+        val b = holder.binding
+        val media = mediaList?.getOrNull(position) ?: return
+        b.itemCompactImage.loadImage(media.cover)
+        setupBannerTransition(b.itemCompactBanner, b.itemCompactBannerNoKen, media.cover, media.banner)
+        b.itemCompactOngoing.isVisible =
+            media.status == b.root.context.getString(R.string.status_releasing)
+        b.itemCompactTitle.text = media.userPreferredName
+        bindCarouselLogo(media, b.itemCompactTitle, b.itemCompactLogo)
+        b.itemCompactScore.text = formatScore(media)
+        b.itemCompactScoreBG.background = ContextCompat.getDrawable(
+            b.root.context,
+            getScoreBackgroundRes(media)
+        )
+        bindMediaTotals(b.root.context, media, b.itemTotal, b.itemCompactTotal)
+        handleInfiniteScroll(position)
+    }
+
+    private fun bindPageSmallViewHolder(holder: MediaPageSmallViewHolder, position: Int) {
+        val b = holder.binding
+        val media = mediaList?.getOrNull(position) ?: return
+        b.itemCompactImage.loadImage(media.cover)
+        setupBannerTransition(b.itemCompactBanner, b.itemCompactBannerNoKen, media.cover, media.banner)
+        b.itemCompactOngoing.isVisible =
+            media.status == b.root.context.getString(R.string.status_releasing)
+        b.itemCompactTitle.text = media.userPreferredName
+        bindCarouselLogo(
+            media,
+            b.itemCompactTitle,
+            b.itemCompactLogo,
+            b.itemCompactSynopsis,
+            b.itemCompactLogoContainer
+        )
+        b.itemCompactScore.text = formatScore(media)
+        b.itemCompactScoreBG.background = ContextCompat.getDrawable(
+            b.root.context,
+            getScoreBackgroundRes(media)
+        )
+        bindGenresAndStatus(b, media)
+        bindMediaTotals(b.root.context, media, b.itemTotal, b.itemCompactTotal)
+        handleInfiniteScroll(position)
+    }
+
+    private fun bindGenresAndStatus(b: ItemMediaPageSmallBinding, media: Media) {
+        if (media.genres.isNotEmpty()) {
+            b.itemCompactGenres.text = media.genres.joinToString(" • ")
+        } else if (media.tags.isNotEmpty()) {
+            b.itemCompactGenres.text = media.tags.take(3).joinToString(" • ")
+        } else {
+            b.itemCompactGenres.text = ""
+        }
+        b.itemCompactStatus.text = media.status ?: ""
+    }
+
+    private fun formatScore(media: Media): String {
+        val score = if (media.userScore == 0) media.meanScore ?: 0 else media.userScore
+        return (score / 10.0).toString()
+    }
+
+    private fun getScoreBackgroundRes(media: Media): Int {
+        return if (media.userScore != 0) R.drawable.item_user_score else R.drawable.item_score
+    }
+
+    private fun formatAnimeEpisodesForCompact(media: Media): String {
+        val anime = media.anime ?: return (media.manga?.totalChapters ?: "~").toString()
+        val total = (anime.totalEpisodes ?: "~").toString()
+        return if (anime.nextAiringEpisode != null) {
+            "${anime.nextAiringEpisode} | $total"
+        } else {
+            total
+        }
+    }
+
+    private fun formatAnimeEpisodes(media: Media): String {
+        val anime = media.anime ?: return "??"
+        val total = (anime.totalEpisodes ?: "??").toString()
+        return if (anime.nextAiringEpisode != null) {
+            "${anime.nextAiringEpisode} / $total"
+        } else {
+            total
+        }
+    }
+
+    private fun formatMangaChapters(media: Media): String {
+        val manga = media.manga ?: return "??"
+        val totalCh = manga.totalChapters ?: IdMapper.getCachedChapters(media.id)
+        if (manga.totalChapters == null && totalCh != null) {
+            manga.totalChapters = totalCh
+        }
+        return (totalCh ?: "??").toString()
+    }
+
+    private fun bindMediaTotals(
+        context: Context,
+        media: Media,
+        totalLabel: android.widget.TextView,
+        totalCount: android.widget.TextView
+    ) {
+        if (media.anime != null) {
+            val isPlural = (media.anime.totalEpisodes ?: 0) != 1
+            totalLabel.text = " " + context.getString(
+                if (isPlural) R.string.episode_plural else R.string.episode_singular
+            )
+            totalCount.text = formatAnimeEpisodes(media)
+        } else if (media.manga != null) {
+            val isPlural = (media.manga.totalChapters ?: 0) != 1
+            totalLabel.text = " " + context.getString(
+                if (isPlural) R.string.chapter_plural else R.string.chapter_singular
+            )
+            totalCount.text = formatMangaChapters(media)
+        }
+    }
+
+    private fun setupBannerTransition(
+        banner: com.flaviofaria.kenburnsview.KenBurnsView,
+        bannerNoKen: ImageView,
+        cover: String?,
+        bannerUrl: String?
+    ) {
+        val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
+        if (bannerAnimations) {
+            val speed = PrefManager.getVal<Float>(PrefName.AnimationSpeed)
+            banner.setTransitionGenerator(
+                RandomTransitionGenerator(
+                    (10000 + 15000 * speed).toLong(),
+                    AccelerateDecelerateInterpolator()
+                )
+            )
+        }
+        blurImage(
+            if (bannerAnimations) banner else bannerNoKen,
+            bannerUrl ?: cover
+        )
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private fun handleInfiniteScroll(position: Int) {
+        if (mediaList != null && position == mediaList.size - 2 && viewPager != null) {
+            viewPager.post {
+                val start = mediaList.size
+                mediaList.addAll(mediaList)
+                val count = mediaList.size - start
+                notifyItemRangeInserted(start, count)
             }
         }
     }
@@ -404,107 +412,123 @@ class MediaAdaptor(
     ) {
         val clearLogoEnabled: Boolean = PrefManager.getVal(PrefName.CarouselClearLogo)
         if (!clearLogoEnabled) {
-            titleView.visibility = View.VISIBLE
-            logoView.visibility = View.GONE
-            logoContainer?.visibility = View.GONE
-            synopsisView?.visibility = View.GONE
+            showCarouselTitle(titleView, logoView, synopsisView, logoContainer)
             return
         }
 
         val currentId = media.id
         logoView.tag = currentId
 
-        fun showLogo(url: String) {
-            logoView.loadImage(url)
-            logoView.visibility = View.VISIBLE
-            logoContainer?.visibility = View.VISIBLE
-            titleView.visibility = View.GONE
-            if (synopsisView != null) {
-                val cleanDesc = media.description?.let { sanitizeDescription(it) }
-                if (!cleanDesc.isNullOrBlank()) {
-                    synopsisView.text = cleanDesc
-                    synopsisView.visibility = View.VISIBLE
-                    val oldListener = synopsisView.getTag(R.id.itemCompactSynopsis) as? View.OnLayoutChangeListener
-                    if (oldListener != null) {
-                        synopsisView.removeOnLayoutChangeListener(oldListener)
-                    }
-                    val newListener = View.OnLayoutChangeListener { v, _, top, _, bottom, _, _, _, _ ->
-                        val availableHeight = (bottom - top) - v.paddingTop - v.paddingBottom
-                        val lh = synopsisView.lineHeight
-                        if (lh > 0) {
-                            val maxL = (availableHeight / lh).coerceIn(1, 3)
-                            if (synopsisView.maxLines != maxL) {
-                                synopsisView.maxLines = maxL
-                            }
-                            synopsisView.alpha = 0.72f
-                        } else {
-                            synopsisView.alpha = 0f
-                        }
-                        v.post {
-                            if (!synopsisView.text.endsWith("...")) {
-                                val layout = synopsisView.layout ?: return@post
-                                val lineCount = layout.lineCount
-                                if (lineCount > 0) {
-                                    val lastLine = (lineCount - 1).coerceAtMost(synopsisView.maxLines - 1)
-                                    val lineEnd = layout.getLineEnd(lastLine)
-                                    if (lineEnd in 1 until cleanDesc.length) {
-                                        val ellipsisCount = layout.getEllipsisCount(lastLine)
-                                        if (ellipsisCount == 0) {
-                                            val currentText = synopsisView.text.toString()
-                                            val visible = if (lineEnd <= currentText.length) currentText.substring(0, lineEnd).trimEnd() else currentText.trimEnd()
-                                            val lastSpace = visible.lastIndexOf(' ')
-                                            val truncated = if (lastSpace > visible.length - 12 && lastSpace > 0) {
-                                                visible.substring(0, lastSpace).trimEnd() + "..."
-                                            } else if (visible.length > 3) {
-                                                visible.dropLast(3).trimEnd() + "..."
-                                            } else {
-                                                visible + "..."
-                                            }
-                                            synopsisView.text = truncated
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    synopsisView.setTag(R.id.itemCompactSynopsis, newListener)
-                    synopsisView.addOnLayoutChangeListener(newListener)
-                } else {
-                    synopsisView.visibility = View.GONE
-                }
-            }
-        }
-
-        fun showTitle() {
-            titleView.visibility = View.VISIBLE
-            logoView.visibility = View.GONE
-            logoContainer?.visibility = View.GONE
-            if (synopsisView != null) {
-                val oldListener = synopsisView.getTag(R.id.itemCompactSynopsis) as? View.OnLayoutChangeListener
-                if (oldListener != null) {
-                    synopsisView.removeOnLayoutChangeListener(oldListener)
-                    synopsisView.setTag(R.id.itemCompactSynopsis, null)
-                }
-                synopsisView.visibility = View.GONE
-            }
-        }
-
         if (!media.clearLogo.isNullOrBlank()) {
-            showLogo(media.clearLogo!!)
+            showCarouselLogo(media, media.clearLogo!!, titleView, logoView, synopsisView, logoContainer)
         } else {
-            showTitle()
+            showCarouselTitle(titleView, logoView, synopsisView, logoContainer)
             activity.lifecycleScope.launch(Dispatchers.Main) {
                 val logo = CarouselLogoResolver.resolve(media)
                 if (logoView.tag == currentId) {
                     if (!logo.isNullOrBlank()) {
                         media.clearLogo = logo
-                        showLogo(logo)
+                        showCarouselLogo(media, logo, titleView, logoView, synopsisView, logoContainer)
                     } else {
-                        showTitle()
+                        showCarouselTitle(titleView, logoView, synopsisView, logoContainer)
                     }
                 }
             }
         }
+    }
+
+    private fun showCarouselLogo(
+        media: Media,
+        url: String,
+        titleView: android.widget.TextView,
+        logoView: ImageView,
+        synopsisView: android.widget.TextView?,
+        logoContainer: View?
+    ) {
+        logoView.loadImage(url)
+        logoView.visibility = View.VISIBLE
+        logoContainer?.visibility = View.VISIBLE
+        titleView.visibility = View.GONE
+        if (synopsisView != null) {
+            val cleanDesc = media.description?.let { sanitizeDescription(it) }
+            if (!cleanDesc.isNullOrBlank()) {
+                synopsisView.text = cleanDesc
+                synopsisView.visibility = View.VISIBLE
+                setupSynopsisLayoutListener(synopsisView, cleanDesc)
+            } else {
+                synopsisView.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun showCarouselTitle(
+        titleView: android.widget.TextView,
+        logoView: ImageView,
+        synopsisView: android.widget.TextView?,
+        logoContainer: View?
+    ) {
+        titleView.visibility = View.VISIBLE
+        logoView.visibility = View.GONE
+        logoContainer?.visibility = View.GONE
+        removeSynopsisLayoutListener(synopsisView)
+    }
+
+    private fun removeSynopsisLayoutListener(synopsisView: android.widget.TextView?) {
+        if (synopsisView == null) return
+        val oldListener = synopsisView.getTag(R.id.itemCompactSynopsis) as? View.OnLayoutChangeListener
+        if (oldListener != null) {
+            synopsisView.removeOnLayoutChangeListener(oldListener)
+            synopsisView.setTag(R.id.itemCompactSynopsis, null)
+        }
+        synopsisView.visibility = View.GONE
+    }
+
+    private fun setupSynopsisLayoutListener(synopsisView: android.widget.TextView, cleanDesc: String) {
+        val oldListener = synopsisView.getTag(R.id.itemCompactSynopsis) as? View.OnLayoutChangeListener
+        if (oldListener != null) {
+            synopsisView.removeOnLayoutChangeListener(oldListener)
+        }
+        val newListener = View.OnLayoutChangeListener { v, _, top, _, bottom, _, _, _, _ ->
+            val availableHeight = bottom - top - v.paddingTop - v.paddingBottom
+            val lh = synopsisView.lineHeight
+            if (lh > 0) {
+                val maxL = (availableHeight / lh).coerceIn(1, 3)
+                if (synopsisView.maxLines != maxL) {
+                    synopsisView.maxLines = maxL
+                }
+                synopsisView.alpha = 0.72f
+            } else {
+                synopsisView.alpha = 0f
+            }
+            v.post {
+                truncateSynopsisIfNeeded(synopsisView, cleanDesc)
+            }
+        }
+        synopsisView.setTag(R.id.itemCompactSynopsis, newListener)
+        synopsisView.addOnLayoutChangeListener(newListener)
+    }
+
+    private fun truncateSynopsisIfNeeded(synopsisView: android.widget.TextView, cleanDesc: String) {
+        if (synopsisView.text.endsWith("...")) return
+        val layout = synopsisView.layout ?: return
+        val lineCount = layout.lineCount
+        if (lineCount <= 0) return
+        val lastLine = (lineCount - 1).coerceAtMost(synopsisView.maxLines - 1)
+        val lineEnd = layout.getLineEnd(lastLine)
+        if (lineEnd !in 1 until cleanDesc.length) return
+        val ellipsisCount = layout.getEllipsisCount(lastLine)
+        if (ellipsisCount != 0) return
+        val currentText = synopsisView.text.toString()
+        val visible = if (lineEnd <= currentText.length) currentText.substring(0, lineEnd).trimEnd() else currentText.trimEnd()
+        val lastSpace = visible.lastIndexOf(' ')
+        val truncated = if (lastSpace > visible.length - 12 && lastSpace > 0) {
+            visible.substring(0, lastSpace).trimEnd() + "..."
+        } else if (visible.length > 3) {
+            visible.dropLast(3).trimEnd() + "..."
+        } else {
+            visible + "..."
+        }
+        synopsisView.text = truncated
     }
 
     private fun sanitizeDescription(desc: String): String {
