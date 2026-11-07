@@ -112,14 +112,26 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        val intentFilter = IntentFilter().apply {
-            addAction(ACTION_DOWNLOAD_STARTED)
-            addAction(ACTION_DOWNLOAD_FINISHED)
-            addAction(ACTION_DOWNLOAD_FAILED)
-            addAction(ACTION_DOWNLOAD_PROGRESS)
-        }
+        setupDownloadReceiver()
+        setupBaselinePadding()
+        val gridLayoutManager = setupRecyclerLayout()
+        setupSwipeRefresh()
+        setupScrollTop(gridLayoutManager)
+        setupMediaObserver()
 
+        model.getMangaChapters().observe(viewLifecycleOwner) {
+            updateChapters()
+        }
+    }
+
+    private fun setupDownloadReceiver() {
         if (!isReceiverRegistered) {
+            val intentFilter = IntentFilter().apply {
+                addAction(ACTION_DOWNLOAD_STARTED)
+                addAction(ACTION_DOWNLOAD_FINISHED)
+                addAction(ACTION_DOWNLOAD_FAILED)
+                addAction(ACTION_DOWNLOAD_PROGRESS)
+            }
             ContextCompat.registerReceiver(
                 requireContext(),
                 downloadStatusReceiver,
@@ -128,31 +140,32 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
             )
             isReceiverRegistered = true
         }
+    }
 
-        val mediaDetailsActivity = activity as? MediaDetailsActivity
-        if (mediaDetailsActivity?.bindingReady == true) {
-            val actBinding = mediaDetailsActivity.binding
-            val baselineAnchor = actBinding.mediaBottomBarContainer ?: actBinding.commentMessageContainer
-            baselineAnchor?.let {
-                val includeSystemPaddings = it != actBinding.mediaBottomBarContainer
-                binding.mediaSourceRecycler.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
-                binding.mediaSourceRecycler.clipToPadding = false
-            }
+    private fun setupBaselinePadding() {
+        val mediaDetailsActivity = activity as? MediaDetailsActivity ?: return
+        if (!mediaDetailsActivity.bindingReady) return
+        val actBinding = mediaDetailsActivity.binding
+        val baselineAnchor = actBinding.mediaBottomBarContainer ?: actBinding.commentMessageContainer
+        baselineAnchor?.let {
+            val includeSystemPaddings = it != actBinding.mediaBottomBarContainer
+            binding.mediaSourceRecycler.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
+            binding.mediaSourceRecycler.clipToPadding = false
         }
-        screenWidth = resources.displayMetrics.widthPixels.dp
+    }
 
+    private fun setupRecyclerLayout(): GridLayoutManager {
+        screenWidth = resources.displayMetrics.widthPixels.dp
         var maxGridSize = (screenWidth / 100f).roundToInt()
         maxGridSize = max(4, maxGridSize - (maxGridSize % 2))
 
         val gridLayoutManager = GridLayoutManager(requireContext(), maxGridSize)
-
         gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
             override fun getSpanSize(position: Int): Int {
-                val style = chapterAdapter.getItemViewType(position)
-
+                val itemStyle = chapterAdapter.getItemViewType(position)
                 return when (position) {
                     0 -> maxGridSize
-                    else -> when (style) {
+                    else -> when (itemStyle) {
                         0 -> maxGridSize
                         1 -> 1
                         else -> maxGridSize
@@ -160,9 +173,11 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                 }
             }
         }
-
         binding.mediaSourceRecycler.layoutManager = gridLayoutManager
+        return gridLayoutManager
+    }
 
+    private fun setupSwipeRefresh() {
         binding.mediaSourceSwipeRefresh.apply {
             val primaryColor = PrefManager.getVal<Int>(PrefName.PrimaryColor)
             setColorSchemeColors(primaryColor)
@@ -185,7 +200,9 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                 }
             }
         }
+    }
 
+    private fun setupScrollTop(gridLayoutManager: GridLayoutManager) {
         binding.ScrollTop.setOnClickListener {
             binding.mediaSourceRecycler.scrollToPosition(10)
             binding.mediaSourceRecycler.smoothScrollToPosition(0)
@@ -193,7 +210,6 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         binding.mediaSourceRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
-
                 val position = gridLayoutManager.findFirstVisibleItemPosition()
                 if (position > 2) {
                     binding.ScrollTop.translationY = -(navBarHeight + 12.toPx).toFloat()
@@ -206,73 +222,77 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         model.scrolledToTop.observe(viewLifecycleOwner) {
             if (it) binding.mediaSourceRecycler.scrollToPosition(0)
         }
+    }
 
+    private fun setupMediaObserver() {
         continueEp = model.continueMedia ?: false
         model.getMedia().observe(viewLifecycleOwner) {
             if (it != null) {
-                if (this::media.isInitialized) {
-                    if (it.manga != null && it.manga?.chapters == null) {
-                        it.manga?.chapters = media.manga?.chapters
-                    }
-                }
-                media = it
-                progress = View.GONE
-                binding.mediaInfoProgressBar.visibility = progress
+                handleMediaLoaded(it)
+            }
+        }
+    }
 
-                if (media.format in setOf("MANGA", "ONE SHOT", "MANHWA", "MANHUA", "ONE_SHOT", "DOUJINSHI") || (media.format == "LOCAL" && media.manga != null)) {
-                    // For LOCAL
-                    if (media.format != "LOCAL" || media.selected == null) {
-                        media.selected = model.loadSelected(media)
-                    }
+    private fun handleMediaLoaded(it: Media) {
+        if (this::media.isInitialized) {
+            if (it.manga != null && it.manga?.chapters == null) {
+                it.manga?.chapters = media.manga?.chapters
+            }
+        }
+        media = it
+        progress = View.GONE
+        binding.mediaInfoProgressBar.visibility = progress
 
-                    subscribed =
-                        SubscriptionHelper.getSubscriptions().containsKey(media.id)
+        val isSupported = media.format in setOf("MANGA", "ONE SHOT", "MANHWA", "MANHUA", "ONE_SHOT", "DOUJINSHI") ||
+                (media.format == "LOCAL" && media.manga != null)
 
-                    style = media.selected!!.recyclerStyle
-                    reverse = media.selected!!.recyclerReversed
+        if (!isSupported) {
+            binding.mediaNotSupported.visibility = View.VISIBLE
+            binding.mediaNotSupported.text = getString(R.string.not_supported, media.format ?: "")
+            return
+        }
 
-                    if (!loaded) {
-                        model.mangaReadSources = if (media.isAdult) HMangaSources else MangaSources
+        if (media.format != "LOCAL" || media.selected == null) {
+            media.selected = model.loadSelected(media)
+        }
 
-                        headerAdapter = MangaReadAdapter(it, this, model.mangaReadSources!!)
-                        headerAdapter.scanlatorSelectionListener = this
-                        chapterAdapter =
-                            MangaChapterAdapter(
-                                style ?: PrefManager.getVal(PrefName.MangaDefaultView), media, this
-                            )
+        subscribed = SubscriptionHelper.getSubscriptions().containsKey(media.id)
+        style = media.selected!!.recyclerStyle
+        reverse = media.selected!!.recyclerReversed
 
-                        for (download in downloadManager.mangaDownloadedTypes) {
-                            if (media.compareName(download.titleName)) {
-                                chapterAdapter.stopDownload(download.uniqueName)
-                            }
-                        }
+        if (!loaded) {
+            initializeAdaptersAndLoad(it)
+        } else {
+            reload()
+        }
+    }
 
-                        binding.mediaSourceRecycler.adapter =
-                            ConcatAdapter(headerAdapter, chapterAdapter)
+    private fun initializeAdaptersAndLoad(it: Media) {
+        model.mangaReadSources = if (media.isAdult) HMangaSources else MangaSources
 
-                        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                            val ctx = context
-                            val offline =
-                                (ctx != null && !isOnline(ctx)) || PrefManager.getVal(PrefName.OfflineMode)
-                            if (offline && media.format != "LOCAL") media.selected!!.sourceIndex =
-                                model.mangaReadSources!!.list.lastIndex
-                            model.loadMangaChapters(media, media.selected!!.sourceIndex)
-                        }
-                        loaded = true
-                    } else {
-                        reload()
-                    }
-                } else {
-                    binding.mediaNotSupported.visibility = View.VISIBLE
-                    binding.mediaNotSupported.text =
-                        getString(R.string.not_supported, media.format ?: "")
-                }
+        headerAdapter = MangaReadAdapter(it, this, model.mangaReadSources!!)
+        headerAdapter.scanlatorSelectionListener = this
+        chapterAdapter = MangaChapterAdapter(
+            style ?: PrefManager.getVal(PrefName.MangaDefaultView), media, this
+        )
+
+        for (download in downloadManager.mangaDownloadedTypes) {
+            if (media.compareName(download.titleName)) {
+                chapterAdapter.stopDownload(download.uniqueName)
             }
         }
 
-        model.getMangaChapters().observe(viewLifecycleOwner) { _ ->
-            updateChapters()
+        binding.mediaSourceRecycler.adapter = ConcatAdapter(headerAdapter, chapterAdapter)
+
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            val ctx = context
+            val offline = (ctx != null && !isOnline(ctx)) || PrefManager.getVal(PrefName.OfflineMode)
+            if (offline && media.format != "LOCAL") {
+                media.selected!!.sourceIndex = model.mangaReadSources!!.list.lastIndex
+            }
+            model.loadMangaChapters(media, media.selected!!.sourceIndex)
         }
+        loaded = true
     }
 
     override fun onScanlatorsSelected() {
@@ -305,6 +325,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
             Toast.makeText(requireContext(), "All downloads completed!", Toast.LENGTH_SHORT).show()
         }
     }
+
     private suspend fun downloadChapterSequentially(chapter: MangaChapter) {
         withContext(Dispatchers.IO) {
             onMangaChapterDownloadClick(chapter)
@@ -312,79 +333,87 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         }
     }
 
-
     private fun updateChapters() {
-        val loadedChapters = model.getMangaChapters().value
-        if (loadedChapters != null) {
-            val chapters = loadedChapters[media.selected!!.sourceIndex]
-            if (chapters != null) {
-                headerAdapter.options = getScanlators(chapters)
-                val filteredChapters =
-                    if (model.mangaReadSources?.get(media.selected!!.sourceIndex) is OfflineMangaParser) {
-                        chapters
-                    } else {
-                        chapters.filterNot { (_, chapter) ->
-                            chapter.scanlator in headerAdapter.hiddenScanlators
-                        }
-                    }
+        val loadedChapters = model.getMangaChapters().value ?: return
+        val chapters = loadedChapters[media.selected!!.sourceIndex] ?: return
 
-                media.manga?.chapters = filteredChapters.toMutableMap()
+        headerAdapter.options = getScanlators(chapters)
+        val filteredChapters = filterChaptersByScanlator(chapters)
+        media.manga?.chapters = filteredChapters.toMutableMap()
 
-                //CHIP GROUP
-                val total = filteredChapters.size
-                val divisions = total.toDouble() / 10
-                start = 0
-                end = null
-                val limit = when {
-                    (divisions < 25) -> 25
-                    (divisions < 50) -> 50
-                    else -> 100
-                }
-                headerAdapter.clearChips()
-                if (total > limit) {
-                    val arr = filteredChapters.keys.toTypedArray()
-                    val stored = ceil((total).toDouble() / limit).toInt()
+        setupChapterChips(filteredChapters)
+        headerAdapter.subscribeButton(true)
+        reload()
+    }
 
-                    val anilistEp = (media.userProgress ?: 0).plus(1)
-                    val appEp = PrefManager.getCustomVal<String?>(
-                        "${media.id}_current_ep", ""
-                    )?.let { MediaNameAdapter.findChapterNumber(it)?.toInt() ?: it.toIntOrNull() } ?: 1
-                    val targetChpNum = (if (anilistEp > appEp) anilistEp else appEp).toFloat()
-
-                    var targetIndex = arr.indexOfFirst { key ->
-                        val chObj = filteredChapters[key]
-                        val num = MediaNameAdapter.findChapterNumber(chObj?.number ?: key)
-                        num != null && (num == targetChpNum || num.toInt() == targetChpNum.toInt())
-                    }
-                    if (targetIndex == -1) {
-                        val targetIdx = targetChpNum.toInt() - 1
-                        if (targetIdx in arr.indices) {
-                            targetIndex = targetIdx
-                        }
-                    }
-
-                    val targetChip = if (targetIndex >= 0) (targetIndex / limit).coerceIn(0, stored - 1) else 0
-                    val position = if (media.selected!!.chip == 0 && targetChip > 0) {
-                        media.selected!!.chip = targetChip
-                        targetChip
-                    } else {
-                        clamp(media.selected!!.chip, 0, stored - 1)
-                    }
-                    val last = if (position + 1 == stored) total else (limit * (position + 1))
-                    start = limit * (position)
-                    end = last - 1
-                    headerAdapter.updateChips(
-                        limit,
-                        arr,
-                        (1..stored).toList().toTypedArray(),
-                        position
-                    )
-                }
-
-                headerAdapter.subscribeButton(true)
-                reload()
+    private fun filterChaptersByScanlator(chapters: MutableMap<String, MangaChapter>): Map<String, MangaChapter> {
+        val isOffline = model.mangaReadSources?.get(media.selected!!.sourceIndex) is OfflineMangaParser
+        return if (isOffline) {
+            chapters
+        } else {
+            chapters.filterNot { (_, chapter) ->
+                chapter.scanlator in headerAdapter.hiddenScanlators
             }
         }
+    }
+
+    private fun setupChapterChips(filteredChapters: Map<String, MangaChapter>) {
+        val total = filteredChapters.size
+        val divisions = total.toDouble() / 10
+        start = 0
+        end = null
+        val limit = when {
+            divisions < 25 -> 25
+            divisions < 50 -> 50
+            else -> 100
+        }
+        headerAdapter.clearChips()
+        if (total > limit) {
+            val arr = filteredChapters.keys.toTypedArray()
+            val stored = ceil(total.toDouble() / limit).toInt()
+
+            val targetIndex = findTargetChapterIndex(filteredChapters, arr)
+            val targetChip = if (targetIndex >= 0) (targetIndex / limit).coerceIn(0, stored - 1) else 0
+            val position = if (media.selected!!.chip == 0 && targetChip > 0) {
+                media.selected!!.chip = targetChip
+                targetChip
+            } else {
+                clamp(media.selected!!.chip, 0, stored - 1)
+            }
+            val last = if (position + 1 == stored) total else limit * (position + 1)
+            start = limit * position
+            end = last - 1
+            headerAdapter.updateChips(
+                limit,
+                arr,
+                (1..stored).toList().toTypedArray(),
+                position
+            )
+        }
+    }
+
+    private fun findTargetChapterIndex(
+        filteredChapters: Map<String, MangaChapter>,
+        arr: Array<String>
+    ): Int {
+        val anilistEp = (media.userProgress ?: 0).plus(1)
+        val appEp = PrefManager.getCustomVal<String?>(
+            "${media.id}_current_ep", ""
+        )?.let { MediaNameAdapter.findChapterNumber(it)?.toInt() ?: it.toIntOrNull() } ?: 1
+        val targetChpNum = (if (anilistEp > appEp) anilistEp else appEp).toFloat()
+
+        var targetIndex = arr.indexOfFirst { key ->
+            val chObj = filteredChapters[key]
+            val num = MediaNameAdapter.findChapterNumber(chObj?.number ?: key)
+            num != null && (num == targetChpNum || num.toInt() == targetChpNum.toInt())
+        }
+        if (targetIndex == -1) {
+            val targetIdx = targetChpNum.toInt() - 1
+            if (targetIdx in arr.indices) {
+                targetIndex = targetIdx
+            }
+        }
+        return targetIndex
     }
 
     private fun getScanlators(chap: MutableMap<String, MangaChapter>?): List<String> {
@@ -432,17 +461,21 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
     fun onIconPressed(viewType: Int, rev: Boolean) {
         style = viewType
         reverse = rev
-        media.selected!!.recyclerStyle = style
-        media.selected!!.recyclerReversed = reverse
-        model.saveSelected(media.id, media.selected!!)
+        media.selected?.let { sel ->
+            sel.recyclerStyle = viewType
+            sel.recyclerReversed = rev
+            model.saveSelected(media.id, sel)
+        }
         reload()
     }
 
     fun onChipClicked(i: Int, s: Int, e: Int) {
-        media.selected!!.chip = i
         start = s
         end = e
-        model.saveSelected(media.id, media.selected!!)
+        media.selected?.let { sel ->
+            sel.chip = i
+            model.saveSelected(media.id, sel)
+        }
         reload()
     }
 
@@ -450,74 +483,57 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
     fun onNotificationPressed(subscribed: Boolean, source: String) {
         this.subscribed = subscribed
         saveSubscription(media, subscribed)
-        snackString(
-            if (subscribed) getString(R.string.subscribed_notification, source)
-            else getString(R.string.unsubscribed_notification)
-        )
+        val msg = if (subscribed) {
+            getString(R.string.subscribed_notification, source)
+        } else {
+            getString(R.string.unsubscribed_notification)
+        }
+        snackString(msg)
     }
 
     fun openSettings(pkg: MangaExtension.Installed) {
         val changeUIVisibility: (Boolean) -> Unit = { show ->
-            val activity = activity
-            if (activity is MediaDetailsActivity && isAdded) {
-                activity.findViewById<AppBarLayout>(R.id.mediaAppBar).isVisible = show
-                activity.findViewById<ViewPager2>(R.id.mediaViewPager).isVisible = show
-                activity.findViewById<CardView>(R.id.mediaCover).isVisible = show
-                activity.findViewById<CardView>(R.id.mediaClose).isVisible = show
-                activity.navBar.isVisible = show
-                activity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer).isGone = show
-            }
-        }
-        var itemSelected = false
-        val allSettings = pkg.sources.filterIsInstance<ConfigurableSource>()
-        if (allSettings.isNotEmpty()) {
-            var selectedSetting = allSettings[0]
-            if (allSettings.size > 1) {
-                val names =
-                    allSettings.map { LanguageMapper.getLanguageName(it.lang) }.toTypedArray()
-                requireContext().customAlertDialog().apply {
-                    setTitle("Select a Source")
-                    singleChoiceItems(names) { which ->
-                        selectedSetting = allSettings[which]
-                        itemSelected = true
+            val mediaActivity = activity as? MediaDetailsActivity
+            val viewPager =
+                mediaActivity?.findViewById<ViewPager2>(R.id.mediaViewPager)
+            val appbar =
+                mediaActivity?.findViewById<AppBarLayout>(R.id.mediaAppBar)
+            val shadow = mediaActivity?.findViewById<View>(R.id.mediaDetailsShadow)
+            val parent =
+                mediaActivity?.findViewById<FrameLayout>(R.id.mediaExtensionPref)
+            val card =
+                mediaActivity?.findViewById<CardView>(R.id.mediaExtensionPrefCard)
 
-                        val fragment =
-                            MangaSourcePreferencesFragment().getInstance(selectedSetting.id) {
-                                changeUIVisibility(true)
-                                loadChapters(media.selected!!.sourceIndex, true)
-                            }
-                        parentFragmentManager.beginTransaction()
-                            .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
-                            .replace(R.id.fragmentExtensionsContainer, fragment)
-                            .addToBackStack(null)
-                            .commit()
-                    }
-                    onDismiss {
-                        if (!itemSelected) {
-                            changeUIVisibility(true)
-                        }
-                    }
-                    show()
-
+            viewPager?.isGone = !show
+            shadow?.isGone = !show
+            appbar?.isGone = !show
+            parent?.isVisible = !show
+            card?.isVisible = !show
+            if (show) {
+                mediaActivity?.let {
+                    setNavigationTheme()
                 }
             } else {
-                // If there's only one setting, proceed with the fragment transaction
-                val fragment = MangaSourcePreferencesFragment().getInstance(selectedSetting.id) {
-                    changeUIVisibility(true)
-                    loadChapters(media.selected!!.sourceIndex, true)
-                }
-                parentFragmentManager.beginTransaction()
-                    .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
-                    .replace(R.id.fragmentExtensionsContainer, fragment)
-                    .addToBackStack(null)
-                    .commit()
+                parent?.updatePadding(top = 0, bottom = 0)
             }
-
-            changeUIVisibility(false)
-        } else {
-            Toast.makeText(requireContext(), "Source is not configurable", Toast.LENGTH_SHORT)
-                .show()
         }
+
+        val fragment = MangaSourcePreferencesFragment.getInstance(pkg.pkgName)
+        fragment.onDismissListener = {
+            changeUIVisibility(true)
+        }
+        val sources = pkg.sources.filterIsInstance<ConfigurableSource>()
+        val hasAllSourcesSelected =
+            pkg.sources.size == model.mangaReadSources?.list?.filterIsInstance<DynamicMangaParser>()
+                ?.map { it.extension }?.size
+        if (sources.isEmpty() || hasAllSourcesSelected) {
+            snackString(getString(R.string.no_sources_detected))
+            return
+        }
+        val transaction = childFragmentManager.beginTransaction()
+        transaction.replace(R.id.mediaExtensionPref, fragment)
+        transaction.commit()
+        changeUIVisibility(false)
     }
 
     fun onMangaChapterClick(i: MangaChapter) {
@@ -531,78 +547,84 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
     }
 
     fun onMangaChapterDownloadClick(i: MangaChapter) {
-        activity?.let {
-            if (!isNotificationPermissionGranted()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    ActivityCompat.requestPermissions(
-                        it,
-                        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                        1
-                    )
+        val act = activity ?: return
+        if (!isNotificationPermissionGranted()) {
+            requestNotificationPermission(act)
+        }
+        if (!hasDirAccess(act)) {
+            (act as MediaDetailsActivity).accessAlertDialog(act.launcher) { success ->
+                if (success) {
+                    processChapterDownload(i)
+                } else {
+                    snackString(getString(R.string.download_permission_required))
                 }
             }
-            fun continueDownload() {
-                if (PrefManager.getVal<Boolean>(PrefName.DownloadWifiOnly) && !ani.dantotsu.isWifiConnected(requireContext())) {
-                    snackString(getString(R.string.download_wifi_only_warning))
-                    return
-                }
-                val uniqueNum = i.uniqueNumber()
-                if (chapterAdapter.isDownloading(uniqueNum) || chapterAdapter.isDownloaded(uniqueNum)) {
-                    return
-                }
-                chapterAdapter.startDownload(uniqueNum)
-                model.continueMedia = false
-                media.manga?.chapters?.get(uniqueNum)?.let { chapter ->
-                    val parser =
-                        model.mangaReadSources?.get(media.selected!!.sourceIndex) as? DynamicMangaParser
-                    parser?.let {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            try {
-                                val images = parser.imageList(chapter.sChapter)
+        } else {
+            processChapterDownload(i)
+        }
+    }
 
-                                // Create a download task
-                                val downloadTask = MangaDownloaderService.DownloadTask(
-                                    title = media.mainName(),
-                                    chapter = chapter.number,
-                                    scanlator = chapter.scanlator ?: "Unknown",
-                                    imageData = images,
-                                    sourceMedia = media,
-                                    retries = 25,
-                                    simultaneousDownloads = 2
-                                )
+    private fun requestNotificationPermission(act: android.app.Activity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ActivityCompat.requestPermissions(
+                act,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                1
+            )
+        }
+    }
 
-                                val isAlreadyQueued = MangaServiceDataSingleton.downloadQueue.any { it.title == media.mainName() && (it.chapter == chapter.number || it.chapter == chapter.title) } ||
-                                                      MangaServiceDataSingleton.currentTasks.any { it.title == media.mainName() && (it.chapter == chapter.number || it.chapter == chapter.title) }
-                                if (!isAlreadyQueued) {
-                                    MangaServiceDataSingleton.downloadQueue.offer(downloadTask)
-                                }
+    private fun processChapterDownload(i: MangaChapter) {
+        if (PrefManager.getVal<Boolean>(PrefName.DownloadWifiOnly) && !ani.dantotsu.isWifiConnected(requireContext())) {
+            snackString(getString(R.string.download_wifi_only_warning))
+            return
+        }
+        val uniqueNum = i.uniqueNumber()
+        if (chapterAdapter.isDownloading(uniqueNum) || chapterAdapter.isDownloaded(uniqueNum)) {
+            return
+        }
+        chapterAdapter.startDownload(uniqueNum)
+        model.continueMedia = false
+        val chapter = media.manga?.chapters?.get(uniqueNum) ?: return
+        val parser = model.mangaReadSources?.get(media.selected!!.sourceIndex) as? DynamicMangaParser ?: return
 
-                                val intent = Intent(context, MangaDownloaderService::class.java)
-                                withContext(Dispatchers.Main) {
-                                    ContextCompat.startForegroundService(requireContext(), intent)
-                                }
-                                MangaServiceDataSingleton.isServiceRunning = true
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    chapterAdapter.purgeDownload(uniqueNum)
-                                }
-                            }
-                        }
-                    }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                executeDownloadTask(parser, chapter)
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) {
+                    chapterAdapter.purgeDownload(uniqueNum)
                 }
-            }
-            if (!hasDirAccess(it)) {
-                (it as MediaDetailsActivity).accessAlertDialog(it.launcher) { success ->
-                    if (success) {
-                        continueDownload()
-                    } else {
-                        snackString(getString(R.string.download_permission_required))
-                    }
-                }
-            } else {
-                continueDownload()
             }
         }
+    }
+
+    private suspend fun executeDownloadTask(parser: DynamicMangaParser, chapter: MangaChapter) {
+        val images = parser.imageList(chapter.sChapter)
+        val downloadTask = MangaDownloaderService.DownloadTask(
+            title = media.mainName(),
+            chapter = chapter.number,
+            scanlator = chapter.scanlator ?: "Unknown",
+            imageData = images,
+            sourceMedia = media,
+            retries = 25,
+            simultaneousDownloads = 2
+        )
+
+        val isAlreadyQueued = MangaServiceDataSingleton.downloadQueue.any {
+            it.title == media.mainName() && (it.chapter == chapter.number || it.chapter == chapter.title)
+        } || MangaServiceDataSingleton.currentTasks.any {
+            it.title == media.mainName() && (it.chapter == chapter.number || it.chapter == chapter.title)
+        }
+        if (!isAlreadyQueued) {
+            MangaServiceDataSingleton.downloadQueue.offer(downloadTask)
+        }
+
+        val intent = Intent(context, MangaDownloaderService::class.java)
+        withContext(Dispatchers.Main) {
+            ContextCompat.startForegroundService(requireContext(), intent)
+        }
+        MangaServiceDataSingleton.isServiceRunning = true
     }
 
     private fun isNotificationPermissionGranted(): Boolean {
@@ -614,7 +636,6 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         }
         return true
     }
-
 
     fun onMangaChapterRemoveDownloadClick(i: MangaChapter) {
         downloadManager.removeDownload(
@@ -694,7 +715,6 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         }
     }
 
-
     @SuppressLint("NotifyDataSetChanged")
     private fun reload() {
         val selected = model.loadSelected(media)
@@ -718,7 +738,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
                     .slice(start..(end ?: (media.manga!!.chapters!!.size - 1)))
             )
             if (reverse)
-                arr = (arr.reversed() as? ArrayList<MangaChapter>) ?: arr
+                arr = ArrayList(arr.reversed())
         }
         chapterAdapter.arr = arr
         chapterAdapter.updateType(style ?: PrefManager.getVal(PrefName.MangaDefaultView))
