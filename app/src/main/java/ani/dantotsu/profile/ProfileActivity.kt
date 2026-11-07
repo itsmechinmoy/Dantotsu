@@ -107,6 +107,13 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
                     }
                 })
 
+                setupProfileViews(user)
+            }
+        }
+    }
+
+    private fun setupProfileViews(user: User) {
+        val context = this
                 bindingProfileAppBar = ItemProfileAppBarBinding.bind(binding.root).apply {
                     binding.profileProgressBar.visibility = View.GONE
                     followButton.isGone =
@@ -280,8 +287,7 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
                     profileCloseButton.setOnClickListener {
                         onBackPressedDispatcher.onBackPressed()
                     }
-                }
-            }
+                
         }
     }
 

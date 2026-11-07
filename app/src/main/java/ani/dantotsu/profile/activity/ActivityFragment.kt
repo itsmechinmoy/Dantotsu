@@ -60,27 +60,8 @@ class ActivityFragment : Fragment() {
             activityId = if (it.containsKey("activityId")) it.getInt("activityId").takeIf { id -> id != 0 } else null
         }
         val isUserActivity = type == ActivityType.USER || type == ActivityType.GLOBAL || userId == null || userId == Anilist.userid
-        binding.titleBar.visibility =
-            if (type != ActivityType.ONE) View.VISIBLE else View.GONE
-        binding.titleText.text = when (type) {
-            ActivityType.OTHER_USER -> if (userId == null || userId == Anilist.userid) getString(R.string.create_new_activity) else getString(R.string.write_a_message)
-            ActivityType.USER, ActivityType.GLOBAL -> getString(R.string.create_new_activity)
-            ActivityType.ONE -> ""
-        }
-        binding.titleImage.visibility = when (type) {
-            ActivityType.OTHER_USER -> View.VISIBLE
-            ActivityType.USER, ActivityType.GLOBAL -> if (Anilist.token != null) View.VISIBLE else View.GONE
-            else -> View.GONE
-        }
-        
-        // Set up filter icon visibility
-        binding.filterButton.visibility = if (type != ActivityType.ONE) View.VISIBLE else View.GONE
-        binding.filterButton.setOnClickListener {
-            showFilterBottomSheet()
-        }
-        
-        binding.titleImage.setOnClickListener { handleTitleImageClick() }
-        binding.listRecyclerView.adapter = adapter
+        setupHeaderBar()
+                binding.listRecyclerView.adapter = adapter
         binding.listRecyclerView.layoutManager = LinearLayoutManager(context)
         binding.listProgressBar.isVisible = true
 
@@ -298,4 +279,27 @@ class ActivityFragment : Fragment() {
             }
         }
     }
+    private fun setupHeaderBar() {
+        binding.titleBar.visibility =
+            if (type != ActivityType.ONE) View.VISIBLE else View.GONE
+        binding.titleText.text = when (type) {
+            ActivityType.OTHER_USER -> if (userId == null || userId == Anilist.userid) getString(R.string.create_new_activity) else getString(R.string.write_a_message)
+            ActivityType.USER, ActivityType.GLOBAL -> getString(R.string.create_new_activity)
+            ActivityType.ONE -> ""
+        }
+        binding.titleImage.visibility = when (type) {
+            ActivityType.OTHER_USER -> View.VISIBLE
+            ActivityType.USER, ActivityType.GLOBAL -> if (Anilist.token != null) View.VISIBLE else View.GONE
+            else -> View.GONE
+        }
+        
+        // Set up filter icon visibility
+        binding.filterButton.visibility = if (type != ActivityType.ONE) View.VISIBLE else View.GONE
+        binding.filterButton.setOnClickListener {
+            showFilterBottomSheet()
+        }
+        
+        binding.titleImage.setOnClickListener { handleTitleImageClick() }
+    }
+
 }

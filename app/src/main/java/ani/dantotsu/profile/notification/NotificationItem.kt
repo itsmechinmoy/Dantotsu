@@ -56,34 +56,11 @@ class NotificationItem(
 
         binding.root.context.customAlertDialog().apply {
             if (canDeleteLocal) {
-                setTitle(R.string.delete)
-            } else {
-                setTitle(R.string.activity_subscription)
-            }
-            setMessage(ActivityItemBuilder.getContent(notification))
-            if (canDeleteLocal) {
                 setPosButton(R.string.yes) {
-                    if (type == COMMENT) {
-                        val list = PrefManager.getNullableVal<List<CommentStore>>(
-                            PrefName.CommentNotificationStore,
-                            null
-                        ) ?: listOf()
-                        val newList = list.filter { it.commentId != notification.commentId }
-                        PrefManager.setVal(PrefName.CommentNotificationStore, newList)
-                        parentAdapter.remove(this@NotificationItem)
-                    } else if (type == SUBSCRIPTION) {
-                        val list = PrefManager.getNullableVal<List<SubscriptionStore>>(
-                            PrefName.SubscriptionNotificationStore,
-                            null
-                        ) ?: listOf()
-                        val newList =
-                            list.filter { (it.time / 1000L).toInt() != notification.createdAt }
-                        PrefManager.setVal(PrefName.SubscriptionNotificationStore, newList)
-                        parentAdapter.remove(this@NotificationItem)
-                    }
+                    handleLocalNotificationDelete()
                 }
             }
-            if (canUnsubscribeActivity) {
+                        if (canUnsubscribeActivity) {
                 val unsubscribeAction = {
                     val activityId = notification.activityId
                     if (activityId == null) {
@@ -521,6 +498,26 @@ class NotificationItem(
         binding.notificationBannerImage.setOnLongClickListener {
             dialog()
             true
+        }
+    }
+
+    private fun handleLocalNotificationDelete() {
+        if (type == COMMENT) {
+            val list = PrefManager.getNullableVal<List<CommentStore>>(
+                PrefName.CommentNotificationStore,
+                null
+            ) ?: listOf()
+            val newList = list.filter { it.commentId != notification.commentId }
+            PrefManager.setVal(PrefName.CommentNotificationStore, newList)
+            parentAdapter.remove(this@NotificationItem)
+        } else if (type == SUBSCRIPTION) {
+            val list = PrefManager.getNullableVal<List<SubscriptionStore>>(
+                PrefName.SubscriptionNotificationStore,
+                null
+            ) ?: listOf()
+            val newList = list.filter { (it.time / 1000L).toInt() != notification.createdAt }
+            PrefManager.setVal(PrefName.SubscriptionNotificationStore, newList)
+            parentAdapter.remove(this@NotificationItem)
         }
     }
 

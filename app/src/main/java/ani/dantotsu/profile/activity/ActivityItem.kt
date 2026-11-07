@@ -103,32 +103,7 @@ class ActivityItem(
                 }
             }
         }
-        binding.activityDelete.isVisible =
-            activity.userId == Anilist.userid ||
-            activity.messenger?.id == Anilist.userid ||
-            activity.recipientId == Anilist.userid ||
-            activity.recipient?.id == Anilist.userid
-        binding.activityDelete.setOnClickListener {
-            binding.root.context.customAlertDialog().apply {
-                setTitle(R.string.delete)
-                setMessage(binding.root.context.getString(R.string.delete_activity_confirm))
-                setPosButton(R.string.delete) {
-                    scope.launch {
-                        val res = Anilist.mutation.deleteActivity(activity.id)
-                        withContext(Dispatchers.Main) {
-                            if (res) {
-                                snackString("Deleted activity")
-                                parentAdapter.remove(this@ActivityItem)
-                            } else {
-                                snackString("Failed to delete activity")
-                            }
-                        }
-                    }
-                }
-                setNegButton(R.string.cancel)
-                show()
-            }
-        }
+        setupDeleteAction(scope)
 
         binding.activityPin.isVisible = activity.userId == Anilist.userid
         binding.activityPin.text = if (activity.isPinned == true) "Unpin" else "Pin"
@@ -311,4 +286,34 @@ class ActivityItem(
     override fun initializeViewBinding(view: View): ItemActivityBinding {
         return ItemActivityBinding.bind(view)
     }
+    private fun setupDeleteAction(scope: CoroutineScope) {
+        binding.activityDelete.isVisible =
+            activity.userId == Anilist.userid ||
+            activity.messenger?.id == Anilist.userid ||
+            activity.recipientId == Anilist.userid ||
+            activity.recipient?.id == Anilist.userid
+        binding.activityDelete.setOnClickListener {
+            binding.root.context.customAlertDialog().apply {
+                setTitle(R.string.delete)
+                setMessage(binding.root.context.getString(R.string.delete_activity_confirm))
+                setPosButton(R.string.delete) {
+                    scope.launch {
+                        val res = Anilist.mutation.deleteActivity(activity.id)
+                        withContext(Dispatchers.Main) {
+                            if (res) {
+                                snackString("Deleted activity")
+                                parentAdapter.remove(this@ActivityItem)
+                            } else {
+                                snackString("Failed to delete activity")
+                            }
+                        }
+                    }
+                }
+                setNegButton(R.string.cancel)
+                show()
+            }
+        }
+
+    }
+
 }
