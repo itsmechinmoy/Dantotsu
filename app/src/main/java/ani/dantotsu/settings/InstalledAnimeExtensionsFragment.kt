@@ -46,7 +46,7 @@ import uy.kohesive.injekt.api.get
 import java.util.Locale
 
 
-class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
+class InstalledAnimeExtensionsFragment : BaseInstalledExtensionsFragment(), SearchQueryHandler {
     private var _binding: FragmentExtensionsBinding? = null
     private val binding get() = _binding!!
     private lateinit var extensionsRecyclerView: RecyclerView
@@ -55,25 +55,12 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
     private val extensionsAdapter = AnimeExtensionsAdapter(
         { pkg ->
             val name = pkg.name
-            val changeUIVisibility: (Boolean) -> Unit = { show ->
-                val activity = activity as? ExtensionsActivity
-                if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
-                    activity.findViewById<ViewPager2>(R.id.viewPager).isVisible = show
-                    activity.findViewById<TabLayout>(R.id.tabLayout).isVisible = show
-                    activity.findViewById<TextInputLayout>(R.id.searchView).isVisible = show
-                    activity.findViewById<ImageView>(R.id.languageselect).isVisible = show
-                    activity.findViewById<TextView>(R.id.extensions).text =
-                        if (show) activity.getString(R.string.extensions) else name
-                    activity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer).isGone = show
-                }
-            }
-            var itemSelected = false
             val allSettings = pkg.sources.filterIsInstance<ConfigurableAnimeSource>()
             if (allSettings.isNotEmpty()) {
                 val openPrefFragment: (ConfigurableAnimeSource) -> Unit = { source ->
-                    changeUIVisibility(false)
+                    changeExtensionsUIVisibility(false, name)
                     val fragment = AnimeSourcePreferencesFragment().getInstance(source.id) {
-                        changeUIVisibility(true)
+                        changeExtensionsUIVisibility(true)
                     }
                     parentFragmentManager.beginTransaction()
                         .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
@@ -81,29 +68,15 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
                         .addToBackStack(null)
                         .commit()
                 }
-
-                if (allSettings.size > 1) {
-                    val names = allSettings.map { getLanguageName(it.lang) }.toTypedArray()
-                    var selectedIndex = 0
-                    requireContext().customAlertDialog().apply {
-                        setTitle("Select a Source")
-                        singleChoiceItems(names, selectedIndex) { which ->
-                            itemSelected = true
-                            openPrefFragment(allSettings[which])
-                        }
-                        onDismiss {
-                            if (!itemSelected) {
-                                changeUIVisibility(true)
-                            }
-                        }
-                        show()
-                    }
-                } else {
-                    openPrefFragment(allSettings[0])
-                }
+                showConfigurableSourceSelection(
+                    requireContext(),
+                    allSettings,
+                    { getLanguageName(it.lang) },
+                    openPrefFragment,
+                    { changeExtensionsUIVisibility(true) }
+                )
             } else {
-                Toast.makeText(requireContext(), "Source is not configurable", Toast.LENGTH_SHORT)
-                    .show()
+                Toast.makeText(requireContext(), "Source is not configurable", Toast.LENGTH_SHORT).show()
             }
         },
         { pkg ->
@@ -113,56 +86,11 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
             }
         }, { pkg ->
             if (isAdded) {
-                val context = requireContext()
-                val notificationManager =
-                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
                 if (pkg.hasUpdate) {
-                    animeExtensionManager.updateExtension(pkg)
-                        .observeOn(AndroidSchedulers.mainThread())
-                        .subscribe(
-                            { installStep ->
-                                val builder = NotificationCompat.Builder(
-                                    context,
-                                    Notifications.CHANNEL_DOWNLOADER_PROGRESS
-                                )
-                                    .setSmallIcon(R.drawable.ic_round_sync_24)
-                                    .setContentTitle("Updating extension")
-                                    .setContentText("Step: $installStep")
-                                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                                notificationManager.notify(1, builder.build())
-                            },
-                            { error ->
-                                Injekt.get<CrashlyticsInterface>().logException(error)
-                                Logger.log(error)
-                                val builder = NotificationCompat.Builder(
-                                    context,
-                                    Notifications.CHANNEL_DOWNLOADER_ERROR
-                                )
-                                    .setSmallIcon(R.drawable.ic_round_info_24)
-                                    .setContentTitle("Update failed: ${error.message}")
-                                    .setContentText("Error: ${error.message}")
-                                    .setPriority(NotificationCompat.PRIORITY_HIGH)
-                                notificationManager.notify(1, builder.build())
-                                snackString("Update failed: ${error.message}")
-                            },
-                            {
-                                val builder = NotificationCompat.Builder(
-                                    context,
-                                    Notifications.CHANNEL_DOWNLOADER_PROGRESS
-                                )
-                                    .setSmallIcon(R.drawable.ic_circle_check)
-                                    .setContentTitle("Update complete")
-                                    .setContentText("The extension has been successfully updated.")
-                                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                                notificationManager.notify(1, builder.build())
-                                snackString("Extension updated")
-                            }
-                        )
+                    subscribeExtensionUpdate(requireContext(), animeExtensionManager.updateExtension(pkg))
                 } else {
                     snackString("No update available")
                 }
-
             }
         }, skipIcons
     )
@@ -178,44 +106,18 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
         extensionsRecyclerView.layoutManager = SafeLinearLayoutManager(requireContext())
         extensionsRecyclerView.adapter = extensionsAdapter
 
-        val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(
-            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
-        ) {
-            override fun onMove(
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder,
-                target: RecyclerView.ViewHolder
-            ): Boolean {
-                val fromPosition = viewHolder.absoluteAdapterPosition
-                val toPosition = target.absoluteAdapterPosition
+        setupExtensionsDragAndDrop(
+            extensionsRecyclerView,
+            onMoveItem = { fromPosition, toPosition ->
                 val newList = extensionsAdapter.currentList.toMutableList().apply {
                     add(toPosition, removeAt(fromPosition))
                 }
                 extensionsAdapter.submitList(newList)
-                return true
-            }
-
-            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
-
-            override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
-                super.onSelectedChanged(viewHolder, actionState)
-                if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
-                    viewHolder?.itemView?.elevation = 8f
-                    viewHolder?.itemView?.translationZ = 8f
-                }
-            }
-
-            override fun clearView(
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder
-            ) {
-                super.clearView(recyclerView, viewHolder)
+            },
+            onClearView = {
                 extensionsAdapter.updatePref()
-                viewHolder.itemView.elevation = 0f
-                viewHolder.itemView.translationZ = 0f
             }
-        }
-        ItemTouchHelper(itemTouchHelperCallback).attachToRecyclerView(extensionsRecyclerView)
+        )
 
 
         lifecycleScope.launch {
