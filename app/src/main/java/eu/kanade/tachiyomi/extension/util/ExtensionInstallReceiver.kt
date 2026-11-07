@@ -69,115 +69,79 @@ internal class ExtensionInstallReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent == null) return
         when (intent.action) {
-            Intent.ACTION_PACKAGE_ADDED, ACTION_EXTENSION_ADDED -> {
-                if (isReplacing(intent) && intent.action == Intent.ACTION_PACKAGE_ADDED) return
+            Intent.ACTION_PACKAGE_ADDED, ACTION_EXTENSION_ADDED -> handlePackageAdded(context, intent)
+            Intent.ACTION_PACKAGE_REPLACED, ACTION_EXTENSION_REPLACED -> handlePackageReplaced(context, intent)
+            Intent.ACTION_PACKAGE_REMOVED, ACTION_EXTENSION_REMOVED -> handlePackageRemoved(intent)
+        }
+    }
 
-                launchNow {
-                    when (type) {
-                        MediaType.ANIME -> {
-                            when (val result = getAnimeExtensionFromIntent(context, intent)) {
-                                is AnimeLoadResult.Success -> animeListener?.onExtensionInstalled(
-                                    result.extension
-                                )
+    private fun handlePackageAdded(context: Context, intent: Intent) {
+        if (isReplacing(intent) && intent.action == Intent.ACTION_PACKAGE_ADDED) return
 
-                                is AnimeLoadResult.Untrusted -> animeListener?.onExtensionUntrusted(
-                                    result.extension
-                                )
-
-                                else -> {}
-                            }
-                        }
-
-                        MediaType.MANGA -> {
-                            when (val result = getMangaExtensionFromIntent(context, intent)) {
-                                is MangaLoadResult.Success -> mangaListener?.onExtensionInstalled(
-                                    result.extension
-                                )
-
-                                is MangaLoadResult.Untrusted -> mangaListener?.onExtensionUntrusted(
-                                    result.extension
-                                )
-
-                                else -> {}
-                            }
-                        }
-
-                        MediaType.NOVEL -> {
-                            when (val result = getNovelExtensionFromIntent(context, intent)) {
-                                is NovelLoadResult.Success -> novelListener?.onExtensionInstalled(
-                                    result.extension
-                                )
-
-                                else -> {}
-                            }
-                        }
-
+        launchNow {
+            when (type) {
+                MediaType.ANIME -> {
+                    when (val result = getAnimeExtensionFromIntent(context, intent)) {
+                        is AnimeLoadResult.Success -> animeListener?.onExtensionInstalled(result.extension)
+                        is AnimeLoadResult.Untrusted -> animeListener?.onExtensionUntrusted(result.extension)
                         else -> {}
                     }
                 }
-            }
-
-            Intent.ACTION_PACKAGE_REPLACED, ACTION_EXTENSION_REPLACED -> {
-                launchNow {
-                    when (type) {
-                        MediaType.ANIME -> {
-                            when (val result = getAnimeExtensionFromIntent(context, intent)) {
-                                is AnimeLoadResult.Success -> animeListener?.onExtensionUpdated(
-                                    result.extension
-                                )
-
-                                else -> {}
-                            }
-                        }
-
-                        MediaType.MANGA -> {
-                            when (val result = getMangaExtensionFromIntent(context, intent)) {
-                                is MangaLoadResult.Success -> mangaListener?.onExtensionUpdated(
-                                    result.extension
-                                )
-
-                                else -> {}
-                            }
-                        }
-
-                        MediaType.NOVEL -> {
-                            when (val result = getNovelExtensionFromIntent(context, intent)) {
-                                is NovelLoadResult.Success -> novelListener?.onExtensionUpdated(
-                                    result.extension
-                                )
-
-                                else -> {}
-                            }
-                        }
-
+                MediaType.MANGA -> {
+                    when (val result = getMangaExtensionFromIntent(context, intent)) {
+                        is MangaLoadResult.Success -> mangaListener?.onExtensionInstalled(result.extension)
+                        is MangaLoadResult.Untrusted -> mangaListener?.onExtensionUntrusted(result.extension)
                         else -> {}
                     }
                 }
-            }
-
-            Intent.ACTION_PACKAGE_REMOVED, ACTION_EXTENSION_REMOVED -> {
-                if (isReplacing(intent) && intent.action == Intent.ACTION_PACKAGE_REMOVED) return
-
-                val pkgName = getPackageNameFromIntent(intent)
-                if (pkgName != null) {
-                    when (type) {
-                        MediaType.ANIME -> {
-                            animeListener?.onPackageUninstalled(pkgName)
-                        }
-
-                        MediaType.MANGA -> {
-                            mangaListener?.onPackageUninstalled(pkgName)
-                        }
-
-                        MediaType.NOVEL -> {
-                            novelListener?.onPackageUninstalled(pkgName)
-                        }
-
+                MediaType.NOVEL -> {
+                    when (val result = getNovelExtensionFromIntent(context, intent)) {
+                        is NovelLoadResult.Success -> novelListener?.onExtensionInstalled(result.extension)
                         else -> {}
                     }
                 }
+                else -> {}
             }
         }
+    }
+
+    private fun handlePackageReplaced(context: Context, intent: Intent) {
+        launchNow {
+            when (type) {
+                MediaType.ANIME -> {
+                    when (val result = getAnimeExtensionFromIntent(context, intent)) {
+                        is AnimeLoadResult.Success -> animeListener?.onExtensionUpdated(result.extension)
+                        else -> {}
+                    }
+                }
+                MediaType.MANGA -> {
+                    when (val result = getMangaExtensionFromIntent(context, intent)) {
+                        is MangaLoadResult.Success -> mangaListener?.onExtensionUpdated(result.extension)
+                        else -> {}
+                    }
+                }
+                MediaType.NOVEL -> {
+                    when (val result = getNovelExtensionFromIntent(context, intent)) {
+                        is NovelLoadResult.Success -> novelListener?.onExtensionUpdated(result.extension)
+                        else -> {}
+                    }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    private fun handlePackageRemoved(intent: Intent) {
+        if (isReplacing(intent) && intent.action == Intent.ACTION_PACKAGE_REMOVED) return
+
+        val pkgName = getPackageNameFromIntent(intent) ?: return
+        when (type) {
+            MediaType.ANIME -> animeListener?.onPackageUninstalled(pkgName)
+            MediaType.MANGA -> mangaListener?.onPackageUninstalled(pkgName)
+            MediaType.NOVEL -> novelListener?.onPackageUninstalled(pkgName)
+            else -> {}
+        }
+    }
     }
 
     /**

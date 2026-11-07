@@ -42,24 +42,28 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         val minutes = timeUntil % (1000 * 60 * 60 * 24) % (1000 * 60 * 60) / (1000 * 60)
         
         return if (timeUntil >= 0) {
-            buildString {
-                if (days > 0) append("$days day${if (days > 1) "s" else ""} ")
-                if (hours > 0 || days > 0) append("$hours hour${if (hours > 1) "s" else ""} ")
-                append("$minutes minute${if (minutes > 1) "s" else ""}")
-            }.trim()
+            formatFutureTime(days, hours, minutes)
         } else {
-            val elapsedDays = -days
-            val elapsedHours = -hours
-            val elapsedMinutes = -minutes
-            buildString {
-                append("Aired ")
-                if (elapsedDays > 0) append("$elapsedDays day${if (elapsedDays > 1) "s" else ""} ")
-                if (elapsedHours > 0 || elapsedDays > 0) append("$elapsedHours hour${if (elapsedHours > 1) "s" else ""} ")
-                append("$elapsedMinutes minute${if (elapsedMinutes > 1) "s" else ""} ago")
-            }.trim()
+            formatElapsedTime(-days, -hours, -minutes)
         }
     }
 
+    private fun formatFutureTime(days: Long, hours: Long, minutes: Long): String {
+        return buildString {
+            if (days > 0) append("$days day${if (days > 1) "s" else ""} ")
+            if (hours > 0 || days > 0) append("$hours hour${if (hours > 1) "s" else ""} ")
+            append("$minutes minute${if (minutes > 1) "s" else ""}")
+        }.trim()
+    }
+
+    private fun formatElapsedTime(elapsedDays: Long, elapsedHours: Long, elapsedMinutes: Long): String {
+        return buildString {
+            append("Aired ")
+            if (elapsedDays > 0) append("$elapsedDays day${if (elapsedDays > 1) "s" else ""} ")
+            if (elapsedHours > 0 || elapsedDays > 0) append("$elapsedHours hour${if (elapsedHours > 1) "s" else ""} ")
+            append("$elapsedMinutes minute${if (elapsedMinutes > 1) "s" else ""} ago")
+        }.trim()
+    }
     override fun onDataSetChanged() {
         if (refreshing) return
         Logger.log("UpcomingRemoteViewsFactory onDataSetChanged")
@@ -88,67 +92,74 @@ class UpcomingRemoteViewsFactory(private val context: Context) :
         }
 
         if (timeSinceLastUpdate > 1000 * 60 * 60 * 4 || serializedMedia.isNullOrEmpty() || forceRefresh) {
-            runBlocking(Dispatchers.IO) {
-                Anilist.getSavedToken()
-                val upcoming = Anilist.query.getUpcomingAnime(userId)
-                val seen = mutableSetOf<Int>()
-                upcoming.forEach { mediaItem ->
-                    if (seen.add(mediaItem.id)) {
-                        val timeUntilAiring = mediaItem.timeUntilAiring ?: 0
-                        if (timeUntilAiring > 0) {
-                            val episodeNumber =  mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
-                            widgetItems.add(
-                                WidgetItem(
-                                    title = mediaItem.userPreferredName,
-                                    countdown = formatTime(timeUntilAiring),
-                                    image = mediaItem.cover ?: "",
-                                    id = mediaItem.id,
-                                    episode = episodeNumber
-                                )
-                            )
-                        }
-                    }
-                }
-                prefs.edit().putLong(UpcomingWidget.LAST_UPDATE, System.currentTimeMillis()).apply()
-                val serialized = serializeMedia(upcoming)
-                if (serialized != null) {
-                    prefs.edit().putString(UpcomingWidget.PREF_SERIALIZED_MEDIA, serialized).apply()
-                } else {
-                    prefs.edit().putString(UpcomingWidget.PREF_SERIALIZED_MEDIA, "").apply()
-                    Logger.log("Error serializing media")
-                }
-                refreshing = false
-            }
+            fetchUpcomingFromNetwork(userId, prefs)
         } else {
-            refreshing = false
-            if (media != null) {
-                val seen = mutableSetOf<Int>()
-                media.forEach { mediaItem ->
-                    if (seen.add(mediaItem.id)) {
-                        val timeUntilAiring = mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0
-                        if (timeUntilAiring > 0) {
-                            val episodeNumber = mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
-                            widgetItems.add(
-                                WidgetItem(
-                                    title = mediaItem.userPreferredName,
-                                    countdown = formatTime(timeUntilAiring),
-                                    image = mediaItem.cover ?: "",
-                                    id = mediaItem.id,
-                                    episode = episodeNumber
-                                )
-                            )
-                        }
-                    }
-                }
-            } else {
-                prefs.edit().putString(UpcomingWidget.PREF_SERIALIZED_MEDIA, "").apply()
-                prefs.edit().putLong(UpcomingWidget.LAST_UPDATE, 0).apply()
-                Logger.log("Error deserializing media")
-                fillWidgetItems()
-            }
+            populateFromCache(media, timeSinceLastUpdate, prefs)
         }
     }
 
+    private fun fetchUpcomingFromNetwork(userId: String, prefs: SharedPreferences) {
+        runBlocking(Dispatchers.IO) {
+            Anilist.getSavedToken()
+            val upcoming = Anilist.query.getUpcomingAnime(userId)
+            val seen = mutableSetOf<Int>()
+            upcoming.forEach { mediaItem ->
+                if (seen.add(mediaItem.id)) {
+                    val timeUntilAiring = mediaItem.timeUntilAiring ?: 0
+                    if (timeUntilAiring > 0) {
+                        val episodeNumber =  mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
+                        widgetItems.add(
+                            WidgetItem(
+                                title = mediaItem.userPreferredName,
+                                countdown = formatTime(timeUntilAiring),
+                                image = mediaItem.cover ?: "",
+                                id = mediaItem.id,
+                                episode = episodeNumber
+                            )
+                        )
+                    }
+                }
+            }
+            prefs.edit().putLong(UpcomingWidget.LAST_UPDATE, System.currentTimeMillis()).apply()
+            val serialized = serializeMedia(upcoming)
+            if (serialized != null) {
+                prefs.edit().putString(UpcomingWidget.PREF_SERIALIZED_MEDIA, serialized).apply()
+            } else {
+                prefs.edit().putString(UpcomingWidget.PREF_SERIALIZED_MEDIA, "").apply()
+                Logger.log("Error serializing media")
+            }
+            refreshing = false
+        }
+    }
+
+    private fun populateFromCache(media: List<Media>?, timeSinceLastUpdate: Long, prefs: SharedPreferences) {
+        refreshing = false
+        if (media != null) {
+            val seen = mutableSetOf<Int>()
+            media.forEach { mediaItem ->
+                if (seen.add(mediaItem.id)) {
+                    val timeUntilAiring = mediaItem.timeUntilAiring?.minus(timeSinceLastUpdate) ?: 0
+                    if (timeUntilAiring > 0) {
+                        val episodeNumber = mediaItem.anime?.nextAiringEpisode?.let { it + 1 }
+                        widgetItems.add(
+                            WidgetItem(
+                                title = mediaItem.userPreferredName,
+                                countdown = formatTime(timeUntilAiring),
+                                image = mediaItem.cover ?: "",
+                                id = mediaItem.id,
+                                episode = episodeNumber
+                            )
+                        )
+                    }
+                }
+            }
+        } else {
+            prefs.edit().putString(UpcomingWidget.PREF_SERIALIZED_MEDIA, "").apply()
+            prefs.edit().putLong(UpcomingWidget.LAST_UPDATE, 0).apply()
+            Logger.log("Error deserializing media")
+            fillWidgetItems()
+        }
+    }
     private fun serializeMedia(media: List<Media>): String? {
         return try {
             val gson = GsonBuilder()

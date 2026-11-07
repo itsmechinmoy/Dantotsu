@@ -14,6 +14,11 @@ object MalScraper {
     suspend fun loadMedia(media: Media) {
         val malId = media.idMAL ?: return
 
+        scrapeMalDirectly(media, malId)
+        fallbackToJikan(media, malId)
+    }
+
+    private suspend fun scrapeMalDirectly(media: Media, malId: Int) {
         // 1. Try scraping MyAnimeList directly
         try {
             withTimeout(5000) {
@@ -70,6 +75,9 @@ object MalScraper {
             Logger.log("MalScraper: Direct scrape failed for malId $malId: ${e.message}")
         }
 
+    }
+
+    private suspend fun fallbackToJikan(media: Media, malId: Int) {
         // 2. Fallback to Jikan API (which uses multi-mirror fallback: Jikan, midnightignite, tenrai)
         try {
             if (media.anime != null && media.anime.op.isEmpty() && media.anime.ed.isEmpty()) {
@@ -103,4 +111,5 @@ object MalScraper {
             Logger.log("MalScraper: Jikan fallback failed for malId $malId: ${e.message}")
         }
     }
+
 }

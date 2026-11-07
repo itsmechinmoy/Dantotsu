@@ -92,6 +92,28 @@ class App : Application(), GraphProvider<AppGraph> {
         }
         registerActivityLifecycleCallbacks(mFTActivityLifecycleCallbacks)
 
+        setupMemoryLeakTracking()
+        crashlytics.setCrashlyticsCollectionEnabled(!DisabledReports)
+        setupCrashlyticsMetadata(crashlytics)
+        initializeNetwork()
+
+        setupNotificationChannels()
+        if (!LogcatLogger.isInstalled) {
+            LogcatLogger.install(AndroidLogcatLogger(LogPriority.VERBOSE))
+        }
+
+        if (PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 0) {
+            if (BuildConfig.FLAVOR.contains("fdroid")) {
+                PrefManager.setVal(PrefName.CommentsEnabled, 2)
+            } else {
+                PrefManager.setVal(PrefName.CommentsEnabled, 1)
+            }
+        }
+
+        initExtensionsAndBackgroundTasks()
+    }
+
+    private fun setupMemoryLeakTracking() {
         runCatching {
             leakcanary.LeakCanary.config = leakcanary.LeakCanary.config.copy(
                 dumpHeap = false,
@@ -123,7 +145,9 @@ class App : Application(), GraphProvider<AppGraph> {
             PrefManager.setVal(PrefName.LastLeakSummaryTimestamp, now)
         }
 
-        crashlytics.setCrashlyticsCollectionEnabled(!DisabledReports)
+    }
+
+    private fun setupCrashlyticsMetadata(crashlytics: CrashlyticsInterface) {
         (PrefManager.getVal(PrefName.SharedUserID) as Boolean).let {
             if (!it) return@let
             val dUsername = PrefManager.getVal(PrefName.DiscordUserName, null as String?)
@@ -137,21 +161,9 @@ class App : Application(), GraphProvider<AppGraph> {
         }
         crashlytics.setCustomKey("device Info", SettingsActivity.getDeviceInfo())
 
-        initializeNetwork()
+    }
 
-        setupNotificationChannels()
-        if (!LogcatLogger.isInstalled) {
-            LogcatLogger.install(AndroidLogcatLogger(LogPriority.VERBOSE))
-        }
-
-        if (PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 0) {
-            if (BuildConfig.FLAVOR.contains("fdroid")) {
-                PrefManager.setVal(PrefName.CommentsEnabled, 2)
-            } else {
-                PrefManager.setVal(PrefName.CommentsEnabled, 1)
-            }
-        }
-
+    private fun initExtensionsAndBackgroundTasks() {
         val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         applicationScope.launch(Dispatchers.IO) {
             animeExtensionManager = Injekt.get()
@@ -210,7 +222,6 @@ class App : Application(), GraphProvider<AppGraph> {
             ani.dantotsu.others.AniskipCsvFallback.getInstance(this@App).syncIfNeeded()
         }
     }
-
     private fun setupNotificationChannels() {
         try {
             Notifications.createChannels(this)
