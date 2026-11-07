@@ -113,7 +113,6 @@ fun syncPendingProgressUpdates() {
                 break
             }
         }
-        }
         PrefManager.setVal(PrefName.PendingProgressUpdates, remaining)
         if (remaining.isEmpty()) {
             toast(currContext()?.getString(R.string.sync_complete))

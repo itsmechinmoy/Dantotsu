@@ -1,20 +1,23 @@
 package tachiyomi.source.local
 
-import com.hippo.unifile.UniFile
+import androidx.documentfile.provider.DocumentFile
 
 object LocalSourceHelper {
 
-    fun resolveTargetDir(baseDir: UniFile, subfolder: String): UniFile {
+    fun resolveTargetDir(baseDir: DocumentFile?, subfolder: String): DocumentFile? {
+        if (baseDir == null) return null
         val localDir = baseDir.findFile("local") ?: baseDir
         return localDir.findFile(subfolder) ?: localDir
     }
 
     fun filterEntries(
-        targetDir: UniFile,
+        targetDir: DocumentFile?,
         lastModifiedLimit: Long,
         query: String
-    ): List<UniFile> {
-        return targetDir.listFiles()
+    ): List<DocumentFile> {
+        if (targetDir == null) return emptyList()
+        val files = targetDir.listFiles() ?: return emptyList()
+        return files
             .filter { it.isDirectory && !it.name.orEmpty().startsWith('.') }
             .distinctBy { it.name }
             .filter {

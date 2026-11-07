@@ -94,6 +94,7 @@ class MangaReadAdapter(
         return ViewHolder(bind)
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val binding = holder.binding
         _binding = binding
@@ -218,7 +219,142 @@ class MangaReadAdapter(
 
         binding.mediaTorrentButton.visibility = View.GONE
 
-        setupLayoutOptionsDialog(source)
+        binding.mediaNestedButton.setOnClickListener {
+            val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
+            var refresh = false
+            var run = false
+            var reversed = media.selected!!.recyclerReversed
+            var style =
+                media.selected!!.recyclerStyle ?: PrefManager.getVal(PrefName.MangaDefaultView)
+            dialogBinding.apply {
+                mediaSourceTop.rotation = if (reversed) -90f else 90f
+                sortText.text = if (reversed) "Down to Up" else "Up to Down"
+                mediaSourceTop.setOnClickListener {
+                    reversed = !reversed
+                    mediaSourceTop.rotation = if (reversed) -90f else 90f
+                    sortText.text = if (reversed) "Down to Up" else "Up to Down"
+                    run = true
+                }
+
+                // Grids
+                mediaSourceGrid.visibility = View.GONE
+                var selected = when (style) {
+                    0 -> mediaSourceList
+                    1 -> mediaSourceCompact
+                    else -> mediaSourceList
+                }
+                when (style) {
+                    0 -> layoutText.setText(R.string.list)
+                    1 -> layoutText.setText(R.string.compact)
+                    else -> mediaSourceList
+                }
+                selected.alpha = 1f
+                fun selected(it: ImageButton) {
+                    selected.alpha = 0.33f
+                    selected = it
+                    selected.alpha = 1f
+                }
+                mediaSourceList.setOnClickListener {
+                    selected(it as ImageButton)
+                    style = 0
+                    layoutText.setText(R.string.list)
+                    run = true
+                }
+                mediaSourceCompact.setOnClickListener {
+                    selected(it as ImageButton)
+                    style = 1
+                    layoutText.setText(R.string.compact)
+                    run = true
+                }
+                mediaWebviewContainer.setOnClickListener {
+                    if (!WebViewUtil.supportsWebView(fragment.requireContext())) {
+                        toast(R.string.webview_not_installed)
+                    }
+                    // Start CookieCatcher activity
+                    if (mangaReadSources.names.isNotEmpty() && source in 0 until mangaReadSources.names.size) {
+                        val sourceAHH = mangaReadSources[source] as? DynamicMangaParser
+                        val sourceHttp = sourceAHH?.extension?.sources?.firstOrNull() as? HttpSource
+                        val url = sourceHttp?.baseUrl
+                        url?.let {
+                            refresh = true
+                            val headersMap = try {
+                                sourceHttp.headers.toMultimap()
+                                    .mapValues { it.value.getOrNull(0) ?: "" }
+                            } catch (e: Exception) {
+                                emptyMap()
+                            }
+                            val intent =
+                                Intent(fragment.requireContext(), CookieCatcher::class.java)
+                                    .putExtra("url", url)
+                                    .putExtra("headers", headersMap as HashMap<String, String>)
+                            startActivity(fragment.requireContext(), intent, null)
+                        }
+                    }
+                }
+
+                // Multi download
+                //downloadNo.text = "0"
+                if (media.format == "LOCAL") {
+                    animeDownloadContainer.visibility = View.GONE
+                    mediaWebviewContainer.visibility = View.GONE
+                } else {
+                    mediaDownloadTop.visibility = View.VISIBLE
+                    mediaDownloadTop.setOnClickListener {
+                        fragment.requireContext().customAlertDialog().apply {
+                            setTitle("Multi Chapter Downloader")
+                        setMessage("Enter the number of chapters to download")
+                        val input = View.inflate(currContext(), R.layout.dialog_layout, null)
+                        val editText = input.findViewById<EditText>(R.id.downloadNo)
+                        setCustomView(input)
+                        setPosButton(R.string.ok) {
+                            val value = editText.text.toString().toIntOrNull()
+                            if (value != null && value > 0) {
+                                downloadNo.setText(value.toString(), TextView.BufferType.EDITABLE)
+                                fragment.multiDownload(value)
+                            } else {
+                                toast("Please enter a valid number")
+                            }
+                        }
+                        setNegButton(R.string.cancel)
+                        show()
+                    }
+                }
+                }
+                resetProgress.setOnClickListener {
+                    fragment.requireContext().customAlertDialog().apply {
+                        setTitle(" Delete Progress for all chapters of ${media.nameRomaji}")
+                        setMessage("This will delete all the locally stored progress for chapters")
+                        setPosButton(R.string.ok) {
+// Usage
+                            clearCustomValsForMedia("${media.id}", "_Chapter")
+                            clearCustomValsForMedia("${media.id}", "_Vol")
+
+                            snackString("Deleted the progress of Chapters for ${media.nameRomaji}")
+                        }
+                        setNegButton(R.string.no)
+                        show()
+                    }
+                }
+                resetProgressDef.text = getString(currContext()!!, R.string.clear_stored_chapter)
+
+                fragment.requireContext().customAlertDialog().apply {
+                    setTitle("Options")
+                    setCustomView(root)
+                    setPosButton("OK") {
+                        if (run) fragment.onIconPressed(style, reversed)
+                        val value = downloadNo.text.toString().toIntOrNull()
+                        if (value != null && value > 0) {
+                            fragment.multiDownload(value)
+                        }
+                        if (refresh) fragment.loadChapters(source, true)
+                    }
+                    setNegButton("Cancel") {
+                        if (refresh) fragment.loadChapters(source, true)
+                    }
+                    show()
+                }
+            }
+        }
         // Chapter Handling
         handleChapters()
     }
@@ -283,7 +419,37 @@ class MangaReadAdapter(
                 }
 
                 val targetChpNum = (if (anilistEp > appEp) anilistEp else appEp).toFloat()
-                var continueChap = resolveContinueChapter(filteredChapters, targetChpNum, binding)
+
+                var continueChap = filteredChapters.values.find { ch ->
+                    val num = MediaNameAdapter.findChapterNumber(ch.number)
+                    num != null && (num == targetChpNum || num.toInt() == targetChpNum.toInt())
+                } ?: filteredChapters.values.elementAtOrNull(targetChpNum.toInt() - 1)
+
+                if (continueChap != null) {
+                    handleProgress(
+                        binding.itemMediaProgressCont,
+                        binding.itemMediaProgress,
+                        binding.itemMediaProgressEmpty,
+                        media.id,
+                        continueChap.number
+                    )
+                    val progressWeight = (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight
+                    if (progressWeight > 0.8f) {
+                        val chapterList = filteredChapters.values.toList()
+                        val currIdx = chapterList.indexOf(continueChap)
+                        if (currIdx != -1 && currIdx + 1 < chapterList.size) {
+                            continueChap = chapterList[currIdx + 1]
+                            handleProgress(
+                                binding.itemMediaProgressCont,
+                                binding.itemMediaProgress,
+                                binding.itemMediaProgressEmpty,
+                                media.id,
+                                continueChap.number
+                            )
+                        } else {
+                            continueChap = null
+                        }
+                    }
 
                     if (continueChap != null) {
                         binding.sourceContinue.visibility = View.VISIBLE
@@ -438,182 +604,4 @@ class MangaReadAdapter(
 
 interface ScanlatorSelectionListener {
     fun onScanlatorsSelected()
-    private fun setupLayoutOptionsDialog(source: Int) {
-        val binding = _binding ?: return
-        binding.mediaNestedButton.setOnClickListener {
-            val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
-            var refresh = false
-            var run = false
-            var reversed = media.selected!!.recyclerReversed
-            var style =
-                media.selected!!.recyclerStyle ?: PrefManager.getVal(PrefName.MangaDefaultView)
-            dialogBinding.apply {
-                mediaSourceTop.rotation = if (reversed) -90f else 90f
-                sortText.text = if (reversed) "Down to Up" else "Up to Down"
-                mediaSourceTop.setOnClickListener {
-                    reversed = !reversed
-                    mediaSourceTop.rotation = if (reversed) -90f else 90f
-                    sortText.text = if (reversed) "Down to Up" else "Up to Down"
-                    run = true
-                }
-
-                // Grids
-                mediaSourceGrid.visibility = View.GONE
-                var selected = when (style) {
-                    0 -> mediaSourceList
-                    1 -> mediaSourceCompact
-                    else -> mediaSourceList
-                }
-                when (style) {
-                    0 -> layoutText.setText(R.string.list)
-                    1 -> layoutText.setText(R.string.compact)
-                    else -> mediaSourceList
-                }
-                selected.alpha = 1f
-                fun selected(it: ImageButton) {
-                    selected.alpha = 0.33f
-                    selected = it
-                    selected.alpha = 1f
-                }
-                mediaSourceList.setOnClickListener {
-                    selected(it as ImageButton)
-                    style = 0
-                    layoutText.setText(R.string.list)
-                    run = true
-                }
-                mediaSourceCompact.setOnClickListener {
-                    selected(it as ImageButton)
-                    style = 1
-                    layoutText.setText(R.string.compact)
-                    run = true
-                }
-                mediaWebviewContainer.setOnClickListener {
-                    if (!WebViewUtil.supportsWebView(fragment.requireContext())) {
-                        toast(R.string.webview_not_installed)
-                    }
-                    // Start CookieCatcher activity
-                    if (mangaReadSources.names.isNotEmpty() && source in 0 until mangaReadSources.names.size) {
-                        val sourceAHH = mangaReadSources[source] as? DynamicMangaParser
-                        val sourceHttp = sourceAHH?.extension?.sources?.firstOrNull() as? HttpSource
-                        val url = sourceHttp?.baseUrl
-                        url?.let {
-                            refresh = true
-                            val headersMap = try {
-                                sourceHttp.headers.toMultimap()
-                                    .mapValues { it.value.getOrNull(0) ?: "" }
-                            } catch (e: Exception) {
-                                emptyMap()
-                            }
-                            val intent =
-                                Intent(fragment.requireContext(), CookieCatcher::class.java)
-                                    .putExtra("url", url)
-                                    .putExtra("headers", headersMap as HashMap<String, String>)
-                            startActivity(fragment.requireContext(), intent, null)
-                        }
-                    }
-                }
-
-                // Multi download
-                //downloadNo.text = "0"
-                if (media.format == "LOCAL") {
-                    animeDownloadContainer.visibility = View.GONE
-                    mediaWebviewContainer.visibility = View.GONE
-                } else {
-                    mediaDownloadTop.visibility = View.VISIBLE
-                    mediaDownloadTop.setOnClickListener {
-                        fragment.requireContext().customAlertDialog().apply {
-                            setTitle("Multi Chapter Downloader")
-                        setMessage("Enter the number of chapters to download")
-                        val input = View.inflate(currContext(), R.layout.dialog_layout, null)
-                        val editText = input.findViewById<EditText>(R.id.downloadNo)
-                        setCustomView(input)
-                        setPosButton(R.string.ok) {
-                            val value = editText.text.toString().toIntOrNull()
-                            if (value != null && value > 0) {
-                                downloadNo.setText(value.toString(), TextView.BufferType.EDITABLE)
-                                fragment.multiDownload(value)
-                            } else {
-                                toast("Please enter a valid number")
-                            }
-                        }
-                        setNegButton(R.string.cancel)
-                        show()
-                    }
-                }
-                }
-                resetProgress.setOnClickListener {
-                    fragment.requireContext().customAlertDialog().apply {
-                        setTitle(" Delete Progress for all chapters of ${media.nameRomaji}")
-                        setMessage("This will delete all the locally stored progress for chapters")
-                        setPosButton(R.string.ok) {
-// Usage
-                            clearCustomValsForMedia("${media.id}", "_Chapter")
-                            clearCustomValsForMedia("${media.id}", "_Vol")
-
-                            snackString("Deleted the progress of Chapters for ${media.nameRomaji}")
-                        }
-                        setNegButton(R.string.no)
-                        show()
-                    }
-                }
-                resetProgressDef.text = getString(currContext()!!, R.string.clear_stored_chapter)
-
-                fragment.requireContext().customAlertDialog().apply {
-                    setTitle("Options")
-                    setCustomView(root)
-                    setPosButton("OK") {
-                        if (run) fragment.onIconPressed(style, reversed)
-                        val value = downloadNo.text.toString().toIntOrNull()
-                        if (value != null && value > 0) {
-                            fragment.multiDownload(value)
-                        }
-                        if (refresh) fragment.loadChapters(source, true)
-                    }
-                    setNegButton("Cancel") {
-                        if (refresh) fragment.loadChapters(source, true)
-                    }
-                    show()
-                }
-            }
-        }    }
-
-    private fun resolveContinueChapter(
-        filteredChapters: Map<String, Chapter>,
-        targetChpNum: Float,
-        binding: FragmentMangaBinding
-    ): Chapter? {
-        var continueChap = filteredChapters.values.find { ch ->
-            val num = MediaNameAdapter.findChapterNumber(ch.number)
-            num != null && (num == targetChpNum || num.toInt() == targetChpNum.toInt())
-        } ?: filteredChapters.values.elementAtOrNull(targetChpNum.toInt() - 1)
-
-        if (continueChap != null) {
-            handleProgress(
-                binding.itemMediaProgressCont,
-                binding.itemMediaProgress,
-                binding.itemMediaProgressEmpty,
-                media.id,
-                continueChap.number
-            )
-            val progressWeight = (binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight
-            if (progressWeight > 0.8f) {
-                val chapterList = filteredChapters.values.toList()
-                val currIdx = chapterList.indexOf(continueChap)
-                if (currIdx != -1 && currIdx + 1 < chapterList.size) {
-                    continueChap = chapterList[currIdx + 1]
-                    handleProgress(
-                        binding.itemMediaProgressCont,
-                        binding.itemMediaProgress,
-                        binding.itemMediaProgressEmpty,
-                        media.id,
-                        continueChap.number
-                    )
-                } else {
-                    continueChap = null
-                }
-            }
-        }
-        return continueChap
-    }
-
 }

@@ -51,8 +51,7 @@ object StremioSubtitles {
             if (providers.contains("Stremio")) {
                 allSubs.addAll(fetchOpenSubtitles(media, season, episode, allSubs.map { it.url }.toSet()))
             }
-
-                        allSubs
+            allSubs
         }
     }
     private fun fetchOpenSubtitles(
@@ -98,5 +97,19 @@ object StremioSubtitles {
         }
         return newSubs
     }
-
 }
+
+
+
+
+@Serializable
+data class StremioResponse(
+    val subtitles: List<StremioSub> = emptyList()
+)
+
+@Serializable
+data class StremioSub(
+    val id: String,
+    val url: String,
+    val lang: String
+)

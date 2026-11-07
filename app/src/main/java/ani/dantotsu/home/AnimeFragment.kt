@@ -155,7 +155,7 @@ class AnimeFragment : Fragment() {
         model.getPopular().observe(viewLifecycleOwner) {
             if (it != null) {
                 HomePageAdapterHelper.handlePopularResults(
-                    it, model, popularAdaptor, progressAdaptor, oldIncludeList,
+                    it, model.aniMangaSearchResults, popularAdaptor, progressAdaptor, oldIncludeList,
                     { updated -> oldIncludeList = updated },
                     { msg -> snackString(msg) },
                     getString(R.string.jobless_message)

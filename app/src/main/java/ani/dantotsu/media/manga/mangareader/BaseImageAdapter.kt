@@ -160,8 +160,8 @@ abstract class BaseImageAdapter(
 
         private fun bindPreviousTransition(
             transition: ReaderItem.Transition,
-            fromChap: eu.kanade.tachiyomi.source.model.SChapter,
-            toChap: eu.kanade.tachiyomi.source.model.SChapter?
+            fromChap: MangaChapter,
+            toChap: MangaChapter?
         ) {
             binding.transitionFinishedHeader.text = itemView.context.getString(R.string.transition_previous)
             if (toChap != null) {
@@ -197,8 +197,8 @@ abstract class BaseImageAdapter(
 
         private fun bindNextTransition(
             transition: ReaderItem.Transition,
-            fromChap: eu.kanade.tachiyomi.source.model.SChapter,
-            toChap: eu.kanade.tachiyomi.source.model.SChapter?
+            fromChap: MangaChapter,
+            toChap: MangaChapter?
         ) {
             val finishedTitle = activity.getChapterDisplayTitle(fromChap)
             binding.transitionFinishedHeader.text = itemView.context.getString(R.string.transition_finished)
@@ -380,7 +380,7 @@ abstract class BaseImageAdapter(
 
                 withContext(Dispatchers.IO) {
                     val localFile = File(link.url)
-val baseBitmap = decodeSourceBitmap(link, mangaCache) ?: return@withContext null
+                    val baseBitmap = this@loadBitmap.decodeSourceBitmap(link, mangaCache) ?: return@withContext null
 
                     val result = if (transforms.isEmpty()) {
                         baseBitmap
@@ -633,8 +633,8 @@ val baseBitmap = decodeSourceBitmap(link, mangaCache) ?: return@withContext null
             dst.setPixels(dstPixels, 0, dstW, 0, 0, dstW, dstH)
             return dst
         }
-    }
-        private fun Context.decodeSourceBitmap(
+
+        private suspend fun Context.decodeSourceBitmap(
             link: FileUrl,
             mangaCache: MangaCache
         ): Bitmap? {
@@ -701,5 +701,5 @@ val baseBitmap = decodeSourceBitmap(link, mangaCache) ?: return@withContext null
                 }
             }
         }
-
+    }
 }

@@ -1,6 +1,7 @@
 package ani.dantotsu.settings
 
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -141,7 +142,7 @@ class SettingsCommonActivity : AppCompatActivity() {
             }
 
             val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
-            val settingsList = buildCommonSettingsList(context, openDocumentLauncher, createDocumentLauncher)
+            val settingsList = buildCommonSettingsList(context, openDocumentLauncher)
             settingsRecyclerView.adapter = SettingsAdapter(settingsList, highlightKey = highlightKey)
 
                         settingsRecyclerView.apply {
@@ -245,9 +246,8 @@ class SettingsCommonActivity : AppCompatActivity() {
         }
     }
     private fun buildCommonSettingsList(
-        context: Context,
-        openDocumentLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
-        createDocumentLauncher: androidx.activity.result.ActivityResultLauncher<String>
+        context: AppCompatActivity,
+        openDocumentLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>
     ): ArrayList<Settings> {
         return arrayListOf(
                         Settings(

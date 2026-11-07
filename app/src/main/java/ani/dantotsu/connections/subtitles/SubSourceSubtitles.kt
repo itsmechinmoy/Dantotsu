@@ -69,7 +69,7 @@ object SubSourceSubtitles {
                 val subResult = Mapper.json.decodeFromString<SubSourceListResponseV1>(subJson)
 
                 val matched = subResult.data.filter { isSubSourceEpisodeMatch(it, episode) }
-                                matched.map { item ->
+                matched.map { item ->
                     val releaseTitle = item.releaseInfo.joinToString(" • ").ifBlank { item.commentary ?: "SubSource Subtitle" }
                     SubSourceSub(
                         id = item.subtitleId.toString(),
@@ -141,5 +141,53 @@ object SubSourceSubtitles {
                relText.contains("Ep. $epStr", ignoreCase = true) ||
                relText.contains(" $epPad ", ignoreCase = true)
     }
-
 }
+
+@Serializable
+data class SubSourceSub(
+    val id: String,
+    val releaseName: String,
+    val lang: String,
+    val movie: String,
+    val isHearingImpaired: Boolean = false
+)
+
+@Serializable
+data class SubSourceSearchResponseV1(
+    val success: Boolean = false,
+    val data: List<SubSourceMovieV1> = emptyList()
+)
+
+@Serializable
+data class SubSourceMovieV1(
+    val movieId: Int,
+    val title: String? = null,
+    val alternateTitle: String? = null,
+    val type: String? = null,
+    val releaseYear: Int? = null,
+    val imdbId: String? = null,
+    val season: Int? = null,
+    val subtitleCount: Int? = null
+)
+
+@Serializable
+data class SubSourceListResponseV1(
+    val success: Boolean = false,
+    val data: List<SubSourceItemV1> = emptyList()
+)
+
+@Serializable
+data class SubSourceItemV1(
+    val subtitleId: Int,
+    val movieId: Int? = null,
+    val language: String = "english",
+    val releaseInfo: List<String> = emptyList(),
+    val commentary: String? = null,
+    val files: Int? = null,
+    val hearingImpaired: Boolean? = null,
+    val foreignParts: Boolean? = null,
+    val framerate: String? = null,
+    val productionType: String? = null,
+    val releaseType: String? = null,
+    val downloads: Int? = null
+)

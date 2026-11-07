@@ -275,7 +275,7 @@ fun OkHttpClient.Builder.addCloudFlareDns() =
                 "2606:4700:4700::1111",
                 "2606:4700:4700::1001"
             )
-        ))
+        )
 
 fun OkHttpClient.Builder.addAdGuardDns() =
         addGenericDns(
@@ -285,7 +285,7 @@ fun OkHttpClient.Builder.addAdGuardDns() =
                 "94.140.14.140",
                 "94.140.14.141",
             )
-        ))
+        )
 
 @Suppress("BlockingMethodInNonBlockingContext")
 suspend fun webViewInterface(webViewDialog: WebViewBottomDialog): Map<String, String>? {

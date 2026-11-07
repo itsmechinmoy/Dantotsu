@@ -54,6 +54,7 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
     private var selected: Int = 0
     lateinit var navBar: AnimatedBottomBar
 
+    @Suppress("ComplexMethod", "LongMethod")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ThemeManager(this).applyTheme()
@@ -107,13 +108,6 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
                     }
                 })
 
-                setupProfileViews(user)
-            }
-        }
-    }
-
-    private fun setupProfileViews(user: User) {
-        val context = this
                 bindingProfileAppBar = ItemProfileAppBarBinding.bind(binding.root).apply {
                     binding.profileProgressBar.visibility = View.GONE
                     followButton.isGone =
@@ -287,7 +281,8 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
                     profileCloseButton.setOnClickListener {
                         onBackPressedDispatcher.onBackPressed()
                     }
-                
+                }
+            }
         }
     }
 

@@ -74,7 +74,7 @@ class DownloadCompat {
         @Deprecated("external storage is deprecated, use SAF instead")
         fun loadOfflineAnimeModelCompat(downloadedType: DownloadedType): OfflineAnimeModel {
             try {
-                val info = resolveCompatMediaInfo(downloadedType) ?: return null
+                val info = resolveCompatMediaInfo(downloadedType) ?: throw IllegalStateException("Could not load media info")
                 val mediaModel = info.mediaModel
                 val coverUri = info.coverUri
                 val bannerUri = info.bannerUri
@@ -82,6 +82,7 @@ class DownloadCompat {
                 val score = info.score
                 val isOngoing = info.isOngoing
                 val isUserScored = info.isUserScored
+                val type = info.type
                 val watchedEpisodes = (mediaModel.userProgress ?: "~").toString()
                 val totalEpisode =
                     if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
@@ -126,7 +127,7 @@ class DownloadCompat {
         @Deprecated("external storage is deprecated, use SAF instead")
         fun loadOfflineMangaModelCompat(downloadedType: DownloadedType): OfflineMangaModel {
             try {
-                val info = resolveCompatMediaInfo(downloadedType) ?: return null
+                val info = resolveCompatMediaInfo(downloadedType) ?: throw IllegalStateException("Could not load media info")
                 val mediaModel = info.mediaModel
                 val coverUri = info.coverUri
                 val bannerUri = info.bannerUri
@@ -134,6 +135,7 @@ class DownloadCompat {
                 val score = info.score
                 val isOngoing = info.isOngoing
                 val isUserScored = info.isUserScored
+                val type = info.type
                 val readchapter = (mediaModel.userProgress ?: "~").toString()
                 val totalchapter = "${mediaModel.manga?.totalChapters ?: "??"}"
                 val chapters = " Chapters"
@@ -348,6 +350,7 @@ class DownloadCompat {
         private val animeLocation = "Dantotsu/Anime"
 
         private data class CompatMediaInfo(
+            val type: String,
             val mediaModel: ani.dantotsu.media.Media,
             val title: String,
             val coverUri: Uri?,
@@ -377,7 +380,7 @@ class DownloadCompat {
                 val score = ((if (mediaModel.userScore == 0) mediaModel.meanScore ?: 0 else mediaModel.userScore) / 10.0).toString()
                 val isOngoing = mediaModel.status == currContext()?.getString(R.string.status_releasing)
                 val isUserScored = mediaModel.userScore != 0
-                CompatMediaInfo(mediaModel, title, coverUri, bannerUri, score, isOngoing, isUserScored)
+                CompatMediaInfo(type, mediaModel, title, coverUri, bannerUri, score, isOngoing, isUserScored)
             } catch (e: Exception) {
                 null
             }

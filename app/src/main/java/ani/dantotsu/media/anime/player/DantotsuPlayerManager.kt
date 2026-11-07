@@ -103,11 +103,41 @@ class DantotsuPlayerManager(
         }
     }
 
-    private fun buildPlayerHttpClient(isLocalhost: Boolean): okhttp3.OkHttpClient {
-        return client.newBuilder().apply {
+    @Suppress("ComplexMethod", "LongMethod")
+    fun buildMediaSource(
+        video: Video,
+        subConfigs: List<MediaItem.SubtitleConfiguration>,
+        mimeType: String?,
+        downloadedMediaItem: MediaItem?,
+        mediaMetadata: MediaMetadata? = null,
+        audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
+    ): Pair<MediaSource, MediaItem> {
+        val videoUri = runCatching { video.file.url.toUri() }.getOrNull()
+        val isLocalhost = StreamTypeDetector.isLocalhost(videoUri)
+        val isLocalhostTorrent = StreamTypeDetector.isTorrentStream(videoUri)
+        val isLocalhostMp4 = StreamTypeDetector.isLocalMp4(videoUri)
+
+        val headers = mutableMapOf<String, String>()
+        headers.putAll(defaultHeaders)
+        video.file.headers?.let {
+            headers.putAll(it)
+        }
+        if (isLocalhost) {
+            headers.remove("Accept-Encoding")
+            headers.remove("accept-encoding")
+        }
+
+        val httpClient = client.newBuilder().apply {
             connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            // Strip Accept-Encoding on the wire for localhost/127.0.0.1 NanoHTTPD server.
+            // When NanoHTTPD forwards requests upstream to CDNs (like imgnex/megaplay),
+            // having NO Accept-Encoding header allows NanoHTTPD's internal OkHttpClient
+            // to enable transparentGzip = true, which automatically decompresses
+            // gzipped M3U8 playlists. If Accept-Encoding is sent (even "identity" or "gzip"),
+            // transparentGzip is disabled in NanoHTTPD and it returns mangled binary gzip
+            // which causes ExoPlayer ParserException: Input does not start with #EXTM3U.
             addNetworkInterceptor { chain ->
                 val request = chain.request()
                 val host = request.url.host
@@ -136,14 +166,14 @@ class DantotsuPlayerManager(
                 if (isLocal && response.isSuccessful) {
                     val contentType = response.header("Content-Type").orEmpty().lowercase()
                     val isMediaContent = contentType.startsWith("video/") ||
-                            contentType.startsWith("audio/") ||
-                            contentType.startsWith("image/")
+                        contentType.startsWith("audio/") ||
+                        contentType.startsWith("image/")
 
                     val isSegment = isMediaContent || StreamTypeDetector.isSegmentUrl(request.url)
                     val isM3u8 = !isSegment && (
-                            contentType.contains("mpegurl") ||
-                                    StreamTypeDetector.isM3u8Url(request.url)
-                            )
+                        contentType.contains("mpegurl") ||
+                        StreamTypeDetector.isM3u8Url(request.url)
+                    )
                     val hasGzipEncoding = response.header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true
 
                     val body = response.body
@@ -171,16 +201,20 @@ class DantotsuPlayerManager(
                             decompressedBytes
                         }
 
-                        val newContentType = if (isM3u8 && !contentType.contains("mpegurl")) {
-                            "application/vnd.apple.mpegurl; charset=utf-8".toMediaTypeOrNull()
+                        val mediaType = (if (startsWithHls || isM3u8) {
+                            "application/vnd.apple.mpegurl"
                         } else {
-                            response.body?.contentType()
-                        }
+                            body.contentType()?.toString()
+                        })?.toMediaTypeOrNull() ?: body.contentType()
 
-                        val newBody = ResponseBody.create(newContentType, finalBytes)
+                        val strippedHeaders = response.headers.newBuilder()
+                            .removeAll("Content-Encoding")
+                            .removeAll("Content-Length")
+                            .build()
+
+                        val newBody = finalBytes.toResponseBody(mediaType)
                         response.newBuilder()
-                            .removeHeader("Content-Encoding")
-                            .header("Content-Length", finalBytes.size.toString())
+                            .headers(strippedHeaders)
                             .body(newBody)
                             .build()
                     } else {
@@ -191,19 +225,28 @@ class DantotsuPlayerManager(
                 }
             }
         }.build()
-    }
+        val httpDataSourceFactory = MediaDataSourceFactory.resolveHttpFactory(
+            context = activity,
+            headers = headers,
+            okHttpClient = httpClient,
+            isLocalhost = isLocalhost,
+        )
 
-    private fun buildMediaItem(
-        video: Video,
-        subConfigs: List<MediaItem.SubtitleConfiguration>,
-        mimeType: String?,
-        downloadedMediaItem: MediaItem?,
-        mediaMetadata: MediaMetadata?,
-        isLocalhost: Boolean,
-        isLocalhostTorrent: Boolean,
-        isLocalhostMp4: Boolean
-    ): MediaItem {
-        return downloadedMediaItem?.buildUpon()?.apply {
+        val upstream = DefaultDataSource.Factory(activity, httpDataSourceFactory)
+        val cacheFactory: DataSource.Factory = CacheDataSource.Factory()
+            .setCache(VideoCache.getInstance(activity))
+            .setUpstreamDataSourceFactory(upstream)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+        val extractorsFactory = subtitleManager.createExtractorsFactory()
+        val assParserFactory = subtitleManager.createSubtitleParserFactory()
+        // Some providers wrap the license response; normalise it before the CDM sees it.
+        val drmProvider = WrappedDrmCallback.providerFor(httpDataSourceFactory)
+        val assMediaSourceFactory = DefaultMediaSourceFactory(cacheFactory, extractorsFactory)
+            .setSubtitleParserFactory(assParserFactory)
+            .setDrmSessionManagerProvider(drmProvider)
+
+        val mediaItem = downloadedMediaItem?.buildUpon()?.apply {
             if (mediaMetadata != null) setMediaMetadata(mediaMetadata)
         }?.build() ?: MediaItem.Builder()
             .setUri(video.file.url.toUri())
@@ -215,6 +258,8 @@ class DantotsuPlayerManager(
                 if (subConfigs.isNotEmpty()) setSubtitleConfigurations(subConfigs)
                 if (mediaMetadata != null) setMediaMetadata(mediaMetadata)
                 video.drm?.let { drm ->
+                    // The device CDM does the decryption; this only says where the
+                    // license server is.
                     val uuid = when (drm.scheme.lowercase()) {
                         "playready" -> C.PLAYREADY_UUID
                         "clearkey" -> C.CLEARKEY_UUID
@@ -224,6 +269,7 @@ class DantotsuPlayerManager(
                         MediaItem.DrmConfiguration.Builder(uuid)
                             .setLicenseUri(drm.licenseUrl)
                             .setLicenseRequestHeaders(drm.licenseHeaders)
+                            // Video and audio can carry separate keys.
                             .setMultiSession(true)
                             .build()
                     )
@@ -231,42 +277,34 @@ class DantotsuPlayerManager(
                 }
             }
             .build()
-    }
+        this.currentMediaItem = mediaItem
 
-    private fun resolveActiveMediaSourceFactory(
-        isContentUri: Boolean,
-        isLocalhostTorrent: Boolean,
-        isLocalhost: Boolean,
-        upstream: DataSource.Factory,
-        assMediaSourceFactory: DefaultMediaSourceFactory,
-        extractorsFactory: ExtractorsFactory,
-        assParserFactory: androidx.media3.extractor.text.SubtitleParser.Factory,
-        drmProvider: androidx.media3.exoplayer.drm.DrmSessionManagerProvider
-    ): DefaultMediaSourceFactory {
-        return if (isContentUri) {
+        // A downloaded episode is played from its own uri, which is not the one
+        // the extension handed us, so the scheme has to come from the media item.
+        val isContentUri =
+            (mediaItem.localConfiguration?.uri?.scheme ?: video.file.url.substringBefore(":")) == "content"
+
+        val activeFactory = if (isContentUri) {
             val localDataSourceFactory = DefaultDataSource.Factory(activity)
             DefaultMediaSourceFactory(localDataSourceFactory, extractorsFactory)
                 .setSubtitleParserFactory(assParserFactory)
                 .setDrmSessionManagerProvider(drmProvider)
         } else if (isLocalhostTorrent || isLocalhost) {
+            // Direct upstream for localhost streams (torrents and local extension proxies)
+            // - avoids double writing to flash via VideoCache and avoids Range request issues with NanoHTTPD
             DefaultMediaSourceFactory(upstream, extractorsFactory)
                 .setSubtitleParserFactory(assParserFactory)
                 .setDrmSessionManagerProvider(drmProvider)
         } else {
             assMediaSourceFactory
         }
-    }
+        this.activeMediaSourceFactory = activeFactory
+        val primarySource = activeFactory.createMediaSource(mediaItem)
 
-    private fun mergeAudioTracks(
-        primarySource: MediaSource,
-        audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track>,
-        videoUrl: String,
-        activeFactory: DefaultMediaSourceFactory
-    ): MediaSource {
         val audioSources = mutableListOf<MediaSource>()
         audioTracks.forEach { audioTrack ->
             val audioUrl = audioTrack.url
-            if (audioUrl.isNotBlank() && audioUrl != videoUrl) {
+            if (audioUrl.isNotBlank() && audioUrl != video.file.url) {
                 val audioMimeType = when {
                     audioUrl.contains(".m3u8", ignoreCase = true) || audioUrl.contains("/m3u8", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
                     audioUrl.contains(".mpd", ignoreCase = true) || audioUrl.contains("/mpd", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_MPD
@@ -283,82 +321,12 @@ class DantotsuPlayerManager(
             }
         }
 
-        return if (audioSources.isNotEmpty()) {
+        val finalSource = if (audioSources.isNotEmpty()) {
             MergingMediaSource(primarySource, *audioSources.toTypedArray())
         } else {
             primarySource
         }
-    }
 
-    fun buildMediaSource(
-        video: Video,
-        subConfigs: List<MediaItem.SubtitleConfiguration>,
-        mimeType: String?,
-        downloadedMediaItem: MediaItem?,
-        mediaMetadata: MediaMetadata? = null,
-        audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
-    ): Pair<MediaSource, MediaItem> {
-        val videoUri = runCatching { video.file.url.toUri() }.getOrNull()
-        val isLocalhost = StreamTypeDetector.isLocalhost(videoUri)
-        val isLocalhostTorrent = StreamTypeDetector.isTorrentStream(videoUri)
-        val isLocalhostMp4 = StreamTypeDetector.isLocalMp4(videoUri)
-
-        val headers = mutableMapOf<String, String>()
-        headers.putAll(defaultHeaders)
-        video.file.headers?.let {
-            headers.putAll(it)
-        }
-        if (isLocalhost) {
-            headers.remove("Accept-Encoding")
-            headers.remove("accept-encoding")
-        }
-
-        val httpClient = buildPlayerHttpClient(isLocalhost)
-        val httpDataSourceFactory = MediaDataSourceFactory.resolveHttpFactory(
-            context = activity,
-            headers = headers,
-            okHttpClient = httpClient,
-            isLocalhost = isLocalhost,
-            isLocalhostMp4 = isLocalhostMp4
-        )
-
-        val upstream = MediaDataSourceFactory.resolveUpstreamFactory(
-            activity,
-            headers,
-            httpDataSourceFactory,
-            isLocalhost,
-            isLocalhostTorrent
-        )
-        val cacheFactory = MediaDataSourceFactory.resolveCacheFactory(
-            activity,
-            video.file.url,
-            upstream
-        )
-
-        val extractorsFactory = subtitleManager.createExtractorsFactory()
-        val assParserFactory = subtitleManager.createSubtitleParserFactory()
-        val drmProvider = WrappedDrmCallback.providerFor(httpDataSourceFactory)
-        val assMediaSourceFactory = DefaultMediaSourceFactory(cacheFactory, extractorsFactory)
-            .setSubtitleParserFactory(assParserFactory)
-            .setDrmSessionManagerProvider(drmProvider)
-
-        val mediaItem = buildMediaItem(
-            video, subConfigs, mimeType, downloadedMediaItem, mediaMetadata,
-            isLocalhost, isLocalhostTorrent, isLocalhostMp4
-        )
-        this.currentMediaItem = mediaItem
-
-        val isContentUri =
-            (mediaItem.localConfiguration?.uri?.scheme ?: video.file.url.substringBefore(":")) == "content"
-
-        val activeFactory = resolveActiveMediaSourceFactory(
-            isContentUri, isLocalhostTorrent, isLocalhost, upstream,
-            assMediaSourceFactory, extractorsFactory, assParserFactory, drmProvider
-        )
-        this.activeMediaSourceFactory = activeFactory
-        val primarySource = activeFactory.createMediaSource(mediaItem)
-
-        val finalSource = mergeAudioTracks(primarySource, audioTracks, video.file.url, activeFactory)
         this.mediaSource = finalSource
         return Pair(finalSource, mediaItem)
     }

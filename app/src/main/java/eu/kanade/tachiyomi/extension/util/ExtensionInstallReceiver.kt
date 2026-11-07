@@ -142,7 +142,6 @@ internal class ExtensionInstallReceiver : BroadcastReceiver() {
             else -> {}
         }
     }
-    }
 
     /**
      * Returns the extension triggered by the given intent.

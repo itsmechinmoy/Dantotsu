@@ -1211,7 +1211,7 @@ function load(html) {
 }
 """.trimIndent()
     private fun registerJsoupBridge(
-        qjs: com.dokar.quickjs.QuickJs,
+        qjs: QuickJs,
         jsoupElements: MutableMap<Int, org.jsoup.nodes.Element>
     ) {
         var elementCounter = 0

@@ -6,8 +6,7 @@ import android.view.animation.LayoutAnimationController
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import ani.dantotsu.connections.anilist.AnilistViewModel
-import ani.dantotsu.connections.anilist.SearchResults
+import ani.dantotsu.connections.anilist.AniMangaSearchResults
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaAdaptor
 import ani.dantotsu.media.MediaListViewActivity
@@ -57,8 +56,8 @@ object HomePageAdapterHelper {
     }
 
     fun handlePopularResults(
-        it: SearchResults,
-        model: AnilistViewModel,
+        it: AniMangaSearchResults,
+        aniMangaSearchResults: AniMangaSearchResults,
         popularAdaptor: MediaAdaptor,
         progressAdaptor: ProgressAdapter,
         oldIncludeList: Boolean,
@@ -67,17 +66,17 @@ object HomePageAdapterHelper {
         joblessMessage: String
     ) {
         if (oldIncludeList == (it.onList != false)) {
-            val prev = model.aniMangaSearchResults.results.size
-            model.aniMangaSearchResults.results.addAll(it.results)
+            val prev = aniMangaSearchResults.results.size
+            aniMangaSearchResults.results.addAll(it.results)
             popularAdaptor.notifyItemRangeInserted(prev, it.results.size)
         } else {
-            model.aniMangaSearchResults.results.addAll(it.results)
+            aniMangaSearchResults.results.addAll(it.results)
             popularAdaptor.notifyDataSetChanged()
             onUpdateOldIncludeList(it.onList ?: true)
         }
-        model.aniMangaSearchResults.onList = it.onList
-        model.aniMangaSearchResults.hasNextPage = it.hasNextPage
-        model.aniMangaSearchResults.page = it.page
+        aniMangaSearchResults.onList = it.onList
+        aniMangaSearchResults.hasNextPage = it.hasNextPage
+        aniMangaSearchResults.page = it.page
         if (it.hasNextPage) {
             progressAdaptor.bar?.visibility = View.VISIBLE
         } else {

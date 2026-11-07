@@ -287,7 +287,8 @@ internal object ExtensionLoader {
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
             ?: emptySequence()
 
-        val extPkgs = sharedExtPkgs + privateExtPkgs
+        @Suppress("UnnecessaryParentheses") // Required for operator precedence before .distinctBy
+        val extPkgs = (sharedExtPkgs + privateExtPkgs)
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
                 val privatePkg = privateExtPkgs
@@ -337,7 +338,8 @@ internal object ExtensionLoader {
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
             ?: emptySequence()
 
-        val extPkgs = sharedExtPkgs + privateExtPkgs
+        @Suppress("UnnecessaryParentheses") // Required for operator precedence before .distinctBy
+        val extPkgs = (sharedExtPkgs + privateExtPkgs)
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
                 val privatePkg = privateExtPkgs
@@ -387,7 +389,8 @@ internal object ExtensionLoader {
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
             ?: emptySequence()
 
-        val extPkgs = sharedExtPkgs + privateExtPkgs
+        @Suppress("UnnecessaryParentheses") // Required for operator precedence before .distinctBy
+        val extPkgs = (sharedExtPkgs + privateExtPkgs)
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
                 val privatePkg = privateExtPkgs

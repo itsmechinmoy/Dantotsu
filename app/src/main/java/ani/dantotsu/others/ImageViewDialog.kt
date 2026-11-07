@@ -1,6 +1,8 @@
 package ani.dantotsu.others
 
 import android.animation.ObjectAnimator
+import android.content.Context
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View

@@ -56,6 +56,7 @@ class NovelReadAdapter(
     private val imm = fragment.requireContext()
         .getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
 
+    @Suppress("ComplexMethod", "LongMethod")
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val binding = holder.binding
         _binding = binding
@@ -69,129 +70,6 @@ class NovelReadAdapter(
             )
         }
 
-        setupNovelSourceUI(binding)
-    }
-
-    private fun showFilterDialog() {
-        val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
-        var run = false
-        var reversed = fragment.reverse
-        var style = fragment.style
-
-        dialogBinding.apply {
-
-            mediaSourceTop.rotation = if (reversed) -90f else 90f
-            sortText.text = if (reversed) "Down to Up" else "Up to Down"
-            mediaSourceTop.setOnClickListener {
-                reversed = !reversed
-                mediaSourceTop.rotation = if (reversed) -90f else 90f
-                sortText.text = if (reversed) "Down to Up" else "Up to Down"
-                run = true
-            }
-
-
-            setupLayoutSelection(this, style) { newStyle ->
-                style = newStyle
-                run = true
-            }
-            setupDownloadAndWebView(this)
-            resetProgressDef.text = "Clear stored chapter details"
-            resetProgress.setOnClickListener {
-                fragment.requireContext().customAlertDialog().apply {
-                    setTitle("Delete Progress for all chapters of ${fragment.media.nameRomaji}")
-                    setMessage("This will delete all the locally stored progress for chapters")
-                    setPosButton(R.string.ok) {
-                        val prefix = "${fragment.media.id}_"
-                        val regex = Regex("^${prefix}\\d+$")
-                        PrefManager.getAllCustomValsForMedia(prefix)
-                            .keys
-                            .filter { it.matches(regex) }
-                            .onEach { key -> PrefManager.removeCustomVal(key) }
-                        ani.dantotsu.snackString("Deleted the progress of Chapters for ${fragment.media.nameRomaji}")
-                    }
-                    setNegButton(R.string.no)
-                    show()
-                }
-            }
-        }
-
-        fragment.requireContext().customAlertDialog().apply {
-            setTitle("Options")
-            setCustomView(dialogBinding.root)
-            setPosButton(R.string.ok) {
-                if (run) {
-                    fragment.onLayoutChanged(style, reversed)
-                }
-            }
-            setNegButton(R.string.cancel)
-            show()
-        }
-    }
-
-    fun updateContinue(responses: List<ShowResponse>) {
-        if (progress == null) return
-        val lastReadName = PrefManager.getCustomVal("${media.id}_last_read_volume", "")
-        
-        var continueNovel: ShowResponse? = null
-        if (lastReadName.isNotBlank() && responses.isNotEmpty()) {
-            continueNovel = responses.firstOrNull { it.name == lastReadName } ?: responses.first()
-        } else if (responses.isNotEmpty()) {
-            continueNovel = responses.first()
-        }
-
-        val binding = ItemNovelHeaderBinding.bind(progress!!.parent as View)
-        if (continueNovel != null) {
-            binding.sourceContinue.visibility = View.VISIBLE
-            binding.itemMediaImage.loadImage(media.banner ?: media.cover)
-            binding.mediaSourceContinueText.text = fragment.getString(R.string.continue_reading) + "\n" + continueNovel.name
-            binding.sourceContinue.setOnClickListener {
-                fragment.onNovelClick(continueNovel)
-            }
-        } else {
-            binding.sourceContinue.visibility = View.GONE
-        }
-    }
-
-    fun updateChips(limit: Int, names: Array<String>, arr: Array<Int>, selected: Int = 0) {
-        val binding = _binding
-        if (binding != null) {
-            ani.dantotsu.util.PaginationChipHelper.buildChips(
-                context = fragment.requireContext(),
-                chipGroup = binding.mediaSourceChipGroup,
-                scrollView = binding.mediaWatchChipScroll,
-                limit = limit,
-                names = names,
-                arr = arr,
-                selected = selected,
-                onChipClicked = { position, start, end ->
-                    fragment.onChipClicked(position, start, end)
-                }
-            )
-        }
-    }
-
-    fun clearChips() {
-        _binding?.mediaSourceChipGroup?.removeAllViews()
-    }
-
-    fun startLoading() {
-        _binding?.sourceContinue?.visibility = View.GONE
-        _binding?.sourceNotFound?.visibility = View.GONE
-        _binding?.faqbutton?.visibility = View.GONE
-        clearChips()
-        progress?.visibility = View.VISIBLE
-    }
-
-    fun handleSourceNotFound(isEmpty: Boolean) {
-        _binding?.sourceNotFound?.isGone = !isEmpty
-        _binding?.faqbutton?.isGone = !isEmpty
-    }
-
-    override fun getItemCount(): Int = 1
-
-    inner class ViewHolder(val binding: ItemNovelHeaderBinding) :
-        RecyclerView.ViewHolder(binding.root)
-    private fun setupNovelSourceUI(binding: ani.dantotsu.databinding.ItemNovelHeaderBinding) {
         val isLocal = media.format == "LOCAL" || media.format == "LOCAL_NOVEL"
 
         if (isLocal) {
@@ -283,7 +161,7 @@ class NovelReadAdapter(
                     onSourceSelected = { selected ->
                         val isLnReader = fragment.model.novelSources[fragment.source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
                         if (isLnReader) {
-                            fragment.overrideNovelSource(selected)
+                            fragment.overrideNovelSource(selected, fragment.source)
                         } else {
                             fragment.resetChapterState()
                             fragment.onNovelClick(selected)
@@ -311,13 +189,25 @@ class NovelReadAdapter(
         }
     }
 
-    private fun setupLayoutSelection(
-        dialogBinding: ani.dantotsu.databinding.DialogLayoutBinding,
-        currentStyle: Int,
-        onStyleChange: (Int) -> Unit
-    ) {
-        var style = currentStyle
+    @Suppress("ComplexMethod", "LongMethod")
+    private fun showFilterDialog() {
+        val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
+        var run = false
+        var reversed = fragment.reverse
+        var style = fragment.style
+
         dialogBinding.apply {
+
+            mediaSourceTop.rotation = if (reversed) -90f else 90f
+            sortText.text = if (reversed) "Down to Up" else "Up to Down"
+            mediaSourceTop.setOnClickListener {
+                reversed = !reversed
+                mediaSourceTop.rotation = if (reversed) -90f else 90f
+                sortText.text = if (reversed) "Down to Up" else "Up to Down"
+                run = true
+            }
+
+
             mediaSourceGrid.visibility = View.VISIBLE
             var selected = when (style) {
                 0 -> mediaSourceList
@@ -357,11 +247,6 @@ class NovelReadAdapter(
             }
 
 
-        }
-    }
-
-    private fun setupDownloadAndWebView(dialogBinding: ani.dantotsu.databinding.DialogLayoutBinding) {
-        dialogBinding.apply {
             if (fragment.media.format == "LOCAL") {
                 animeDownloadContainer.visibility = View.GONE
             } else {
@@ -414,7 +299,100 @@ class NovelReadAdapter(
             }
 
 
+            resetProgressDef.text = "Clear stored chapter details"
+            resetProgress.setOnClickListener {
+                fragment.requireContext().customAlertDialog().apply {
+                    setTitle("Delete Progress for all chapters of ${fragment.media.nameRomaji}")
+                    setMessage("This will delete all the locally stored progress for chapters")
+                    setPosButton(R.string.ok) {
+                        val prefix = "${fragment.media.id}_"
+                        val regex = Regex("^${prefix}\\d+$")
+                        PrefManager.getAllCustomValsForMedia(prefix)
+                            .keys
+                            .filter { it.matches(regex) }
+                            .onEach { key -> PrefManager.removeCustomVal(key) }
+                        ani.dantotsu.snackString("Deleted the progress of Chapters for ${fragment.media.nameRomaji}")
+                    }
+                    setNegButton(R.string.no)
+                    show()
+                }
+            }
+        }
+
+        fragment.requireContext().customAlertDialog().apply {
+            setTitle("Options")
+            setCustomView(dialogBinding.root)
+            setPosButton(R.string.ok) {
+                if (run) {
+                    fragment.onLayoutChanged(style, reversed)
+                }
+            }
+            setNegButton(R.string.cancel)
+            show()
         }
     }
 
+    fun updateContinue(responses: List<ShowResponse>) {
+        if (progress == null) return
+        val lastReadName = PrefManager.getCustomVal("${media.id}_last_read_volume", "")
+
+        var continueNovel: ShowResponse? = null
+        if (lastReadName.isNotBlank() && responses.isNotEmpty()) {
+            continueNovel = responses.firstOrNull { it.name == lastReadName } ?: responses.first()
+        } else if (responses.isNotEmpty()) {
+            continueNovel = responses.first()
+        }
+
+        val binding = ItemNovelHeaderBinding.bind(progress!!.parent as View)
+        if (continueNovel != null) {
+            binding.sourceContinue.visibility = View.VISIBLE
+            binding.itemMediaImage.loadImage(media.banner ?: media.cover)
+            binding.mediaSourceContinueText.text = fragment.getString(R.string.continue_reading) + "\n" + continueNovel.name
+            binding.sourceContinue.setOnClickListener {
+                fragment.onNovelClick(continueNovel)
+            }
+        } else {
+            binding.sourceContinue.visibility = View.GONE
+        }
+    }
+
+    fun updateChips(limit: Int, names: Array<String>, arr: Array<Int>, selected: Int = 0) {
+        val binding = _binding
+        if (binding != null) {
+            ani.dantotsu.util.PaginationChipHelper.buildChips(
+                context = fragment.requireContext(),
+                chipGroup = binding.mediaSourceChipGroup,
+                scrollView = binding.mediaWatchChipScroll,
+                limit = limit,
+                names = names,
+                arr = arr,
+                selected = selected,
+                onChipClicked = { position, start, end ->
+                    fragment.onChipClicked(position, start, end)
+                }
+            )
+        }
+    }
+
+    fun clearChips() {
+        _binding?.mediaSourceChipGroup?.removeAllViews()
+    }
+
+    fun startLoading() {
+        _binding?.sourceContinue?.visibility = View.GONE
+        _binding?.sourceNotFound?.visibility = View.GONE
+        _binding?.faqbutton?.visibility = View.GONE
+        clearChips()
+        progress?.visibility = View.VISIBLE
+    }
+
+    fun handleSourceNotFound(isEmpty: Boolean) {
+        _binding?.sourceNotFound?.isGone = !isEmpty
+        _binding?.faqbutton?.isGone = !isEmpty
+    }
+
+    override fun getItemCount(): Int = 1
+
+    inner class ViewHolder(val binding: ItemNovelHeaderBinding) :
+        RecyclerView.ViewHolder(binding.root)
 }

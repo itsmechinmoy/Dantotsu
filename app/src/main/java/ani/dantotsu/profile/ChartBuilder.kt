@@ -39,6 +39,7 @@ class ChartBuilder {
             var statData: List<Number>
         )
 
+        @Suppress("ComplexMethod", "LongMethod")
         fun buildChart(
             context: Context,
             passedChartType: ChartType,
@@ -72,13 +73,120 @@ class ChartBuilder {
 
             val namesMax = chartPackets.maxOf { it.names.size }
             val palette = ColorEditor.generateColorPalette(primaryColor, namesMax)
-            val aaChartModel = buildAAChartModel(
-                chartType, aaChartType, statType, mediaType, chartPackets,
-                xAxisName, xAxisTickInterval, polar, categories, scrollPos,
-                normalize, primaryColor, palette
-            )
+            val aaChartModel = when (chartType) {
+                ChartType.OneDimensional -> {
+                    val chart = AAChartModel()
+                        .chartType(aaChartType)
+                        .subtitle(
+                            getTypeName(
+                                statType,
+                                mediaType
+                            ) + if (normalize && chartPackets.size > 1) " (Normalized)" else ""
+                        )
+                        .zoomType(AAChartZoomType.None)
+                        .dataLabelsEnabled(true)
+                    val elements: MutableList<Any> = mutableListOf()
+                    chartPackets.forEachIndexed { index, chartPacket ->
+                        val element = AASeriesElement()
+                            .name(chartPacket.username)
+                            .data(
+                                get1DElements(
+                                    chartPacket.names,
+                                    chartPacket.statData,
+                                    palette
+                                )
+                            )
+                        if (index == 0) {
+                            element.color(primaryColor)
+                        } else {
+                            element.color(ColorEditor.oppositeColor(primaryColor))
+                        }
+                        elements.add(element)
 
-                        val aaOptions = aaChartModel.aa_toAAOptions()
+                    }
+                    chart.series(elements.toTypedArray())
+                    xAxisTickInterval?.let { chart.xAxisTickInterval(it) }
+                    categories?.let { chart.categories(it.toTypedArray()) }
+                    chart
+                }
+
+                ChartType.TwoDimensional -> {
+                    val hexColorsArray: Array<Any> =
+                        palette.map { String.format("#%06X", 0xFFFFFF and it) }.toTypedArray()
+                    val chart = AAChartModel()
+                        .chartType(aaChartType)
+                        .subtitle(
+                            getTypeName(
+                                statType,
+                                mediaType
+                            ) + if (normalize && chartPackets.size > 1) " (Normalized)" else ""
+                        )
+                        .zoomType(AAChartZoomType.None)
+                        .dataLabelsEnabled(false)
+                        .yAxisTitle(
+                            getTypeName(
+                                statType,
+                                mediaType
+                            ) + if (normalize && chartPackets.size > 1) " (Normalized)" else ""
+                        )
+                    if (chartPackets.size == 1) {
+                        chart.colorsTheme(hexColorsArray)
+                    }
+
+                    val elements: MutableList<AASeriesElement> = mutableListOf()
+                    chartPackets.forEachIndexed { index, chartPacket ->
+                        val element = get2DElements(
+                            chartPacket.names,
+                            chartPacket.statData,
+                            chartPackets.size == 1
+                        )
+                        element.name(chartPacket.username)
+
+                        if (index == 0) {
+                            element.color(
+                                AAColor.rgbaColor(
+                                    Color.red(primaryColor),
+                                    Color.green(primaryColor),
+                                    Color.blue(primaryColor),
+                                    0.9f
+                                )
+                            )
+
+                        } else {
+                            element.color(
+                                AAColor.rgbaColor(
+                                    Color.red(
+                                        ColorEditor.oppositeColor(
+                                            primaryColor
+                                        )
+                                    ),
+                                    Color.green(ColorEditor.oppositeColor(primaryColor)),
+                                    Color.blue(ColorEditor.oppositeColor(primaryColor)),
+                                    0.9f
+                                )
+                            )
+                        }
+                        if (chartPackets.size == 1) {
+                            element.fillColor(
+                                AAColor.rgbaColor(
+                                    Color.red(primaryColor),
+                                    Color.green(primaryColor),
+                                    Color.blue(primaryColor),
+                                    0.9f
+                                )
+                            )
+                        }
+                        elements.add(element)
+                    }
+                    chart.series(elements.toTypedArray())
+
+                    xAxisTickInterval?.let { chart.xAxisTickInterval(it) }
+                    categories?.let { chart.categories(it.toTypedArray()) }
+
+                    chart
+                }
+            }
+            val aaOptions = aaChartModel.aa_toAAOptions()
             aaOptions.chart?.polar = polar
             aaOptions.tooltip?.apply {
                 headerFormat
@@ -303,135 +411,4 @@ function() {
         }
 
     }
-        private fun buildAAChartModel(
-            chartType: ChartType,
-            aaChartType: AAChartType,
-            statType: StatType,
-            mediaType: MediaType,
-            chartPackets: List<ChartPacket>,
-            xAxisName: String,
-            xAxisTickInterval: Int?,
-            polar: Boolean,
-            categories: List<String>?,
-            scrollPos: Float?,
-            normalize: Boolean,
-            primaryColor: Int,
-            palette: List<Int>
-        ): AAChartModel {
-            val namesMax = chartPackets.maxOf { it.names.size }
-            return when (chartType) {
-                ChartType.OneDimensional -> {
-                    val chart = AAChartModel()
-                        .chartType(aaChartType)
-                        .subtitle(
-                            getTypeName(
-                                statType,
-                                mediaType
-                            ) + if (normalize && chartPackets.size > 1) " (Normalized)" else ""
-                        )
-                        .zoomType(AAChartZoomType.None)
-                        .dataLabelsEnabled(true)
-                    val elements: MutableList<Any> = mutableListOf()
-                    chartPackets.forEachIndexed { index, chartPacket ->
-                        val element = AASeriesElement()
-                            .name(chartPacket.username)
-                            .data(
-                                get1DElements(
-                                    chartPacket.names,
-                                    chartPacket.statData,
-                                    palette
-                                )
-                            )
-                        if (index == 0) {
-                            element.color(primaryColor)
-                        } else {
-                            element.color(ColorEditor.oppositeColor(primaryColor))
-                        }
-                        elements.add(element)
-
-                    }
-                    chart.series(elements.toTypedArray())
-                    xAxisTickInterval?.let { chart.xAxisTickInterval(it) }
-                    categories?.let { chart.categories(it.toTypedArray()) }
-                    chart
-                }
-
-                ChartType.TwoDimensional -> {
-                    val hexColorsArray: Array<Any> =
-                        palette.map { String.format("#%06X", 0xFFFFFF and it) }.toTypedArray()
-                    val chart = AAChartModel()
-                        .chartType(aaChartType)
-                        .subtitle(
-                            getTypeName(
-                                statType,
-                                mediaType
-                            ) + if (normalize && chartPackets.size > 1) " (Normalized)" else ""
-                        )
-                        .zoomType(AAChartZoomType.None)
-                        .dataLabelsEnabled(false)
-                        .yAxisTitle(
-                            getTypeName(
-                                statType,
-                                mediaType
-                            ) + if (normalize && chartPackets.size > 1) " (Normalized)" else ""
-                        )
-                    if (chartPackets.size == 1) {
-                        chart.colorsTheme(hexColorsArray)
-                    }
-
-                    val elements: MutableList<AASeriesElement> = mutableListOf()
-                    chartPackets.forEachIndexed { index, chartPacket ->
-                        val element = get2DElements(
-                            chartPacket.names,
-                            chartPacket.statData,
-                            chartPackets.size == 1
-                        )
-                        element.name(chartPacket.username)
-
-                        if (index == 0) {
-                            element.color(
-                                AAColor.rgbaColor(
-                                    Color.red(primaryColor),
-                                    Color.green(primaryColor),
-                                    Color.blue(primaryColor),
-                                    0.9f
-                                )
-                            )
-
-                        } else {
-                            element.color(
-                                AAColor.rgbaColor(
-                                    Color.red(
-                                        ColorEditor.oppositeColor(
-                                            primaryColor
-                                        )
-                                    ),
-                                    Color.green(ColorEditor.oppositeColor(primaryColor)),
-                                    Color.blue(ColorEditor.oppositeColor(primaryColor)),
-                                    0.9f
-                                )
-                            )
-                        }
-                        if (chartPackets.size == 1) {
-                            element.fillColor(
-                                AAColor.rgbaColor(
-                                    Color.red(primaryColor),
-                                    Color.green(primaryColor),
-                                    Color.blue(primaryColor),
-                                    0.9f
-                                )
-                            )
-                        }
-                        elements.add(element)
-                    }
-                    chart.series(elements.toTypedArray())
-
-                    xAxisTickInterval?.let { chart.xAxisTickInterval(it) }
-                    categories?.let { chart.categories(it.toTypedArray()) }
-
-                    chart
-                }
-            }
-        }
-
 }

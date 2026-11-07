@@ -22,6 +22,7 @@ import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.AnilistSearch.SearchType
 import ani.dantotsu.databinding.ItemChipBinding
+import ani.dantotsu.databinding.ItemSearchHeaderBinding
 import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.others.imagesearch.ImageSearchActivity
 import ani.dantotsu.settings.saving.PrefManager
@@ -231,7 +232,7 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
     }
     companion object {
         fun setupSearchInputListeners(
-            binding: ItemSearchSettingsBinding,
+            binding: ItemSearchHeaderBinding,
             activity: SearchActivity,
             imm: InputMethodManager,
             setHistoryVisibility: (Boolean) -> Unit,

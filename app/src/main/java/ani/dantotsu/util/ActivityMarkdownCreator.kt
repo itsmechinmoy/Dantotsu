@@ -74,175 +74,7 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         )
     }
 
-    private fun setupTypeSpecificViews(type: String, editId: Int, mediaId: Int) {
-        when (type) {
-            "review" -> {
-                binding.reviewFieldsLayout.visibility = ViewGroup.VISIBLE
-                val score = intent.getIntExtra("score", -1)
-                val summary = intent.getStringExtra("summary")
-                val private = intent.getBooleanExtra("private", false)
-                if (editId != -1) {
-                    binding.reviewScoreEditText.setText(if (score >= 0) score.toString() else "")
-                    binding.reviewSummaryEditText.setText(summary ?: "")
-                }
-                binding.privateCheckbox.isChecked = private
-                binding.reviewBodyCountText.text = "Review body: ${text.length} / 2200 min characters"
-            }
-
-            "thread" -> {
-                binding.threadTitleLayout.visibility = ViewGroup.VISIBLE
-                val title = intent.getStringExtra("title")
-                val body = intent.getStringExtra("body")
-                val categoryId = intent.getIntExtra("categoryId", -1)
-                if (editId != -1) {
-                    binding.threadTitleEditText.setText(title ?: "")
-                    binding.editText.setText(body ?: "")
-                    if (categoryId != -1) {
-                        val categoryName = categories[categoryId]
-                        if (categoryName != null) {
-                            binding.threadCategoryDropdown.setText(categoryName, false)
-                        }
-                    }
-                }
-            }
-
-            "bio" -> {
-                binding.createButton.text = getString(R.string.save)
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val currentBio = Anilist.query.getUserAbout(Anilist.userid ?: 0)
-                    withContext(Dispatchers.Main) {
-                        text = currentBio
-                        binding.editText.setText(currentBio)
-                        binding.editText.setSelection(currentBio.length)
-                    }
-                }
-            }
-        }
-    }
-
-    private suspend fun executeSubmission(
-        type: String,
-        editId: Int,
-        userId: Int,
-        mediaId: Int,
-        summary: String,
-        scoreText: String,
-        titleText: String
-    ): String {
-        return withContext(Dispatchers.IO) {
-            when (type) {
-                "activity" -> Anilist.mutation.postActivity(text, edit = editId.takeIf { it != -1 })
-                "message" -> Anilist.mutation.postMessage(userId, text, edit = editId.takeIf { it != -1 }, private = binding.privateCheckbox.isChecked)
-                "activityReply" -> Anilist.mutation.replyActivity(editId, text)
-                "review" -> {
-                    val score = scoreText.toInt()
-                    val private = binding.privateCheckbox.isChecked
-                    Anilist.mutation.saveReview(
-                        mediaId = mediaId,
-                        body = text,
-                        summary = summary,
-                        score = score,
-                        private = private,
-                        reviewId = editId.takeIf { it != -1 }
-                    )
-                }
-                "thread" -> {
-                    val mediaCategories = intent.getIntegerArrayListExtra("mediaCategories")
-                    Anilist.mutation.saveThread(
-                        title = titleText,
-                        body = text,
-                        threadId = editId.takeIf { it != -1 },
-                        categories = selectedCategories,
-                        mediaCategories = mediaCategories
-                    )
-                }
-                "comment" -> Anilist.mutation.saveThreadComment(
-                    threadId = editId.takeIf { it != -1 },
-                    comment = text,
-                    parentCommentId = intent.getIntExtra("parentCommentId", -1).takeIf { it != -1 }
-                )
-                "bio" -> {
-                    val updated = Anilist.mutation.updateUserBio(text)
-                    if (updated) "Profile bio updated" else "Error updating bio"
-                }
-                else -> "Error: Unknown type"
-            }
-        }
-    }
-
-    private fun validateSubmission(type: String, summary: String, scoreText: String, titleText: String): Boolean {
-        if (type == "review") {
-            if (text.length < 2200) {
-                toast(getString(R.string.review_body_min_length_error, text.length))
-                return false
-            }
-            if (summary.length < 20 || summary.length > 120) {
-                toast(getString(R.string.review_summary_length_error))
-                return false
-            }
-            val score = scoreText.toIntOrNull()
-            if (score == null || score < 0 || score > 100) {
-                toast("Please enter a valid score between 0 and 100")
-                return false
-            }
-        } else if (type == "thread") {
-            if (titleText.length < 6) {
-                toast(getString(R.string.thread_title_length_error))
-                return false
-            }
-        }
-        return true
-    }
-
-    private fun setupCreateButton(type: String, editId: Int, userId: Int, mediaId: Int) {
-        binding.createButton.setOnClickListener {
-            if (text.isBlank()) {
-                toast(getString(R.string.cannot_be_empty))
-                return@setOnClickListener
-            }
-
-            val summary = binding.reviewSummaryEditText.text.toString().trim()
-            val scoreText = binding.reviewScoreEditText.text.toString().trim()
-            val titleText = binding.threadTitleEditText.text.toString().trim()
-
-            if (!validateSubmission(type, summary, scoreText, titleText)) return@setOnClickListener
-
-            customAlertDialog().apply {
-                setTitle(R.string.warning)
-                setMessage(R.string.post_warning)
-                setPosButton(R.string.yes) {
-                    binding.createButton.isEnabled = false
-                    lifecycleScope.launch {
-                        val success = executeSubmission(type, editId, userId, mediaId, summary, scoreText, titleText)
-                        val isSuccess = success == getString(R.string.success) ||
-                                success == "Success" ||
-                                success == "Profile bio updated"
-                        withContext(Dispatchers.Main) {
-                            if (isSuccess) {
-                                snackString(getString(R.string.success))
-                                val returnIntent = Intent().apply {
-                                    putExtra("edit", editId != -1)
-                                    putExtra("type", type)
-                                    putExtra("new_text", text)
-                                }
-                                setResult(Activity.RESULT_OK, returnIntent)
-                                finish()
-                            } else {
-                                snackString(success)
-                                binding.createButton.isEnabled = true
-                            }
-                        }
-                    }
-                }
-                setNeutralButton(R.string.open_rules) {
-                    openLinkInBrowser("https://anilist.co/forum/thread/14")
-                }
-                setNegButton(R.string.cancel)
-                show()
-            }
-        }
-    }
-
+    @Suppress("ComplexMethod", "LongMethod")
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -272,10 +104,13 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         val editId = intent.getIntExtra("edit", -1)
         val userId = intent.getIntExtra("userId", -1)
         val mediaId = intent.getIntExtra("mediaId", -1)
-
-        val categoriesList = categories.values.toList()
-        val adapter = ArrayAdapter(this, R.layout.item_dropdown, categoriesList)
-        binding.threadCategoryDropdown.setAdapter(adapter)
+        val initialSummary = intent.getStringExtra("summary") ?: ""
+        val initialScore = intent.getIntExtra("score", 0)
+        val initialTitle = intent.getStringExtra("title") ?: ""
+        val initialCategories = intent.getIntegerArrayListExtra("categories")
+        var selectedCategoryId = initialCategories?.firstOrNull() ?: 1
+        var private = intent.getBooleanExtra("private", false)
+        parentId = intent.getIntExtra("parentId", -1)
 
         ping = intent.getStringExtra("other")
         text = ping ?: ""
@@ -283,20 +118,194 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         binding.editText.addTextChangedListener {
             if (!isPreviewMode) {
                 text = it.toString()
-                if (type == "review") {
-                    binding.reviewBodyCountText.text = "Review body: ${text.length} / 2200 min characters"
+            }
+            if (type == "review") {
+                binding.reviewBodyCountText.text = "Review body: ${it?.length ?: 0} / 2200 min characters"
+            }
+        }
+
+        when (type) {
+            "replyActivity" -> if (parentId == -1) {
+                toast("Error: No parent ID")
+                finish()
+                return
+            }
+
+            "activity" -> {
+                binding.privateCheckbox.visibility = ViewGroup.GONE
+            }
+
+            "message" -> {
+                if (editId == -1) {
+                    binding.privateCheckbox.visibility = ViewGroup.VISIBLE
+                }
+            }
+
+            "review" -> {
+                binding.reviewInputsContainer.visibility = ViewGroup.VISIBLE
+                binding.privateCheckbox.visibility = ViewGroup.VISIBLE
+                if (initialSummary.isNotEmpty()) binding.reviewSummaryEditText.setText(initialSummary)
+                if (initialScore > 0) binding.reviewScoreEditText.setText(initialScore.toString())
+                binding.privateCheckbox.isChecked = private
+                binding.reviewBodyCountText.text = "Review body: ${text.length} / 2200 min characters"
+            }
+
+            "thread" -> {
+                binding.threadTitleLayout.visibility = ViewGroup.VISIBLE
+                binding.threadCategoryLayout.visibility = ViewGroup.VISIBLE
+                if (initialTitle.isNotEmpty()) binding.threadTitleEditText.setText(initialTitle)
+                val categoryNames = FORUM_CATEGORIES.map { it.second }
+                val categoryAdapter = ArrayAdapter(
+                    this,
+                    android.R.layout.simple_dropdown_item_1line,
+                    categoryNames
+                )
+                binding.threadCategoryAutoComplete.setAdapter(categoryAdapter)
+                val defaultCategory = FORUM_CATEGORIES.find { it.first == selectedCategoryId }
+                    ?: FORUM_CATEGORIES.first()
+                binding.threadCategoryAutoComplete.setText(defaultCategory.second, false)
+                binding.threadCategoryAutoComplete.setOnItemClickListener { _, _, position, _ ->
+                    selectedCategoryId = FORUM_CATEGORIES.getOrNull(position)?.first ?: 1
                 }
             }
         }
 
-        setupTypeSpecificViews(type, editId, mediaId)
+        binding.privateCheckbox.setOnCheckedChangeListener { _, isChecked ->
+            private = isChecked
+        }
+        if (type == "bio" && text.isBlank()) {
+            launchIO {
+                val currentBio = Anilist.userid?.let { Anilist.query.getUserRawBio(it) } ?: ""
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    if (currentBio.isNotBlank() && !isFinishing) {
+                        text = currentBio
+                        binding.editText.setText(currentBio)
+                        binding.editText.setSelection(currentBio.length)
+                    }
+                }
+            }
+        }
         previewMarkdown(false)
 
         binding.markdownCreatorBack.setOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
 
-        setupCreateButton(type, editId, userId, mediaId)
+        binding.createButton.setOnClickListener {
+            if (text.isBlank()) {
+                toast(getString(R.string.cannot_be_empty))
+                return@setOnClickListener
+            }
+
+            val summary = binding.reviewSummaryEditText.text.toString().trim()
+            val scoreText = binding.reviewScoreEditText.text.toString().trim()
+            val titleText = binding.threadTitleEditText.text.toString().trim()
+
+            if (type == "review") {
+                if (text.length < 2200) {
+                    toast(getString(R.string.review_body_min_length_error, text.length))
+                    return@setOnClickListener
+                }
+                if (summary.length < 20 || summary.length > 120) {
+                    toast(getString(R.string.review_summary_length_error))
+                    return@setOnClickListener
+                }
+                val score = scoreText.toIntOrNull()
+                if (score == null || score < 0 || score > 100) {
+                    toast("Please enter a valid score between 0 and 100")
+                    return@setOnClickListener
+                }
+            } else if (type == "thread") {
+                if (titleText.length < 6) {
+                    toast(getString(R.string.thread_title_length_error))
+                    return@setOnClickListener
+                }
+            }
+
+            customAlertDialog().apply {
+                setTitle(R.string.warning)
+                setMessage(R.string.post_to_anilist_warning)
+                setPosButton(R.string.ok) {
+                    launchIO {
+                        val isEdit = editId != -1
+                        val success = when (type) {
+                            "activity" -> if (isEdit) {
+                                Anilist.mutation.postActivity(text, editId)
+                            } else {
+                                Anilist.mutation.postActivity(text)
+                            }
+
+                            "review" -> {
+                                val score = scoreText.toIntOrNull() ?: 0
+                                Anilist.mutation.postReview(
+                                    summary = summary,
+                                    body = text,
+                                    mediaId = mediaId,
+                                    score = score,
+                                    edit = if (isEdit) editId else null,
+                                    isPrivate = private
+                                )
+                            }
+
+                            "bio" -> {
+                                val ok = Anilist.mutation.updateUserBio(text)
+                                if (ok) "Profile bio updated" else "Failed to update bio"
+                            }
+
+                            "thread" -> {
+                                val mediaCategories = intent.getIntegerArrayListExtra("mediaCategories")
+                                Anilist.mutation.saveThread(
+                                    title = titleText,
+                                    body = text,
+                                    categories = arrayListOf(selectedCategoryId),
+                                    mediaCategories = mediaCategories,
+                                    edit = if (isEdit) editId else null
+                                )
+                            }
+
+                            "threadComment" -> {
+                                val parentCommentId = if (parentId != -1) parentId else null
+                                val threadId = intent.getIntExtra("threadId", -1)
+                                Anilist.mutation.saveThreadComment(
+                                    threadId = threadId,
+                                    comment = text,
+                                    parentCommentId = parentCommentId,
+                                    edit = if (isEdit) editId else null
+                                )
+                            }
+
+                            "replyActivity" -> if (isEdit) {
+                                Anilist.mutation.postReply(parentId, text, editId)
+                            } else {
+                                Anilist.mutation.postReply(parentId, text)
+                            }
+
+                            "message" -> if (isEdit) {
+                                Anilist.mutation.postMessage(userId, text, editId)
+                            } else {
+                                Anilist.mutation.postMessage(userId, text, isPrivate = private)
+                            }
+
+                            else -> "Error: Unknown type"
+                        }
+                        val isSuccess = success == getString(R.string.success) ||
+                                success == "Success" ||
+                                success == "Profile bio updated"
+                        withContext(Dispatchers.Main) {
+                            toast(success)
+                            if (isSuccess) {
+                                finish()
+                            }
+                        }
+                    }
+                }
+                setNeutralButton(R.string.open_rules) {
+                    openLinkInBrowser("https://anilist.co/forum/thread/14")
+                }
+                setNegButton(R.string.cancel)
+                show()
+            }
+        }
 
         binding.previewCheckbox.setOnClickListener {
             isPreviewMode = !isPreviewMode

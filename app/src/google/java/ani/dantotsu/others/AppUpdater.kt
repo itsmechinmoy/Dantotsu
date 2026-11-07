@@ -160,7 +160,7 @@ object AppUpdater {
 
             if (shouldUpdate && !dontShow && !activity.isDestroyed) {
                 showUpdateDialog(activity, version, md, isCustom, repo)
-            }            } else {
+            } else {
                 if (post) snackString(currContext()?.getString(R.string.no_update_found))
             }
         }

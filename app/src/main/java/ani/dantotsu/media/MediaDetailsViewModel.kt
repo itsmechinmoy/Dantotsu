@@ -36,6 +36,7 @@ import ani.dantotsu.parsers.NovelSources
 import ani.dantotsu.parsers.OfflineAnimeParser
 import ani.dantotsu.parsers.OfflineMangaParser
 import ani.dantotsu.parsers.OfflineNovelParser
+import ani.dantotsu.parsers.NovelParser
 import ani.dantotsu.parsers.ShowResponse
 import ani.dantotsu.parsers.VideoExtractor
 import ani.dantotsu.parsers.WatchSources
@@ -133,7 +134,7 @@ class MediaDetailsViewModel : ViewModel() {
         m.folderName = m.folderName ?: m.name
         media.postValue(m)
 
-        val mapKeyStr = m.folderName ?: m.name
+        val mapKeyStr = m.folderName ?: m.name ?: ""
         var mappedId = PrefManager.getCustomVal<Int>("local_mapping_$mapKeyStr", 0)
         if (mappedId == 0) {
             mappedId = searchLocalMappingId(m, mapKeyStr)
@@ -395,7 +396,7 @@ class MediaDetailsViewModel : ViewModel() {
 
     private fun mergeJikanCharacters(
         media: Media,
-        jikanCharacters: List<ani.dantotsu.connections.mal.JikanCharacterResponse>
+        jikanCharacters: List<ani.dantotsu.connections.mal.JikanAnimeCharacter>
     ) {
         val mappedCharacters = jikanCharacters
             .mapNotNull { jChar ->
@@ -428,7 +429,7 @@ class MediaDetailsViewModel : ViewModel() {
 
     private fun mergeJikanStaff(
         media: Media,
-        jikanStaff: List<ani.dantotsu.connections.mal.JikanStaffResponse>,
+        jikanStaff: List<ani.dantotsu.connections.mal.JikanStaffMember>,
         fullData: ani.dantotsu.connections.mal.JikanMediaData?,
         isAnime: Boolean
     ) {
@@ -653,11 +654,9 @@ class MediaDetailsViewModel : ViewModel() {
         }
         if (info.resolvedFmt != null) {
             rel.format = info.resolvedFmt
-            val rawRelation = rel.relation?.substringBefore("
-") ?: ""
+            val rawRelation = rel.relation?.substringBefore("\n") ?: ""
             if (rawRelation.isNotEmpty()) {
-                rel.relation = "$rawRelation
-${info.resolvedFmt}"
+                rel.relation = "$rawRelation\n${info.resolvedFmt}"
             }
         }
     }

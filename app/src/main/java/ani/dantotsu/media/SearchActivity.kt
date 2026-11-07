@@ -1,6 +1,7 @@
 package ani.dantotsu.media
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
 import android.os.Parcelable
 import android.view.View
@@ -384,7 +385,7 @@ class SearchActivity : AppCompatActivity() {
                 if (model.notSet) {
                     model.notSet = false
                     model.aniMangaSearchResults = AniMangaSearchResults(
-                        intent.getStringExtra("type") ?: "ANIME",
+                        type = intent.getStringExtra("type") ?: "ANIME",
                         isAdult = if (Anilist.adult) intent.getBooleanExtra(
                             "hentai",
                             false

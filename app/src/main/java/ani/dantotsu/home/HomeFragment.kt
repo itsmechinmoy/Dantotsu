@@ -88,25 +88,14 @@ class HomeFragment : Fragment() {
 
     val model: AnilistHomeViewModel by activityViewModels()
 
+    @Suppress("ComplexMethod", "LongMethod")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        val currentBinding = _binding ?: return
+        val scope = viewLifecycleOwner.lifecycleScope
         Logger.log("HomeFragment")
-
-        setupHeaderViews(currentBinding)
-        setupScrollAndRefresh(currentBinding)
-        loadUserData(currentBinding)
-        setupListImagesObserver(currentBinding)
-        setupMediaRecyclerViews(currentBinding)
-        setupUserStories(currentBinding)
-        setupHiddenItems(currentBinding)
-        setupLayoutAndRefresh(currentBinding)
-    }
-
-    private fun loadUserData(currentBinding: FragmentHomeBinding) {
-        Logger.log("Loading HomeFragment")
-        if (activity != null && _binding != null) {
-            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+        fun load() {
+            Logger.log("Loading HomeFragment")
+            if (activity != null && _binding != null) viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                val currentBinding = _binding ?: return@launch
                 val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                 if (rescueMode && MAL.token != null) {
                     currentBinding.homeUserName.text = MAL.username ?: Anilist.username
@@ -155,21 +144,19 @@ class HomeFragment : Fragment() {
                     )
                 }
 
-                currentBinding.homeUserAvatarContainer.startAnimation(setSlideUp())
-                currentBinding.homeUserDataContainer.visibility = View.VISIBLE
-                currentBinding.homeUserDataContainer.layoutAnimation =
+                binding.homeUserAvatarContainer.startAnimation(setSlideUp())
+                binding.homeUserDataContainer.visibility = View.VISIBLE
+                binding.homeUserDataContainer.layoutAnimation =
                     LayoutAnimationController(setSlideUp(), 0.25f)
-                currentBinding.homeAnimeList.visibility = View.VISIBLE
-                currentBinding.homeMangaList.visibility = View.VISIBLE
-                currentBinding.homeListContainer.layoutAnimation =
+                binding.homeAnimeList.visibility = View.VISIBLE
+                binding.homeMangaList.visibility = View.VISIBLE
+                binding.homeListContainer.layoutAnimation =
                     LayoutAnimationController(setSlideIn(), 0.25f)
             }
-        } else {
-            snackString(currContext()?.getString(R.string.please_reload))
+            else {
+                snackString(currContext()?.getString(R.string.please_reload))
+            }
         }
-    }
-
-    private fun setupHeaderViews(binding: FragmentHomeBinding) {
         binding.homeUserAvatarContainer.setSafeOnClickListener {
             val dialogFragment =
                 SettingsDialogFragment.newInstance(SettingsDialogFragment.Companion.PageType.HOME)
@@ -208,9 +195,7 @@ class HomeFragment : Fragment() {
             }
             false
         }
-    }
 
-    private fun setupScrollAndRefresh(binding: FragmentHomeBinding) {
         binding.homeContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
             bottomMargin = navBarHeight
         }
@@ -219,7 +204,7 @@ class HomeFragment : Fragment() {
         binding.homeTopContainer.updatePadding(top = statusBarHeight)
 
         var reached = false
-        val duration = ((PrefManager.getVal(PrefName.AnimationSpeed) as Float) * 200).toLong()
+        val duration = (PrefManager.getVal<Float>(PrefName.AnimationSpeed) * 200).toLong()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             binding.homeScroll.setOnScrollChangeListener { _, _, _, _, _ ->
@@ -243,13 +228,14 @@ class HomeFragment : Fragment() {
             val displayCutout = activity?.window?.decorView?.rootWindowInsets?.displayCutout
             if (displayCutout != null) {
                 if (displayCutout.boundingRects.size > 0) {
-                    height = max(
-                        statusBarHeight,
-                        min(
-                            displayCutout.boundingRects[0].width(),
-                            displayCutout.boundingRects[0].height()
+                    height =
+                        max(
+                            statusBarHeight,
+                            min(
+                                displayCutout.boundingRects[0].width(),
+                                displayCutout.boundingRects[0].height()
+                            )
                         )
-                    )
                 }
             }
         }
@@ -258,98 +244,111 @@ class HomeFragment : Fragment() {
         binding.homeRefresh.setOnRefreshListener {
             Refresh.activity[1]!!.postValue(true)
         }
-    }
 
-    private fun setupListImagesObserver(binding: FragmentHomeBinding) {
+        //UserData
+        load()
+        //List Images
         model.getListImages().observe(viewLifecycleOwner) {
             if (it.isNotEmpty()) {
                 binding.homeAnimeListImage.loadImage(it[0] ?: "https://bit.ly/31bsIHq")
                 binding.homeMangaListImage.loadImage(it[1] ?: "https://bit.ly/2ZGfcuG")
             }
         }
-    }
 
-    private fun getSkeletonMediaList(count: Int = 7): ArrayList<Media> {
-        val list = ArrayList<Media>()
-        for (i in 0 until count) {
-            list.add(
-                Media(
-                    id = 0,
-                    name = "Loading...",
-                    userProgress = 0,
-                    userScore = 0,
-                    meanScore = 0,
-                    cover = "https://bit.ly/31bsIHq",
-                    banner = "https://bit.ly/31bsIHq",
-                    timeUntilAiring = 0,
-                    anime = null,
-                    manga = null
+        fun getSkeletonMediaList(count: Int = 7): ArrayList<Media> {
+            val list = ArrayList<Media>()
+            for (i in 0 until count) {
+                list.add(
+                    Media(
+                        anime = ani.dantotsu.media.anime.Anime(),
+                        manga = null,
+                        id = -100 - i,
+                        name = "•••",
+                        nameRomaji = "•••",
+                        userPreferredName = "••••••••••••",
+                        cover = null,
+                        isAdult = false,
+                        meanScore = 0,
+                        userProgress = 0
+                    )
                 )
-            )
+            }
+            return list
         }
-        return list
-    }
 
-    private fun initRecyclerView(
-        mode: LiveData<ArrayList<Media>>,
-        container: View,
-        recyclerView: RecyclerView,
-        progress: View,
-        empty: View,
-        title: View,
-        more: View,
-        string: String,
-        isAnime: Boolean = true
-    ) {
-        recyclerView.adapter = MediaAdaptor(0, getSkeletonMediaList(), requireActivity())
-        recyclerView.layoutManager =
-            LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
-        recyclerView.layoutAnimation =
-            LayoutAnimationController(setSlideIn(), 0.25f)
+        //Function For Recycler Views
+        fun initRecyclerView(
+            mode: LiveData<ArrayList<Media>>,
+            container: View,
+            recyclerView: RecyclerView,
+            progress: View,
+            empty: View,
+            title: View,
+            more: View,
+            string: String
+        ) {
+            container.visibility = View.VISIBLE
+            progress.visibility = View.GONE
+            empty.visibility = View.GONE
+            title.visibility = View.VISIBLE
+            more.visibility = View.VISIBLE
+            recyclerView.visibility = View.VISIBLE
 
-        mode.observe(viewLifecycleOwner) {
-            if (it != null) {
-                if (it.isNotEmpty()) {
-                    empty.visibility = View.GONE
-                    val currentAdapter = recyclerView.adapter as? MediaAdaptor
-                    if (currentAdapter != null && currentAdapter.type == 0 && currentAdapter.mediaList === it && recyclerView.tag == "loaded") {
-                        currentAdapter.notifyDataSetChanged()
-                    } else {
-                        recyclerView.adapter = MediaAdaptor(0, it, requireActivity())
-                        recyclerView.tag = "loaded"
-                        progress.visibility = View.GONE
-                        recyclerView.visibility = View.VISIBLE
-                    }
-                    more.visibility = View.VISIBLE
-                    val click = View.OnClickListener { i ->
-                        val intent = Intent(i.context, MediaListActivity::class.java)
-                        intent.putExtra("isAnime", isAnime)
-                        intent.putExtra("name", string)
-                        if (string == getString(R.string.recommended)) {
-                            intent.putExtra("type", "RECOMMENDED")
-                            intent.putExtra("page", model.recommendationPage)
+            recyclerView.adapter = MediaAdaptor(0, getSkeletonMediaList(), requireActivity())
+            recyclerView.layoutManager = LinearLayoutManager(
+                requireContext(),
+                LinearLayoutManager.HORIZONTAL,
+                false
+            )
+
+            mode.observe(viewLifecycleOwner) {
+                if (it != null) {
+                    if (it.isNotEmpty()) {
+                        empty.visibility = View.GONE
+                        val currentAdapter = recyclerView.adapter as? MediaAdaptor
+                        if (currentAdapter != null && currentAdapter.type == 0 && currentAdapter.mediaList === it && recyclerView.tag == "loaded") {
+                            currentAdapter.notifyDataSetChanged()
+                        } else {
+                            recyclerView.tag = "loaded"
+                            recyclerView.adapter = MediaAdaptor(0, it, requireActivity())
+                            recyclerView.layoutManager = LinearLayoutManager(
+                                requireContext(),
+                                LinearLayoutManager.HORIZONTAL,
+                                false
+                            )
+                            recyclerView.visibility = View.VISIBLE
+                            recyclerView.layoutAnimation =
+                                LayoutAnimationController(setSlideIn(), 0.25f)
                         }
-                        ContextCompat.startActivity(i.context, intent, null)
+                        more.setOnClickListener { i ->
+                            MediaListViewActivity.passedMedia = it
+                            val intent = Intent(i.context, MediaListViewActivity::class.java)
+                                .putExtra("title", string)
+                            if (string == getString(R.string.recommended)) {
+                                intent.putExtra("type", "RECOMMENDED")
+                                intent.putExtra("page", model.recommendationPage)
+                            }
+                            ContextCompat.startActivity(
+                                i.context, intent,
+                                null
+                            )
+                        }
+                    } else {
+                        recyclerView.visibility = View.GONE
+                        empty.visibility = View.VISIBLE
                     }
-                    title.setOnClickListener(click)
-                    more.setOnClickListener(click)
-                } else {
-                    empty.visibility = View.VISIBLE
-                    progress.visibility = View.GONE
-                    more.visibility = View.GONE
-                    recyclerView.visibility = View.GONE
                 }
             }
-        }
-    }
 
-    private fun setupMediaRecyclerViews(binding: FragmentHomeBinding) {
+        }
+
+        // Recycler Views
         initRecyclerView(
-            model.getContinueWatch(),
+            model.getAnimeContinue(),
             binding.homeContinueWatchingContainer,
-            binding.homeContinueWatchRecycler,
-            binding.homeContinueWatchProgress,
-            binding.homeContinueWatchEmpty,
+            binding.homeWatchingRecyclerView,
+            binding.homeWatchingProgressBar,
+            binding.homeWatchingEmpty,
             binding.homeContinueWatch,
             binding.homeContinueWatchMore,
             getString(R.string.continue_watching)
@@ -361,22 +360,19 @@ class HomeFragment : Fragment() {
         initRecyclerView(
             model.getAnimeFav(),
             binding.homeFavAnimeContainer,
-            binding.homeFavAnimeRecycler,
-            binding.homeFavAnimeProgress,
+            binding.homeFavAnimeRecyclerView,
+            binding.homeFavAnimeProgressBar,
             binding.homeFavAnimeEmpty,
             binding.homeFavAnime,
             binding.homeFavAnimeMore,
-            getString(R.string.favorite_anime)
+            getString(R.string.fav_anime)
         )
-        binding.homeFavAnimeBrowseButton.setOnClickListener {
-            bottomBarOrNull?.selectTabAt(0)
-        }
 
         initRecyclerView(
             model.getAnimePlanned(),
             binding.homePlannedAnimeContainer,
-            binding.homePlannedAnimeRecycler,
-            binding.homePlannedAnimeProgress,
+            binding.homePlannedAnimeRecyclerView,
+            binding.homePlannedAnimeProgressBar,
             binding.homePlannedAnimeEmpty,
             binding.homePlannedAnime,
             binding.homePlannedAnimeMore,
@@ -389,27 +385,23 @@ class HomeFragment : Fragment() {
         initRecyclerView(
             model.getMissingSequels(),
             binding.homeMissingSequelsContainer,
-            binding.homeMissingSequelsRecycler,
-            binding.homeMissingSequelsProgress,
+            binding.homeMissingSequelsRecyclerView,
+            binding.homeMissingSequelsProgressBar,
             binding.homeMissingSequelsEmpty,
             binding.homeMissingSequels,
             binding.homeMissingSequelsMore,
             getString(R.string.missing_sequels)
         )
-        binding.homeMissingSequelsBrowseButton.setOnClickListener {
-            bottomBarOrNull?.selectTabAt(0)
-        }
 
         initRecyclerView(
-            model.getContinueRead(),
+            model.getMangaContinue(),
             binding.homeContinueReadingContainer,
-            binding.homeContinueReadRecycler,
-            binding.homeContinueReadProgress,
-            binding.homeContinueReadEmpty,
+            binding.homeReadingRecyclerView,
+            binding.homeReadingProgressBar,
+            binding.homeReadingEmpty,
             binding.homeContinueRead,
             binding.homeContinueReadMore,
-            getString(R.string.continue_reading),
-            false
+            getString(R.string.continue_reading)
         )
         binding.homeReadingBrowseButton.setOnClickListener {
             bottomBarOrNull?.selectTabAt(2)
@@ -418,28 +410,23 @@ class HomeFragment : Fragment() {
         initRecyclerView(
             model.getMangaFav(),
             binding.homeFavMangaContainer,
-            binding.homeFavMangaRecycler,
-            binding.homeFavMangaProgress,
+            binding.homeFavMangaRecyclerView,
+            binding.homeFavMangaProgressBar,
             binding.homeFavMangaEmpty,
             binding.homeFavManga,
             binding.homeFavMangaMore,
-            getString(R.string.favorite_manga),
-            false
+            getString(R.string.fav_manga)
         )
-        binding.homeFavMangaBrowseButton.setOnClickListener {
-            bottomBarOrNull?.selectTabAt(2)
-        }
 
         initRecyclerView(
             model.getMangaPlanned(),
             binding.homePlannedMangaContainer,
-            binding.homePlannedMangaRecycler,
-            binding.homePlannedMangaProgress,
+            binding.homePlannedMangaRecyclerView,
+            binding.homePlannedMangaProgressBar,
             binding.homePlannedMangaEmpty,
             binding.homePlannedManga,
             binding.homePlannedMangaMore,
-            getString(R.string.planned_manga),
-            false
+            getString(R.string.planned_manga)
         )
         binding.homePlannedMangaBrowseButton.setOnClickListener {
             bottomBarOrNull?.selectTabAt(2)
@@ -448,44 +435,50 @@ class HomeFragment : Fragment() {
         initRecyclerView(
             model.getRecommendation(),
             binding.homeRecommendedContainer,
-            binding.homeRecommendedRecycler,
-            binding.homeRecommendedProgress,
+            binding.homeRecommendedRecyclerView,
+            binding.homeRecommendedProgressBar,
             binding.homeRecommendedEmpty,
             binding.homeRecommended,
             binding.homeRecommendedMore,
             getString(R.string.recommended)
         )
-        binding.homeRecommendedBrowseButton.setOnClickListener {
-            bottomBarOrNull?.selectTabAt(0)
-        }
-        binding.homeRecommendedRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+binding.homeRecommendedRecyclerView.addOnScrollListener(object :
+            RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (!recyclerView.canScrollHorizontally(1)) {
-                    if (model.recommendationLoaded) {
-                        model.recommendationLoaded = false
-                        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                            model.initRecommendation()
+                    if (model.recommendationHasNextPage && !model.recommendationLoading) {
+                        scope.launch(Dispatchers.IO) {
+                            model.loadMoreRecommendations()
                         }
                     }
                 }
                 super.onScrolled(recyclerView, dx, dy)
             }
         })
-    }
-
-    private fun setupUserStories(binding: FragmentHomeBinding) {
         val storiesEnabled = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout)
             .getOrElse(7) { true } && !PrefManager.getVal<Boolean>(PrefName.RescueMode)
         binding.homeUserStatusContainer.visibility =
             if (storiesEnabled) View.VISIBLE else View.GONE
-        binding.homeUserStatusRecyclerView.layoutManager =
-            LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
-
-        var latestStatusUsers: List<UserStatus>? = null
-        fun bindUserStatusList(users: List<UserStatus>) {
+        binding.homeUserStatusProgressBar.visibility =
+            if (storiesEnabled) View.VISIBLE else View.GONE
+        binding.homeUserStatusRecyclerView.visibility = View.GONE
+        binding.homeUserStatusRecyclerView.layoutManager = LinearLayoutManager(
+            requireContext(),
+            LinearLayoutManager.HORIZONTAL,
+            false
+        )
+        var latestStatusUsers: ArrayList<User> = arrayListOf()
+        model.getUserStatus().observe(viewLifecycleOwner) { users ->
             when {
-                latestStatusUsers == users && binding.homeUserStatusRecyclerView.adapter != null -> {
-                    binding.homeUserStatusRecyclerView.adapter?.notifyDataSetChanged()
+                users == null -> {
+                    val show = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout)
+                        .getOrElse(7) { true } &&
+                        !PrefManager.getVal<Boolean>(PrefName.RescueMode)
+                    if (show) {
+                        binding.homeUserStatusContainer.visibility = View.VISIBLE
+                        binding.homeUserStatusProgressBar.visibility = View.VISIBLE
+                        binding.homeUserStatusRecyclerView.visibility = View.GONE
+                    }
                 }
                 users.isNotEmpty() -> {
                     latestStatusUsers = users
@@ -497,24 +490,24 @@ class HomeFragment : Fragment() {
                         LayoutAnimationController(setSlideIn(), 0.25f)
                 }
                 else -> {
-                    latestStatusUsers = users
+                    latestStatusUsers = arrayListOf()
+                    binding.homeUserStatusProgressBar.visibility = View.GONE
+                    binding.homeUserStatusRecyclerView.visibility = View.GONE
                     binding.homeUserStatusContainer.visibility = View.GONE
                 }
             }
         }
-
-        model.getUserStatus().observe(viewLifecycleOwner) { users ->
-            if (users != null) bindUserStatusList(users)
-        }
-    }
-
-    private fun setupHiddenItems(binding: FragmentHomeBinding) {
-        model.getHiddenItems().observe(viewLifecycleOwner) {
-            if (it.isNotEmpty()) {
-                if (binding.homeHiddenItemsRecyclerView.adapter != null && binding.homeHiddenItemsRecyclerView.tag == "loaded") {
-                    (binding.homeHiddenItemsRecyclerView.adapter as MediaAdaptor).notifyDataSetChanged()
-                } else {
-                    binding.homeHiddenItemsRecyclerView.tag = "loaded"
+        PrefManager.getLiveVal(PrefName.RefreshStatus, false).asLiveBool()
+            .observe(viewLifecycleOwner) {
+                if (latestStatusUsers.isNotEmpty()) {
+                    binding.homeUserStatusRecyclerView.adapter =
+                        UserStatusAdapter(latestStatusUsers)
+                }
+            }
+        binding.homeHiddenItemsContainer.visibility = View.GONE
+        model.getHidden().observe(viewLifecycleOwner) {
+            if (it != null) {
+                if (it.isNotEmpty()) {
                     binding.homeHiddenItemsRecyclerView.adapter =
                         MediaAdaptor(0, it, requireActivity())
                     binding.homeHiddenItemsRecyclerView.layoutManager = LinearLayoutManager(
@@ -526,14 +519,25 @@ class HomeFragment : Fragment() {
                         binding.homeHiddenItemsContainer.visibility = View.VISIBLE
                         binding.homeHiddenItemsRecyclerView.layoutAnimation =
                             LayoutAnimationController(setSlideIn(), 0.25f)
-                        binding.homeScroll.smoothScrollTo(
-                            0,
-                            binding.homeHiddenItemsContainer.top
-                        )
                         true
                     }
-                    binding.homeHiddenClose.setOnClickListener {
+                    binding.homeHiddenItemsMore.setSafeOnClickListener { _ ->
+                        MediaListViewActivity.passedMedia = it
+                        ContextCompat.startActivity(
+                            requireActivity(),
+                            Intent(requireActivity(), MediaListViewActivity::class.java)
+                                .putExtra("title", getString(R.string.hidden)),
+                            null
+                        )
+                    }
+                    binding.homeHiddenItemsTitle.setOnLongClickListener {
                         binding.homeHiddenItemsContainer.visibility = View.GONE
+                        true
+                    }
+                } else {
+                    binding.homeContinueWatch.setOnLongClickListener {
+                        snackString(getString(R.string.no_hidden_items))
+                        true
                     }
                 }
             } else {
@@ -543,12 +547,11 @@ class HomeFragment : Fragment() {
                 }
             }
         }
-    }
 
-    private fun setupLayoutAndRefresh(binding: FragmentHomeBinding) {
         binding.homeUserAvatarContainer.startAnimation(setSlideUp())
 
-        model.empty.observe(viewLifecycleOwner) {
+        model.empty.observe(viewLifecycleOwner)
+        {
             binding.homeDantotsuContainer.visibility = if (it == true) View.VISIBLE else View.GONE
             (binding.homeDantotsuIcon.drawable as Animatable).start()
             binding.homeDantotsuContainer.startAnimation(setSlideUp())
@@ -556,6 +559,19 @@ class HomeFragment : Fragment() {
                 (binding.homeDantotsuIcon.drawable as Animatable).start()
             }
         }
+
+
+        val array = arrayOf(
+            "AnimeContinue",
+            "AnimeFav",
+            "AnimePlanned",
+            "MangaContinue",
+            "MangaFav",
+            "MangaPlanned",
+            "Recommendation",
+            "UserStatus",
+            "MissingSequels",
+        )
 
         val containers = arrayOf(
             binding.homeContinueWatchingContainer,
@@ -574,6 +590,7 @@ class HomeFragment : Fragment() {
 
         PrefManager.getLiveVal(PrefName.RescueMode, false).asLiveBool()
             .observe(viewLifecycleOwner) { inRescueMode ->
+
                 val alOnlySections = listOf(
                     binding.homeFavAnimeContainer,
                     binding.homeFavMangaContainer,
@@ -584,6 +601,7 @@ class HomeFragment : Fragment() {
                     if (inRescueMode) View.VISIBLE else View.GONE
                 if (inRescueMode) {
                     alOnlySections.forEach { it.visibility = View.GONE }
+
                     binding.homeContinueWatchingContainer.visibility = View.VISIBLE
                     binding.homePlannedAnimeContainer.visibility = View.VISIBLE
                     binding.homeContinueReadingContainer.visibility = View.VISIBLE
@@ -604,14 +622,14 @@ class HomeFragment : Fragment() {
         live.observe(viewLifecycleOwner) { shouldRefresh ->
             if (!running && shouldRefresh) {
                 running = true
-                viewLifecycleOwner.lifecycleScope.launch {
+                scope.launch {
                     withContext(Dispatchers.IO) {
                         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                         if (rescueMode) {
                             if (MAL.token != null && MAL.episodesWatched == null) {
                                 tryWithSuspend { MAL.query.getUserData() }
                             }
-                            withContext(Dispatchers.Main) { loadUserData(binding) }
+                            withContext(Dispatchers.Main) { load() }
                         } else {
                             Anilist.userid =
                                 PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
@@ -619,13 +637,13 @@ class HomeFragment : Fragment() {
                             if (Anilist.userid == null) {
                                 withContext(Dispatchers.Main) {
                                     getUserId(context) {
-                                        loadUserData(binding)
+                                        load()
                                     }
                                 }
                             } else {
                                 launch(Dispatchers.Main) {
                                     getUserId(context) {
-                                        loadUserData(binding)
+                                        load()
                                     }
                                 }
                             }

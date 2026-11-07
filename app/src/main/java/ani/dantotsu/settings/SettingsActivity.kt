@@ -1,5 +1,6 @@
 package ani.dantotsu.settings
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Animatable
 import android.os.Build.BRAND
@@ -96,9 +97,37 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
 
-            val settingsList = buildSettingsItems(context)
-            val mainAdapter = SettingsAdapter(settingsList)
+            val mainAdapter = SettingsAdapter(buildSettingsItems(context))
 
+            val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
+
+            settingsRecyclerView.apply {
+                adapter = mainAdapter
+                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
+                setHasFixedSize(true)
+            }
+
+            settingsSearchBarText.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    val query = s?.toString()?.trim() ?: ""
+                    if (query.isNotEmpty()) {
+                        val results = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
+                        if (results.isNotEmpty()) {
+                            searchAdapter.updateResults(results)
+                            settingsRecyclerView.adapter = searchAdapter
+                            settingsRecyclerView.visibility = View.VISIBLE
+                            settingsEmptyLayout.visibility = View.GONE
+                        } else {
+                            settingsRecyclerView.visibility = View.GONE
+                            settingsEmptyLayout.visibility = View.VISIBLE
+                        }
+                        settingsFooterLayout.visibility = View.GONE
+                        settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_close_24)
+                        settingsSearchBar.setEndIconOnClickListener {
+                            settingsSearchBarText.setText("")
+                        }
+                    } else {
                         settingsRecyclerView.adapter = mainAdapter
                         settingsRecyclerView.visibility = View.VISIBLE
                         settingsEmptyLayout.visibility = View.GONE
@@ -360,37 +389,6 @@ class SettingsActivity : AppCompatActivity() {
                         isActivity = true
                     )
                 )
-            )
-
-            val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
-
-            settingsRecyclerView.apply {
-                adapter = mainAdapter
-                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-                setHasFixedSize(true)
-            }
-
-            settingsSearchBarText.addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                    val query = s?.toString()?.trim() ?: ""
-                    if (query.isNotEmpty()) {
-                        val results = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
-                        if (results.isNotEmpty()) {
-                            searchAdapter.updateResults(results)
-                            settingsRecyclerView.adapter = searchAdapter
-                            settingsRecyclerView.visibility = View.VISIBLE
-                            settingsEmptyLayout.visibility = View.GONE
-                        } else {
-                            settingsRecyclerView.visibility = View.GONE
-                            settingsEmptyLayout.visibility = View.VISIBLE
-                        }
-                        settingsFooterLayout.visibility = View.GONE
-                        settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_close_24)
-                        settingsSearchBar.setEndIconOnClickListener {
-                            settingsSearchBarText.setText("")
-                        }
-                    } else {
     }
 
 }

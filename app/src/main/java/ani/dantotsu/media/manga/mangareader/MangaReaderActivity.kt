@@ -306,8 +306,10 @@ class MangaReaderActivity : AppCompatActivity() {
     }
 
     private fun pageSliderHide() {
-        pageSliderHandler.removeCallbacks(pageSliderRunnable)
-        pageSliderHandler.postDelayed(pageSliderRunnable, 3000)
+        pageSliderRunnable?.let {
+            pageSliderHandler.removeCallbacks(it)
+            pageSliderHandler.postDelayed(it, 3000)
+        }
     }
 
     private fun handleSliderPageChange(value: Int) {

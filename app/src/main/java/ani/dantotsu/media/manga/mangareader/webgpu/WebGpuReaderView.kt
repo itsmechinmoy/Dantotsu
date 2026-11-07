@@ -343,7 +343,7 @@ class WebGpuReaderView(
         return null
     }
 
-    private fun openCacheOrNetworkStream(image: MangaImage, url: String): ByteArrayInputStream? {
+    private suspend fun openCacheOrNetworkStream(image: MangaImage, url: String): ByteArrayInputStream? {
         try {
             val mangaCache = Injekt.get<MangaCache>()
             val imageData = mangaCache.get(url)

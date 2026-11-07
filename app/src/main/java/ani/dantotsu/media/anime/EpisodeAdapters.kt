@@ -97,7 +97,7 @@ class EpisodeAdapter(
             )
 
             else -> throw IllegalArgumentException()
-        })
+        }
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -569,7 +569,7 @@ class EpisodeAdapter(
         viewedCover: View,
         viewed: View,
         container: View,
-        progressCont: View,
+        progressCont: LinearLayout,
         progress: View,
         progressEmpty: View,
         media: Media,

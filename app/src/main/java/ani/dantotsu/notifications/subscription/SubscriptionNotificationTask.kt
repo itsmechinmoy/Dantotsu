@@ -218,8 +218,8 @@ class SubscriptionNotificationTask : Task {
     }
     private suspend fun processSubscriptions(
         context: Context,
-        subscriptions: Map<String, SubscriptionHelper.Companion.SubscribeMedia>,
-        index: Map<String, Int>,
+        subscriptions: Map<Int, SubscriptionHelper.Companion.SubscribeMedia>,
+        index: Map<Int, Int>,
         progressNotification: androidx.core.app.NotificationCompat.Builder?,
         notificationManager: NotificationManagerCompat
     ): Int {
@@ -270,9 +270,9 @@ class SubscriptionNotificationTask : Task {
 
     private suspend fun checkSubscriptionMedia(
         context: Context,
-        subKey: String,
+        subKey: Int,
         media: SubscriptionHelper.Companion.SubscribeMedia,
-        index: Map<String, Int>,
+        index: Map<Int, Int>,
         progressCallback: (Int, String) -> Unit
     ): Pair<String, FileUrl?>? {
         return if (media.isAnime) {

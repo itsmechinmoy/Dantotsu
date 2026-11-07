@@ -299,7 +299,7 @@ class DownloadQueueActivity : AppCompatActivity() {
         }
     }
 
-    private fun cacheDownloadedTitles(type: MediaType, downloadedTypes: List<DownloadsManager.DownloadedType>) {
+    private fun cacheDownloadedTitles(type: MediaType, downloadedTypes: List<ani.dantotsu.download.DownloadedType>) {
         val titles = downloadedTypes.map { it.titleName }.distinct()
         for (title in titles) {
             val folder = DownloadsManager.getSubDirectory(this@DownloadQueueActivity, type, false, title, null)

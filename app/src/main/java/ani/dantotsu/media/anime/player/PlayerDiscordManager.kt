@@ -87,4 +87,8 @@ class PlayerDiscordManager(
             buttons = buttons,
         )
     }
+
+    fun clear() {
+        RPCManager.clearPresence(activity)
+    }
 }

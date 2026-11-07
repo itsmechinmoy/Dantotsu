@@ -696,8 +696,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         binding.selectorAutoListContainer.visibility = View.VISIBLE
         binding.selectorTitle.text = "Starting Download"
         binding.selectorAutoText.text =
-            "Starting download using server:
-$selectedServerName"
+            "Starting download using server:\n$selectedServerName"
         binding.selectorCancel.visibility = View.GONE
 
         scope.launch(Dispatchers.IO) {
@@ -794,7 +793,7 @@ $selectedServerName"
                 val torrentHash = ep.extra?.get("torrentHash")
                     ?: if (url.contains("hash=")) url.substringAfter("hash=").substringBefore("&") else null
                 val index = ep.extra?.get("fileId")?.toIntOrNull()
-                    ?: if (url.contains("index=")) url.substringAfter("index=").substringBefore("&").toIntOrNull() else null
+                    ?: (if (url.contains("index=")) url.substringAfter("index=").substringBefore("&").toIntOrNull() else null)
                     ?: 0
 
                 prepareTorrentBuffer(torrentManager, torrentHash, url, video, index)
@@ -1116,7 +1115,7 @@ $selectedServerName"
             }
 
             val onAudioPrompt = {
-                promptAudioTracks(selectedAudioTracks, onComplete)
+                promptAudioTracks(selectedAudioTracks) { onComplete?.invoke() }
             }
 
             if (extractor.subtitles.isNotEmpty()) {

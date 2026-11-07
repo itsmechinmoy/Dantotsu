@@ -708,7 +708,7 @@ $REVIEW_GRAPHQL_FIELDS
             ${if (repeat != null) ""","repeat":$repeat""" else ""}
             ${if (notes != null) ""","notes":"${notes.replace("\n", "\\n")}"""" else ""}
             ${if (status != null) ""","status":"$status"""" else ""}
-            ${if (customList != null) ""","customLists":[${customList.joinToString { ""$it"" }}]""" else ""}
+            ${if (customList != null) ""","customLists":[${customList.joinToString { "\"$it\"" }}]""" else ""}
             ${if (advancedScores != null) ""","advancedScores":[${advancedScores.joinToString(",")}]""" else ""}
             }""".replace("\n", "").replace("""    """, "")
     }

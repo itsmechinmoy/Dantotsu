@@ -2,6 +2,7 @@ package ani.dantotsu.widgets.upcoming
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.view.View
 import android.widget.RemoteViews

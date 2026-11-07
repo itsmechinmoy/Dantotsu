@@ -291,186 +291,7 @@ class AnimeDownloaderService : Service() {
         notificationManager.notify(NOTIFICATION_ID, builder.build())
     }
 
-    private fun checkNotificationPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(
-                this@AnimeDownloaderService,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true
-        }
-    }
-
-    private suspend fun downloadDrmEpisode(
-        task: AnimeDownloadTask,
-        baseOutputDir: androidx.documentfile.provider.DocumentFile,
-        outputDir: androidx.documentfile.provider.DocumentFile,
-        drm: ani.dantotsu.media.anime.DrmConfig,
-        offlineDrm: ani.dantotsu.media.anime.DrmConfig.Offline,
-        notifi: Boolean
-    ) {
-        saveMediaInfo(task, baseOutputDir)
-        val lastPercent = java.util.concurrent.atomic.AtomicInteger(-1)
-        val result = DrmDownloader.download(
-            context = this@AnimeDownloaderService,
-            drm = offlineDrm,
-            scheme = drm.scheme,
-            outputDir = outputDir,
-        ) { percent ->
-            if (task.cancelled || lastPercent.getAndSet(percent) == percent) {
-                return@download
-            }
-            AnimeServiceDataSingleton.progress[task.getTaskName()] = percent
-            builder.setProgress(100, percent, false)
-            if (notifi) notificationManager.notify(NOTIFICATION_ID, builder.build())
-            broadcastDownloadProgress(task.episode, percent, task.sourceMedia?.id, 0L, 0L)
-        }
-        if (task.cancelled) return
-        Logger.log(
-            "DRM download finished; license valid for " +
-                    "${result.licenseSeconds}s, playback window ${result.playbackSeconds}s"
-        )
-        completeDownload(task, notifi)
-    }
-
-    private suspend fun monitorFfmpegDownload(
-        task: AnimeDownloadTask,
-        ffExtension: FFMpegExtension,
-        ffTask: Long,
-        notifi: Boolean
-    ) {
-        var fails = 0
-        while (ffExtension.isActive(ffTask)) {
-            if (task.cancelled) {
-                ffExtension.cancelDownload(ffTask)
-                return
-            }
-            if (ffExtension.isFailed(ffTask)) {
-                fails++
-                if (fails > 3) {
-                    if (notifi) {
-                        builder.setContentText(
-                            "${getTaskName(task.title, task.episode)} Download failed"
-                        )
-                        withContext(Dispatchers.Main) {
-                            notificationManager.notify(NOTIFICATION_ID, builder.build())
-                        }
-                    }
-                    toast("${getTaskName(task.title, task.episode)} Download failed")
-                    Logger.log("Download failed: ${ffExtension.getStackTrace(ffTask)}")
-                    downloadsManager.removeDownload(
-                        DownloadedType(task.title, task.episode, MediaType.ANIME)
-                    )
-                    currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
-                    broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
-                    break
-                }
-            }
-            kotlinx.coroutines.delay(300.milliseconds)
-        }
-        if (task.cancelled) {
-            ffExtension.cancelDownload(ffTask)
-            return
-        }
-        if (ffExtension.isSuccess(ffTask)) {
-            completeDownload(task, notifi)
-        } else {
-            if (notifi) {
-                builder.setContentText(
-                    "${getTaskName(task.title, task.episode)} Download failed"
-                )
-                withContext(Dispatchers.Main) {
-                    notificationManager.notify(NOTIFICATION_ID, builder.build())
-                }
-            }
-            toast("${getTaskName(task.title, task.episode)} Download failed")
-            Logger.log("Download failed: ${ffExtension.getStackTrace(ffTask)}")
-            downloadsManager.removeDownload(
-                DownloadedType(task.title, task.episode, MediaType.ANIME)
-            )
-            currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
-            broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
-        }
-    }
-
-    private suspend fun downloadFfmpegEpisode(
-        task: AnimeDownloadTask,
-        outputDir: androidx.documentfile.provider.DocumentFile,
-        notifi: Boolean
-    ) {
-        val extension = ffExtension!!.getFileExtension()
-        outputDir.findFile("${task.getTaskName().findValidName()}.${extension.first}")?.delete()
-
-        val outputFile = outputDir.createFile(
-            extension.second,
-            "${task.getTaskName()}.${extension.first}"
-        ) ?: throw Exception("Failed to create output file")
-
-        val percent = java.util.concurrent.atomic.AtomicInteger(0)
-        val lastPublishedPercent = java.util.concurrent.atomic.AtomicInteger(-1)
-        val lastUiMs = java.util.concurrent.atomic.AtomicLong(0L)
-        var ffTask = -1L
-
-        val path = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            "pipe:0"
-        } else {
-            val realPath = getRealPath(outputFile.uri)
-            realPath ?: "pipe:0"
-        }
-
-        val statCallback: (Int) -> Unit = { p ->
-            percent.set(p)
-            val now = SystemClock.elapsedRealtime()
-            if (p != lastPublishedPercent.get() && (now - lastUiMs.get() >= 250L || p == 100)) {
-                lastPublishedPercent.set(p)
-                lastUiMs.set(SystemClock.elapsedRealtime())
-                AnimeServiceDataSingleton.progress[task.getTaskName()] = p
-                builder.setProgress(100, p, false)
-                builder.setContentText("${getTaskName(task.title, task.episode)} • $p%")
-                val sessionId = ffTask
-                val addonDownloaded = if (sessionId != -1L) ffExtension.getDownloadedBytes(sessionId) else -1L
-                val addonEstimated = if (sessionId != -1L) ffExtension.getEstimatedTotalBytes(sessionId) else -1L
-                broadcastDownloadProgress(task.episode, p, task.sourceMedia?.id, addonDownloaded, addonEstimated)
-                if (notifi) {
-                    try {
-                        notificationManager.notify(NOTIFICATION_ID, builder.build())
-                    } catch (_: SecurityException) {
-                        // POST_NOTIFICATIONS may be missing on some devices mid-download
-                    }
-                }
-            }
-        }
-
-        ffTask = ffExtension.executeFFMpeg(
-            task.video.file.url,
-            path,
-            task.video.file.headers,
-            task.subtitle,
-            statCallback
-        )
-
-        if (task.cancelled) {
-            ffExtension.cancelDownload(ffTask)
-            return
-        }
-        currentTasks.find { it.getTaskName() == task.getTaskName() }?.sessionId = ffTask
-
-        monitorFfmpegDownload(task, ffExtension, ffTask, notifi)
-    }
-
-    private fun handleDownloadException(task: AnimeDownloadTask, e: Exception) {
-        if (task.cancelled || e.message?.contains("Coroutine was cancelled") == true) {
-            task.cancelled = true
-            Logger.log("Download cancelled: ${task.getTaskName()}")
-        } else {
-            Logger.log("Exception while downloading file: ${e.message}")
-            snackString("Exception while downloading file: ${e.message}")
-            currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
-            broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
-        }
-    }
-
+    @Suppress("ComplexMethod", "LongMethod")
     @androidx.annotation.OptIn(UnstableApi::class)
     suspend fun download(task: AnimeDownloadTask) {
         withContext(Dispatchers.IO) {
@@ -484,7 +305,15 @@ class AnimeDownloaderService : Service() {
                 return@withContext
             }
             try {
-                val notifi = checkNotificationPermission()
+                val notifi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    ContextCompat.checkSelfPermission(
+                        this@AnimeDownloaderService,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED
+                } else {
+                    true
+                }
+
                 builder.setContentText("Downloading ${getTaskName(task.title, task.episode)}")
                 if (notifi) {
                     withContext(Dispatchers.Main) {
@@ -506,21 +335,245 @@ class AnimeDownloaderService : Service() {
                     task.episode
                 ) ?: throw Exception("Failed to create output directory")
 
+                // FFmpeg would need the content key to make anything playable out of an
+                // encrypted stream, so those are stored as-is next to a persistent license.
                 val drm = task.video.drm
                 val offlineDrm = drm?.offline
                 if (offlineDrm != null) {
-                    downloadDrmEpisode(task, baseOutputDir, outputDir, drm, offlineDrm, notifi)
+                    saveMediaInfo(task, baseOutputDir)
+                    val lastPercent = java.util.concurrent.atomic.AtomicInteger(-1)
+                    val result = DrmDownloader.download(
+                        context = this@AnimeDownloaderService,
+                        drm = offlineDrm,
+                        scheme = drm.scheme,
+                        outputDir = outputDir,
+                    ) { percent ->
+                        // Fires once per segment, and an episode has hundreds of them.
+                        if (task.cancelled || lastPercent.getAndSet(percent) == percent) {
+                            return@download
+                        }
+                        AnimeServiceDataSingleton.progress[task.getTaskName()] = percent
+                        builder.setProgress(100, percent, false)
+                        if (notifi) notificationManager.notify(NOTIFICATION_ID, builder.build())
+                        broadcastDownloadProgress(task.episode, percent, task.sourceMedia?.id, 0L, 0L)
+                    }
+                    if (task.cancelled) return@withContext
+                    Logger.log(
+                        "DRM download finished; license valid for " +
+                            "${result.licenseSeconds}s, playback window ${result.playbackSeconds}s"
+                    )
+                    completeDownload(task, notifi)
                     return@withContext
                 }
 
-                downloadFfmpegEpisode(task, outputDir, notifi)
+                val extension = ffExtension!!.getFileExtension()
+                outputDir.findFile("${task.getTaskName().findValidName()}.${extension.first}")
+                    ?.delete()
+
+                val outputFile =
+                    outputDir.createFile(
+                        extension.second,
+                        "${task.getTaskName()}.${extension.first}"
+                    )
+                        ?: throw Exception("Failed to create output file")
+
+                val percent = java.util.concurrent.atomic.AtomicInteger(0)
+                val lastPublishedPercent = java.util.concurrent.atomic.AtomicInteger(-1)
+                val lastUiMs = java.util.concurrent.atomic.AtomicLong(0L)
+                var ffTask = -1L
+                val path = ffExtension.setDownloadPath(
+                    this@AnimeDownloaderService,
+                    outputFile.uri
+                )
+                if (!task.video.file.headers.containsKey("User-Agent")
+                    && !task.video.file.headers.containsKey("user-agent")
+                ) {
+                    val newHeaders = task.video.file.headers.toMutableMap()
+                    newHeaders["User-Agent"] = defaultHeaders["User-Agent"]!!
+                    task.video.file.headers = newHeaders
+                }
+
+                fun publishProgress(force: Boolean = false) {
+                    // Drop all UI/notification updates after user cancel
+                    if (task.cancelled) return
+                    val p = percent.get().coerceIn(0, 99)
+                    // Broadcast to UI only when percent changes (or forced on complete)
+                    if (!force && p == lastPublishedPercent.get()) return
+                    lastPublishedPercent.set(p)
+                    lastUiMs.set(SystemClock.elapsedRealtime())
+                    AnimeServiceDataSingleton.progress[task.getTaskName()] = p
+                    builder.setProgress(100, p, false)
+                    builder.setContentText(
+                        "${getTaskName(task.title, task.episode)} · $p%"
+                    )
+                    val sessionId = ffTask
+                    val addonDownloaded =
+                        if (sessionId != -1L) ffExtension.getDownloadedBytes(sessionId) else -1L
+                    val addonEstimated =
+                        if (sessionId != -1L) ffExtension.getEstimatedTotalBytes(sessionId) else -1L
+                    val downloadedBytes =
+                        if (addonDownloaded > 0L) addonDownloaded else outputFile.length()
+                    val estimatedTotalBytes =
+                        if (addonEstimated > 0L) addonEstimated
+                        else SizeFormatter.estimateTotalBytesByPercent(downloadedBytes, p)
+                    broadcastDownloadProgress(
+                        task.episode,
+                        p,
+                        task.sourceMedia?.id,
+                        downloadedBytes,
+                        estimatedTotalBytes
+                    )
+                    if (notifi) {
+                        try {
+                            notificationManager.notify(NOTIFICATION_ID, builder.build())
+                        } catch (_: SecurityException) {
+                            // POST_NOTIFICATIONS may be missing on some devices mid-download
+                        }
+                    }
+                }
+
+                if (task.cancelled) return@withContext
+
+                // Downloader sends percent * 1000 via statCallback
+                ffTask = ffExtension.executeFFMpeg(
+                    task.video.file.url,
+                    path,
+                    task.video.file.headers,
+                    task.subtitle,
+                    task.audio,
+                ) {
+                    if (task.cancelled) return@executeFFMpeg
+                    if (it > 0) {
+                        percent.set((it / 1000.0).toInt().coerceIn(0, 99))
+                        publishProgress(force = false)
+                    }
+                }
+                task.sessionId = ffTask
+                // If canceled while executeFFMpeg was starting, stop engine immediately
+                if (task.cancelled) {
+                    ffExtension.cancelDownload(ffTask)
+                    return@withContext
+                }
+                currentTasks.find { it.getTaskName() == task.getTaskName() }?.sessionId =
+                    ffTask
+
+                saveMediaInfo(task, baseOutputDir)
+
+                // Wait for completion; UI progress only on percent change via statCallback
+                while (!task.cancelled && ffExtension.getState(ffTask) != "COMPLETED") {
+                    if (ffExtension.getState(ffTask) == "FAILED") {
+                        Logger.log("Download failed")
+                        builder.setContentText(
+                            "${
+                                getTaskName(
+                                    task.title,
+                                    task.episode
+                                )
+                            } Download failed"
+                        )
+                        if (notifi) {
+                            withContext(Dispatchers.Main) {
+                                notificationManager.notify(NOTIFICATION_ID, builder.build())
+                            }
+                        }
+                        toast("${getTaskName(task.title, task.episode)} Download failed")
+                        Logger.log("Download failed: ${ffExtension.getStackTrace(ffTask)}")
+                        downloadsManager.removeDownload(
+                            DownloadedType(
+                                task.title,
+                                task.episode,
+                                MediaType.ANIME,
+                            ),
+                            false
+                        ) {}
+                        Injekt.get<CrashlyticsInterface>().logException(
+                            Exception(
+                                "Anime Download failed:" +
+                                        " ${getTaskName(task.title, task.episode)}" +
+                                        " url: ${task.video.file.url}" +
+                                        " title: ${task.title}" +
+                                        " episode: ${task.episode}"
+                            )
+                        )
+                        currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
+                        broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
+                        break
+                    }
+                    kotlinx.coroutines.delay(300.milliseconds)
+                }
+                if (task.cancelled) {
+                    ffExtension.cancelDownload(ffTask)
+                    return@withContext
+                }
+                publishProgress(force = true)
+                if (ffExtension.getState(ffTask) == "COMPLETED") {
+                    if (task.cancelled) return@withContext
+                    if (ffExtension.hadError(ffTask)) {
+                        Logger.log("Download failed")
+                        builder.setContentText(
+                            "${
+                                getTaskName(
+                                    task.title,
+                                    task.episode
+                                )
+                            } Download failed"
+                        )
+                        if (notifi) {
+                            withContext(Dispatchers.Main) {
+                                notificationManager.notify(NOTIFICATION_ID, builder.build())
+                            }
+                        }
+                        snackString("${getTaskName(task.title, task.episode)} Download failed")
+                        downloadsManager.removeDownload(
+                            DownloadedType(
+                                task.title,
+                                task.episode,
+                                MediaType.ANIME
+                            ),
+                            false
+                        ) {}
+                        Injekt.get<CrashlyticsInterface>().logException(
+                            Exception(
+                                "Anime Download failed:" +
+                                        " ${getTaskName(task.title, task.episode)}" +
+                                        " url: ${task.video.file.url}" +
+                                        " title: ${task.title}" +
+                                        " episode: ${task.episode}"
+                            )
+                        )
+                        currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
+                        broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
+                        return@withContext
+                    }
+                    if (task.cancelled) return@withContext
+                    completeDownload(task, notifi)
+                } else throw Exception("Download failed")
+
             } catch (e: kotlinx.coroutines.CancellationException) {
                 task.cancelled = true
                 Logger.log("Download cancelled: ${task.getTaskName()}")
                 throw e
             } catch (e: Exception) {
-                handleDownloadException(task, e)
+                if (task.cancelled || e.message?.contains("Coroutine was cancelled") == true) {
+                    task.cancelled = true
+                    Logger.log("Download cancelled: ${task.getTaskName()}")
+                } else {
+                    Logger.log("Exception while downloading file: ${e.message}")
+                    snackString("Exception while downloading file: ${e.message}")
+                    e.printStackTrace()
+                    Injekt.get<CrashlyticsInterface>().logException(e)
+                    if (!task.cancelled) {
+                        broadcastDownloadFailed(task.episode, task.sourceMedia?.id)
+                    }
+                }
             } finally {
+                // Stop orphan engine work after user cancel
+                if (task.cancelled && task.sessionId != -1L) {
+                    runCatching { ffExtension?.cancelDownload(task.sessionId) }
+                }
+                task.sourceMedia?.id?.let { mediaId ->
+                    AnimeDownloader.stopDownload(mediaId, task.episode)
+                }
                 currentTasks.removeAll { it.getTaskName() == task.getTaskName() }
                 AnimeServiceDataSingleton.progress.remove(task.getTaskName())
             }

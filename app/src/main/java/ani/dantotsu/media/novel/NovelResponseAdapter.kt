@@ -33,6 +33,7 @@ class NovelResponseAdapter(
 
     inner class CoverViewHolder(val binding: ItemNovelResponseBinding) :
         RecyclerView.ViewHolder(binding.root) {
+        @Suppress("ComplexMethod", "LongMethod")
         fun bind(novel: ShowResponse, position: Int) {
             setAnimation(fragment.requireContext(), binding.root)
             binding.itemMediaImage.loadImage(novel.coverUrl, 400, 0)
@@ -73,6 +74,7 @@ class NovelResponseAdapter(
         
         private val activeCoroutines = mutableSetOf<String>()
 
+        @Suppress("ComplexMethod", "LongMethod")
         fun bind(novel: ShowResponse, position: Int) {
             binding.itemChapterNumber.text = novel.name
             
@@ -95,67 +97,6 @@ class NovelResponseAdapter(
                 }
             }
 
-            setupDownloadActions(novel)
-            setupChapterMeta(novel)
-            setupClickListeners(binding.root, novel)
-        }
-    }
-
-    inner class ListViewHolder(val binding: ItemChapterListBinding) :
-        RecyclerView.ViewHolder(binding.root) {
-        
-        private val activeCoroutines = mutableSetOf<String>()
-
-        fun bind(novel: ShowResponse, position: Int) {
-            binding.itemChapterNumber.text = novel.name
-            
-            if (fragment.media.format == "LOCAL" || fragment.media.format == "LOCAL_NOVEL") {
-                binding.itemDownload.visibility = View.GONE
-            } else {
-                binding.itemDownload.visibility = View.VISIBLE
-                
-                if (activeDownloads.contains(novel.link)) {
-                    binding.itemDownload.setImageResource(R.drawable.ic_sync)
-                    startOrContinueRotation(novel.link) {
-                        binding.itemDownload.rotation = 0f
-                    }
-                } else if (downloadedCheckCallback.downloadedCheck(novel) || downloadedChapters.contains(novel.link)) {
-                    binding.itemDownload.setImageResource(R.drawable.ic_round_delete_24)
-                    binding.itemDownload.rotation = 0f
-                } else {
-                    binding.itemDownload.setImageResource(R.drawable.ic_download_24)
-                    binding.itemDownload.rotation = 0f
-                }
-            }
-
-            setupDownloadActions(novel)
-            val releaseTime = novel.extra?.get("releaseTime")
-            val sourceName = novel.extra?.get("sourceName")
-            if (!releaseTime.isNullOrBlank() || !sourceName.isNullOrBlank()) {
-                binding.itemChapterDateLayout.visibility = View.VISIBLE
-                if (!releaseTime.isNullOrBlank()) {
-                    binding.itemChapterDate.text = releaseTime
-                    binding.itemChapterDate.visibility = View.VISIBLE
-                } else {
-                    binding.itemChapterDate.visibility = View.GONE
-                }
-                if (!sourceName.isNullOrBlank()) {
-                    binding.itemChapterScan.text = sourceName
-                    binding.itemChapterScan.visibility = View.VISIBLE
-                } else {
-                    binding.itemChapterScan.visibility = View.GONE
-                }
-                binding.itemChapterDateDivider.visibility =
-                    if (!releaseTime.isNullOrBlank() && !sourceName.isNullOrBlank()) View.VISIBLE else View.GONE
-            } else {
-                binding.itemChapterDateLayout.visibility = View.GONE
-            }
-            binding.itemEpisodeViewed.visibility = View.GONE
-
-            setupClickListeners(binding.root, novel)
-        }
-
-        private fun setupDownloadActions(novel: ShowResponse) {
             binding.itemDownload.setOnClickListener {
                 if (activeDownloads.contains(novel.link)) {
                     return@setOnClickListener
@@ -227,9 +168,30 @@ class NovelResponseAdapter(
                 true
             }
 
-        }
+            val releaseTime = novel.extra?.get("releaseTime")
+            val sourceName = novel.extra?.get("sourceName")
+            if (!releaseTime.isNullOrBlank() || !sourceName.isNullOrBlank()) {
+                binding.itemChapterDateLayout.visibility = View.VISIBLE
+                if (!releaseTime.isNullOrBlank()) {
+                    binding.itemChapterDate.text = releaseTime
+                    binding.itemChapterDate.visibility = View.VISIBLE
+                } else {
+                    binding.itemChapterDate.visibility = View.GONE
+                }
+                if (!sourceName.isNullOrBlank()) {
+                    binding.itemChapterScan.text = sourceName
+                    binding.itemChapterScan.visibility = View.VISIBLE
+                } else {
+                    binding.itemChapterScan.visibility = View.GONE
+                }
+                binding.itemChapterDateDivider.visibility =
+                    if (!releaseTime.isNullOrBlank() && !sourceName.isNullOrBlank()) View.VISIBLE else View.GONE
+            } else {
+                binding.itemChapterDateLayout.visibility = View.GONE
+            }
+            binding.itemEpisodeViewed.visibility = View.GONE
 
-        private fun setupChapterMeta(novel: ShowResponse) {
+            setupClickListeners(binding.root, novel)
         }
 
         private fun startOrContinueRotation(link: String, resetRotation: () -> Unit) {
@@ -251,6 +213,7 @@ class NovelResponseAdapter(
 
     inner class CompactViewHolder(val binding: ItemEpisodeCompactBinding) :
         RecyclerView.ViewHolder(binding.root) {
+        @Suppress("ComplexMethod", "LongMethod")
         fun bind(novel: ShowResponse, position: Int) {
             val chapterNumStr = novel.extra?.get("chapterNumber") ?: novel.name
             val parsedNumber = ani.dantotsu.media.MediaNameAdapter.findChapterNumber(chapterNumStr)

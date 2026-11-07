@@ -162,9 +162,11 @@ class MediaInfoFragment : Fragment() {
         binding.mediaInfoProgressBar.isGone = loaded
         binding.mediaInfoContainer.isVisible = loaded
         val activity = requireActivity() as MediaDetailsActivity
+        // The host can be mid-bail after a process death; it has no views to anchor to.
         if (!activity.bindingReady) return
         val baselineAnchor = activity.binding.mediaBottomBarContainer ?: activity.binding.commentMessageContainer
         baselineAnchor.let {
+            // If it's the unified container, it already has navBarHeight padding, so don't include it again.
             val includeSystemPaddings = it != activity.binding.mediaBottomBarContainer
             binding.mediaInfoScroll.setBaseline(it, includeSystemNavBar = includeSystemPaddings)
             binding.mediaInfoScroll.clipToPadding = false
@@ -176,992 +178,931 @@ class MediaInfoFragment : Fragment() {
 
         model.getMedia().observe(viewLifecycleOwner) { media ->
             if (media != null) {
-                bindBasicInfo(media)
-                bindDescription(media)
+                loaded = true
 
-                val parent = _binding?.mediaInfoContainer ?: return@observe
-                clearDynamicViews(parent)
-                bindMangaPublishersAndSynonyms(media, parent, offline)
-                bindUsers(media, parent, offline)
-                bindTrailers(media, parent, offline)
-                bindAnimeThemes(media, parent, offline)
-                bindGenres(media, parent)
-                bindTags(media, parent, offline)
-                bindRankings(media, parent, offline)
-                bindExternalLinks(media, parent, offline)
-                bindSequelsAndChronology(media, parent, offline)
-                bindReviews(media, parent)
-                bindRelations(media, parent, offline)
-                bindCharacters(media, parent, offline)
-                bindStaff(media, parent, offline)
-                bindRecommendations(media, parent, offline)
+                binding.mediaInfoProgressBar.visibility = View.GONE
+                binding.mediaInfoContainer.visibility = View.VISIBLE
+                val infoName = tripleTab + (media.name ?: media.nameRomaji)
+                binding.mediaInfoName.text = infoName
+                binding.mediaInfoName.setOnLongClickListener {
+                    copyToClipboard(media.name ?: media.nameRomaji)
+                    true
+                }
+                if (media.name != null) binding.mediaInfoNameRomajiContainer.visibility =
+                    View.VISIBLE
+                val infoNameRomaji = tripleTab + media.nameRomaji
+                binding.mediaInfoNameRomaji.text = infoNameRomaji
+                binding.mediaInfoNameRomaji.setOnLongClickListener {
+                    copyToClipboard(media.nameRomaji)
+                    true
+                }
+                binding.mediaInfoMeanScore.text =
+                    media.meanScore?.let { (it / 10.0).toString() } ?: "??"
+                binding.mediaInfoStatus.text = media.status
+                binding.mediaInfoFormat.text = media.format
+                binding.mediaInfoSource.text = media.source
+                binding.mediaInfoStart.text = media.startDate?.toString() ?: "??"
+                binding.mediaInfoEnd.text = media.endDate?.toString() ?: "??"
+                binding.mediaInfoPopularity.text = media.popularity.toString()
+                binding.mediaInfoFavorites.text = media.favourites.toString()
+                if (media.anime != null) {
+                    val episodeDuration = media.anime.episodeDuration
+
+                    binding.mediaInfoDuration.text = when {
+                        episodeDuration != null -> {
+                            val hours = episodeDuration / 60
+                            val minutes = episodeDuration % 60
+
+                            val formattedDuration = buildString {
+                                if (hours > 0) {
+                                    append("$hours hour")
+                                    if (hours > 1) append("s")
+                                }
+
+                                if (minutes > 0) {
+                                    if (hours > 0) append(", ")
+                                    append("$minutes min")
+                                    if (minutes > 1) append("s")
+                                }
+                            }
+
+                            formattedDuration
+                        }
+
+                        else -> "??"
+                    }
+                    binding.mediaInfoDurationContainer.visibility = View.VISIBLE
+                    binding.mediaInfoSeasonContainer.visibility = View.VISIBLE
+                    val seasonInfo =
+                        "${(media.anime.season ?: "??")} ${(media.anime.seasonYear ?: "??")}"
+                    binding.mediaInfoSeason.text = seasonInfo
+
+                    if (media.anime.mainStudio != null) {
+                        binding.mediaInfoStudioContainer.visibility = View.VISIBLE
+                        binding.mediaInfoStudio.text = media.anime.mainStudio!!.name
+                        binding.mediaInfoStudioContainer.setOnClickListener {
+                            ContextCompat.startActivity(
+                                requireActivity(),
+                                Intent(requireContext(), StudioActivity::class.java).putExtra(
+                                    "studio",
+                                    media.anime.mainStudio!! as Serializable
+                                ),
+                                null
+                            )
+                        }
+                    }
+                    // Show producers as a chip group (same style as External Links)
+                    if (!media.anime.producers.isNullOrEmpty()) {
+                        val validProducers = media.anime.producers!!.filter { it.id != "null" }
+                        if (validProducers.isNotEmpty()) {
+                            val bind = ItemTitleChipgroupBinding.inflate(
+                                LayoutInflater.from(context),
+                                binding.mediaInfoContainer,
+                                false
+                            )
+                            bind.itemTitle.text = getString(R.string.producers)
+                            bind.root.tag = "dynamic_view"
+                            binding.mediaInfoContainer.addView(bind.root, 1)
+
+                            validProducers.forEach { producer ->
+                                val chip = ItemChipBinding.inflate(
+                                    LayoutInflater.from(context),
+                                    bind.itemChipGroup,
+                                    false
+                                ).root
+                                chip.text = producer.name ?: ""
+                                chip.setSafeOnClickListener {
+                                    ContextCompat.startActivity(
+                                        requireActivity(),
+                                        Intent(activity, StudioActivity::class.java).putExtra(
+                                            "studio",
+                                            producer as Serializable
+                                        ),
+                                        null
+                                    )
+                                }
+                                bind.itemChipGroup.addView(chip)
+                            }
+                        }
+                    }
+                    if (media.anime.author != null) {
+                        binding.mediaInfoAuthorContainer.visibility = View.VISIBLE
+                        binding.mediaInfoAuthor.text = media.anime.author!!.name
+                        binding.mediaInfoAuthorContainer.setOnClickListener {
+                            ContextCompat.startActivity(
+                                requireActivity(),
+                                Intent(requireContext(), AuthorActivity::class.java).putExtra(
+                                    "author",
+                                    media.anime.author!! as Serializable
+                                ),
+                                null
+                            )
+                        }
+                    }
+                    binding.mediaInfoTotalTitle.setText(R.string.total_eps)
+                    val infoTotal = if (media.anime.nextAiringEpisode != null)
+                        "${media.anime.nextAiringEpisode} | ${media.anime.totalEpisodes ?: "~"}"
+                    else
+                        (media.anime.totalEpisodes ?: "~").toString()
+                    binding.mediaInfoTotal.text = infoTotal
+
+                } else if (media.manga != null) {
+                    type = "MANGA"
+                    binding.mediaInfoTotalTitle.setText(R.string.total_chaps)
+                    binding.mediaInfoTotal.text = (media.manga.totalChapters ?: "~").toString()
+                    if (media.manga.author != null) {
+                        binding.mediaInfoAuthorContainer.visibility = View.VISIBLE
+                        binding.mediaInfoAuthor.text = media.manga.author!!.name
+                        if (!offline) {
+                            binding.mediaInfoAuthorContainer.setOnClickListener {
+                                ContextCompat.startActivity(
+                                    requireActivity(),
+                                    Intent(activity, AuthorActivity::class.java).putExtra(
+                                        "author",
+                                        media.manga.author!! as Serializable
+                                    ),
+                                    null
+                                )
+                            }
+                        }
+                    }
+                }
+
+                val desc = HtmlCompat.fromHtml(
+                    (media.description ?: "null").replace("\\n", "<br>").replace("\\\"", "\""),
+                    HtmlCompat.FROM_HTML_MODE_LEGACY
+                )
+                val infoDesc =
+                    tripleTab + if (desc.toString() != "null") desc else getString(R.string.no_description_available)
+                binding.mediaInfoDescription.text = infoDesc
+
+                binding.mediaInfoDescription.setOnClickListener {
+                    if (binding.mediaInfoDescription.maxLines == 5) {
+                        ObjectAnimator.ofInt(binding.mediaInfoDescription, "maxLines", 100)
+                            .setDuration(950).start()
+                    } else {
+                        ObjectAnimator.ofInt(binding.mediaInfoDescription, "maxLines", 5)
+                            .setDuration(400).start()
+                    }
+                }
+                displayTimer(media, binding.mediaInfoContainer)
+                val parent = _binding?.mediaInfoContainer!!
+                for (i in parent.childCount - 1 downTo 0) {
+                    val child = parent.getChildAt(i)
+                    if (child.tag == "dynamic_view") {
+                        parent.removeViewAt(i)
+                    }
+                }
+
+                val screenWidth = resources.displayMetrics.run { widthPixels / density }
+
+                if (media.manga != null && !offline) {
+                    model.loadMangaExtras(media)
+
+                    model.adaptation.observe(viewLifecycleOwner) {
+                        it?.let { displayAnimeAdaptation(it) }
+                    }
+
+                    model.nextRelease.observe(viewLifecycleOwner) {
+                        it?.let { displayNextChapterPrediction(it) }
+                    }
+                }
+                if (media.synonyms.isNotEmpty()) {
+                    val bind = ItemTitleChipgroupBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    )
+                    bind.root.tag = "dynamic_view"
+                    for (position in media.synonyms.indices) {
+                        val chip = ItemChipBinding.inflate(
+                            LayoutInflater.from(context),
+                            bind.itemChipGroup,
+                            false
+                        ).root
+                        chip.text = media.synonyms[position]
+                        chip.setOnLongClickListener { copyToClipboard(media.synonyms[position]);true }
+                        bind.itemChipGroup.addView(chip)
+                    }
+                    parent.addView(bind.root)
+                }
+                if (!media.users.isNullOrEmpty() && !offline) {
+                    val users: ArrayList<User> = media.users ?: arrayListOf()
+                    val currentUserId = Anilist.userid
+                    if (Anilist.token != null && currentUserId != null && media.userStatus != null) {
+                        users.add(
+                            0,
+                            User(
+                                id = currentUserId,
+                                name = getString(R.string.you),
+                                pfp = Anilist.avatar,
+                                banner = "",
+                                status = media.userStatus,
+                                score = media.userScore.toFloat(),
+                                progress = media.userProgress,
+                                totalEpisodes = media.anime?.totalEpisodes
+                                    ?: media.manga?.totalChapters,
+                                nextAiringEpisode = media.anime?.nextAiringEpisode
+                            )
+                        )
+                    }
+                    ItemTitleRecyclerBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    ).apply {
+                        itemTitle.visibility = View.GONE
+                        itemRecycler.adapter =
+                            MediaSocialAdapter(users, type, requireActivity())
+                        itemRecycler.layoutManager = LinearLayoutManager(
+                            requireContext(),
+                            LinearLayoutManager.HORIZONTAL,
+                            false
+                        )
+                        root.tag = "dynamic_view"
+                        parent.addView(root)
+                    }
+                }
+                if (media.trailer != null && !offline) {
+                    @Suppress("DEPRECATION")
+                    class MyChrome : WebChromeClient() {
+                        private var mCustomView: View? = null
+                        private var mCustomViewCallback: CustomViewCallback? = null
+                        private var mOriginalSystemUiVisibility = 0
+
+                        override fun onHideCustomView() {
+                            (requireActivity().window.decorView as FrameLayout).removeView(
+                                mCustomView
+                            )
+                            mCustomView = null
+                            requireActivity().window.decorView.systemUiVisibility =
+                                mOriginalSystemUiVisibility
+                            mCustomViewCallback!!.onCustomViewHidden()
+                            mCustomViewCallback = null
+                        }
+
+                        override fun onShowCustomView(
+                            paramView: View,
+                            paramCustomViewCallback: CustomViewCallback
+                        ) {
+                            if (mCustomView != null) {
+                                onHideCustomView()
+                                return
+                            }
+                            mCustomView = paramView
+                            mOriginalSystemUiVisibility =
+                                requireActivity().window.decorView.systemUiVisibility
+                            mCustomViewCallback = paramCustomViewCallback
+                            (requireActivity().window.decorView as FrameLayout).addView(
+                                mCustomView,
+                                FrameLayout.LayoutParams(-1, -1)
+                            )
+                            requireActivity().window.decorView.systemUiVisibility =
+                                3846 or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        }
+                    }
+
+                    val bind = ItemTitleTrailerBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    )
+                    bind.mediaInfoTrailer.apply {
+                        visibility = View.VISIBLE
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.databaseEnabled = true
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        }
+                        settings.userAgentString = null
+                        isSoundEffectsEnabled = true
+                        webChromeClient = MyChrome()
+
+                        val trailerId = media.trailer!!
+
+                        addJavascriptInterface(object {
+                            @android.webkit.JavascriptInterface
+                            fun loadVideo() {
+                                val trailerHtml = """
+                                    <!DOCTYPE html>
+                                    <html>
+                                    <head>
+                                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                        <style>
+                                            * {
+                                                margin: 0;
+                                                padding: 0;
+                                                box-sizing: border-box;
+                                                -webkit-tap-highlight-color: transparent;
+                                            }
+                                            html, body {
+                                                width: 100%;
+                                                height: 100%;
+                                                background: #000;
+                                                overflow: hidden;
+                                            }
+                                            iframe {
+                                                width: 100%;
+                                                height: 100%;
+                                                border: none;
+                                                display: block;
+                                            }
+                                        </style>
+                                    </head>
+                                    <body>
+                                        <iframe
+                                            src="https://www.youtube-nocookie.com/embed/$trailerId?autoplay=1&rel=0&modestbranding=1&controls=1&fs=0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            frameborder="0">
+                                        </iframe>
+                                    </body>
+                                    </html>
+                                """.trimIndent()
+                                context.let {
+                                     (it as? android.app.Activity)?.runOnUiThread {
+                                         loadDataWithBaseURL("https://www.youtube-nocookie.com", trailerHtml, "text/html", "utf-8", null)
+                                     }
+                                }
+                            }
+                        }, "Android")
+
+                        val placeholderHtml = """
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                <style>
+                                    * {
+                                        margin: 0;
+                                        padding: 0;
+                                        box-sizing: border-box;
+                                        -webkit-tap-highlight-color: transparent;
+                                        -webkit-touch-callout: none;
+                                        -webkit-user-select: none;
+                                        user-select: none;
+                                    }
+                                    body, html {
+                                        width: 100%;
+                                        height: 100%;
+                                        background: #000;
+                                        overflow: hidden;
+                                    }
+                                    .thumbnail-container {
+                                        position: relative;
+                                        width: 100%;
+                                        height: 100%;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        background: #000;
+                                    }
+                                    .thumbnail {
+                                        width: 100%;
+                                        height: 100%;
+                                        object-fit: contain;
+                                    }
+                                    .play-button {
+                                        position: absolute;
+                                        width: 68px;
+                                        height: 48px;
+                                        background: rgba(255, 0, 0, 0.8);
+                                        border-radius: 12px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        transition: transform 0.2s;
+                                    }
+                                    .thumbnail-container:active .play-button {
+                                        transform: scale(0.95);
+                                    }
+                                    .play-icon {
+                                        width: 0;
+                                        height: 0;
+                                        border-left: 20px solid white;
+                                        border-top: 12px solid transparent;
+                                        border-bottom: 12px solid transparent;
+                                        margin-left: 4px;
+                                    }
+                                </style>
+                            </head>
+                            <body>
+                                <div class="thumbnail-container" onclick="Android.loadVideo()">
+                                    <img class="thumbnail" src="https://img.youtube.com/vi/$trailerId/maxresdefault.jpg"
+                                         onerror="this.src='https://img.youtube.com/vi/$trailerId/hqdefault.jpg'" alt="Trailer">
+                                    <div class="play-button">
+                                        <div class="play-icon"></div>
+                                    </div>
+                                </div>
+                            </body>
+                            </html>
+                        """.trimIndent()
+                        loadDataWithBaseURL("https://www.youtube-nocookie.com", placeholderHtml, "text/html", "utf-8", null)
+                    }
+                    bind.root.tag = "dynamic_view"
+                    parent.addView(bind.root)
+                }
+
+                if (media.anime != null && (media.anime.op.isNotEmpty() || media.anime.ed.isNotEmpty()) && !offline) {
+                    val markWon = Markwon.builder(requireContext())
+                        .usePlugin(SoftBreakAddsNewLinePlugin.create()).build()
+
+                    fun makeLink(a: String): String {
+                        val first = a.indexOf('"').let { if (it != -1) it else return a } + 1
+                        val end = a.indexOf('"', first).let { if (it != -1) it else return a }
+                        val name = a.subSequence(first, end).toString()
+                        return "${a.subSequence(0, first)}" +
+                                "[$name](https://www.youtube.com/results?search_query=${
+                                    URLEncoder.encode(
+                                        name,
+                                        "utf-8"
+                                    )
+                                })" +
+                                "${a.subSequence(end, a.length)}"
+                    }
+
+                    fun makeText(textView: TextView, arr: ArrayList<String>) {
+                        var op = ""
+                        arr.forEach {
+                            op += "\n"
+                            op += makeLink(it)
+                        }
+                        op = op.removePrefix("\n")
+                        textView.setOnClickListener {
+                            if (textView.maxLines == 4) {
+                                ObjectAnimator.ofInt(textView, "maxLines", 100)
+                                    .setDuration(950).start()
+                            } else {
+                                ObjectAnimator.ofInt(textView, "maxLines", 4)
+                                    .setDuration(400).start()
+                            }
+                        }
+                        markWon.setMarkdown(textView, op)
+                    }
+
+                    if (media.anime.op.isNotEmpty()) {
+                        val bind = ItemTitleTextBinding.inflate(
+                            LayoutInflater.from(context),
+                            parent,
+                            false
+                        )
+                        bind.itemTitle.setText(R.string.opening)
+                        makeText(bind.itemText, media.anime.op)
+                        bind.root.tag = "dynamic_view"
+                        parent.addView(bind.root)
+                    }
+
+
+                    if (media.anime.ed.isNotEmpty()) {
+                        val bind = ItemTitleTextBinding.inflate(
+                            LayoutInflater.from(context),
+                            parent,
+                            false
+                        )
+                        bind.itemTitle.setText(R.string.ending)
+                        makeText(bind.itemText, media.anime.ed)
+                        bind.root.tag = "dynamic_view"
+                        parent.addView(bind.root)
+                    }
+                }
+
+                if (media.genres.isNotEmpty()) {
+                    val bind = ActivityGenreBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    )
+                    bind.root.tag = "dynamic_view"
+                    val adapter = GenreAdapter(type)
+
+                    bind.mediaInfoGenresRecyclerView.adapter = adapter
+                    bind.mediaInfoGenresRecyclerView.layoutManager =
+                        GridLayoutManager(requireActivity(), (screenWidth / 156f).toInt())
+
+                    if (!offline) {
+                        genreModel.doneListener = {
+                            MainScope().launch {
+                                bind.mediaInfoGenresProgressBar.visibility = View.GONE
+                            }
+                        }
+                        if (genreModel.genres != null) {
+                            adapter.genres = genreModel.genres!!
+                            adapter.pos = ArrayList(genreModel.genres!!.keys)
+                            if (genreModel.done) genreModel.doneListener?.invoke()
+                        }
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            genreModel.loadGenres(media.genres) {
+                                MainScope().launch {
+                                    adapter.addGenre(it)
+                                }
+                            }
+                        }
+                    } else {
+                        bind.mediaInfoGenresProgressBar.visibility = View.GONE
+                        media.genres.forEach { genre ->
+                             adapter.addGenre(Pair(genre, ""))
+                        }
+                    }
+                    parent.addView(bind.root)
+                }
+
+                if (media.tags.isNotEmpty() && !offline) {
+                    val bind = ItemTitleChipgroupBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    )
+                    bind.root.tag = "dynamic_view"
+                    val hideSpoilerTags = PrefManager.getVal<Boolean>(PrefName.HideSpoilerTags)
+                    val hasSpoilers = media.tagsIsSpoiler.any { it }
+                    var allSpoilersRevealed = false
+                    val spoilerChipUpdaters = mutableListOf<(Boolean) -> Unit>()
+
+                    bind.itemTitle.setText(R.string.tags)
+                    if (hasSpoilers && hideSpoilerTags) {
+                        bind.itemTitle.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.format_spoiler_24, 0)
+                        bind.itemTitle.compoundDrawablePadding = 8
+                        bind.itemTitle.setSafeOnClickListener {
+                            allSpoilersRevealed = !allSpoilersRevealed
+                            spoilerChipUpdaters.forEach { it(allSpoilersRevealed) }
+                            val msg = if (allSpoilersRevealed) R.string.show_spoilers else R.string.hide_spoilers
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    for (position in media.tags.indices) {
+                        val chip = ItemChipBinding.inflate(
+                            LayoutInflater.from(context),
+                            bind.itemChipGroup,
+                            false
+                        ).root
+                        val isSpoiler = media.tagsIsSpoiler.getOrNull(position) == true
+                        var isRevealed = !hideSpoilerTags || !isSpoiler
+
+                        fun updateChipAppearance() {
+                            if (isSpoiler && !isRevealed) {
+                                chip.text = chip.context.getString(R.string.spoiler_tag_placeholder)
+                                chip.setChipIconResource(R.drawable.format_spoiler_24)
+                                chip.isChipIconVisible = true
+                                chip.alpha = 0.75f
+                            } else {
+                                chip.text = media.tags[position]
+                                chip.isChipIconVisible = false
+                                chip.alpha = 1.0f
+                            }
+                        }
+
+                        updateChipAppearance()
+
+                        if (isSpoiler && hideSpoilerTags) {
+                            spoilerChipUpdaters.add { reveal ->
+                                isRevealed = reveal
+                                updateChipAppearance()
+                            }
+                        }
+
+                        chip.setSafeOnClickListener {
+                            if (isSpoiler && !isRevealed) {
+                                isRevealed = true
+                                updateChipAppearance()
+                            } else {
+                                ContextCompat.startActivity(
+                                    chip.context,
+                                    Intent(chip.context, SearchActivity::class.java)
+                                        .putExtra("type", type)
+                                        .putExtra("sortBy", Anilist.sortBy[2])
+                                        .putExtra("tag", media.tags[position].substringBefore(" :"))
+                                        .putExtra("search", true)
+                                        .also {
+                                            if (media.isAdult) {
+                                                if (!Anilist.adult) Toast.makeText(
+                                                    chip.context,
+                                                    currActivity()?.getString(R.string.content_18),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                                it.putExtra("hentai", true)
+                                            }
+                                        },
+                                    null
+                                )
+                            }
+                        }
+                        chip.setOnLongClickListener {
+                            if (isSpoiler && isRevealed && hideSpoilerTags) {
+                                isRevealed = false
+                                updateChipAppearance()
+                                true
+                            } else {
+                                copyToClipboard(media.tags[position])
+                                true
+                            }
+                        }
+                        bind.itemChipGroup.addView(chip)
+                    }
+                    parent.addView(bind.root)
+                }
+
+                if (!media.rankings.isNullOrEmpty() && !offline) {
+                    val bind = ItemTitleChipgroupBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    )
+                    bind.root.tag = "dynamic_view"
+                    bind.itemTitle.text = "Rankings"
+                    media.rankings?.forEach { rank ->
+                        val chip = ItemChipBinding.inflate(
+                            LayoutInflater.from(context),
+                            bind.itemChipGroup,
+                            false
+                        ).root
+                        val rawContext = rank.context?.takeIf { it.isNotBlank() }
+                            ?: when (rank.type) {
+                                "POPULAR" -> "most popular"
+                                "RATED" -> "highest rated"
+                                else -> ""
+                            }
+                        val formattedContext = rawContext.split(" ")
+                            .filter { it.isNotBlank() }
+                            .joinToString(" ") { word -> word.replaceFirstChar(Char::titlecase) }
+
+                        val isAllTime = rank.allTime == true || formattedContext.contains("All Time", ignoreCase = true)
+                        val seasonName = rank.season?.name?.lowercase()?.replaceFirstChar(Char::titlecase)
+
+                        val timePeriod = when {
+                            isAllTime -> if (formattedContext.contains("All Time", ignoreCase = true)) "" else "All Time"
+                            seasonName != null && rank.year != null -> "$seasonName ${rank.year}"
+                            rank.year != null -> "${rank.year}"
+                            seasonName != null -> seasonName
+                            else -> ""
+                        }
+
+                        val rankingText = if (timePeriod.isNotEmpty()) {
+                            "$formattedContext $timePeriod"
+                        } else {
+                            formattedContext
+                        }
+
+                        chip.text = "#${rank.rank} $rankingText"
+                        bind.itemChipGroup.addView(chip)
+                    }
+                    parent.addView(bind.root)
+                }
+
+                if (!media.externalLinks.isNullOrEmpty() && !offline) {
+                    val bind = ItemTitleChipgroupBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    )
+                    bind.itemTitle.setText(R.string.external_links)
+                    for (link in media.externalLinks!!) {
+                        val url = link.url ?: continue
+                        val chip = ItemChipBinding.inflate(
+                            LayoutInflater.from(context),
+                            bind.itemChipGroup,
+                            false
+                        ).root
+                        chip.text = link.site
+                        chip.setSafeOnClickListener {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        }
+                        chip.setOnLongClickListener { copyToClipboard(url); true }
+                        bind.itemChipGroup.addView(chip)
+                    }
+                    bind.root.tag = "dynamic_view"
+                    parent.addView(bind.root)
+                }
+
+                if ((!media.relations.isNullOrEmpty() || media.sequel != null || media.prequel != null) && !offline) {
+                    if (media.sequel != null || media.prequel != null) {
+                        ItemQuelsBinding.inflate(
+                            LayoutInflater.from(context),
+                            parent,
+                            false
+                        ).apply {
+
+                            if (media.sequel != null) {
+                                mediaInfoSequel.visibility = View.VISIBLE
+                                mediaInfoSequelImage.loadImage(
+                                    media.sequel!!.banner ?: media.sequel!!.cover
+                                )
+                                mediaInfoSequel.setSafeOnClickListener {
+                                    ContextCompat.startActivity(
+                                        requireContext(),
+                                        Intent(
+                                            requireContext(),
+                                            MediaDetailsActivity::class.java
+                                        ).putExtra(
+                                            "media",
+                                            media.sequel as Serializable
+                                        ), null
+                                    )
+                                }
+                            }
+                            if (media.prequel != null) {
+                                mediaInfoPrequel.visibility = View.VISIBLE
+                                mediaInfoPrequelImage.loadImage(
+                                    media.prequel!!.banner ?: media.prequel!!.cover
+                                )
+                                mediaInfoPrequel.setSafeOnClickListener {
+                                    ContextCompat.startActivity(
+                                        requireContext(),
+                                        Intent(
+                                            requireContext(),
+                                            MediaDetailsActivity::class.java
+                                        ).putExtra(
+                                            "media",
+                                            media.prequel as Serializable
+                                        ), null
+                                    )
+                                }
+                            }
+                            root.tag = "dynamic_view"
+                            parent.addView(root)
+                        }
+                    }
+                }
+
+                if (!offline) {
+                    val isAnimeMedia = media.anime != null
+                    ItemQuelsBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    ).apply {
+                        if (isAnimeMedia) {
+                            val watchOrderImage = media.banner ?: media.cover
+                            val newsImage = media.relations?.firstOrNull { it.cover != null && it.cover != media.cover }?.cover
+                                ?: media.characters?.firstOrNull()?.image
+                                ?: media.relations?.firstOrNull { it.banner != null && it.banner != media.banner }?.banner
+                                ?: media.cover?.takeIf { it != watchOrderImage }
+                                ?: media.banner
+                                ?: media.cover
+
+                            mediaInfoPrequel.visibility = View.VISIBLE
+                            mediaInfoPrequelTitle.text = getString(R.string.watch_order)
+                            mediaInfoPrequelImage.loadImage(watchOrderImage)
+                            mediaInfoPrequel.setSafeOnClickListener {
+                                if (!isAdded || context == null) return@setSafeOnClickListener
+                                if (childFragmentManager.findFragmentByTag("watch_order") == null) {
+                                    MediaContentBottomSheet.newWatchOrderInstance(media)
+                                        .show(childFragmentManager, "watch_order")
+                                }
+                            }
+
+                            mediaInfoSequel.visibility = View.VISIBLE
+                            mediaInfoSequelTitle.text = getString(R.string.news)
+                            mediaInfoSequelImage.loadImage(newsImage)
+                            mediaInfoSequel.setSafeOnClickListener {
+                                if (!isAdded || context == null) return@setSafeOnClickListener
+                                if (childFragmentManager.findFragmentByTag("news") == null) {
+                                    MediaContentBottomSheet.newNewsInstance(media)
+                                        .show(childFragmentManager, "news")
+                                }
+                            }
+                        } else {
+                            val newsImage = media.banner ?: media.cover
+                            mediaInfoPrequel.visibility = View.VISIBLE
+                            mediaInfoPrequelTitle.text = getString(R.string.news)
+                            mediaInfoPrequelImage.loadImage(newsImage)
+                            mediaInfoPrequel.setSafeOnClickListener {
+                                if (!isAdded || context == null) return@setSafeOnClickListener
+                                if (childFragmentManager.findFragmentByTag("news") == null) {
+                                    MediaContentBottomSheet.newNewsInstance(media)
+                                        .show(childFragmentManager, "news")
+                                }
+                            }
+                        }
+
+                        root.tag = "dynamic_view"
+                        parent.addView(root)
+                    }
+                }
+
+                if (!media.review.isNullOrEmpty()) {
+                    ItemTitleRecyclerBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    ).apply {
+                        val adapter = GroupieAdapter()
+                        media.review!!.forEach { adapter.add(ReviewAdapter(it)) }
+                        itemTitle.setText(R.string.reviews)
+                        itemRecycler.adapter = adapter
+                        itemRecycler.layoutManager = LinearLayoutManager(requireContext())
+                        itemMore.visibility = View.VISIBLE
+                        itemMore.setSafeOnClickListener {
+                            startActivity(
+                                Intent(requireContext(), ReviewActivity::class.java)
+                                    .putExtra("mediaId", media.id)
+                            )
+                        }
+                        root.tag = "dynamic_view"
+                        parent.addView(root)
+                    }
+                }
+
+                if (!media.relations.isNullOrEmpty() && !offline) {
+                    ItemTitleRecyclerBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    ).apply {
+                        itemRecycler.adapter =
+                            MediaAdaptor(0, media.relations!!, requireActivity())
+                        itemRecycler.layoutManager = LinearLayoutManager(
+                            requireContext(),
+                            LinearLayoutManager.HORIZONTAL,
+                            false
+                        )
+                        root.tag = "dynamic_view"
+                        parent.addView(root)
+                    }
+                }
+                if (!media.characters.isNullOrEmpty() && !offline) {
+                    ItemTitleRecyclerBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    ).apply {
+                        itemTitle.setText(R.string.characters)
+                        itemRecycler.adapter =
+                            CharacterAdapter(media.characters!!)
+                        itemRecycler.layoutManager = LinearLayoutManager(
+                            requireContext(),
+                            LinearLayoutManager.HORIZONTAL,
+                            false
+                        )
+                        root.tag = "dynamic_view"
+                        parent.addView(root)
+                    }
+                }
+                if (!media.staff.isNullOrEmpty() && !offline) {
+                    ItemTitleRecyclerBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    ).apply {
+                        itemTitle.setText(R.string.staff)
+                        itemRecycler.adapter =
+                            AuthorAdapter(media.staff!!)
+                        itemRecycler.layoutManager = LinearLayoutManager(
+                            requireContext(),
+                            LinearLayoutManager.HORIZONTAL,
+                            false
+                        )
+                        root.tag = "dynamic_view"
+                        parent.addView(root)
+                    }
+                }
+
+                if (!media.recommendations.isNullOrEmpty() && !offline) {
+                    ItemTitleRecyclerBinding.inflate(
+                        LayoutInflater.from(context),
+                        parent,
+                        false
+                    ).apply {
+                        itemTitle.setText(R.string.recommended)
+                        itemRecycler.adapter =
+                            MediaAdaptor(0, media.recommendations!!, requireActivity())
+                        itemRecycler.layoutManager = LinearLayoutManager(
+                            requireContext(),
+                            LinearLayoutManager.HORIZONTAL,
+                            false
+                        )
+                        root.tag = "dynamic_view"
+                        parent.addView(root)
+                    }
+                }
             }
         }
 
-        setupCornerRadiusAnimation()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val cornerTop = ObjectAnimator.ofFloat(binding.root, "radius", 0f, 32f).setDuration(200)
+            val cornerNotTop =
+                ObjectAnimator.ofFloat(binding.root, "radius", 32f, 0f).setDuration(200)
+            var cornered = true
+            cornerTop.start()
+            binding.mediaInfoScroll.setOnScrollChangeListener { v, _, _, _, _ ->
+                if (!v.canScrollVertically(-1)) {
+                    if (!cornered) {
+                        cornered = true
+                        cornerTop.start()
+                    }
+                } else {
+                    if (cornered) {
+                        cornered = false
+                        cornerNotTop.start()
+                    }
+                }
+            }
+        }
+
         super.onViewCreated(view, null)
-    }
-
-    private fun bindBasicInfo(media: Media) {
-        loaded = true
-        binding.mediaInfoProgressBar.visibility = View.GONE
-        binding.mediaInfoContainer.visibility = View.VISIBLE
-        val infoName = tripleTab + (media.name ?: media.nameRomaji)
-        binding.mediaInfoName.text = infoName
-        binding.mediaInfoName.setOnLongClickListener {
-            copyToClipboard(media.name ?: media.nameRomaji)
-            true
-        }
-        if (media.name != null) binding.mediaInfoNameRomajiContainer.visibility = View.VISIBLE
-        val infoNameRomaji = tripleTab + media.nameRomaji
-        binding.mediaInfoNameRomaji.text = infoNameRomaji
-        binding.mediaInfoNameRomaji.setOnLongClickListener {
-            copyToClipboard(media.nameRomaji)
-            true
-        }
-        binding.mediaInfoMeanScore.text = media.meanScore?.let { (it / 10.0).toString() } ?: "??"
-        binding.mediaInfoStatus.text = media.status
-        binding.mediaInfoFormat.text = media.format
-        binding.mediaInfoSource.text = media.source
-        binding.mediaInfoStart.text = media.startDate?.toString() ?: "??"
-        binding.mediaInfoEnd.text = media.endDate?.toString() ?: "??"
-        binding.mediaInfoPopularity.text = media.popularity.toString()
-        binding.mediaInfoFavorites.text = media.favourites.toString()
-        if (media.anime != null) {
-            bindAnimeDetails(media)
-        } else if (media.manga != null) {
-            bindMangaDetails(media)
-        }
-    }
-
-    private fun bindAnimeDetails(media: Media) {
-        val episodeDuration = media.anime.episodeDuration
-        binding.mediaInfoDuration.text = formatEpisodeDuration(episodeDuration)
-        binding.mediaInfoDurationContainer.visibility = View.VISIBLE
-        binding.mediaInfoSeasonContainer.visibility = View.VISIBLE
-        val seasonInfo = "${media.anime.season ?: "??"} ${media.anime.seasonYear ?: "??"}"
-        binding.mediaInfoSeason.text = seasonInfo
-
-        if (media.anime.mainStudio != null) {
-            binding.mediaInfoStudioContainer.visibility = View.VISIBLE
-            binding.mediaInfoStudio.text = media.anime.mainStudio!!.name
-            binding.mediaInfoStudioContainer.setOnClickListener {
-                ContextCompat.startActivity(
-                    requireActivity(),
-                    Intent(requireContext(), StudioActivity::class.java).putExtra(
-                        "studio",
-                        media.anime.mainStudio!! as Serializable
-                    ),
-                    null
-                )
-            }
-        }
-        bindAnimeProducers(media)
-    }
-
-    private fun formatEpisodeDuration(episodeDuration: Int?): String {
-        if (episodeDuration == null) return "??"
-        val hours = episodeDuration / 60
-        val minutes = episodeDuration % 60
-        return buildString {
-            if (hours > 0) {
-                append("$hours hour")
-                if (hours > 1) append("s")
-            }
-            if (minutes > 0) {
-                if (hours > 0) append(", ")
-                append("$minutes min")
-                if (minutes > 1) append("s")
-            }
-        }
-    }
-
-    private fun bindAnimeProducers(media: Media) {
-        if (media.anime.producers.isNullOrEmpty()) return
-        val validProducers = media.anime.producers!!.filter { it.id != "null" }
-        if (validProducers.isEmpty()) return
-
-        val bind = ItemTitleChipgroupBinding.inflate(
-            LayoutInflater.from(context),
-            binding.mediaInfoContainer,
-            false
-        )
-        bind.itemTitle.text = getString(R.string.producers)
-        bind.root.tag = "dynamic_view"
-        binding.mediaInfoContainer.addView(bind.root, 1)
-
-        validProducers.forEach { producer ->
-            val chip = ItemChipBinding.inflate(
-                LayoutInflater.from(context),
-                bind.itemChipGroup,
-                false
-            ).root
-            chip.text = producer.name
-            chip.setOnClickListener {
-                ContextCompat.startActivity(
-                    requireActivity(),
-                    Intent(requireContext(), StudioActivity::class.java).putExtra(
-                        "studio",
-                        producer as Serializable
-                    ),
-                    null
-                )
-            }
-            bind.itemChipGroup.addView(chip)
-        }
-    }
-    private fun bindMangaDetails(media: Media) {
-type = "MANGA"
-binding.mediaInfoTotalTitle.setText(R.string.total_chaps)
-binding.mediaInfoTotal.text = (media.manga.totalChapters ?: "~").toString()
-if (media.manga.author != null) {
-    binding.mediaInfoAuthorContainer.visibility = View.VISIBLE
-    binding.mediaInfoAuthor.text = media.manga.author!!.name
-    if (!offline) {
-        binding.mediaInfoAuthorContainer.setOnClickListener {
-            ContextCompat.startActivity(
-                requireActivity(),
-                Intent(activity, AuthorActivity::class.java).putExtra(
-                    "author",
-                    media.manga.author!! as Serializable
-                ),
-                null
-            )
-        }
-    }
-}
-                }
-
-    }
-
-    private fun bindDescription(media: Media) {
-val desc = HtmlCompat.fromHtml(
-    (media.description ?: "null").replace("\\n", "<br>").replace("\\\"", "\""),
-    HtmlCompat.FROM_HTML_MODE_LEGACY
-)
-val infoDesc =
-    tripleTab + if (desc.toString() != "null") desc else getString(R.string.no_description_available)
-binding.mediaInfoDescription.text = infoDesc
-
-binding.mediaInfoDescription.setOnClickListener {
-    if (binding.mediaInfoDescription.maxLines == 5) {
-        ObjectAnimator.ofInt(binding.mediaInfoDescription, "maxLines", 100)
-            .setDuration(950).start()
-    } else {
-        ObjectAnimator.ofInt(binding.mediaInfoDescription, "maxLines", 5)
-            .setDuration(400).start()
-    }
-}
-displayTimer(media, binding.mediaInfoContainer)
-    }
-
-    private fun clearDynamicViews(parent: ViewGroup) {
-val parent = _binding?.mediaInfoContainer!!
-for (i in parent.childCount - 1 downTo 0) {
-    val child = parent.getChildAt(i)
-    if (child.tag == "dynamic_view") {
-        parent.removeViewAt(i)
-    }
-}
-
-    }
-
-    private fun bindMangaPublishersAndSynonyms(media: Media, parent: ViewGroup, offline: Boolean) {
-val screenWidth = resources.displayMetrics.run { widthPixels / density }
-
-if (media.manga != null && !offline) {
-    model.loadMangaExtras(media)
-
-    model.adaptation.observe(viewLifecycleOwner) {
-        it?.let { displayAnimeAdaptation(it) }
-    }
-
-    model.nextRelease.observe(viewLifecycleOwner) {
-        it?.let { displayNextChapterPrediction(it) }
-    }
-}
-if (media.synonyms.isNotEmpty()) {
-    val bind = ItemTitleChipgroupBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    )
-    bind.root.tag = "dynamic_view"
-    for (position in media.synonyms.indices) {
-        val chip = ItemChipBinding.inflate(
-            LayoutInflater.from(context),
-            bind.itemChipGroup,
-            false
-        ).root
-        chip.text = media.synonyms[position]
-        chip.setOnLongClickListener { copyToClipboard(media.synonyms[position]);true }
-        bind.itemChipGroup.addView(chip)
-    }
-    parent.addView(bind.root)
-}
-    }
-
-    private fun bindUsers(media: Media, parent: ViewGroup, offline: Boolean) {
-if (!media.users.isNullOrEmpty() && !offline) {
-    val users: ArrayList<User> = media.users ?: arrayListOf()
-    val currentUserId = Anilist.userid
-    if (Anilist.token != null && currentUserId != null && media.userStatus != null) {
-        users.add(
-            0,
-            User(
-                id = currentUserId,
-                name = getString(R.string.you),
-                pfp = Anilist.avatar,
-                banner = "",
-                status = media.userStatus,
-                score = media.userScore.toFloat(),
-                progress = media.userProgress,
-                totalEpisodes = media.anime?.totalEpisodes
-                    ?: media.manga?.totalChapters,
-                nextAiringEpisode = media.anime?.nextAiringEpisode
-            )
-        )
-    }
-    ItemTitleRecyclerBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    ).apply {
-        itemTitle.visibility = View.GONE
-        itemRecycler.adapter =
-            MediaSocialAdapter(users, type, requireActivity())
-        itemRecycler.layoutManager = LinearLayoutManager(
-            requireContext(),
-            LinearLayoutManager.HORIZONTAL,
-            false
-        )
-        root.tag = "dynamic_view"
-        parent.addView(root)
-    }
-}
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun bindTrailers(media: Media, parent: ViewGroup, offline: Boolean) {
-if (media.trailer != null && !offline) {
-    @Suppress("DEPRECATION")
-    class MyChrome : WebChromeClient() {
-        private var mCustomView: View? = null
-        private var mCustomViewCallback: CustomViewCallback? = null
-        private var mOriginalSystemUiVisibility = 0
-
-        override fun onHideCustomView() {
-            (requireActivity().window.decorView as FrameLayout).removeView(
-                mCustomView
-            )
-            mCustomView = null
-            requireActivity().window.decorView.systemUiVisibility =
-                mOriginalSystemUiVisibility
-            mCustomViewCallback!!.onCustomViewHidden()
-            mCustomViewCallback = null
-        }
-
-        override fun onShowCustomView(
-            paramView: View,
-            paramCustomViewCallback: CustomViewCallback
-        ) {
-            if (mCustomView != null) {
-                onHideCustomView()
-                return
-            }
-            mCustomView = paramView
-            mOriginalSystemUiVisibility =
-                requireActivity().window.decorView.systemUiVisibility
-            mCustomViewCallback = paramCustomViewCallback
-            (requireActivity().window.decorView as FrameLayout).addView(
-                mCustomView,
-                FrameLayout.LayoutParams(-1, -1)
-            )
-            requireActivity().window.decorView.systemUiVisibility =
-                3846 or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        }
-    }
-
-    val bind = ItemTitleTrailerBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    )
-    bind.mediaInfoTrailer.apply {
-        visibility = View.VISIBLE
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.databaseEnabled = true
-        settings.useWideViewPort = true
-        settings.loadWithOverviewMode = true
-        settings.mediaPlaybackRequiresUserGesture = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        }
-        settings.userAgentString = null
-        isSoundEffectsEnabled = true
-        webChromeClient = MyChrome()
-
-        val trailerId = media.trailer!!
-
-        addJavascriptInterface(object {
-            @android.webkit.JavascriptInterface
-            fun loadVideo() {
-                val trailerHtml = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                            * {
-                                margin: 0;
-                                padding: 0;
-                                box-sizing: border-box;
-                                -webkit-tap-highlight-color: transparent;
-                            }
-                            html, body {
-                                width: 100%;
-                                height: 100%;
-                                background: #000;
-                                overflow: hidden;
-                            }
-                            iframe {
-                                width: 100%;
-                                height: 100%;
-                                border: none;
-                                display: block;
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <iframe
-                            src="https://www.youtube-nocookie.com/embed/$trailerId?autoplay=1&rel=0&modestbranding=1&controls=1&fs=0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            frameborder="0">
-                        </iframe>
-                    </body>
-                    </html>
-                """.trimIndent()
-                context.let {
-                     (it as? android.app.Activity)?.runOnUiThread {
-                         loadDataWithBaseURL("https://www.youtube-nocookie.com", trailerHtml, "text/html", "utf-8", null)
-                     }
-                }
-            }
-        }, "Android")
-
-        val placeholderHtml = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                        -webkit-tap-highlight-color: transparent;
-                        -webkit-touch-callout: none;
-                        -webkit-user-select: none;
-                        user-select: none;
-                    }
-                    body, html {
-                        width: 100%;
-                        height: 100%;
-                        background: #000;
-                        overflow: hidden;
-                    }
-                    .thumbnail-container {
-                        position: relative;
-                        width: 100%;
-                        height: 100%;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        background: #000;
-                    }
-                    .thumbnail {
-                        width: 100%;
-                        height: 100%;
-                        object-fit: contain;
-                    }
-                    .play-button {
-                        position: absolute;
-                        width: 68px;
-                        height: 48px;
-                        background: rgba(255, 0, 0, 0.8);
-                        border-radius: 12px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        transition: transform 0.2s;
-                    }
-                    .thumbnail-container:active .play-button {
-                        transform: scale(0.95);
-                    }
-                    .play-icon {
-                        width: 0;
-                        height: 0;
-                        border-left: 20px solid white;
-                        border-top: 12px solid transparent;
-                        border-bottom: 12px solid transparent;
-                        margin-left: 4px;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="thumbnail-container" onclick="Android.loadVideo()">
-                    <img class="thumbnail" src="https://img.youtube.com/vi/$trailerId/maxresdefault.jpg"
-                         onerror="this.src='https://img.youtube.com/vi/$trailerId/hqdefault.jpg'" alt="Trailer">
-                    <div class="play-button">
-                        <div class="play-icon"></div>
-                    </div>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
-        loadDataWithBaseURL("https://www.youtube-nocookie.com", placeholderHtml, "text/html", "utf-8", null)
-    }
-    bind.root.tag = "dynamic_view"
-    parent.addView(bind.root)
-}
-    }
-
-    private fun bindAnimeThemes(media: Media, parent: ViewGroup, offline: Boolean) {
-
-if (media.anime != null && (media.anime.op.isNotEmpty() || media.anime.ed.isNotEmpty()) && !offline) {
-    val markWon = Markwon.builder(requireContext())
-        .usePlugin(SoftBreakAddsNewLinePlugin.create()).build()
-
-    fun makeLink(a: String): String {
-        val first = a.indexOf('"').let { if (it != -1) it else return a } + 1
-        val end = a.indexOf('"', first).let { if (it != -1) it else return a }
-        val name = a.subSequence(first, end).toString()
-        return "${a.subSequence(0, first)}" +
-                "[$name](https://www.youtube.com/results?search_query=${
-                    URLEncoder.encode(
-                        name,
-                        "utf-8"
-                    )
-                })" +
-                "${a.subSequence(end, a.length)}"
-    }
-
-    fun makeText(textView: TextView, arr: ArrayList<String>) {
-        var op = ""
-        arr.forEach {
-            op += "\n"
-            op += makeLink(it)
-        }
-        op = op.removePrefix("\n")
-        textView.setOnClickListener {
-            if (textView.maxLines == 4) {
-                ObjectAnimator.ofInt(textView, "maxLines", 100)
-                    .setDuration(950).start()
-            } else {
-                ObjectAnimator.ofInt(textView, "maxLines", 4)
-                    .setDuration(400).start()
-            }
-        }
-        markWon.setMarkdown(textView, op)
-    }
-
-    if (media.anime.op.isNotEmpty()) {
-        val bind = ItemTitleTextBinding.inflate(
-            LayoutInflater.from(context),
-            parent,
-            false
-        )
-        bind.itemTitle.setText(R.string.opening)
-        makeText(bind.itemText, media.anime.op)
-        bind.root.tag = "dynamic_view"
-        parent.addView(bind.root)
-    }
-
-
-    if (media.anime.ed.isNotEmpty()) {
-        val bind = ItemTitleTextBinding.inflate(
-            LayoutInflater.from(context),
-            parent,
-            false
-        )
-        bind.itemTitle.setText(R.string.ending)
-        makeText(bind.itemText, media.anime.ed)
-        bind.root.tag = "dynamic_view"
-        parent.addView(bind.root)
-    }
-}
-    }
-
-    private fun bindGenres(media: Media, parent: ViewGroup) {
-        val screenWidth = resources.displayMetrics.run { widthPixels / density }
-
-if (media.genres.isNotEmpty()) {
-    val bind = ActivityGenreBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    )
-    bind.root.tag = "dynamic_view"
-    val adapter = GenreAdapter(type)
-    
-    bind.mediaInfoGenresRecyclerView.adapter = adapter
-    bind.mediaInfoGenresRecyclerView.layoutManager =
-        GridLayoutManager(requireActivity(), (screenWidth / 156f).toInt())
-
-    if (!offline) {
-        genreModel.doneListener = {
-            MainScope().launch {
-                bind.mediaInfoGenresProgressBar.visibility = View.GONE
-            }
-        }
-        if (genreModel.genres != null) {
-            adapter.genres = genreModel.genres!!
-            adapter.pos = ArrayList(genreModel.genres!!.keys)
-            if (genreModel.done) genreModel.doneListener?.invoke()
-        }
-        lifecycleScope.launch(Dispatchers.IO) {
-            genreModel.loadGenres(media.genres) {
-                MainScope().launch {
-                    adapter.addGenre(it)
-                }
-            }
-        }
-    } else {
-        bind.mediaInfoGenresProgressBar.visibility = View.GONE
-        media.genres.forEach { genre ->
-             adapter.addGenre(Pair(genre, ""))
-        }
-    }
-    parent.addView(bind.root)
-}
-    }
-
-    private fun bindTags(media: Media, parent: ViewGroup, offline: Boolean) {
-        if (media.tags.isEmpty() || offline) return
-        val bind = ItemTitleChipgroupBinding.inflate(
-            LayoutInflater.from(context),
-            parent,
-            false
-        )
-        bind.root.tag = "dynamic_view"
-        val hideSpoilerTags = PrefManager.getVal<Boolean>(PrefName.HideSpoilerTags)
-        val hasSpoilers = media.tagsIsSpoiler.any { it }
-        var allSpoilersRevealed = false
-        val spoilerChipUpdaters = mutableListOf<(Boolean) -> Unit>()
-
-        bind.itemTitle.setText(R.string.tags)
-        if (hasSpoilers && hideSpoilerTags) {
-            bind.itemTitle.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.format_spoiler_24, 0)
-            bind.itemTitle.compoundDrawablePadding = 8
-            bind.itemTitle.setSafeOnClickListener {
-                allSpoilersRevealed = !allSpoilersRevealed
-                spoilerChipUpdaters.forEach { it(allSpoilersRevealed) }
-                val msg = if (allSpoilersRevealed) R.string.show_spoilers else R.string.hide_spoilers
-                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        for (position in media.tags.indices) {
-            val chip = createTagChip(bind, media, position, hideSpoilerTags, spoilerChipUpdaters)
-            bind.itemChipGroup.addView(chip)
-        }
-        parent.addView(bind.root)
-    }
-
-    private fun launchTagSearch(context: android.content.Context, media: Media, position: Int) {
-        ContextCompat.startActivity(
-            context,
-            Intent(context, SearchActivity::class.java)
-                .putExtra("type", type)
-                .putExtra("sortBy", Anilist.sortBy[2])
-                .putExtra("tag", media.tags[position].substringBefore(" :"))
-                .putExtra("search", true)
-                .also {
-                    if (media.isAdult) {
-                        if (!Anilist.adult) Toast.makeText(
-                            context,
-                            currActivity()?.getString(R.string.content_18),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        it.putExtra("hentai", true)
-                    }
-                },
-            null
-        )
-    }
-
-    private fun createTagChip(
-        bind: ItemTitleChipgroupBinding,
-        media: Media,
-        position: Int,
-        hideSpoilerTags: Boolean,
-        spoilerChipUpdaters: MutableList<(Boolean) -> Unit>
-    ): View {
-        val chip = ItemChipBinding.inflate(
-            LayoutInflater.from(context),
-            bind.itemChipGroup,
-            false
-        ).root
-        val isSpoiler = media.tagsIsSpoiler.getOrNull(position) == true
-        var isRevealed = !hideSpoilerTags || !isSpoiler
-
-        fun updateChipAppearance() {
-            if (isSpoiler && !isRevealed) {
-                chip.text = chip.context.getString(R.string.spoiler_tag_placeholder)
-                chip.setChipIconResource(R.drawable.format_spoiler_24)
-                chip.isChipIconVisible = true
-                chip.alpha = 0.75f
-            } else {
-                chip.text = media.tags[position]
-                chip.isChipIconVisible = false
-                chip.alpha = 1.0f
-            }
-        }
-
-        updateChipAppearance()
-
-        if (isSpoiler && hideSpoilerTags) {
-            spoilerChipUpdaters.add { reveal ->
-                isRevealed = reveal
-                updateChipAppearance()
-            }
-        }
-
-        chip.setSafeOnClickListener {
-            if (isSpoiler && !isRevealed) {
-                isRevealed = true
-                updateChipAppearance()
-            } else {
-                launchTagSearch(chip.context, media, position)
-            }
-        }
-        chip.setOnLongClickListener {
-            if (isSpoiler && isRevealed && hideSpoilerTags) {
-                isRevealed = false
-                updateChipAppearance()
-                true
-            } else {
-                copyToClipboard(media.tags[position])
-                true
-            }
-        }
-        return chip
-    }
-    private fun bindRankings(media: Media, parent: ViewGroup, offline: Boolean) {
-        if (media.rankings.isNullOrEmpty() || offline) return
-        val bind = ItemTitleChipgroupBinding.inflate(
-            LayoutInflater.from(context),
-            parent,
-            false
-        )
-        bind.root.tag = "dynamic_view"
-        bind.itemTitle.text = "Rankings"
-        media.rankings?.forEach { rank ->
-            val chip = ItemChipBinding.inflate(
-                LayoutInflater.from(context),
-                bind.itemChipGroup,
-                false
-            ).root
-            chip.text = formatRankingText(rank)
-            bind.itemChipGroup.addView(chip)
-        }
-        parent.addView(bind.root)
-    }
-
-    private fun formatRankingText(rank: ani.dantotsu.media.Ranking): String {
-        val rawContext = rank.context?.takeIf { it.isNotBlank() }
-            ?: when (rank.type) {
-                "POPULAR" -> "most popular"
-                "RATED" -> "highest rated"
-                else -> ""
-            }
-        val formattedContext = rawContext.split(" ")
-            .filter { it.isNotBlank() }
-            .joinToString(" ") { word -> word.replaceFirstChar(Char::titlecase) }
-
-        val isAllTime = rank.allTime == true || formattedContext.contains("All Time", ignoreCase = true)
-        val timePeriod = resolveRankingPeriod(rank, isAllTime, formattedContext)
-
-        val rankingText = if (timePeriod.isNotEmpty()) {
-            "$formattedContext $timePeriod"
-        } else {
-            formattedContext
-        }
-        return "#${rank.rank} $rankingText"
-    }
-
-    private fun resolveRankingPeriod(rank: ani.dantotsu.media.Ranking, isAllTime: Boolean, formattedContext: String): String {
-        val seasonName = rank.season?.name?.lowercase()?.replaceFirstChar(Char::titlecase)
-        return when {
-            isAllTime -> if (formattedContext.contains("All Time", ignoreCase = true)) "" else "All Time"
-            seasonName != null && rank.year != null -> "$seasonName ${rank.year}"
-            rank.year != null -> "${rank.year}"
-            seasonName != null -> seasonName
-            else -> ""
-        }
-    }
-    private fun bindExternalLinks(media: Media, parent: ViewGroup, offline: Boolean) {
-
-if (!media.externalLinks.isNullOrEmpty() && !offline) {
-    val bind = ItemTitleChipgroupBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    )
-    bind.itemTitle.setText(R.string.external_links)
-    for (link in media.externalLinks!!) {
-        val url = link.url ?: continue
-        val chip = ItemChipBinding.inflate(
-            LayoutInflater.from(context),
-            bind.itemChipGroup,
-            false
-        ).root
-        chip.text = link.site
-        chip.setSafeOnClickListener {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }
-        chip.setOnLongClickListener { copyToClipboard(url); true }
-        bind.itemChipGroup.addView(chip)
-    }
-    bind.root.tag = "dynamic_view"
-    parent.addView(bind.root)
-}
-    }
-
-    private fun bindSequelsAndChronology(media: Media, parent: ViewGroup, offline: Boolean) {
-        bindSequelsAndPrequels(media, parent, offline)
-        bindChronology(media, parent, offline)
-    }
-
-    private fun bindSequelsAndPrequels(media: Media, parent: ViewGroup, offline: Boolean) {
-        if ((media.relations.isNullOrEmpty() && media.sequel == null && media.prequel == null) || offline) return
-        if (media.sequel == null && media.prequel == null) return
-
-        ItemQuelsBinding.inflate(
-            LayoutInflater.from(context),
-            parent,
-            false
-        ).apply {
-            if (media.sequel != null) {
-                mediaInfoSequel.visibility = View.VISIBLE
-                mediaInfoSequelImage.loadImage(media.sequel!!.banner ?: media.sequel!!.cover)
-                mediaInfoSequel.setSafeOnClickListener {
-                    ContextCompat.startActivity(
-                        requireContext(),
-                        Intent(requireContext(), MediaDetailsActivity::class.java).putExtra("media", media.sequel as Serializable),
-                        null
-                    )
-                }
-            }
-            if (media.prequel != null) {
-                mediaInfoPrequel.visibility = View.VISIBLE
-                mediaInfoPrequelImage.loadImage(media.prequel!!.banner ?: media.prequel!!.cover)
-                mediaInfoPrequel.setSafeOnClickListener {
-                    ContextCompat.startActivity(
-                        requireContext(),
-                        Intent(requireContext(), MediaDetailsActivity::class.java).putExtra("media", media.prequel as Serializable),
-                        null
-                    )
-                }
-            }
-            root.tag = "dynamic_view"
-            parent.addView(root)
-        }
-    }
-
-    private fun bindChronology(media: Media, parent: ViewGroup, offline: Boolean) {
-        if (offline) return
-        val binding = ItemQuelsBinding.inflate(LayoutInflater.from(context), parent, false)
-        if (media.anime != null) {
-            bindAnimeChronology(binding, media)
-        } else {
-            bindMangaChronology(binding, media)
-        }
-        binding.root.tag = "dynamic_view"
-        parent.addView(binding.root)
-    }
-
-    private fun resolveAnimeNewsImage(media: Media, watchOrderImage: String?): String? {
-        return media.relations?.firstOrNull { it.cover != null && it.cover != media.cover }?.cover
-            ?: media.characters?.firstOrNull()?.image
-            ?: media.relations?.firstOrNull { it.banner != null && it.banner != media.banner }?.banner
-            ?: media.cover?.takeIf { it != watchOrderImage }
-            ?: media.banner
-            ?: media.cover
-    }
-
-    private fun bindAnimeChronology(binding: ItemQuelsBinding, media: Media) {
-        val watchOrderImage = media.banner ?: media.cover
-        val newsImage = resolveAnimeNewsImage(media, watchOrderImage)
-
-        binding.mediaInfoPrequel.visibility = View.VISIBLE
-        binding.mediaInfoPrequelTitle.text = getString(R.string.watch_order)
-        binding.mediaInfoPrequelImage.loadImage(watchOrderImage)
-        binding.mediaInfoPrequel.setSafeOnClickListener {
-            if (!isAdded || context == null) return@setSafeOnClickListener
-            if (childFragmentManager.findFragmentByTag("watch_order") == null) {
-                MediaContentBottomSheet.newWatchOrderInstance(media).show(childFragmentManager, "watch_order")
-            }
-        }
-
-        binding.mediaInfoSequel.visibility = View.VISIBLE
-        binding.mediaInfoSequelTitle.text = getString(R.string.news)
-        binding.mediaInfoSequelImage.loadImage(newsImage)
-        binding.mediaInfoSequel.setSafeOnClickListener {
-            if (!isAdded || context == null) return@setSafeOnClickListener
-            if (childFragmentManager.findFragmentByTag("news") == null) {
-                MediaContentBottomSheet.newNewsInstance(media).show(childFragmentManager, "news")
-            }
-        }
-    }
-
-    private fun bindMangaChronology(binding: ItemQuelsBinding, media: Media) {
-        val newsImage = media.banner ?: media.cover
-        binding.mediaInfoPrequel.visibility = View.VISIBLE
-        binding.mediaInfoPrequelTitle.text = getString(R.string.news)
-        binding.mediaInfoPrequelImage.loadImage(newsImage)
-        binding.mediaInfoPrequel.setSafeOnClickListener {
-            if (!isAdded || context == null) return@setSafeOnClickListener
-            if (childFragmentManager.findFragmentByTag("news") == null) {
-                MediaContentBottomSheet.newNewsInstance(media).show(childFragmentManager, "news")
-            }
-        }
-    }
-    private fun bindReviews(media: Media, parent: ViewGroup) {
-
-if (!media.review.isNullOrEmpty()) {
-    ItemTitleRecyclerBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    ).apply {
-        val adapter = GroupieAdapter()
-        media.review!!.forEach { adapter.add(ReviewAdapter(it)) }
-        itemTitle.setText(R.string.reviews)
-        itemRecycler.adapter = adapter
-        itemRecycler.layoutManager = LinearLayoutManager(requireContext())
-        itemMore.visibility = View.VISIBLE
-        itemMore.setSafeOnClickListener {
-            startActivity(
-                Intent(requireContext(), ReviewActivity::class.java)
-                    .putExtra("mediaId", media.id)
-            )
-        }
-        root.tag = "dynamic_view"
-        parent.addView(root)
-    }
-}
-    }
-
-    private fun bindRelations(media: Media, parent: ViewGroup, offline: Boolean) {
-
-if (!media.relations.isNullOrEmpty() && !offline) {
-    ItemTitleRecyclerBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    ).apply {
-        itemRecycler.adapter =
-            MediaAdaptor(0, media.relations!!, requireActivity())
-        itemRecycler.layoutManager = LinearLayoutManager(
-            requireContext(),
-            LinearLayoutManager.HORIZONTAL,
-            false
-        )
-        root.tag = "dynamic_view"
-        parent.addView(root)
-    }
-}
-    }
-
-    private fun bindCharacters(media: Media, parent: ViewGroup, offline: Boolean) {
-if (!media.characters.isNullOrEmpty() && !offline) {
-    ItemTitleRecyclerBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    ).apply {
-        itemTitle.setText(R.string.characters)
-        itemRecycler.adapter =
-            CharacterAdapter(media.characters!!)
-        itemRecycler.layoutManager = LinearLayoutManager(
-            requireContext(),
-            LinearLayoutManager.HORIZONTAL,
-            false
-        )
-        root.tag = "dynamic_view"
-        parent.addView(root)
-    }
-}
-    }
-
-    private fun bindStaff(media: Media, parent: ViewGroup, offline: Boolean) {
-if (!media.staff.isNullOrEmpty() && !offline) {
-    ItemTitleRecyclerBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    ).apply {
-        itemTitle.setText(R.string.staff)
-        itemRecycler.adapter =
-            AuthorAdapter(media.staff!!)
-        itemRecycler.layoutManager = LinearLayoutManager(
-            requireContext(),
-            LinearLayoutManager.HORIZONTAL,
-            false
-        )
-        root.tag = "dynamic_view"
-        parent.addView(root)
-    }
-}
-    }
-
-    private fun bindRecommendations(media: Media, parent: ViewGroup, offline: Boolean) {
-
-if (!media.recommendations.isNullOrEmpty() && !offline) {
-    ItemTitleRecyclerBinding.inflate(
-        LayoutInflater.from(context),
-        parent,
-        false
-    ).apply {
-        itemTitle.setText(R.string.recommended)
-        itemRecycler.adapter =
-            MediaAdaptor(0, media.recommendations!!, requireActivity())
-        itemRecycler.layoutManager = LinearLayoutManager(
-            requireContext(),
-            LinearLayoutManager.HORIZONTAL,
-            false
-        )
-        root.tag = "dynamic_view"
-        parent.addView(root)
-    }
-}
-    }
-
-    private fun setupCornerRadiusAnimation() {
-
-if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-    val cornerTop = ObjectAnimator.ofFloat(binding.root, "radius", 0f, 32f).setDuration(200)
-    val cornerNotTop =
-        ObjectAnimator.ofFloat(binding.root, "radius", 32f, 0f).setDuration(200)
-    var cornered = true
-    cornerTop.start()
-    binding.mediaInfoScroll.setOnScrollChangeListener { v, _, _, _, _ ->
-        if (!v.canScrollVertically(-1)) {
-            if (!cornered) {
-                cornered = true
-                cornerTop.start()
-            }
-        } else {
-            if (cornered) {
-                cornered = false
-                cornerNotTop.start()
-            }
-        }
-    }
-}
-
     }
 
     override fun onResume() {

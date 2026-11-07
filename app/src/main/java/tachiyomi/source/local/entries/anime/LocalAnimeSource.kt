@@ -85,7 +85,7 @@ class LocalAnimeSource(
         animeDirs = sortAnimeDirs(animeDirs, filters)
         val animes = animeDirs.map { buildSAnimeFromDir(it) }
 
-                AnimesPage(animes, false)
+        AnimesPage(animes, false)
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getPopularAnime"))
@@ -299,11 +299,10 @@ class LocalAnimeSource(
             return current
         }
     }
-
     private fun sortAnimeDirs(
-        dirs: List<com.hippo.unifile.UniFile>,
+        dirs: List<DocumentFile>,
         filters: AnimeFilterList
-    ): List<com.hippo.unifile.UniFile> {
+    ): List<DocumentFile> {
         var animeDirs = dirs
         filters.forEach { filter ->
             when (filter) {
@@ -331,7 +330,7 @@ class LocalAnimeSource(
         return animeDirs
     }
 
-    private fun buildSAnimeFromDir(animeDir: com.hippo.unifile.UniFile): SAnime {
+    private fun buildSAnimeFromDir(animeDir: DocumentFile): SAnime {
         return SAnime.create().apply {
             title = animeDir.name.orEmpty()
             url = animeDir.name.orEmpty()
@@ -340,12 +339,15 @@ class LocalAnimeSource(
             if (coverFile != null) {
                 thumbnail_url = coverFile.uri.toString()
             } else {
-                val firstVideo = animeDir.listFiles().firstOrNull { !it.name.orEmpty().startsWith('.') && isSupportedVideo(it) }
+                val firstVideo = (animeDir.listFiles() ?: emptyArray()).firstOrNull { !it.name.orEmpty().startsWith('.') && isSupportedVideo(it) }
                 if (firstVideo != null) {
                     thumbnail_url = firstVideo.uri.toString()
                 }
             }
         }
     }
-
 }
+
+fun Anime.isLocal(): Boolean = source == LocalAnimeSource.ID
+
+fun AnimeSource.isLocal(): Boolean = id == LocalAnimeSource.ID

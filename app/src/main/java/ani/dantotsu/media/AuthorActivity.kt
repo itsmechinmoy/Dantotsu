@@ -208,7 +208,7 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
     private fun setupAuthorMediaRecycler(author: Author) {
                 val titlePosition = arrayListOf<Int>()
                 val concatAdapter = ConcatAdapter()
-                val map = author.yearMedia ?: return@observe
+                val map = author.yearMedia ?: return
                 val keys = map.keys.toTypedArray()
                 var pos = 0
 

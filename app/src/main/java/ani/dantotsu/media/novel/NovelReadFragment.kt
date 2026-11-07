@@ -114,8 +114,7 @@ class NovelReadFragment : Fragment(),
                     sourceMedia = media,
                     coverUrl = novelDownloadPackage.coverUrl,
                     retries = 2,
-                    simultaneousDownloads = 2,
-                    parser = parser
+                    lnReaderParser = parser
                 )
 
                 NovelServiceDataSingleton.downloadQueue.offer(downloadTask)
@@ -272,7 +271,7 @@ class NovelReadFragment : Fragment(),
         } else {
             val intent = Intent(requireContext(), NovelReaderActivity::class.java).apply {
                 val extras = Bundle().apply {
-                    putParcelable("media", media)
+                    putSerializable("media", media)
                     putString("novel_title", novel.name)
                     putString("novel_link", novel.link)
                     putString("novel_cover", novel.coverUrl.url)
@@ -315,7 +314,7 @@ class NovelReadFragment : Fragment(),
         storedSearchResults = null
     }
 
-    fun overrideNovelSource(novel: ShowResponse, newSourceIndex: Int) {
+    fun overrideNovelSource(novel: ShowResponse, newSourceIndex: Int = source) {
         source = newSourceIndex
         isShowingChapters = false
         headerAdapter.clearChips()

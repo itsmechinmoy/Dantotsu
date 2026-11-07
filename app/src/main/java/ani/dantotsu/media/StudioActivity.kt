@@ -134,7 +134,7 @@ class StudioActivity : AppCompatActivity() {
     private fun setupStudioRecycler(studio: Studio, screenWidth: Float) {
                 val titlePosition = arrayListOf<Int>()
                 val concatAdapter = ConcatAdapter()
-                val map = studio.yearMedia ?: return@observe
+                val map = studio.yearMedia ?: return
                 val keys = map.keys.toTypedArray()
                 var pos = 0
 
