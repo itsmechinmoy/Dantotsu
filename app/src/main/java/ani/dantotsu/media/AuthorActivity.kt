@@ -57,29 +57,9 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        ThemeManager(this).applyTheme()
         binding = ActivityCharacterBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        initActivity(this)
         screenWidth = resources.displayMetrics.run { widthPixels / density }
-        if (PrefManager.getVal(PrefName.ImmersiveMode)) this.window.statusBarColor =
-            ContextCompat.getColor(this, R.color.transparent)
-
-        val banner =
-            if (PrefManager.getVal(PrefName.BannerAnimations)) binding.characterBanner else binding.characterBannerNoKen
-
-        banner.updateLayoutParams { height += statusBarHeight }
-        binding.characterClose.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
-        binding.characterCollapsing.minimumHeight = statusBarHeight
-        binding.characterCover.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
-        binding.characterRecyclerView.updatePadding(bottom = 64f.px + navBarHeight)
-        binding.characterTitle.isSelected = true
-        binding.characterAppBar.addOnOffsetChangedListener(this)
-
-        binding.characterClose.setOnClickListener {
-            onBackPressedDispatcher.onBackPressed()
-        }
+        val banner = CharacterUiUtil.setupCharacterView(this, binding, this)
 
         author = intent.getSerialized("author") ?: return
         binding.characterTitle.text = author.name

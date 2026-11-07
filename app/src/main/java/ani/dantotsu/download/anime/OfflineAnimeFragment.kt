@@ -135,24 +135,22 @@ class OfflineAnimeFragment : Fragment(), OfflineAnimeSearchListener {
             selected.alpha = 1f
         }
 
-        layoutList.setOnClickListener {
-            selected(it as ImageView)
-            style = 0
+        fun switchLayoutMode(newStyle: Int, icon: ImageView, targetGridId: Int) {
+            selected(icon)
+            style = newStyle
             PrefManager.setVal(PrefName.OfflineView, style)
             gridView.visibility = View.GONE
-            gridView = view.findViewById(R.id.gridView)
+            gridView = view.findViewById(targetGridId)
             adapter.notifyNewGrid()
             grid()
         }
 
+        layoutList.setOnClickListener {
+            switchLayoutMode(0, it as ImageView, R.id.gridView)
+        }
+
         layoutCompact.setOnClickListener {
-            selected(it as ImageView)
-            style = 1
-            PrefManager.setVal(PrefName.OfflineView, style)
-            gridView.visibility = View.GONE
-            gridView = view.findViewById(R.id.gridView1)
-            adapter.notifyNewGrid()
-            grid()
+            switchLayoutMode(1, it as ImageView, R.id.gridView1)
         }
 
         gridView =

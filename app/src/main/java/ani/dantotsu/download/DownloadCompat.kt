@@ -73,32 +73,15 @@ class DownloadCompat {
 
         @Deprecated("external storage is deprecated, use SAF instead")
         fun loadOfflineAnimeModelCompat(downloadedType: DownloadedType): OfflineAnimeModel {
-            val type = when (downloadedType.type) {
-                MediaType.MANGA -> "Manga"
-                MediaType.ANIME -> "Anime"
-                else -> "Novel"
-            }
-            val directory = File(
-                currContext()?.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                "Dantotsu/$type/${downloadedType.titleName}"
-            )
-            //load media.json and convert to media class with gson
             try {
-                val mediaModel = loadMediaCompat(downloadedType)!!
-                val cover = File(directory, "cover.jpg")
-                val coverUri: Uri? = if (cover.exists()) {
-                    Uri.fromFile(cover)
-                } else null
-                val banner = File(directory, "banner.jpg")
-                val bannerUri: Uri? = if (banner.exists()) {
-                    Uri.fromFile(banner)
-                } else null
-                val title = mediaModel.mainName()
-                val score = ((if (mediaModel.userScore == 0) mediaModel.meanScore
-                    ?: 0 else mediaModel.userScore) / 10.0).toString()
-                val isOngoing =
-                    mediaModel.status == currContext()?.getString(R.string.status_releasing)
-                val isUserScored = mediaModel.userScore != 0
+                val info = resolveCompatMediaInfo(downloadedType) ?: return null
+                val mediaModel = info.mediaModel
+                val coverUri = info.coverUri
+                val bannerUri = info.bannerUri
+                val title = info.title
+                val score = info.score
+                val isOngoing = info.isOngoing
+                val isUserScored = info.isUserScored
                 val watchedEpisodes = (mediaModel.userProgress ?: "~").toString()
                 val totalEpisode =
                     if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
@@ -142,32 +125,15 @@ class DownloadCompat {
 
         @Deprecated("external storage is deprecated, use SAF instead")
         fun loadOfflineMangaModelCompat(downloadedType: DownloadedType): OfflineMangaModel {
-            val type = when (downloadedType.type) {
-                MediaType.MANGA -> "Manga"
-                MediaType.ANIME -> "Anime"
-                else -> "Novel"
-            }
-            val directory = File(
-                currContext()?.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                "Dantotsu/$type/${downloadedType.titleName}"
-            )
-            //load media.json and convert to media class with gson
             try {
-                val mediaModel = loadMediaCompat(downloadedType)!!
-                val cover = File(directory, "cover.jpg")
-                val coverUri: Uri? = if (cover.exists()) {
-                    Uri.fromFile(cover)
-                } else null
-                val banner = File(directory, "banner.jpg")
-                val bannerUri: Uri? = if (banner.exists()) {
-                    Uri.fromFile(banner)
-                } else null
-                val title = mediaModel.mainName()
-                val score = ((if (mediaModel.userScore == 0) mediaModel.meanScore
-                    ?: 0 else mediaModel.userScore) / 10.0).toString()
-                val isOngoing =
-                    mediaModel.status == currContext()?.getString(R.string.status_releasing)
-                val isUserScored = mediaModel.userScore != 0
+                val info = resolveCompatMediaInfo(downloadedType) ?: return null
+                val mediaModel = info.mediaModel
+                val coverUri = info.coverUri
+                val bannerUri = info.bannerUri
+                val title = info.title
+                val score = info.score
+                val isOngoing = info.isOngoing
+                val isUserScored = info.isUserScored
                 val readchapter = (mediaModel.userProgress ?: "~").toString()
                 val totalchapter = "${mediaModel.manga?.totalChapters ?: "??"}"
                 val chapters = " Chapters"
@@ -380,5 +346,41 @@ class DownloadCompat {
         }
 
         private val animeLocation = "Dantotsu/Anime"
+
+        private data class CompatMediaInfo(
+            val mediaModel: ani.dantotsu.media.Media,
+            val title: String,
+            val coverUri: Uri?,
+            val bannerUri: Uri?,
+            val score: String,
+            val isOngoing: Boolean,
+            val isUserScored: Boolean
+        )
+
+        private fun resolveCompatMediaInfo(downloadedType: DownloadedType): CompatMediaInfo? {
+            val type = when (downloadedType.type) {
+                MediaType.MANGA -> "Manga"
+                MediaType.ANIME -> "Anime"
+                else -> "Novel"
+            }
+            val directory = File(
+                currContext()?.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                "Dantotsu/$type/${downloadedType.titleName}"
+            )
+            return try {
+                val mediaModel = loadMediaCompat(downloadedType) ?: return null
+                val cover = File(directory, "cover.jpg")
+                val coverUri = if (cover.exists()) Uri.fromFile(cover) else null
+                val banner = File(directory, "banner.jpg")
+                val bannerUri = if (banner.exists()) Uri.fromFile(banner) else null
+                val title = mediaModel.mainName()
+                val score = ((if (mediaModel.userScore == 0) mediaModel.meanScore ?: 0 else mediaModel.userScore) / 10.0).toString()
+                val isOngoing = mediaModel.status == currContext()?.getString(R.string.status_releasing)
+                val isUserScored = mediaModel.userScore != 0
+                CompatMediaInfo(mediaModel, title, coverUri, bannerUri, score, isOngoing, isUserScored)
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 }

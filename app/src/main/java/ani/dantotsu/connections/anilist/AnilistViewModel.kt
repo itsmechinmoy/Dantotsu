@@ -955,47 +955,14 @@ class AnilistSearch : ViewModel() {
             }
 
             val jikanType = if (isAnime) "anime" else "manga"
-            val jikanStatus = when (r.status?.uppercase()) {
-                "RELEASING", "AIRING" -> "airing"
-                "FINISHED", "COMPLETE" -> "complete"
-                "NOT_YET_RELEASED", "UPCOMING" -> "upcoming"
-                else -> null
-            }
-            val (orderBy, sortDir) = when (r.sort) {
-                Anilist.sortBy[0] -> "score" to "desc"
-                Anilist.sortBy[1] -> "members" to "desc"
-                Anilist.sortBy[2] -> "members" to "desc"
-                Anilist.sortBy[3] -> "start_date" to "desc"
-                Anilist.sortBy[4] -> "title" to "asc"
-                Anilist.sortBy[5] -> "title" to "desc"
-                else -> "members" to "desc"
-            }
-            val jikanGenreMap = mapOf(
-                "Action" to 1, "Adventure" to 2, "Cars" to 3, "Comedy" to 4,
-                "Mystery" to 7, "Drama" to 8, "Ecchi" to 9, "Fantasy" to 10,
-                "Game" to 11, "Historical" to 13, "Horror" to 14, "Kids" to 15,
-                "Magic" to 16, "Martial Arts" to 17, "Mecha" to 18, "Music" to 19,
-                "Parody" to 20, "Samurai" to 21, "Romance" to 22, "School" to 23,
-                "Sci-Fi" to 24, "Shoujo" to 25, "Girls Love" to 26, "Shounen" to 27,
-                "Boys Love" to 28, "Space" to 29, "Sports" to 30, "Super Power" to 31,
-                "Vampire" to 32, "Harem" to 35, "Slice of Life" to 36, "Supernatural" to 37,
-                "Military" to 38, "Police" to 39, "Psychological" to 40, "Thriller" to 41,
-                "Seinen" to 42, "Josei" to 43, "Gourmet" to 47, "Work" to 48,
-                "Erotica" to 49, "Isekai" to 62
-            )
-            val genresParam = r.genres?.mapNotNull { jikanGenreMap[it] }?.joinToString(",")
-
-            val jikanFormat = r.format?.lowercase()?.let {
-                when (it) {
-                    "tv", "movie", "ova", "special", "ona", "music" -> it
-                    "tv_short" -> "tv"
-                    "manga", "novel", "light_novel", "oneshot", "doujin", "manhwa", "manhua" -> it.replace("_", "")
-                    else -> null
-                }
-            }
-
-            val year = if (isAnime) r.seasonYear else r.startYear
-            val (startDate, endDate) = if (year != null) "$year-01-01" to "$year-12-31" else null to null
+            val p = mapAnilistToJikanParams(r, isAnime)
+            val jikanStatus = p.status
+            val orderBy = p.orderBy
+            val sortDir = p.sortDir
+            val genresParam = p.genresParam
+            val jikanFormat = p.format
+            val startDate = p.startDate
+            val endDate = p.endDate
             val res = MAL.jikan.search(
                 query = r.search ?: "",
                 endpoint = jikanType,
@@ -1165,45 +1132,14 @@ class AnilistSearch : ViewModel() {
         if (rescueMode) {
             val isAnime = r.type == "ANIME"
             val jikanEndpoint = if (isAnime) "anime" else "manga"
-            val jikanStatus = when (r.status?.uppercase()) {
-                "RELEASING", "AIRING" -> "airing"
-                "FINISHED", "COMPLETE" -> "complete"
-                "NOT_YET_RELEASED", "UPCOMING" -> "upcoming"
-                else -> null
-            }
-            val (orderBy, sortDir) = when (r.sort) {
-                Anilist.sortBy[0] -> "score" to "desc"
-                Anilist.sortBy[1] -> "members" to "desc"
-                Anilist.sortBy[2] -> "members" to "desc"
-                Anilist.sortBy[3] -> "start_date" to "desc"
-                Anilist.sortBy[4] -> "title" to "asc"
-                Anilist.sortBy[5] -> "title" to "desc"
-                else -> "members" to "desc"
-            }
-            val jikanGenreMap = mapOf(
-                "Action" to 1, "Adventure" to 2, "Cars" to 3, "Comedy" to 4,
-                "Mystery" to 7, "Drama" to 8, "Ecchi" to 9, "Fantasy" to 10,
-                "Game" to 11, "Historical" to 13, "Horror" to 14, "Kids" to 15,
-                "Magic" to 16, "Martial Arts" to 17, "Mecha" to 18, "Music" to 19,
-                "Parody" to 20, "Samurai" to 21, "Romance" to 22, "School" to 23,
-                "Sci-Fi" to 24, "Shoujo" to 25, "Girls Love" to 26, "Shounen" to 27,
-                "Boys Love" to 28, "Space" to 29, "Sports" to 30, "Super Power" to 31,
-                "Vampire" to 32, "Harem" to 35, "Slice of Life" to 36, "Supernatural" to 37,
-                "Military" to 38, "Police" to 39, "Psychological" to 40, "Thriller" to 41,
-                "Seinen" to 42, "Josei" to 43, "Gourmet" to 47, "Work" to 48,
-                "Erotica" to 49, "Isekai" to 62
-            )
-            val genresParam = r.genres?.mapNotNull { jikanGenreMap[it] }?.joinToString(",")
-            val jikanFormat = r.format?.lowercase()?.let {
-                when (it) {
-                    "tv", "movie", "ova", "special", "ona", "music" -> it
-                    "tv_short" -> "tv"
-                    "manga", "novel", "light_novel", "oneshot", "doujin", "manhwa", "manhua" -> it.replace("_", "")
-                    else -> null
-                }
-            }
-            val year = if (isAnime) r.seasonYear else r.startYear
-            val (startDate, endDate) = if (year != null) "$year-01-01" to "$year-12-31" else null to null
+            val p = mapAnilistToJikanParams(r, isAnime)
+            val jikanStatus = p.status
+            val orderBy = p.orderBy
+            val sortDir = p.sortDir
+            val genresParam = p.genresParam
+            val jikanFormat = p.format
+            val startDate = p.startDate
+            val endDate = p.endDate
             val res = MAL.jikan.search(
                 query = r.search ?: "",
                 endpoint = jikanEndpoint,
@@ -1443,5 +1379,60 @@ class ProfileViewModel : ViewModel() {
         mangaFav.postValue(mangaFav.value)
         animeFav.postValue(animeFav.value)
 
+    }
+    private fun mapAnilistToJikanParams(r: AniSearch, isAnime: Boolean): JikanSearchParams {
+        val jikanStatus = when (r.status?.uppercase()) {
+            "RELEASING", "AIRING" -> "airing"
+            "FINISHED", "COMPLETE" -> "complete"
+            "NOT_YET_RELEASED", "UPCOMING" -> "upcoming"
+            else -> null
+        }
+        val (orderBy, sortDir) = when (r.sort) {
+            Anilist.sortBy[0] -> "score" to "desc"
+            Anilist.sortBy[1] -> "members" to "desc"
+            Anilist.sortBy[2] -> "members" to "desc"
+            Anilist.sortBy[3] -> "start_date" to "desc"
+            Anilist.sortBy[4] -> "title" to "asc"
+            Anilist.sortBy[5] -> "title" to "desc"
+            else -> "members" to "desc"
+        }
+        val genresParam = r.genres?.mapNotNull { JIKAN_GENRE_MAP[it] }?.joinToString(",")
+        val jikanFormat = r.format?.lowercase()?.let {
+            when (it) {
+                "tv", "movie", "ova", "special", "ona", "music" -> it
+                "tv_short" -> "tv"
+                "manga", "novel", "light_novel", "oneshot", "doujin", "manhwa", "manhua" -> it.replace("_", "")
+                else -> null
+            }
+        }
+        val year = if (isAnime) r.seasonYear else r.startYear
+        val (startDate, endDate) = if (year != null) "$year-01-01" to "$year-12-31" else null to null
+        return JikanSearchParams(jikanStatus, orderBy, sortDir, genresParam, jikanFormat, startDate, endDate)
+    }
+
+    private data class JikanSearchParams(
+        val status: String?,
+        val orderBy: String,
+        val sortDir: String,
+        val genresParam: String?,
+        val format: String?,
+        val startDate: String?,
+        val endDate: String?
+    )
+
+    companion object {
+        private val JIKAN_GENRE_MAP = mapOf(
+            "Action" to 1, "Adventure" to 2, "Cars" to 3, "Comedy" to 4,
+            "Mystery" to 7, "Drama" to 8, "Ecchi" to 9, "Fantasy" to 10,
+            "Game" to 11, "Historical" to 13, "Horror" to 14, "Kids" to 15,
+            "Magic" to 16, "Martial Arts" to 17, "Mecha" to 18, "Music" to 19,
+            "Parody" to 20, "Samurai" to 21, "Romance" to 22, "School" to 23,
+            "Sci-Fi" to 24, "Shoujo" to 25, "Girls Love" to 26, "Shounen" to 27,
+            "Boys Love" to 28, "Space" to 29, "Sports" to 30, "Super Power" to 31,
+            "Vampire" to 32, "Harem" to 35, "Slice of Life" to 36, "Supernatural" to 37,
+            "Military" to 38, "Police" to 39, "Psychological" to 40, "Thriller" to 41,
+            "Seinen" to 42, "Josei" to 43, "Gourmet" to 47, "Work" to 48,
+            "Erotica" to 49, "Isekai" to 62
+        )
     }
 }

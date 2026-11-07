@@ -185,30 +185,15 @@ class EpisodeAdapter(
                 binding.itemEpisodeDesc.text = ep.desc ?: ""
                 holder.bind(ep.number, ep.downloadProgress, ep.desc)
 
-                val epNum = MediaNameAdapter.findEpisodeNumber(ep.number) ?: ep.number.toFloatOrNull() ?: 9999f
-                if (media.userProgress != null) {
-                    if (epNum <= media.userProgress!!.toFloat()) {
-                        binding.itemEpisodeViewedCover.visibility = View.VISIBLE
-                        binding.itemEpisodeViewed.visibility = View.VISIBLE
-                    } else {
-                        binding.itemEpisodeViewedCover.visibility = View.GONE
-                        binding.itemEpisodeViewed.visibility = View.GONE
-                        binding.itemEpisodeCont.setOnLongClickListener {
-                            updateProgress(media, ep.number)
-                            true
-                        }
-                    }
-                } else {
-                    binding.itemEpisodeViewedCover.visibility = View.GONE
-                    binding.itemEpisodeViewed.visibility = View.GONE
-                }
-
-                handleProgress(
+                bindEpisodeProgress(
+                    binding.itemEpisodeViewedCover,
+                    binding.itemEpisodeViewed,
+                    binding.itemEpisodeCont,
                     binding.itemMediaProgressCont,
                     binding.itemMediaProgress,
                     binding.itemMediaProgressEmpty,
-                    media.id,
-                    ep.number
+                    media,
+                    ep
                 )
             }
 
@@ -252,29 +237,15 @@ class EpisodeAdapter(
                     binding.itemEpisodeFiller.visibility = View.GONE
                     binding.itemEpisodeFillerView.visibility = View.GONE
                 }
-                val epNum = MediaNameAdapter.findEpisodeNumber(ep.number) ?: ep.number.toFloatOrNull() ?: 9999f
-                if (media.userProgress != null) {
-                    if (epNum <= media.userProgress!!.toFloat()) {
-                        binding.itemEpisodeViewedCover.visibility = View.VISIBLE
-                        binding.itemEpisodeViewed.visibility = View.VISIBLE
-                    } else {
-                        binding.itemEpisodeViewedCover.visibility = View.GONE
-                        binding.itemEpisodeViewed.visibility = View.GONE
-                        binding.itemEpisodeCont.setOnLongClickListener {
-                            updateProgress(media, ep.number)
-                            true
-                        }
-                    }
-                } else {
-                    binding.itemEpisodeViewedCover.visibility = View.GONE
-                    binding.itemEpisodeViewed.visibility = View.GONE
-                }
-                handleProgress(
+                bindEpisodeProgress(
+                    binding.itemEpisodeViewedCover,
+                    binding.itemEpisodeViewed,
+                    binding.itemEpisodeCont,
                     binding.itemMediaProgressCont,
                     binding.itemMediaProgress,
                     binding.itemMediaProgressEmpty,
-                    media.id,
-                    ep.number
+                    media,
+                    ep
                 )
             }
 
@@ -595,6 +566,43 @@ class EpisodeAdapter(
         private fun isRotationCoroutineRunningFor(episodeNumber: String): Boolean {
             return episodeNumber in activeCoroutines
         }
+    }
+
+    private fun bindEpisodeProgress(
+        viewedCover: View,
+        viewed: View,
+        container: View,
+        progressCont: View,
+        progress: View,
+        progressEmpty: View,
+        media: Media,
+        ep: Episode
+    ) {
+        val epNum = MediaNameAdapter.findEpisodeNumber(ep.number) ?: ep.number.toFloatOrNull() ?: 9999f
+        if (media.userProgress != null) {
+            if (epNum <= media.userProgress!!.toFloat()) {
+                viewedCover.visibility = View.VISIBLE
+                viewed.visibility = View.VISIBLE
+            } else {
+                viewedCover.visibility = View.GONE
+                viewed.visibility = View.GONE
+                container.setOnLongClickListener {
+                    updateProgress(media, ep.number)
+                    true
+                }
+            }
+        } else {
+            viewedCover.visibility = View.GONE
+            viewed.visibility = View.GONE
+        }
+
+        handleProgress(
+            progressCont,
+            progress,
+            progressEmpty,
+            media.id,
+            ep.number
+        )
     }
 
     fun updateType(t: Int) {
