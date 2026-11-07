@@ -96,152 +96,9 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
 
-            val mainAdapter = SettingsAdapter(
-                arrayListOf(
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.accounts),
-                        desc = getString(R.string.accounts_desc),
-                        icon = R.drawable.ic_round_person_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAccountActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.theme),
-                        desc = getString(R.string.theme_desc),
-                        icon = R.drawable.ic_palette,
-                        onClick = {
-                            startActivity(Intent(context, SettingsThemeActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.common),
-                        desc = getString(R.string.common_desc),
-                        icon = R.drawable.ic_lightbulb_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsCommonActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.label_data_storage),
-                        desc = getString(R.string.label_data_storage_desc),
-                        icon = R.drawable.ic_round_folder_24,
-                        onClick = {
-                            startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.anime),
-                        desc = getString(R.string.anime_desc),
-                        icon = R.drawable.ic_round_movie_filter_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAnimeActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.manga),
-                        desc = getString(R.string.manga_desc),
-                        icon = R.drawable.ic_round_import_contacts_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsMangaActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.extensions),
-                        desc = getString(R.string.extensions_desc),
-                        icon = R.drawable.ic_extension,
-                        onClick = {
-                            startActivity(Intent(context, SettingsExtensionsActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    /*
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.addons),
-                        desc = getString(R.string.addons_desc),
-                        icon = R.drawable.ic_round_restaurant_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAddonActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    */
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.torrent_settings),
-                        desc = getString(R.string.torrent_settings_desc),
-                        icon = R.drawable.ic_round_dns_24,
-                        onClick = {
-                            startActivity(Intent(context, TorrentSettingsActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.notifications),
-                        desc = getString(R.string.notifications_desc),
-                        icon = R.drawable.ic_round_notifications_none_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsNotificationActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.about),
-                        desc = getString(R.string.about_desc),
-                        icon = R.drawable.ic_round_info_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAboutActivity::class.java))
-                        },
-                        isActivity = true
-                    )
-                )
-            )
+            val settingsList = buildSettingsItems(context)
+            val mainAdapter = SettingsAdapter(settingsList)
 
-            val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
-
-            settingsRecyclerView.apply {
-                adapter = mainAdapter
-                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-                setHasFixedSize(true)
-            }
-
-            settingsSearchBarText.addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                    val query = s?.toString()?.trim() ?: ""
-                    if (query.isNotEmpty()) {
-                        val results = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
-                        if (results.isNotEmpty()) {
-                            searchAdapter.updateResults(results)
-                            settingsRecyclerView.adapter = searchAdapter
-                            settingsRecyclerView.visibility = View.VISIBLE
-                            settingsEmptyLayout.visibility = View.GONE
-                        } else {
-                            settingsRecyclerView.visibility = View.GONE
-                            settingsEmptyLayout.visibility = View.VISIBLE
-                        }
-                        settingsFooterLayout.visibility = View.GONE
-                        settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_close_24)
-                        settingsSearchBar.setEndIconOnClickListener {
-                            settingsSearchBarText.setText("")
-                        }
-                    } else {
                         settingsRecyclerView.adapter = mainAdapter
                         settingsRecyclerView.visibility = View.VISIBLE
                         settingsEmptyLayout.visibility = View.GONE
@@ -388,4 +245,152 @@ class SettingsActivity : AppCompatActivity() {
         ThemeManager(this).applyTheme()
         super.onResume()
     }
+    private fun buildSettingsItems(context: Context): ArrayList<Settings> {
+        return arrayListOf(
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.accounts),
+                        desc = getString(R.string.accounts_desc),
+                        icon = R.drawable.ic_round_person_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsAccountActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.theme),
+                        desc = getString(R.string.theme_desc),
+                        icon = R.drawable.ic_palette,
+                        onClick = {
+                            startActivity(Intent(context, SettingsThemeActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.common),
+                        desc = getString(R.string.common_desc),
+                        icon = R.drawable.ic_lightbulb_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsCommonActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.label_data_storage),
+                        desc = getString(R.string.label_data_storage_desc),
+                        icon = R.drawable.ic_round_folder_24,
+                        onClick = {
+                            startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.anime),
+                        desc = getString(R.string.anime_desc),
+                        icon = R.drawable.ic_round_movie_filter_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsAnimeActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.manga),
+                        desc = getString(R.string.manga_desc),
+                        icon = R.drawable.ic_round_import_contacts_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsMangaActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.extensions),
+                        desc = getString(R.string.extensions_desc),
+                        icon = R.drawable.ic_extension,
+                        onClick = {
+                            startActivity(Intent(context, SettingsExtensionsActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    /*
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.addons),
+                        desc = getString(R.string.addons_desc),
+                        icon = R.drawable.ic_round_restaurant_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsAddonActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    */
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.torrent_settings),
+                        desc = getString(R.string.torrent_settings_desc),
+                        icon = R.drawable.ic_round_dns_24,
+                        onClick = {
+                            startActivity(Intent(context, TorrentSettingsActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.notifications),
+                        desc = getString(R.string.notifications_desc),
+                        icon = R.drawable.ic_round_notifications_none_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsNotificationActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.about),
+                        desc = getString(R.string.about_desc),
+                        icon = R.drawable.ic_round_info_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsAboutActivity::class.java))
+                        },
+                        isActivity = true
+                    )
+                )
+            )
+
+            val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
+
+            settingsRecyclerView.apply {
+                adapter = mainAdapter
+                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
+                setHasFixedSize(true)
+            }
+
+            settingsSearchBarText.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    val query = s?.toString()?.trim() ?: ""
+                    if (query.isNotEmpty()) {
+                        val results = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
+                        if (results.isNotEmpty()) {
+                            searchAdapter.updateResults(results)
+                            settingsRecyclerView.adapter = searchAdapter
+                            settingsRecyclerView.visibility = View.VISIBLE
+                            settingsEmptyLayout.visibility = View.GONE
+                        } else {
+                            settingsRecyclerView.visibility = View.GONE
+                            settingsEmptyLayout.visibility = View.VISIBLE
+                        }
+                        settingsFooterLayout.visibility = View.GONE
+                        settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_close_24)
+                        settingsSearchBar.setEndIconOnClickListener {
+                            settingsSearchBarText.setText("")
+                        }
+                    } else {
+    }
+
 }

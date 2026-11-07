@@ -141,9 +141,115 @@ class SettingsCommonActivity : AppCompatActivity() {
             }
 
             val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
-            settingsRecyclerView.adapter =
-                SettingsAdapter(
-                    arrayListOf(
+            val settingsList = buildCommonSettingsList(context, openDocumentLauncher, createDocumentLauncher)
+            settingsRecyclerView.adapter = SettingsAdapter(settingsList, highlightKey = highlightKey)
+
+                        settingsRecyclerView.apply {
+                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
+                setHasFixedSize(true)
+            }
+            var previousStart: View =
+                when (PrefManager.getVal<Int>(PrefName.DefaultStartUpTab)) {
+                    0 -> uiSettingsAnime
+                    1 -> uiSettingsHome
+                    2 -> uiSettingsManga
+                    else -> uiSettingsHome
+                }
+            previousStart.alpha = 1f
+
+            fun uiDefault(
+                mode: Int,
+                current: View,
+            ) {
+                previousStart.alpha = 0.33f
+                previousStart = current
+                current.alpha = 1f
+                PrefManager.setVal(PrefName.DefaultStartUpTab, mode)
+                initActivity(context)
+            }
+
+            uiSettingsAnime.setOnClickListener {
+                uiDefault(0, it)
+            }
+
+            uiSettingsHome.setOnClickListener {
+                uiDefault(1, it)
+            }
+
+            uiSettingsManga.setOnClickListener {
+                uiDefault(2, it)
+            }
+        }
+    }
+
+    private fun passwordAlertDialog(
+        isExporting: Boolean,
+        callback: (CharArray?) -> Unit,
+    ) {
+        val password = CharArray(16).apply { fill('0') }
+
+        // Inflate the dialog layout
+        val dialogView = DialogUserAgentBinding.inflate(layoutInflater)
+        val box = dialogView.userAgentTextBox
+        box.hint = getString(R.string.password)
+        box.setSingleLine()
+
+        val dialog =
+            AlertDialog
+                .Builder(this, R.style.MyPopup)
+                .setTitle(getString(R.string.enter_password))
+                .setView(dialogView.root)
+                .setPositiveButton(R.string.ok, null)
+                .setNegativeButton(R.string.cancel) { dialog, _ ->
+                    password.fill('0')
+                    dialog.dismiss()
+                    callback(null)
+                }.create()
+
+        fun handleOkAction() {
+            val editText = dialogView.userAgentTextBox
+            if (editText.text?.isNotBlank() == true) {
+                editText.text
+                    ?.toString()
+                    ?.trim()
+                    ?.toCharArray(password)
+                dialog.dismiss()
+                callback(password)
+            } else {
+                toast(getString(R.string.password_cannot_be_empty))
+            }
+        }
+        box.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                handleOkAction()
+                true
+            } else {
+                false
+            }
+        }
+        dialogView.subtitle.visibility = View.VISIBLE
+        if (!isExporting) {
+            dialogView.subtitle.text =
+                getString(R.string.enter_password_to_decrypt_file)
+        }
+
+        dialog.window?.apply {
+            setDimAmount(0.8f)
+            attributes.windowAnimations = android.R.style.Animation_Dialog
+        }
+        dialog.show()
+
+        // Override the positive button here
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            handleOkAction()
+        }
+    }
+    private fun buildCommonSettingsList(
+        context: Context,
+        openDocumentLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
+        createDocumentLauncher: androidx.activity.result.ActivityResultLauncher<String>
+    ): ArrayList<Settings> {
+        return arrayListOf(
                         Settings(
                             type = 1,
                             name = getString(R.string.ui_settings),
@@ -463,107 +569,7 @@ class SettingsCommonActivity : AppCompatActivity() {
                             },
                             isVisible = Anilist.adult,
                         ),
-                    ),
-                    highlightKey = highlightKey
-                )
-            settingsRecyclerView.apply {
-                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-                setHasFixedSize(true)
-            }
-            var previousStart: View =
-                when (PrefManager.getVal<Int>(PrefName.DefaultStartUpTab)) {
-                    0 -> uiSettingsAnime
-                    1 -> uiSettingsHome
-                    2 -> uiSettingsManga
-                    else -> uiSettingsHome
-                }
-            previousStart.alpha = 1f
-
-            fun uiDefault(
-                mode: Int,
-                current: View,
-            ) {
-                previousStart.alpha = 0.33f
-                previousStart = current
-                current.alpha = 1f
-                PrefManager.setVal(PrefName.DefaultStartUpTab, mode)
-                initActivity(context)
-            }
-
-            uiSettingsAnime.setOnClickListener {
-                uiDefault(0, it)
-            }
-
-            uiSettingsHome.setOnClickListener {
-                uiDefault(1, it)
-            }
-
-            uiSettingsManga.setOnClickListener {
-                uiDefault(2, it)
-            }
-        }
+                    )
     }
 
-    private fun passwordAlertDialog(
-        isExporting: Boolean,
-        callback: (CharArray?) -> Unit,
-    ) {
-        val password = CharArray(16).apply { fill('0') }
-
-        // Inflate the dialog layout
-        val dialogView = DialogUserAgentBinding.inflate(layoutInflater)
-        val box = dialogView.userAgentTextBox
-        box.hint = getString(R.string.password)
-        box.setSingleLine()
-
-        val dialog =
-            AlertDialog
-                .Builder(this, R.style.MyPopup)
-                .setTitle(getString(R.string.enter_password))
-                .setView(dialogView.root)
-                .setPositiveButton(R.string.ok, null)
-                .setNegativeButton(R.string.cancel) { dialog, _ ->
-                    password.fill('0')
-                    dialog.dismiss()
-                    callback(null)
-                }.create()
-
-        fun handleOkAction() {
-            val editText = dialogView.userAgentTextBox
-            if (editText.text?.isNotBlank() == true) {
-                editText.text
-                    ?.toString()
-                    ?.trim()
-                    ?.toCharArray(password)
-                dialog.dismiss()
-                callback(password)
-            } else {
-                toast(getString(R.string.password_cannot_be_empty))
-            }
-        }
-        box.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                handleOkAction()
-                true
-            } else {
-                false
-            }
-        }
-        dialogView.subtitle.visibility = View.VISIBLE
-        if (!isExporting) {
-            dialogView.subtitle.text =
-                getString(R.string.enter_password_to_decrypt_file)
-        }
-
-        dialog.window?.apply {
-            setDimAmount(0.8f)
-            attributes.windowAnimations = android.R.style.Animation_Dialog
-        }
-        dialog.show()
-
-        // Override the positive button here
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            handleOkAction()
-        }
-    }
 }

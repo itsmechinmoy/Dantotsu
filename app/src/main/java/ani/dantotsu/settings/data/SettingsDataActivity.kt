@@ -131,79 +131,66 @@ class SettingsDataActivity : AppCompatActivity() {
         return try {
             val uri = Uri.parse(uriString)
 
-            // 1. Try Anggrayudi getAbsolutePath on DocumentFile
             val docFile = DocumentFile.fromTreeUri(this, uri)
             val resolvedPath = runCatching { docFile?.getAbsolutePath(this) }.getOrNull()
             if (!resolvedPath.isNullOrBlank() && !resolvedPath.contains("/tree/") && !resolvedPath.contains("msd:")) {
                 return resolvedPath
             }
 
-            // 2. Handle MediaStore document tree (e.g. msd:1000174957)
             val docId = runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull()
                 ?: uri.lastPathSegment ?: ""
-            if (docId.startsWith("msd:") || uriString.contains("msd:")) {
-                val mediaId = docId.substringAfterLast(":")
-                if (mediaId.isNotEmpty() && mediaId.all { it.isDigit() }) {
-                    val contentUri = MediaStore.Files.getContentUri("external")
-                    val projection = arrayOf(
-                        MediaStore.MediaColumns.DATA,
-                        MediaStore.MediaColumns.RELATIVE_PATH,
-                        MediaStore.MediaColumns.DISPLAY_NAME
-                    )
-                    contentResolver.query(
-                        contentUri,
-                        projection,
-                        "${MediaStore.MediaColumns._ID} = ?",
-                        arrayOf(mediaId),
-                        null
-                    )?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val dataIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
-                            if (dataIdx != -1) {
-                                val path = cursor.getString(dataIdx)
-                                if (!path.isNullOrBlank()) return path
-                            }
-                            val relIdx = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
-                            val nameIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
-                            val rel = if (relIdx != -1) cursor.getString(relIdx) else null
-                            val name = if (nameIdx != -1) cursor.getString(nameIdx) else null
-                            if (!rel.isNullOrBlank()) {
-                                val sub = rel.trimEnd('/')
-                                return "/storage/emulated/0/$sub"
-                            } else if (!name.isNullOrBlank()) {
-                                return "/storage/emulated/0/Download/$name"
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 3. Handle primary storage document tree (e.g. primary:Download/Dantotsu)
-            if (docId.contains("primary:") || uriString.contains("primary:") || uriString.contains("primary%3A")) {
-                val decoded = Uri.decode(docId)
-                val relative = decoded.substringAfter("primary:").substringAfter("primary%3A").trimStart('/')
-                return "/storage/emulated/0/$relative"
-            }
-
-            // 4. Handle SD card volume document tree (e.g. 1234-5678:Download/Dantotsu)
-            if (docId.contains(":")) {
-                val volume = docId.substringBefore(":")
-                val relative = docId.substringAfter(":").trimStart('/')
-                if (volume.matches(Regex("[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}"))) {
-                    return "/storage/$volume/$relative"
-                }
-            }
-
-            // 5. Fallback to DocumentFile display name
-            val docName = docFile?.name
-            if (!docName.isNullOrBlank() && !docName.contains("msd:")) {
-                return "/storage/emulated/0/Download/$docName"
-            }
-
-            defaultPath
+            resolveFromMediaStore(docId, uriString) ?: resolveFromDocId(docId) ?: defaultPath
         } catch (e: Exception) {
             defaultPath
         }
+    }
+
+    private fun resolveFromMediaStore(docId: String, uriString: String): String? {
+        if (!docId.startsWith("msd:") && !uriString.contains("msd:")) return null
+        val mediaId = docId.substringAfterLast(":")
+        if (mediaId.isEmpty() || !mediaId.all { it.isDigit() }) return null
+
+        val contentUri = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.MediaColumns.DATA,
+            MediaStore.MediaColumns.RELATIVE_PATH,
+            MediaStore.MediaColumns.DISPLAY_NAME
+        )
+        return contentResolver.query(
+            contentUri,
+            projection,
+            "${MediaStore.MediaColumns._ID} = ?",
+            arrayOf(mediaId),
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val dataIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                if (dataIdx != -1) {
+                    val path = cursor.getString(dataIdx)
+                    if (!path.isNullOrBlank()) return@use path
+                }
+                val relIdx = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+                val nameIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                val rel = if (relIdx != -1) cursor.getString(relIdx) else null
+                val name = if (nameIdx != -1) cursor.getString(nameIdx) else null
+                if (!rel.isNullOrBlank()) {
+                    val sub = rel.trimEnd('/')
+                    "/storage/emulated/0/$sub"
+                } else if (!name.isNullOrBlank()) {
+                    "/storage/emulated/0/Download/$name"
+                } else null
+            } else null
+        }
+    }
+
+    private fun resolveFromDocId(docId: String): String? {
+        return if (docId.startsWith("primary:")) {
+            val subPath = docId.substringAfter("primary:")
+            "/storage/emulated/0/$subPath"
+        } else if (docId.contains(":")) {
+            val split = docId.split(":")
+            if (split.size >= 2) "/storage/${split[0]}/${split[1]}" else null
+        } else null
     }
 
     private fun calculateCacheSize() {
