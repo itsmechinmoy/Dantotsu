@@ -789,7 +789,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             val totalSec = ms / 1000
             val m = totalSec / 60
             val s = totalSec % 60
-            val millis = (ms % 1000) / 100
+            val millis = ms % 1000 / 100
             return String.format(Locale.ROOT, "%02d:%02d.%d", m, s, millis)
         }
 

@@ -103,8 +103,7 @@ class DantotsuPlayerManager(
         }
     }
 
-    @Suppress("ComplexMethod", "LongMethod")
-    fun buildMediaSource(
+        fun buildMediaSource(
         video: Video,
         subConfigs: List<MediaItem.SubtitleConfiguration>,
         mimeType: String?,
@@ -117,114 +116,8 @@ class DantotsuPlayerManager(
         val isLocalhostTorrent = StreamTypeDetector.isTorrentStream(videoUri)
         val isLocalhostMp4 = StreamTypeDetector.isLocalMp4(videoUri)
 
-        val headers = mutableMapOf<String, String>()
-        headers.putAll(defaultHeaders)
-        video.file.headers?.let {
-            headers.putAll(it)
-        }
-        if (isLocalhost) {
-            headers.remove("Accept-Encoding")
-            headers.remove("accept-encoding")
-        }
-
-        val httpClient = client.newBuilder().apply {
-            connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-            readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-            writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-            // Strip Accept-Encoding on the wire for localhost/127.0.0.1 NanoHTTPD server.
-            // When NanoHTTPD forwards requests upstream to CDNs (like imgnex/megaplay),
-            // having NO Accept-Encoding header allows NanoHTTPD's internal OkHttpClient
-            // to enable transparentGzip = true, which automatically decompresses
-            // gzipped M3U8 playlists. If Accept-Encoding is sent (even "identity" or "gzip"),
-            // transparentGzip is disabled in NanoHTTPD and it returns mangled binary gzip
-            // which causes ExoPlayer ParserException: Input does not start with #EXTM3U.
-            addNetworkInterceptor { chain ->
-                val request = chain.request()
-                val host = request.url.host
-                val isLocal = StreamTypeDetector.isLocalhost(host)
-                val newRequest = if (isLocal) {
-                    request.newBuilder()
-                        .removeHeader("Accept-Encoding")
-                        .build()
-                } else {
-                    request
-                }
-                chain.proceed(newRequest)
-            }
-            addInterceptor { chain ->
-                val request = chain.request()
-                val host = request.url.host
-                val isLocal = StreamTypeDetector.isLocalhost(host)
-                val newRequest = if (isLocal) {
-                    request.newBuilder()
-                        .removeHeader("Accept-Encoding")
-                        .build()
-                } else {
-                    request
-                }
-                val response = chain.proceed(newRequest)
-                if (isLocal && response.isSuccessful) {
-                    val contentType = response.header("Content-Type").orEmpty().lowercase()
-                    val isMediaContent = contentType.startsWith("video/") ||
-                        contentType.startsWith("audio/") ||
-                        contentType.startsWith("image/")
-
-                    val isSegment = isMediaContent || StreamTypeDetector.isSegmentUrl(request.url)
-                    val isM3u8 = !isSegment && (
-                        contentType.contains("mpegurl") ||
-                        StreamTypeDetector.isM3u8Url(request.url)
-                    )
-                    val hasGzipEncoding = response.header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true
-
-                    val body = response.body
-                    if (body != null && !isSegment && (isM3u8 || hasGzipEncoding)) {
-                        val rawBytes = body.bytes()
-                        val isGzip = (rawBytes.size >= 2 && rawBytes[0] == 0x1F.toByte() && rawBytes[1] == 0x8B.toByte()) || hasGzipEncoding
-                        val decompressedBytes = if (isGzip) {
-                            try {
-                                GZIPInputStream(ByteArrayInputStream(rawBytes)).use { it.readBytes() }
-                            } catch (_: Exception) {
-                                rawBytes
-                            }
-                        } else {
-                            rawBytes
-                        }
-
-                        val startsWithHls = StreamTypeDetector.startsWithHlsMagic(decompressedBytes)
-                        val finalBytes = if (startsWithHls || isM3u8) {
-                            var text = decompressedBytes.toString(Charsets.UTF_8)
-                            if (text.startsWith("\uFEFF")) {
-                                text = text.substring(1)
-                            }
-                            text.trimStart().toByteArray(Charsets.UTF_8)
-                        } else {
-                            decompressedBytes
-                        }
-
-                        val mediaType = (if (startsWithHls || isM3u8) {
-                            "application/vnd.apple.mpegurl"
-                        } else {
-                            body.contentType()?.toString()
-                        })?.toMediaTypeOrNull() ?: body.contentType()
-
-                        val strippedHeaders = response.headers.newBuilder()
-                            .removeAll("Content-Encoding")
-                            .removeAll("Content-Length")
-                            .build()
-
-                        val newBody = finalBytes.toResponseBody(mediaType)
-                        response.newBuilder()
-                            .headers(strippedHeaders)
-                            .body(newBody)
-                            .build()
-                    } else {
-                        response
-                    }
-                } else {
-                    response
-                }
-            }
-        }.build()
+        val headers = createVideoHeaders(video, isLocalhost)
+        val httpClient = createPlayerHttpClient()
         val httpDataSourceFactory = MediaDataSourceFactory.resolveHttpFactory(
             context = activity,
             headers = headers,
@@ -240,13 +133,164 @@ class DantotsuPlayerManager(
 
         val extractorsFactory = subtitleManager.createExtractorsFactory()
         val assParserFactory = subtitleManager.createSubtitleParserFactory()
-        // Some providers wrap the license response; normalise it before the CDM sees it.
         val drmProvider = WrappedDrmCallback.providerFor(httpDataSourceFactory)
-        val assMediaSourceFactory = DefaultMediaSourceFactory(cacheFactory, extractorsFactory)
-            .setSubtitleParserFactory(assParserFactory)
-            .setDrmSessionManagerProvider(drmProvider)
 
-        val mediaItem = downloadedMediaItem?.buildUpon()?.apply {
+        val mediaItem = createPlayerMediaItem(
+            video = video,
+            subConfigs = subConfigs,
+            mimeType = mimeType,
+            downloadedMediaItem = downloadedMediaItem,
+            mediaMetadata = mediaMetadata,
+            isLocalhost = isLocalhost,
+            isLocalhostTorrent = isLocalhostTorrent,
+            isLocalhostMp4 = isLocalhostMp4
+        )
+        this.currentMediaItem = mediaItem
+
+        val activeFactory = resolveActiveMediaSourceFactory(
+            mediaItem = mediaItem,
+            video = video,
+            isLocalhost = isLocalhost,
+            isLocalhostTorrent = isLocalhostTorrent,
+            upstream = upstream,
+            cacheFactory = cacheFactory,
+            extractorsFactory = extractorsFactory,
+            assParserFactory = assParserFactory,
+            drmProvider = drmProvider
+        )
+        this.activeMediaSourceFactory = activeFactory
+        val primarySource = activeFactory.createMediaSource(mediaItem)
+
+        val finalSource = combineWithAudioTracks(
+            primarySource = primarySource,
+            activeFactory = activeFactory,
+            audioTracks = audioTracks,
+            primaryUrl = video.file.url
+        )
+
+        this.mediaSource = finalSource
+        return Pair(finalSource, mediaItem)
+    }
+
+    private fun createVideoHeaders(video: Video, isLocalhost: Boolean): MutableMap<String, String> {
+        val headers = mutableMapOf<String, String>()
+        headers.putAll(defaultHeaders)
+        video.file.headers?.let {
+            headers.putAll(it)
+        }
+        if (isLocalhost) {
+            headers.remove("Accept-Encoding")
+            headers.remove("accept-encoding")
+        }
+        return headers
+    }
+
+    private fun createPlayerHttpClient(): okhttp3.OkHttpClient {
+        return client.newBuilder().apply {
+            connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            addNetworkInterceptor { chain ->
+                val request = chain.request()
+                val isLocal = StreamTypeDetector.isLocalhost(request.url.host)
+                val newRequest = if (isLocal) {
+                    request.newBuilder().removeHeader("Accept-Encoding").build()
+                } else {
+                    request
+                }
+                chain.proceed(newRequest)
+            }
+            addInterceptor { chain ->
+                val request = chain.request()
+                val isLocal = StreamTypeDetector.isLocalhost(request.url.host)
+                val newRequest = if (isLocal) {
+                    request.newBuilder().removeHeader("Accept-Encoding").build()
+                } else {
+                    request
+                }
+                val response = chain.proceed(newRequest)
+                if (isLocal && response.isSuccessful) {
+                    processLocalhostResponse(chain, response, request)
+                } else {
+                    response
+                }
+            }
+        }.build()
+    }
+
+    private fun processLocalhostResponse(
+        chain: okhttp3.Interceptor.Chain,
+        response: okhttp3.Response,
+        request: okhttp3.Request
+    ): okhttp3.Response {
+        val contentType = response.header("Content-Type").orEmpty().lowercase()
+        val isMediaContent = contentType.startsWith("video/") ||
+            contentType.startsWith("audio/") ||
+            contentType.startsWith("image/")
+
+        val isSegment = isMediaContent || StreamTypeDetector.isSegmentUrl(request.url)
+        val isM3u8 = !isSegment && (
+            contentType.contains("mpegurl") ||
+            StreamTypeDetector.isM3u8Url(request.url)
+        )
+        val hasGzipEncoding = response.header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true
+
+        val body = response.body
+        if (body != null && !isSegment && (isM3u8 || hasGzipEncoding)) {
+            val rawBytes = body.bytes()
+            val isGzip = (rawBytes.size >= 2 && rawBytes[0] == 0x1F.toByte() && rawBytes[1] == 0x8B.toByte()) || hasGzipEncoding
+            val decompressedBytes = if (isGzip) {
+                try {
+                    GZIPInputStream(ByteArrayInputStream(rawBytes)).use { it.readBytes() }
+                } catch (_: Exception) {
+                    rawBytes
+                }
+            } else {
+                rawBytes
+            }
+
+            val startsWithHls = StreamTypeDetector.startsWithHlsMagic(decompressedBytes)
+            val finalBytes = if (startsWithHls || isM3u8) {
+                var text = decompressedBytes.toString(Charsets.UTF_8)
+                if (text.startsWith("\uFEFF")) {
+                    text = text.substring(1)
+                }
+                text.trimStart().toByteArray(Charsets.UTF_8)
+            } else {
+                decompressedBytes
+            }
+
+            val mediaType = (if (startsWithHls || isM3u8) {
+                "application/vnd.apple.mpegurl"
+            } else {
+                body.contentType()?.toString()
+            })?.toMediaTypeOrNull() ?: body.contentType()
+
+            val strippedHeaders = response.headers.newBuilder()
+                .removeAll("Content-Encoding")
+                .removeAll("Content-Length")
+                .build()
+
+            val newBody = finalBytes.toResponseBody(mediaType)
+            return response.newBuilder()
+                .headers(strippedHeaders)
+                .body(newBody)
+                .build()
+        }
+        return response
+    }
+
+    private fun createPlayerMediaItem(
+        video: Video,
+        subConfigs: List<MediaItem.SubtitleConfiguration>,
+        mimeType: String?,
+        downloadedMediaItem: MediaItem?,
+        mediaMetadata: MediaMetadata?,
+        isLocalhost: Boolean,
+        isLocalhostTorrent: Boolean,
+        isLocalhostMp4: Boolean
+    ): MediaItem {
+        return downloadedMediaItem?.buildUpon()?.apply {
             if (mediaMetadata != null) setMediaMetadata(mediaMetadata)
         }?.build() ?: MediaItem.Builder()
             .setUri(video.file.url.toUri())
@@ -258,8 +302,6 @@ class DantotsuPlayerManager(
                 if (subConfigs.isNotEmpty()) setSubtitleConfigurations(subConfigs)
                 if (mediaMetadata != null) setMediaMetadata(mediaMetadata)
                 video.drm?.let { drm ->
-                    // The device CDM does the decryption; this only says where the
-                    // license server is.
                     val uuid = when (drm.scheme.lowercase()) {
                         "playready" -> C.PLAYREADY_UUID
                         "clearkey" -> C.CLEARKEY_UUID
@@ -269,7 +311,6 @@ class DantotsuPlayerManager(
                         MediaItem.DrmConfiguration.Builder(uuid)
                             .setLicenseUri(drm.licenseUrl)
                             .setLicenseRequestHeaders(drm.licenseHeaders)
-                            // Video and audio can carry separate keys.
                             .setMultiSession(true)
                             .build()
                     )
@@ -277,34 +318,48 @@ class DantotsuPlayerManager(
                 }
             }
             .build()
-        this.currentMediaItem = mediaItem
+    }
 
-        // A downloaded episode is played from its own uri, which is not the one
-        // the extension handed us, so the scheme has to come from the media item.
+    private fun resolveActiveMediaSourceFactory(
+        mediaItem: MediaItem,
+        video: Video,
+        isLocalhost: Boolean,
+        isLocalhostTorrent: Boolean,
+        upstream: DataSource.Factory,
+        cacheFactory: DataSource.Factory,
+        extractorsFactory: androidx.media3.extractor.ExtractorsFactory,
+        assParserFactory: androidx.media3.extractor.text.SubtitleParser.Factory,
+        drmProvider: androidx.media3.exoplayer.drm.DrmSessionManagerProvider
+    ): MediaSource.Factory {
         val isContentUri =
             (mediaItem.localConfiguration?.uri?.scheme ?: video.file.url.substringBefore(":")) == "content"
 
-        val activeFactory = if (isContentUri) {
+        return if (isContentUri) {
             val localDataSourceFactory = DefaultDataSource.Factory(activity)
             DefaultMediaSourceFactory(localDataSourceFactory, extractorsFactory)
                 .setSubtitleParserFactory(assParserFactory)
                 .setDrmSessionManagerProvider(drmProvider)
         } else if (isLocalhostTorrent || isLocalhost) {
-            // Direct upstream for localhost streams (torrents and local extension proxies)
-            // - avoids double writing to flash via VideoCache and avoids Range request issues with NanoHTTPD
             DefaultMediaSourceFactory(upstream, extractorsFactory)
                 .setSubtitleParserFactory(assParserFactory)
                 .setDrmSessionManagerProvider(drmProvider)
         } else {
-            assMediaSourceFactory
+            DefaultMediaSourceFactory(cacheFactory, extractorsFactory)
+                .setSubtitleParserFactory(assParserFactory)
+                .setDrmSessionManagerProvider(drmProvider)
         }
-        this.activeMediaSourceFactory = activeFactory
-        val primarySource = activeFactory.createMediaSource(mediaItem)
+    }
 
+    private fun combineWithAudioTracks(
+        primarySource: MediaSource,
+        activeFactory: MediaSource.Factory,
+        audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track>,
+        primaryUrl: String
+    ): MediaSource {
         val audioSources = mutableListOf<MediaSource>()
         audioTracks.forEach { audioTrack ->
             val audioUrl = audioTrack.url
-            if (audioUrl.isNotBlank() && audioUrl != video.file.url) {
+            if (audioUrl.isNotBlank() && audioUrl != primaryUrl) {
                 val audioMimeType = when {
                     audioUrl.contains(".m3u8", ignoreCase = true) || audioUrl.contains("/m3u8", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
                     audioUrl.contains(".mpd", ignoreCase = true) || audioUrl.contains("/mpd", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_MPD
@@ -321,17 +376,12 @@ class DantotsuPlayerManager(
             }
         }
 
-        val finalSource = if (audioSources.isNotEmpty()) {
+        return if (audioSources.isNotEmpty()) {
             MergingMediaSource(primarySource, *audioSources.toTypedArray())
         } else {
             primarySource
         }
-
-        this.mediaSource = finalSource
-        return Pair(finalSource, mediaItem)
-    }
-
-    var activeMediaSourceFactory: MediaSource.Factory? = null
+    }    var activeMediaSourceFactory: MediaSource.Factory? = null
 
     fun applyUpdatedSubtitles(newSubConfigs: List<MediaItem.SubtitleConfiguration>, position: Long) {
         val player = exoPlayer ?: return

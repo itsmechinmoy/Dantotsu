@@ -518,7 +518,7 @@ abstract class BaseImageAdapter(
             if (ax < 1e-9) return 1.0
             if (ax >= LANCZOS_A) return 0.0
             val pix = ax * PI
-            return (sin(pix) * sin(pix / LANCZOS_A)) / (pix * pix / LANCZOS_A)
+            return sin(pix) * sin(pix / LANCZOS_A) / (pix * pix / LANCZOS_A)
         }
 
         private fun scaleLanczos3(src: Bitmap, dstW: Int, dstH: Int): Bitmap {

@@ -2,6 +2,7 @@ package ani.dantotsu.media
 
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -720,6 +721,105 @@ class MediaInfoFragment : Fragment() {
         parent.addView(bind.root)
     }
 
+    private fun setupSpoilerToggle(
+        bind: ItemTitleChipgroupBinding,
+        hasSpoilers: Boolean,
+        hideSpoilerTags: Boolean,
+        spoilerChipUpdaters: List<(Boolean) -> Unit>
+    ) {
+        bind.itemTitle.setText(R.string.tags)
+        if (hasSpoilers && hideSpoilerTags) {
+            bind.itemTitle.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.format_spoiler_24, 0)
+            bind.itemTitle.compoundDrawablePadding = 8
+            var allSpoilersRevealed = false
+            bind.itemTitle.setSafeOnClickListener {
+                allSpoilersRevealed = !allSpoilersRevealed
+                spoilerChipUpdaters.forEach { it(allSpoilersRevealed) }
+                val msg = if (allSpoilersRevealed) R.string.show_spoilers else R.string.hide_spoilers
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun launchTagSearchIntent(context: Context, tagText: String, isAdult: Boolean) {
+        val intent = Intent(context, SearchActivity::class.java)
+            .putExtra("type", type)
+            .putExtra("sortBy", Anilist.sortBy[2])
+            .putExtra("tag", tagText.substringBefore(" :"))
+            .putExtra("search", true)
+            .also {
+                if (isAdult) {
+                    if (!Anilist.adult) {
+                        Toast.makeText(
+                            context,
+                            currActivity()?.getString(R.string.content_18),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    it.putExtra("hentai", true)
+                }
+            }
+        ContextCompat.startActivity(context, intent, null)
+    }
+
+    private fun bindTagChip(
+        bind: ItemTitleChipgroupBinding,
+        media: Media,
+        position: Int,
+        hideSpoilerTags: Boolean,
+        spoilerChipUpdaters: MutableList<(Boolean) -> Unit>
+    ) {
+        val chip = ItemChipBinding.inflate(
+            LayoutInflater.from(context),
+            bind.itemChipGroup,
+            false
+        ).root
+        val isSpoiler = media.tagsIsSpoiler.getOrNull(position) == true
+        var isRevealed = !hideSpoilerTags || !isSpoiler
+
+        fun updateChipAppearance() {
+            if (isSpoiler && !isRevealed) {
+                chip.text = chip.context.getString(R.string.spoiler_tag_placeholder)
+                chip.setChipIconResource(R.drawable.format_spoiler_24)
+                chip.isChipIconVisible = true
+                chip.alpha = 0.75f
+            } else {
+                chip.text = media.tags[position]
+                chip.isChipIconVisible = false
+                chip.alpha = 1.0f
+            }
+        }
+
+        updateChipAppearance()
+
+        if (isSpoiler && hideSpoilerTags) {
+            spoilerChipUpdaters.add { reveal ->
+                isRevealed = reveal
+                updateChipAppearance()
+            }
+        }
+
+        chip.setSafeOnClickListener {
+            if (isSpoiler && !isRevealed) {
+                isRevealed = true
+                updateChipAppearance()
+            } else {
+                launchTagSearchIntent(chip.context, media.tags[position], media.isAdult)
+            }
+        }
+        chip.setOnLongClickListener {
+            if (isSpoiler && isRevealed && hideSpoilerTags) {
+                isRevealed = false
+                updateChipAppearance()
+                true
+            } else {
+                copyToClipboard(media.tags[position])
+                true
+            }
+        }
+        bind.itemChipGroup.addView(chip)
+    }
+
     private fun bindTags(media: Media, parent: ViewGroup, offline: Boolean) {
         if (media.tags.isEmpty() || offline) return
 
@@ -731,89 +831,12 @@ class MediaInfoFragment : Fragment() {
         bind.root.tag = "dynamic_view"
         val hideSpoilerTags = PrefManager.getVal<Boolean>(PrefName.HideSpoilerTags)
         val hasSpoilers = media.tagsIsSpoiler.any { it }
-        var allSpoilersRevealed = false
         val spoilerChipUpdaters = mutableListOf<(Boolean) -> Unit>()
 
-        bind.itemTitle.setText(R.string.tags)
-        if (hasSpoilers && hideSpoilerTags) {
-            bind.itemTitle.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.format_spoiler_24, 0)
-            bind.itemTitle.compoundDrawablePadding = 8
-            bind.itemTitle.setSafeOnClickListener {
-                allSpoilersRevealed = !allSpoilersRevealed
-                spoilerChipUpdaters.forEach { it(allSpoilersRevealed) }
-                val msg = if (allSpoilersRevealed) R.string.show_spoilers else R.string.hide_spoilers
-                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            }
-        }
+        setupSpoilerToggle(bind, hasSpoilers, hideSpoilerTags, spoilerChipUpdaters)
 
         for (position in media.tags.indices) {
-            val chip = ItemChipBinding.inflate(
-                LayoutInflater.from(context),
-                bind.itemChipGroup,
-                false
-            ).root
-            val isSpoiler = media.tagsIsSpoiler.getOrNull(position) == true
-            var isRevealed = !hideSpoilerTags || !isSpoiler
-
-            fun updateChipAppearance() {
-                if (isSpoiler && !isRevealed) {
-                    chip.text = chip.context.getString(R.string.spoiler_tag_placeholder)
-                    chip.setChipIconResource(R.drawable.format_spoiler_24)
-                    chip.isChipIconVisible = true
-                    chip.alpha = 0.75f
-                } else {
-                    chip.text = media.tags[position]
-                    chip.isChipIconVisible = false
-                    chip.alpha = 1.0f
-                }
-            }
-
-            updateChipAppearance()
-
-            if (isSpoiler && hideSpoilerTags) {
-                spoilerChipUpdaters.add { reveal ->
-                    isRevealed = reveal
-                    updateChipAppearance()
-                }
-            }
-
-            chip.setSafeOnClickListener {
-                if (isSpoiler && !isRevealed) {
-                    isRevealed = true
-                    updateChipAppearance()
-                } else {
-                    ContextCompat.startActivity(
-                        chip.context,
-                        Intent(chip.context, SearchActivity::class.java)
-                            .putExtra("type", type)
-                            .putExtra("sortBy", Anilist.sortBy[2])
-                            .putExtra("tag", media.tags[position].substringBefore(" :"))
-                            .putExtra("search", true)
-                            .also {
-                                if (media.isAdult) {
-                                    if (!Anilist.adult) Toast.makeText(
-                                        chip.context,
-                                        currActivity()?.getString(R.string.content_18),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    it.putExtra("hentai", true)
-                                }
-                            },
-                        null
-                    )
-                }
-            }
-            chip.setOnLongClickListener {
-                if (isSpoiler && isRevealed && hideSpoilerTags) {
-                    isRevealed = false
-                    updateChipAppearance()
-                    true
-                } else {
-                    copyToClipboard(media.tags[position])
-                    true
-                }
-            }
-            bind.itemChipGroup.addView(chip)
+            bindTagChip(bind, media, position, hideSpoilerTags, spoilerChipUpdaters)
         }
         parent.addView(bind.root)
     }
