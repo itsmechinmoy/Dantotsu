@@ -684,7 +684,6 @@ $REVIEW_GRAPHQL_FIELDS
         }
         return Gson().toJson(sb.toString())
     }
-    @Suppress("ComplexMethod", "LongMethod")
     private fun buildMutationVariables(
         mediaID: Int,
         private: Boolean?,
@@ -699,19 +698,21 @@ $REVIEW_GRAPHQL_FIELDS
         customList: List<String>?,
         advancedScores: List<Double>?
     ): String {
-        return """{"mediaID":$mediaID
-            ${if (private != null) ""","private":$private""" else ""}
-            ${if (priority != null) ""","priority":$priority""" else ""}
-            ${if (hiddenFromStatusLists != null) ""","hiddenFromStatusLists":$hiddenFromStatusLists""" else ""}
-            ${if (progress != null) ""","progress":$progress""" else ""}
-            ${if (progressVolumes != null) ""","progressVolumes":$progressVolumes""" else ""}
-            ${if (score != null) ""","scoreRaw":$score""" else ""}
-            ${if (repeat != null) ""","repeat":$repeat""" else ""}
-            ${if (notes != null) ""","notes":"${notes.replace("\n", "\\n")}"""" else ""}
-            ${if (status != null) ""","status":"$status"""" else ""}
-            ${if (customList != null) ""","customLists":[${customList.joinToString { "\"$it\"" }}]""" else ""}
-            ${if (advancedScores != null) ""","advancedScores":[${advancedScores.joinToString(",")}]""" else ""}
-            }""".replace("\n", "").replace("""    """, "")
+        val root = org.json.JSONObject().apply {
+            put("mediaID", mediaID)
+            private?.let { put("private", it) }
+            priority?.let { put("priority", it) }
+            hiddenFromStatusLists?.let { put("hiddenFromStatusLists", it) }
+            progress?.let { put("progress", it) }
+            progressVolumes?.let { put("progressVolumes", it) }
+            score?.let { put("scoreRaw", it) }
+            repeat?.let { put("repeat", it) }
+            notes?.let { put("notes", it) }
+            status?.let { put("status", it) }
+            customList?.let { put("customLists", org.json.JSONArray(it)) }
+            advancedScores?.let { put("advancedScores", org.json.JSONArray(it)) }
+        }
+        return root.toString()
     }
 
 }

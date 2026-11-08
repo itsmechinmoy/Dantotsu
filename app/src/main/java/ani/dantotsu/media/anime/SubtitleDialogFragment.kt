@@ -441,74 +441,82 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
         binding.activeSubBadge.text = badgeText
     }
 
-    @Suppress("ComplexMethod", "LongMethod")
-    private fun loadSubtitlesTab(episodeId: String) {
-        val media = model.getMedia().value ?: return
-        val items = mutableListOf<Any>()
-        val savedLang: String? = PrefManager.getNullableCustomVal("subLang_${media.id}", null, String::class.java)
-
-        // 1. None Option
-        items.add(NoneSubtitleOption)
-
-        // 2. Active External Subtitle (Online or Local) in Tab 0
-        val exoActivity = activity as? ExoplayerView
+    private fun resolveActiveExternalSubtitle(mediaId: Int, exoActivity: ExoplayerView?, savedLang: String?): Any? {
         val subManager = exoActivity?.subtitleManager
         val isOnlineActive = subManager?.activeSubtitleId != null &&
             subManager.activeSubtitleDisplayName?.contains("[Server]") != true &&
             subManager.activeSubtitleDisplayName?.startsWith("[Local]") != true
-        val savedEpSub = EpisodeSubtitleStore.getSavedSubtitle(media.id, episode.number)
+        val savedEpSub = EpisodeSubtitleStore.getSavedSubtitle(mediaId, episode.number)
 
-        if (isOnlineActive) {
-            val displayName = subManager!!.activeSubtitleDisplayName ?: "Online Subtitle"
-            val title = displayName.substringBefore(" (")
-            val provider = displayName.substringAfter(" (", "Online").removeSuffix(")")
-            val id = subManager.activeSubtitleId ?: ""
-            items.add(ActiveOnlineSubtitle(title, provider, id))
-        } else if (savedEpSub != null) {
-            items.add(ActiveOnlineSubtitle(savedEpSub.displayName, savedEpSub.provider, savedEpSub.id))
-        } else if (savedLang?.startsWith("[Local]") == true) {
-            items.add(Subtitle(language = savedLang, url = ""))
+        return when {
+            isOnlineActive -> {
+                val displayName = subManager!!.activeSubtitleDisplayName ?: "Online Subtitle"
+                val title = displayName.substringBefore(" (")
+                val provider = displayName.substringAfter(" (", "Online").removeSuffix(")")
+                val id = subManager.activeSubtitleId ?: ""
+                ActiveOnlineSubtitle(title, provider, id)
+            }
+            savedEpSub != null -> ActiveOnlineSubtitle(savedEpSub.displayName, savedEpSub.provider, savedEpSub.id)
+            savedLang?.startsWith("[Local]") == true -> Subtitle(language = savedLang, url = "")
+            else -> null
         }
+    }
 
-        // 3. Current Server's Extractor Subtitles
-        val currentExtractor = episode.extractors?.find { it.server.name == episode.selectedExtractor }
-        if (currentExtractor != null && currentExtractor.subtitles.isNotEmpty()) {
-            items.addAll(currentExtractor.subtitles)
-        }
-
-        // 4. Embedded Player Tracks
-        val trackGroups = exoActivity?.currentSubTrackGroups
-        if (trackGroups != null && trackGroups.isNotEmpty()) {
-            val periodPrefix = Regex("^\\d+:")
-            var flatIndex = 0
-            trackGroups.forEach { group ->
-                for (trackIndex in 0 until group.length) {
-                    val format = group.getTrackFormat(trackIndex)
-                    val lang = format.language
-                    val label = format.label
-                    val cleanTrackId = format.id.orEmpty().replace(periodPrefix, "")
-                    val isExternal = cleanTrackId.startsWith("ext_sub_") ||
-                        cleanTrackId.startsWith("shifted_sub_") ||
-                        cleanTrackId.startsWith("local_sub_")
-                    if (lang != "none" && !isExternal) {
-                        items.add(EmbeddedSubtitleTrack(group, trackIndex, lang, label, flatIndex++))
-                    }
+    private fun collectEmbeddedSubtitleTracks(exoActivity: ExoplayerView?): List<EmbeddedSubtitleTrack> {
+        val trackGroups = exoActivity?.currentSubTrackGroups ?: return emptyList()
+        if (trackGroups.isEmpty()) return emptyList()
+        val result = mutableListOf<EmbeddedSubtitleTrack>()
+        val periodPrefix = Regex("^\\d+:")
+        var flatIndex = 0
+        trackGroups.forEach { group ->
+            for (trackIndex in 0 until group.length) {
+                val format = group.getTrackFormat(trackIndex)
+                val lang = format.language
+                val cleanTrackId = format.id.orEmpty().replace(periodPrefix, "")
+                val isExternal = cleanTrackId.startsWith("ext_sub_") ||
+                    cleanTrackId.startsWith("shifted_sub_") ||
+                    cleanTrackId.startsWith("local_sub_")
+                if (lang != "none" && !isExternal) {
+                    result.add(EmbeddedSubtitleTrack(group, trackIndex, lang, format.label, flatIndex++))
                 }
             }
         }
+        return result
+    }
 
-        // 5. Other Servers' Subtitles for this Episode (Cross-server extraction)
-        episode.extractors?.forEach { extractor ->
+    private fun collectOtherServerSubtitles(): List<OtherServerSubtitle> {
+        val extractors = episode.extractors ?: return emptyList()
+        val result = mutableListOf<OtherServerSubtitle>()
+        extractors.forEach { extractor ->
             if (extractor.server.name != episode.selectedExtractor && extractor.subtitles.isNotEmpty()) {
                 val langCounts = mutableMapOf<String, Int>()
                 extractor.subtitles.forEach { sub ->
                     val count = (langCounts[sub.language] ?: 0) + 1
                     langCounts[sub.language] = count
                     val suffix = if (count > 1) " #$count" else ""
-                    items.add(OtherServerSubtitle(extractor.server.name, sub, suffix))
+                    result.add(OtherServerSubtitle(extractor.server.name, sub, suffix))
                 }
             }
         }
+        return result
+    }
+
+    private fun loadSubtitlesTab(episodeId: String) {
+        val media = model.getMedia().value ?: return
+        val items = mutableListOf<Any>()
+        val savedLang: String? = PrefManager.getNullableCustomVal("subLang_${media.id}", null, String::class.java)
+
+        items.add(NoneSubtitleOption)
+        val exoActivity = activity as? ExoplayerView
+        resolveActiveExternalSubtitle(media.id, exoActivity, savedLang)?.let { items.add(it) }
+
+        val currentExtractor = episode.extractors?.find { it.server.name == episode.selectedExtractor }
+        if (currentExtractor != null && currentExtractor.subtitles.isNotEmpty()) {
+            items.addAll(currentExtractor.subtitles)
+        }
+
+        items.addAll(collectEmbeddedSubtitleTracks(exoActivity))
+        items.addAll(collectOtherServerSubtitles())
 
         val hasAnySubtitles = items.size > 1
         binding.noServerSubsBanner.isVisible = !hasAnySubtitles
@@ -521,7 +529,61 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
         binding.localSubtitlesRecycler.adapter = SubtitleAdapter(localSubs, TabType.LOCAL)
     }
 
-    @Suppress("ComplexMethod", "LongMethod")
+    private fun resolveTargetEpisodeNumber(queryText: String): Int {
+        val actualEpNum = if (this@SubtitleDialogFragment::episode.isInitialized) {
+            MediaNameAdapter.findEpisodeNumber(episode.number)?.toInt()
+                ?: episode.number.filter { it.isDigit() }.toIntOrNull()
+                ?: 1
+        } else 1
+
+        val parsedEpFromQuery = if (queryText.isNotBlank()) {
+            MediaNameAdapter.findEpisodeNumber(queryText)?.toInt()
+        } else null
+        return parsedEpFromQuery ?: actualEpNum
+    }
+
+    private suspend fun fetchAllOnlineSubtitles(
+        imdbId: String,
+        targetEpisodeNum: Int,
+        seasonEpisode: EpisodeMapper.SeasonEpisode,
+        queryText: String,
+        media: ani.dantotsu.media.Media
+    ): List<Any> {
+        val onlineSubs = mutableListOf<Any>()
+        try {
+            onlineSubs.addAll(WyzieSubtitles.getWyzieSubtitles(imdbId, seasonEpisode.season, seasonEpisode.episode))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        try {
+            onlineSubs.addAll(SubSourceSubtitles.getSubtitles(imdbId, targetEpisodeNum, seasonEpisode.season))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        try {
+            onlineSubs.addAll(OpenSubtitlesRestApi.search(imdbId, targetEpisodeNum, seasonEpisode.season, queryText))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        try {
+            val fetchedStremio = StremioSubtitles.getSubtitles(media, seasonEpisode.season, seasonEpisode.episode)
+            val existingUrls = onlineSubs.mapNotNull {
+                when (it) {
+                    is WyzieSub -> it.url
+                    is StremioSub -> it.url
+                    else -> null
+                }
+            }.toSet()
+            val uniqueStremio = fetchedStremio.filter { sub ->
+                sub.url !in existingUrls && (!sub.id.contains(":1:1") || targetEpisodeNum == 1)
+            }
+            onlineSubs.addAll(uniqueStremio)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return onlineSubs
+    }
+
     private fun performOnlineSearch() {
         searchJob?.cancel()
         val media = model.getMedia().value ?: return
@@ -539,17 +601,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
                     media.idIMDB = imdbId
                 }
 
-                val actualEpNum = if (this@SubtitleDialogFragment::episode.isInitialized) {
-                    MediaNameAdapter.findEpisodeNumber(episode.number)?.toInt()
-                        ?: episode.number.filter { it.isDigit() }.toIntOrNull()
-                        ?: 1
-                } else 1
-
-                val parsedEpFromQuery = if (queryText.isNotBlank()) {
-                    MediaNameAdapter.findEpisodeNumber(queryText)?.toInt()
-                } else null
-                val targetEpisodeNum = parsedEpFromQuery ?: actualEpNum
-
+                val targetEpisodeNum = resolveTargetEpisodeNumber(queryText)
                 val seasonEpisode = EpisodeMapper.mapEpisode(
                     media,
                     targetEpisodeNum,
@@ -557,49 +609,10 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
                 )
                 currentSeasonEpisode = seasonEpisode
 
-                val onlineSubs = mutableListOf<Any>()
-                if (imdbId != null) {
-                    // 1. Fetch Wyzie Subtitles
-                    try {
-                        val wyzieSubs = WyzieSubtitles.getWyzieSubtitles(imdbId, seasonEpisode.season, seasonEpisode.episode)
-                        onlineSubs.addAll(wyzieSubs)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-
-                    // 2. Fetch SubSource Subtitles (from AnymeX / CloudStream)
-                    try {
-                        val subSourceSubs = SubSourceSubtitles.getSubtitles(imdbId, targetEpisodeNum, seasonEpisode.season)
-                        onlineSubs.addAll(subSourceSubs)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-
-                    // 3. Fetch OpenSubtitles REST API (from CloudStream)
-                    try {
-                        val openSubRest = OpenSubtitlesRestApi.search(imdbId, targetEpisodeNum, seasonEpisode.season, queryText)
-                        onlineSubs.addAll(openSubRest)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-
-                    // 4. Fetch Stremio / OpenSubtitles (filter out mismatched S1E1 files)
-                    try {
-                        val fetchedStremio = StremioSubtitles.getSubtitles(media, seasonEpisode.season, seasonEpisode.episode)
-                        val existingUrls = onlineSubs.mapNotNull {
-                            when (it) {
-                                is WyzieSub -> it.url
-                                is StremioSub -> it.url
-                                else -> null
-                            }
-                        }.toSet()
-                        val uniqueStremio = fetchedStremio.filter { sub ->
-                            sub.url !in existingUrls && (!sub.id.contains(":1:1") || targetEpisodeNum == 1)
-                        }
-                        onlineSubs.addAll(uniqueStremio)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+                val onlineSubs = if (imdbId != null) {
+                    fetchAllOnlineSubtitles(imdbId, targetEpisodeNum, seasonEpisode, queryText, media)
+                } else {
+                    emptyList()
                 }
 
                 withContext(Dispatchers.Main) {
@@ -816,6 +829,16 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
     // ==========================================
     // RECYCLER VIEW ADAPTER
     // ==========================================
+
+        private data class SubtitleBindContext(
+            val highlightColor: Int,
+            val borderSelectedColor: Int,
+            val normalBorderColor: Int,
+            val exoActivity: ExoplayerView?,
+            val mediaId: Int,
+            val effectiveOnlineId: String?,
+            val savedLang: String?
+        )
     inner class SubtitleAdapter(
         private val items: List<Any>,
         private val tabType: TabType
@@ -833,12 +856,23 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             return SubtitleViewHolder(binding)
         }
 
-        @Suppress("ComplexMethod", "LongMethod")
-        @SuppressLint("SetTextI18n")
-        override fun onBindViewHolder(holder: SubtitleViewHolder, position: Int) {
-            val itemBinding = holder.binding
-            val item = items[position]
 
+        private fun resetItemBinding(itemBinding: ItemSubtitleCardBinding, normalBorderColor: Int) {
+            itemBinding.formatBadge.isVisible = false
+            itemBinding.hiBadge.isVisible = false
+            itemBinding.deleteButton.isVisible = false
+            itemBinding.selectedCheckmark.isVisible = false
+            itemBinding.subtitleCardRoot.setCardBackgroundColor(Color.TRANSPARENT)
+            itemBinding.subtitleCardRoot.strokeColor = normalBorderColor
+        }
+
+        private fun applySelectedStyling(itemBinding: ItemSubtitleCardBinding, highlightColor: Int, borderSelectedColor: Int) {
+            itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
+            itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
+            itemBinding.selectedCheckmark.isVisible = true
+        }
+
+        private fun buildBindContext(): SubtitleBindContext {
             val primaryColor = PrefManager.getVal<Int>(PrefName.PrimaryColor)
             val highlightColor = ColorUtils.setAlphaComponent(primaryColor, 35)
             val borderSelectedColor = ColorUtils.setAlphaComponent(primaryColor, 180)
@@ -861,352 +895,348 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             val effectiveOnlineId = activeOnlineId ?: savedEpSub?.id
             val savedLang: String? = PrefManager.getNullableCustomVal("subLang_${mediaId}", null, String::class.java)
 
-            // Reset visibility
-            itemBinding.formatBadge.isVisible = false
-            itemBinding.hiBadge.isVisible = false
-            itemBinding.deleteButton.isVisible = false
-            itemBinding.selectedCheckmark.isVisible = false
-            itemBinding.subtitleCardRoot.setCardBackgroundColor(Color.TRANSPARENT)
-            itemBinding.subtitleCardRoot.strokeColor = normalBorderColor
+            return SubtitleBindContext(
+                highlightColor = highlightColor,
+                borderSelectedColor = borderSelectedColor,
+                normalBorderColor = normalBorderColor,
+                exoActivity = exoActivity,
+                mediaId = mediaId,
+                effectiveOnlineId = effectiveOnlineId,
+                savedLang = savedLang
+            )
+        }
 
-            when (item) {
-                // --- 1. NONE / OFF OPTION ---
-                is NoneSubtitleOption -> {
-                    itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_subtitles_off_24)
-                    itemBinding.subtitleTitle.text = getString(R.string.subtitles_off)
-                    itemBinding.subtitleDetails.text = getString(R.string.subtitles_off_desc)
+        private fun bindNoneOption(itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_subtitles_off_24)
+            itemBinding.subtitleTitle.text = getString(R.string.subtitles_off)
+            itemBinding.subtitleDetails.text = getString(R.string.subtitles_off_desc)
 
-                    val isSelected = effectiveOnlineId == null && (savedLang == "None" || (savedLang == null && (episode.selectedSubtitle == null || episode.selectedSubtitle == -1)))
-                    if (isSelected) {
-                        itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                        itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                        itemBinding.selectedCheckmark.isVisible = true
-                    }
+            val isSelected = ctx.effectiveOnlineId == null && (ctx.savedLang == "None" || (ctx.savedLang == null && (episode.selectedSubtitle == null || episode.selectedSubtitle == -1)))
+            if (isSelected) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
 
-                    itemBinding.subtitleCardRoot.setOnClickListener {
-                        episode.selectedSubtitle = null
-                        model.setEpisode(episode, "Subtitle")
-                        PrefManager.setCustomVal("subLang_${mediaId}", "None")
-                        exoActivity?.subtitleManager?.clearOnlineSubtitle(mediaId, episode.number)
-                        exoActivity?.playerManager?.exoPlayer?.let { p ->
-                            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
-                        }
-                        updateActiveSubtitleBadge()
-                        dismiss()
-                    }
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                episode.selectedSubtitle = null
+                model.setEpisode(episode, "Subtitle")
+                PrefManager.setCustomVal("subLang_${ctx.mediaId}", "None")
+                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                ctx.exoActivity?.playerManager?.exoPlayer?.let { p ->
+                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
                 }
-
-                 // --- 2. CURRENT SERVER SUBTITLES ---
-                is ActiveOnlineSubtitle -> {
-                    itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
-                    itemBinding.subtitleTitle.text = item.title
-                    itemBinding.subtitleDetails.text = "${item.provider} • Active Online Subtitle"
-
-                    val ext = item.format ?: "SRT"
-                    itemBinding.formatBadge.text = ext
-                    itemBinding.formatBadge.isVisible = true
-
-                    val isSelected = effectiveOnlineId != null
-                    if (isSelected) {
-                        itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                        itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                        itemBinding.selectedCheckmark.isVisible = true
-                    }
-
-                    itemBinding.subtitleCardRoot.setOnClickListener {
-                        updateActiveSubtitleBadge()
-                        dismiss()
-                    }
-                }
-
-                is Subtitle -> {
-                    if (item.language.startsWith("[Local]")) {
-                        // Local Subtitle from storage
-                        val fileName = item.language.removePrefix("[Local]").trim()
-                        itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_folder_24)
-                        itemBinding.subtitleTitle.text = fileName
-                        itemBinding.subtitleDetails.text = "Local Storage Subtitle"
-
-                        // Format Badge
-                        val ext = fileName.substringAfterLast('.', "").uppercase(Locale.ROOT)
-                        if (ext.isNotBlank()) {
-                            itemBinding.formatBadge.text = ext
-                            itemBinding.formatBadge.isVisible = true
-                        }
-
-                        val isSelected = effectiveOnlineId == null && (savedLang == item.language || (savedLang?.startsWith("[Local]") == true && savedLang.contains(fileName)))
-                        if (isSelected) {
-                            itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                            itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                            itemBinding.selectedCheckmark.isVisible = true
-                        }
-
-                        // Delete button (only visible in Local tab)
-                        itemBinding.deleteButton.isVisible = tabType == TabType.LOCAL
-                        itemBinding.deleteButton.setOnClickListener {
-                            val epId = "${mediaId}-${episode.number}"
-                            model.removeLocalSubtitle(epId, item)
-                            loadLocalTab(epId)
-                            if (savedLang == item.language) {
-                                PrefManager.setCustomVal("subLang_${mediaId}", "None")
-                                updateActiveSubtitleBadge()
-                            }
-                        }
-
-                        itemBinding.subtitleCardRoot.setOnClickListener {
-                            episode.selectedSubtitle = null
-                            PrefManager.setCustomVal("subLang_${mediaId}", item.language)
-                            exoActivity?.subtitleManager?.clearOnlineSubtitle(mediaId, episode.number)
-                            if (item.file.url.isNotBlank()) {
-                                exoActivity?.reApplyLocalSubtitle(item.file.url)
-                            }
-                            updateActiveSubtitleBadge()
-                            dismiss()
-                        }
-                    } else {
-                        // Regular Server Subtitle
-                        val langName = mapLanguageCode(item.language)
-                        itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_subtitles_24)
-                        itemBinding.subtitleTitle.text = langName
-                        val currentServerName = episode.selectedExtractor ?: getString(R.string.current_server_subs)
-                        itemBinding.subtitleDetails.text = "$currentServerName • ${item.language}"
-
-                        // Format Tag
-                        val formatTag = when (item.type) {
-                            SubtitleType.ASS -> "ASS"
-                            SubtitleType.VTT -> "VTT"
-                            SubtitleType.SRT -> "SRT"
-                            else -> null
-                        }
-                        if (formatTag != null) {
-                            itemBinding.formatBadge.text = formatTag
-                            itemBinding.formatBadge.isVisible = true
-                        }
-
-                        val currentExtractor = episode.extractors?.find { it.server.name == episode.selectedExtractor }
-                        val curSubs = currentExtractor?.subtitles ?: emptyList()
-                        val subIndex = curSubs.indexOf(item)
-
-                        val sel = episode.selectedSubtitle?.takeIf { it in curSubs.indices }
-                            ?: curSubs.indexOfFirst { it.language.equals(savedLang, ignoreCase = true) }.takeIf { it != -1 }
-                            ?: 0
-                        val isSelected = effectiveOnlineId == null && savedLang == item.language && sel == subIndex
-                        if (isSelected) {
-                            itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                            itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                            itemBinding.selectedCheckmark.isVisible = true
-                        }
-
-                        itemBinding.subtitleCardRoot.setOnClickListener {
-                            val curExt = episode.extractors?.find { it.server.name == episode.selectedExtractor }
-                            val subIdx = curExt?.subtitles?.indexOf(item) ?: -1
-                            episode.selectedSubtitle = subIdx
-                            model.setEpisode(episode, "Subtitle")
-                            PrefManager.setCustomVal("subLang_${mediaId}", item.language)
-                            exoActivity?.subtitleManager?.clearOnlineSubtitle(mediaId, episode.number)
-                            exoActivity?.playerManager?.exoPlayer?.let { p ->
-                                p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-                            }
-                            val videoUrl = exoActivity?.playerManager?.exoPlayer?.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
-                            val embedUrl = curExt?.server?.embed?.url.orEmpty()
-                            val resolvedUrl = PlayerSubtitleManager.unwrapProxyUrl(
-                                PlayerSubtitleManager.resolveSubtitleUrl(item.file.url, embedUrl, videoUrl)
-                            )
-                            val targetTrackId = PlayerSubtitleManager.buildSubtitleId(subIdx, item.language, resolvedUrl)
-                            exoActivity?.subtitleManager?.selectSubtitleTrack(targetTrackId, item.language)
-                            updateActiveSubtitleBadge()
-                            dismiss()
-                        }
-                    }
-                }
-
-                // --- 3. OTHER SERVER SUBTITLES (Cross-server) ---
-                is OtherServerSubtitle -> {
-                    val langName = mapLanguageCode(item.subtitle.language)
-                    itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_subtitles_24)
-                    itemBinding.subtitleTitle.text = "$langName${item.suffix} [${item.serverName}]"
-                    itemBinding.subtitleDetails.text = "${item.serverName} • ${item.subtitle.language}${item.suffix}"
-
-                    val uniqueKey = "${item.subtitle.language}${item.suffix} [${item.serverName}]"
-                    val isSelected = effectiveOnlineId == null && savedLang == uniqueKey
-                    if (isSelected) {
-                        itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                        itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                        itemBinding.selectedCheckmark.isVisible = true
-                    }
-
-                    itemBinding.subtitleCardRoot.setOnClickListener {
-                        episode.selectedSubtitle = null
-                        PrefManager.setCustomVal("subLang_${mediaId}", uniqueKey)
-                        exoActivity?.subtitleManager?.clearOnlineSubtitle(mediaId, episode.number)
-                        exoActivity?.playerManager?.exoPlayer?.let { p ->
-                            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-                        }
-                        exoActivity?.reApplyLocalSubtitle(item.subtitle.file.url)
-                        updateActiveSubtitleBadge()
-                        dismiss()
-                    }
-                }
-
-                // --- 4. EMBEDDED STREAM TRACKS ---
-                is EmbeddedSubtitleTrack -> {
-                    val langName = item.language?.let { mapLanguageCode(it) } ?: "Stream Track ${item.flatIndex + 1}"
-                    val accurateName = when {
-                        item.label.isNullOrBlank() -> "$langName (Track ${item.flatIndex + 1})"
-                        item.label.contains(langName, ignoreCase = true) -> item.label.replaceFirstChar { it.uppercase() }
-                        else -> "$langName (${item.label.replaceFirstChar { it.uppercase() }})"
-                    }
-
-                    itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_subtitles_24)
-                    itemBinding.subtitleTitle.text = accurateName
-                    itemBinding.subtitleDetails.text = "${getString(R.string.embedded_stream_subs)} • ${item.label ?: "Track ${item.flatIndex + 1}"}"
-
-                    val uniqueKey = "Embedded:$accurateName"
-                    val isTrackMatched = if (savedLang != null) savedLang == uniqueKey else item.group.isTrackSelected(item.trackIndex)
-                    val isSelected = effectiveOnlineId == null && isTrackMatched
-                    if (isSelected) {
-                        itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                        itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                        itemBinding.selectedCheckmark.isVisible = true
-                    }
-
-                    itemBinding.subtitleCardRoot.setOnClickListener {
-                        episode.selectedSubtitle = null
-                        PrefManager.setCustomVal("subLang_${mediaId}", uniqueKey)
-                        exoActivity?.subtitleManager?.clearOnlineSubtitle(mediaId, episode.number)
-                        exoActivity?.playerManager?.exoPlayer?.let { p ->
-                            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-                        }
-                        exoActivity?.onSetTrackGroupOverride(
-                            item.group,
-                            C.TRACK_TYPE_TEXT,
-                            item.trackIndex
-                        )
-                        updateActiveSubtitleBadge()
-                        dismiss()
-                    }
-                }
-
-                // --- 5. ONLINE SUBTITLE (WYZIE) ---
-                is WyzieSub -> {
-                    val langName = mapLanguageCode(item.language)
-                    val displayTitle = item.displayLabel.ifBlank { langName }
-                    itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
-                    itemBinding.subtitleTitle.text = displayTitle
-
-                    val seInfo = currentSeasonEpisode?.let { "S${it.season}.E${it.episode}" } ?: ""
-                    itemBinding.subtitleDetails.text = "Wyzie • ${if (seInfo.isNotEmpty()) "$seInfo • " else ""}$langName"
-
-                    itemBinding.formatBadge.text = item.format.uppercase(Locale.ROOT)
-                    itemBinding.formatBadge.isVisible = true
-
-                    val isSelected = effectiveOnlineId != null && effectiveOnlineId == item.url
-                    if (isSelected) {
-                        itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                        itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                        itemBinding.selectedCheckmark.isVisible = true
-                    }
-
-                    itemBinding.subtitleCardRoot.setOnClickListener {
-                        val exoActivity = requireActivity() as? ExoplayerView
-                        if (exoActivity != null) {
-                            episode.selectedSubtitle = -1
-                            exoActivity.applyWyzieSubtitle(item)
-                        }
-                        updateActiveSubtitleBadge()
-                        dismiss()
-                    }
-                }
-
-                // --- 6. ONLINE SUBTITLE (SUBSOURCE) ---
-                is SubSourceSub -> {
-                    val langName = mapLanguageCode(item.lang)
-                    val releaseTitle = item.releaseName.ifBlank { langName }
-                    itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
-                    itemBinding.subtitleTitle.text = releaseTitle
-                    itemBinding.subtitleDetails.text = "SubSource • $langName"
-                    itemBinding.formatBadge.text = "SRT"
-                    itemBinding.formatBadge.isVisible = true
-
-                    val isSelected = effectiveOnlineId != null && effectiveOnlineId == item.id
-                    if (isSelected) {
-                        itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                        itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                        itemBinding.selectedCheckmark.isVisible = true
-                    }
-
-                    itemBinding.subtitleCardRoot.setOnClickListener {
-                        val exoActivity = requireActivity() as? ExoplayerView
-                        if (exoActivity != null) {
-                            episode.selectedSubtitle = -1
-                            exoActivity.applySubSourceSubtitle(item)
-                        }
-                        updateActiveSubtitleBadge()
-                        dismiss()
-                    }
-                }
-
-                // --- 7. ONLINE SUBTITLE (OPEN SUBTITLES REST) ---
-                is OpenSubRestItem -> {
-                    val langName = mapLanguageCode(item.language)
-                    val displayTitle = item.fileName.ifBlank { langName }
-                    itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
-                    itemBinding.subtitleTitle.text = displayTitle
-                    itemBinding.subtitleDetails.text = "OpenSubtitles • $langName"
-
-                    val ext = item.fileName.substringAfterLast('.', "").uppercase(Locale.ROOT)
-                    if (ext.isNotBlank()) {
-                        itemBinding.formatBadge.text = ext
-                        itemBinding.formatBadge.isVisible = true
-                    }
-
-                    val isSelected = effectiveOnlineId != null && effectiveOnlineId == item.fileId.toString()
-                    if (isSelected) {
-                        itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                        itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                        itemBinding.selectedCheckmark.isVisible = true
-                    }
-
-                    itemBinding.subtitleCardRoot.setOnClickListener {
-                        val exoActivity = requireActivity() as? ExoplayerView
-                        if (exoActivity != null) {
-                            episode.selectedSubtitle = -1
-                            exoActivity.applyOpenSubRestSubtitle(item)
-                        }
-                        updateActiveSubtitleBadge()
-                        dismiss()
-                    }
-                }
-
-                // --- 8. ONLINE SUBTITLE (STREMIO / OPEN SUBTITLES) ---
-                is StremioSub -> {
-                    val langName = mapLanguageCode(item.lang)
-                    itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
-                    itemBinding.subtitleTitle.text = langName
-
-                    val seInfo = currentSeasonEpisode?.let { "S${it.season}.E${it.episode}" } ?: ""
-                    itemBinding.subtitleDetails.text = "OpenSubtitles • ${if (seInfo.isNotEmpty()) "$seInfo • " else ""}${item.lang}"
-
-                    val isSelected = effectiveOnlineId != null && (effectiveOnlineId == item.id || effectiveOnlineId == item.url)
-                    if (isSelected) {
-                        itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
-                        itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor
-                        itemBinding.selectedCheckmark.isVisible = true
-                    }
-
-                    itemBinding.subtitleCardRoot.setOnClickListener {
-                        val exoActivity = requireActivity() as? ExoplayerView
-                        if (exoActivity != null) {
-                            episode.selectedSubtitle = -1
-                            exoActivity.applyOnlineSubtitle(item, langName, "OpenSubtitles")
-                        }
-                        updateActiveSubtitleBadge()
-                        dismiss()
-                    }
-                }
+                updateActiveSubtitleBadge()
+                dismiss()
             }
         }
 
+        @SuppressLint("SetTextI18n")
+        private fun bindActiveOnline(item: ActiveOnlineSubtitle, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
+            itemBinding.subtitleTitle.text = item.title
+            itemBinding.subtitleDetails.text = "${item.provider} • Active Online Subtitle"
+
+            val ext = item.format ?: "SRT"
+            itemBinding.formatBadge.text = ext
+            itemBinding.formatBadge.isVisible = true
+
+            if (ctx.effectiveOnlineId != null) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
+
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                updateActiveSubtitleBadge()
+                dismiss()
+            }
+        }
+
+        private fun bindLocalSubtitle(item: Subtitle, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            val fileName = item.language.removePrefix("[Local]").trim()
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_folder_24)
+            itemBinding.subtitleTitle.text = fileName
+            itemBinding.subtitleDetails.text = "Local Storage Subtitle"
+
+            val ext = fileName.substringAfterLast('.', "").uppercase(Locale.ROOT)
+            if (ext.isNotBlank()) {
+                itemBinding.formatBadge.text = ext
+                itemBinding.formatBadge.isVisible = true
+            }
+            val isSelected = ctx.effectiveOnlineId == null && (ctx.savedLang == item.language || (ctx.savedLang?.startsWith("[Local]") == true && ctx.savedLang.contains(fileName)))
+            if (isSelected) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
+
+            itemBinding.deleteButton.isVisible = tabType == TabType.LOCAL
+            itemBinding.deleteButton.setOnClickListener {
+                val epId = "${ctx.mediaId}-${episode.number}"
+                model.removeLocalSubtitle(epId, item)
+                loadLocalTab(epId)
+                if (ctx.savedLang == item.language) {
+                    PrefManager.setCustomVal("subLang_${ctx.mediaId}", "None")
+                    updateActiveSubtitleBadge()
+                }
+            }
+
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                episode.selectedSubtitle = null
+                PrefManager.setCustomVal("subLang_${ctx.mediaId}", item.language)
+                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                if (item.file.url.isNotBlank()) {
+                    ctx.exoActivity?.reApplyLocalSubtitle(item.file.url)
+                }
+                updateActiveSubtitleBadge()
+                dismiss()
+            }
+        }
+
+        @SuppressLint("SetTextI18n")
+        private fun bindServerSubtitle(item: Subtitle, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            val langName = mapLanguageCode(item.language)
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_subtitles_24)
+            itemBinding.subtitleTitle.text = langName
+            val currentServerName = episode.selectedExtractor ?: getString(R.string.current_server_subs)
+            itemBinding.subtitleDetails.text = "$currentServerName • ${item.language}"
+
+            val formatTag = when (item.type) {
+                SubtitleType.ASS -> "ASS"
+                SubtitleType.VTT -> "VTT"
+                SubtitleType.SRT -> "SRT"
+                else -> null
+            }
+            if (formatTag != null) {
+                itemBinding.formatBadge.text = formatTag
+                itemBinding.formatBadge.isVisible = true
+            }
+
+            val currentExtractor = episode.extractors?.find { it.server.name == episode.selectedExtractor }
+            val curSubs = currentExtractor?.subtitles ?: emptyList()
+            val subIndex = curSubs.indexOf(item)
+
+            val sel = episode.selectedSubtitle?.takeIf { it in curSubs.indices }
+                ?: curSubs.indexOfFirst { it.language.equals(ctx.savedLang, ignoreCase = true) }.takeIf { it != -1 }
+                ?: 0
+            val isSelected = ctx.effectiveOnlineId == null && ctx.savedLang == item.language && sel == subIndex
+            if (isSelected) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
+
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                val curExt = episode.extractors?.find { it.server.name == episode.selectedExtractor }
+                val subIdx = curExt?.subtitles?.indexOf(item) ?: -1
+                episode.selectedSubtitle = subIdx
+                model.setEpisode(episode, "Subtitle")
+                PrefManager.setCustomVal("subLang_${ctx.mediaId}", item.language)
+                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                ctx.exoActivity?.playerManager?.exoPlayer?.let { p ->
+                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
+                }
+                val videoUrl = ctx.exoActivity?.playerManager?.exoPlayer?.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
+                val embedUrl = curExt?.server?.embed?.url.orEmpty()
+                val resolvedUrl = PlayerSubtitleManager.unwrapProxyUrl(
+                    PlayerSubtitleManager.resolveSubtitleUrl(item.file.url, embedUrl, videoUrl)
+                )
+                val targetTrackId = PlayerSubtitleManager.buildSubtitleId(subIdx, item.language, resolvedUrl)
+                ctx.exoActivity?.subtitleManager?.selectSubtitleTrack(targetTrackId, item.language)
+                updateActiveSubtitleBadge()
+                dismiss()
+            }
+        }
+
+        @SuppressLint("SetTextI18n")
+        private fun bindOtherServer(item: OtherServerSubtitle, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            val langName = mapLanguageCode(item.subtitle.language)
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_subtitles_24)
+            itemBinding.subtitleTitle.text = "$langName${item.suffix} [${item.serverName}]"
+            itemBinding.subtitleDetails.text = "${item.serverName} • ${item.subtitle.language}${item.suffix}"
+
+            val uniqueKey = "${item.subtitle.language}${item.suffix} [${item.serverName}]"
+            val isSelected = ctx.effectiveOnlineId == null && ctx.savedLang == uniqueKey
+            if (isSelected) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
+
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                episode.selectedSubtitle = null
+                PrefManager.setCustomVal("subLang_${ctx.mediaId}", uniqueKey)
+                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                ctx.exoActivity?.playerManager?.exoPlayer?.let { p ->
+                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
+                }
+                ctx.exoActivity?.reApplyLocalSubtitle(item.subtitle.file.url)
+                updateActiveSubtitleBadge()
+                dismiss()
+            }
+        }
+
+        @SuppressLint("SetTextI18n")
+        private fun bindEmbeddedTrack(item: EmbeddedSubtitleTrack, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            val langName = item.language?.let { mapLanguageCode(it) } ?: "Stream Track ${item.flatIndex + 1}"
+            val accurateName = when {
+                item.label.isNullOrBlank() -> "$langName (Track ${item.flatIndex + 1})"
+                item.label.contains(langName, ignoreCase = true) -> item.label.replaceFirstChar { it.uppercase() }
+                else -> "$langName (${item.label.replaceFirstChar { it.uppercase() }})"
+            }
+
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_subtitles_24)
+            itemBinding.subtitleTitle.text = accurateName
+            itemBinding.subtitleDetails.text = "${getString(R.string.embedded_stream_subs)} • ${item.label ?: "Track ${item.flatIndex + 1}"}"
+
+            val uniqueKey = "Embedded:$accurateName"
+            val isTrackMatched = if (ctx.savedLang != null) ctx.savedLang == uniqueKey else item.group.isTrackSelected(item.trackIndex)
+            val isSelected = ctx.effectiveOnlineId == null && isTrackMatched
+            if (isSelected) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
+
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                episode.selectedSubtitle = null
+                PrefManager.setCustomVal("subLang_${ctx.mediaId}", uniqueKey)
+                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                ctx.exoActivity?.playerManager?.exoPlayer?.let { p ->
+                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
+                }
+                ctx.exoActivity?.onSetTrackGroupOverride(
+                    item.group,
+                    C.TRACK_TYPE_TEXT,
+                    item.trackIndex
+                )
+                updateActiveSubtitleBadge()
+                dismiss()
+            }
+        }
+
+        @SuppressLint("SetTextI18n")
+        private fun bindWyzieSub(item: WyzieSub, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            val langName = mapLanguageCode(item.language)
+            val displayTitle = item.displayLabel.ifBlank { langName }
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
+            itemBinding.subtitleTitle.text = displayTitle
+
+            val seInfo = currentSeasonEpisode?.let { "S${it.season}.E${it.episode}" } ?: ""
+            itemBinding.subtitleDetails.text = "Wyzie • ${if (seInfo.isNotEmpty()) "$seInfo • " else ""}$langName"
+
+            itemBinding.formatBadge.text = item.format.uppercase(Locale.ROOT)
+            itemBinding.formatBadge.isVisible = true
+
+            val isSelected = ctx.effectiveOnlineId != null && ctx.effectiveOnlineId == item.url
+            if (isSelected) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
+
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                val exoActivity = requireActivity() as? ExoplayerView
+                if (exoActivity != null) {
+                    episode.selectedSubtitle = -1
+                    exoActivity.applyWyzieSubtitle(item)
+                }
+                updateActiveSubtitleBadge()
+                dismiss()
+            }
+        }
+
+        @SuppressLint("SetTextI18n")
+        private fun bindSubSourceSub(item: SubSourceSub, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            val langName = mapLanguageCode(item.lang)
+            val releaseTitle = item.releaseName.ifBlank { langName }
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
+            itemBinding.subtitleTitle.text = releaseTitle
+            itemBinding.subtitleDetails.text = "SubSource • $langName"
+            itemBinding.formatBadge.text = "SRT"
+            itemBinding.formatBadge.isVisible = true
+
+            val isSelected = ctx.effectiveOnlineId != null && ctx.effectiveOnlineId == item.id
+            if (isSelected) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
+
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                val exoActivity = requireActivity() as? ExoplayerView
+                if (exoActivity != null) {
+                    episode.selectedSubtitle = -1
+                    exoActivity.applySubSourceSubtitle(item)
+                }
+                updateActiveSubtitleBadge()
+                dismiss()
+            }
+        }
+
+        @SuppressLint("SetTextI18n")
+        private fun bindOpenSubRest(item: OpenSubRestItem, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            val langName = mapLanguageCode(item.language)
+            val displayTitle = item.fileName.ifBlank { langName }
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
+            itemBinding.subtitleTitle.text = displayTitle
+            itemBinding.subtitleDetails.text = "OpenSubtitles • $langName"
+
+            val ext = item.fileName.substringAfterLast('.', "").uppercase(Locale.ROOT)
+            if (ext.isNotBlank()) {
+                itemBinding.formatBadge.text = ext
+                itemBinding.formatBadge.isVisible = true
+            }
+
+            val isSelected = ctx.effectiveOnlineId != null && ctx.effectiveOnlineId == item.fileId.toString()
+            if (isSelected) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
+
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                val exoActivity = requireActivity() as? ExoplayerView
+                if (exoActivity != null) {
+                    episode.selectedSubtitle = -1
+                    exoActivity.applyOpenSubRestSubtitle(item)
+                }
+                updateActiveSubtitleBadge()
+                dismiss()
+            }
+        }
+
+        @SuppressLint("SetTextI18n")
+        private fun bindStremioSub(item: StremioSub, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
+            val langName = mapLanguageCode(item.lang)
+            itemBinding.subtitleIcon.setImageResource(R.drawable.ic_globe_24)
+            itemBinding.subtitleTitle.text = langName
+
+            val seInfo = currentSeasonEpisode?.let { "S${it.season}.E${it.episode}" } ?: ""
+            itemBinding.subtitleDetails.text = "OpenSubtitles • ${if (seInfo.isNotEmpty()) "$seInfo • " else ""}${item.lang}"
+
+            val isSelected = ctx.effectiveOnlineId != null && (ctx.effectiveOnlineId == item.id || ctx.effectiveOnlineId == item.url)
+            if (isSelected) {
+                applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
+            }
+
+            itemBinding.subtitleCardRoot.setOnClickListener {
+                val exoActivity = requireActivity() as? ExoplayerView
+                if (exoActivity != null) {
+                    episode.selectedSubtitle = -1
+                    exoActivity.applyOnlineSubtitle(item, langName, "OpenSubtitles")
+                }
+                updateActiveSubtitleBadge()
+                dismiss()
+            }
+        }
+
+        override fun onBindViewHolder(holder: SubtitleViewHolder, position: Int) {
+            val itemBinding = holder.binding
+            val item = items[position]
+            val ctx = buildBindContext()
+
+            resetItemBinding(itemBinding, ctx.normalBorderColor)
+
+            when (item) {
+                is NoneSubtitleOption -> bindNoneOption(itemBinding, ctx)
+                is ActiveOnlineSubtitle -> bindActiveOnline(item, itemBinding, ctx)
+                is Subtitle -> if (item.language.startsWith("[Local]")) {
+                    bindLocalSubtitle(item, itemBinding, ctx)
+                } else {
+                    bindServerSubtitle(item, itemBinding, ctx)
+                }
+                is OtherServerSubtitle -> bindOtherServer(item, itemBinding, ctx)
+                is EmbeddedSubtitleTrack -> bindEmbeddedTrack(item, itemBinding, ctx)
+                is WyzieSub -> bindWyzieSub(item, itemBinding, ctx)
+                is SubSourceSub -> bindSubSourceSub(item, itemBinding, ctx)
+                is OpenSubRestItem -> bindOpenSubRest(item, itemBinding, ctx)
+                is StremioSub -> bindStremioSub(item, itemBinding, ctx)
+            }
+        }
         override fun getItemCount(): Int = items.size
     }
 

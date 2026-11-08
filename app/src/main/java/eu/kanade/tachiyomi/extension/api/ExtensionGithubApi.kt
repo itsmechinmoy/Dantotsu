@@ -244,7 +244,6 @@ internal class ExtensionGithubApi {
         return LegacyRepoCheck.None
     }
 
-    @Suppress("ComplexMethod", "LongMethod")
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private suspend fun parseAnimeStorePayload(
         responseBytes: ByteArray,
@@ -258,9 +257,7 @@ internal class ExtensionGithubApi {
             runCatching { json.decodeFromString<NetworkAnimeExtensionStore>(bodyString) }.getOrNull()
         } else {
             runCatching { ProtoBuf.decodeFromByteArray<NetworkAnimeExtensionStore>(responseBytes) }.getOrNull()
-        }
-
-        if (animeStore == null) return null
+        } ?: return null
 
         ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveMeta(
             originalUrl,
@@ -269,69 +266,76 @@ internal class ExtensionGithubApi {
             website = animeStore.contact.website,
             discord = animeStore.contact.discord
         )
-        val resolvedList: NetworkAnimeExtensionStore.ExtensionList? = if (animeStore.extensionListUrl != null) {
-            val listUrl = if (animeStore.extensionListUrl.startsWith("http")) {
-                animeStore.extensionListUrl
-            } else {
-                "$cleanBase/${animeStore.extensionListUrl.removePrefix("/")}"
-            }
-            val listResponse = runCatching {
-                networkService.client.newCall(GET(listUrl)).awaitSuccess()
-            }.getOrNull()
-
-            val listBytes = listResponse?.body?.bytes()?.decompressIfGzipped()
-            if (listBytes != null && listBytes.isNotEmpty() && listBytes[0] == 0x7B.toByte()) {
-                runCatching {
-                    json.decodeFromString<NetworkAnimeExtensionStore.ExtensionList>(listBytes.toString(Charsets.UTF_8))
-                }.getOrNull()
-            } else if (listBytes != null && listBytes.isNotEmpty()) {
-                runCatching {
-                    ProtoBuf.decodeFromByteArray<NetworkAnimeExtensionStore.ExtensionList>(listBytes)
-                }.getOrNull()
-            } else {
-                null
-            }
-        } else {
-            animeStore.extensionList
+        val resolvedList = fetchAnimeExtensionList(animeStore, cleanBase)
+        return resolvedList?.extensions?.takeIf { it.isNotEmpty() }?.map { ext ->
+            mapAnimeExtensionItem(ext, prefix)
         }
-
-        if (resolvedList != null && resolvedList.extensions.isNotEmpty()) {
-            return resolvedList.extensions.map { ext ->
-                val sourcesMapped = ext.sources.map { src ->
-                    ExtensionSourceJsonObject(
-                        id = src.id,
-                        lang = src.language,
-                        name = src.name,
-                        baseUrl = src.homeUrl
-                    )
-                }
-                val primaryLang = ext.sources.firstOrNull()?.language ?: "all"
-                val prefixName = if (ext.name.startsWith(prefix)) ext.name else "$prefix${ext.name}"
-                val extLib = if (ext.extensionLib.contains(":")) {
-                    ext.extensionLib
-                } else {
-                    "${ext.extensionLib}:${ext.versionName}"
-                }
-                ExtensionJsonObject(
-                    name = prefixName,
-                    pkg = ext.packageName,
-                    apk = ext.resources.apkUrl,
-                    lang = primaryLang,
-                    code = ext.versionCode,
-                    version = ext.versionName,
-                    nsfw = if (ext.contentWarning == NetworkAnimeExtensionStore.ContentWarning.NSFW || ext.contentWarning == NetworkAnimeExtensionStore.ContentWarning.MIXED) 1 else 0,
-                    hasReadme = 0,
-                    hasChangelog = 0,
-                    sources = sourcesMapped,
-                    iconUrl = ext.resources.iconUrl,
-                    extensionLib = extLib,
-                )
-            }
-        }
-        return null
     }
 
-    @Suppress("ComplexMethod", "LongMethod")
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    private suspend fun fetchAnimeExtensionList(
+        animeStore: NetworkAnimeExtensionStore,
+        cleanBase: String
+    ): NetworkAnimeExtensionStore.ExtensionList? {
+        if (animeStore.extensionListUrl == null) return animeStore.extensionList
+        val listUrl = if (animeStore.extensionListUrl.startsWith("http")) {
+            animeStore.extensionListUrl
+        } else {
+            "$cleanBase/${animeStore.extensionListUrl.removePrefix("/")}"
+        }
+        val listResponse = runCatching {
+            networkService.client.newCall(GET(listUrl)).awaitSuccess()
+        }.getOrNull()
+
+        val listBytes = listResponse?.body?.bytes()?.decompressIfGzipped() ?: return null
+        return if (listBytes.isNotEmpty() && listBytes[0] == 0x7B.toByte()) {
+            runCatching {
+                json.decodeFromString<NetworkAnimeExtensionStore.ExtensionList>(listBytes.toString(Charsets.UTF_8))
+            }.getOrNull()
+        } else if (listBytes.isNotEmpty()) {
+            runCatching {
+                ProtoBuf.decodeFromByteArray<NetworkAnimeExtensionStore.ExtensionList>(listBytes)
+            }.getOrNull()
+        } else {
+            null
+        }
+    }
+
+    private fun mapAnimeExtensionItem(
+        ext: NetworkAnimeExtensionStore.Extension,
+        prefix: String
+    ): ExtensionJsonObject {
+        val sourcesMapped = ext.sources.map { src ->
+            ExtensionSourceJsonObject(
+                id = src.id,
+                lang = src.language,
+                name = src.name,
+                baseUrl = src.homeUrl
+            )
+        }
+        val primaryLang = ext.sources.firstOrNull()?.language ?: "all"
+        val prefixName = if (ext.name.startsWith(prefix)) ext.name else "$prefix${ext.name}"
+        val extLib = if (ext.extensionLib.contains(":")) {
+            ext.extensionLib
+        } else {
+            "${ext.extensionLib}:${ext.versionName}"
+        }
+        return ExtensionJsonObject(
+            name = prefixName,
+            pkg = ext.packageName,
+            apk = ext.resources.apkUrl,
+            lang = primaryLang,
+            code = ext.versionCode,
+            version = ext.versionName,
+            nsfw = if (ext.contentWarning == NetworkAnimeExtensionStore.ContentWarning.NSFW || ext.contentWarning == NetworkAnimeExtensionStore.ContentWarning.MIXED) 1 else 0,
+            hasReadme = 0,
+            hasChangelog = 0,
+            sources = sourcesMapped,
+            iconUrl = ext.resources.iconUrl,
+            extensionLib = extLib,
+        )
+    }
+
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private suspend fun parseMangaStorePayload(
         responseBytes: ByteArray,
@@ -340,14 +344,12 @@ internal class ExtensionGithubApi {
         originalUrl: String,
         prefix: String
     ): List<ExtensionJsonObject>? {
-        val store: NetworkExtensionStore? = if (firstByte == 0x7B.toByte()) {
+        val store: NetworkExtensionStore = if (firstByte == 0x7B.toByte()) {
             val bodyString = responseBytes.toString(Charsets.UTF_8)
             runCatching { json.decodeFromString<NetworkExtensionStore>(bodyString) }.getOrNull()
         } else {
             runCatching { ProtoBuf.decodeFromByteArray<NetworkExtensionStore>(responseBytes) }.getOrNull()
-        }
-
-        if (store == null) return null
+        } ?: return null
 
         ani.dantotsu.parsers.ExtensionRepoMetaHelper.saveMeta(
             originalUrl,
@@ -356,61 +358,69 @@ internal class ExtensionGithubApi {
             website = store.contact.website,
             discord = store.contact.discord
         )
-        val resolvedList: NetworkExtensionStore.ExtensionList? = if (store.extensionListUrl != null) {
-            val listUrl = if (store.extensionListUrl.startsWith("http")) {
-                store.extensionListUrl
-            } else {
-                "$cleanBase/${store.extensionListUrl.removePrefix("/")}"
-            }
-            val listResponse = runCatching {
-                networkService.client.newCall(GET(listUrl)).awaitSuccess()
-            }.getOrNull()
+        val resolvedList = fetchMangaExtensionList(store, cleanBase)
+        return resolvedList?.extensions?.takeIf { it.isNotEmpty() }?.map { ext ->
+            mapMangaExtensionItem(ext, prefix)
+        }
+    }
 
-            val listBytes = listResponse?.body?.bytes()?.decompressIfGzipped()
-            if (listBytes != null && listBytes.isNotEmpty() && listBytes[0] == 0x7B.toByte()) {
-                runCatching {
-                    json.decodeFromString<NetworkExtensionStore.ExtensionList>(listBytes.toString(Charsets.UTF_8))
-                }.getOrNull()
-            } else if (listBytes != null && listBytes.isNotEmpty()) {
-                runCatching {
-                    ProtoBuf.decodeFromByteArray<NetworkExtensionStore.ExtensionList>(listBytes)
-                }.getOrNull()
-            } else {
-                null
-            }
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    private suspend fun fetchMangaExtensionList(
+        store: NetworkExtensionStore,
+        cleanBase: String
+    ): NetworkExtensionStore.ExtensionList? {
+        if (store.extensionListUrl == null) return store.extensionList
+        val listUrl = if (store.extensionListUrl.startsWith("http")) {
+            store.extensionListUrl
         } else {
-            store.extensionList
+            "$cleanBase/${store.extensionListUrl.removePrefix("/")}"
         }
+        val listResponse = runCatching {
+            networkService.client.newCall(GET(listUrl)).awaitSuccess()
+        }.getOrNull()
 
-        if (resolvedList != null && resolvedList.extensions.isNotEmpty()) {
-            return resolvedList.extensions.map { ext ->
-                val sourcesMapped = ext.sources.map { src ->
-                    ExtensionSourceJsonObject(
-                        id = src.id,
-                        lang = src.language,
-                        name = src.name,
-                        baseUrl = src.homeUrl
-                    )
-                }
-                val primaryLang = ext.sources.firstOrNull()?.language ?: "all"
-                val prefixName = if (ext.name.startsWith(prefix)) ext.name else "$prefix${ext.name}"
-                ExtensionJsonObject(
-                    name = prefixName,
-                    pkg = ext.packageName,
-                    apk = ext.resources.apkUrl,
-                    lang = primaryLang,
-                    code = ext.versionCode,
-                    version = ext.versionName,
-                    nsfw = if (ext.contentWarning == NetworkExtensionStore.ContentWarning.NSFW || ext.contentWarning == NetworkExtensionStore.ContentWarning.MIXED) 1 else 0,
-                    hasReadme = 0,
-                    hasChangelog = 0,
-                    sources = sourcesMapped,
-                    iconUrl = ext.resources.iconUrl,
-                    extensionLib = ext.extensionLib,
-                )
-            }
+        val listBytes = listResponse?.body?.bytes()?.decompressIfGzipped() ?: return null
+        return if (listBytes.isNotEmpty() && listBytes[0] == 0x7B.toByte()) {
+            runCatching {
+                json.decodeFromString<NetworkExtensionStore.ExtensionList>(listBytes.toString(Charsets.UTF_8))
+            }.getOrNull()
+        } else if (listBytes.isNotEmpty()) {
+            runCatching {
+                ProtoBuf.decodeFromByteArray<NetworkExtensionStore.ExtensionList>(listBytes)
+            }.getOrNull()
+        } else {
+            null
         }
-        return null
+    }
+
+    private fun mapMangaExtensionItem(
+        ext: NetworkExtensionStore.Extension,
+        prefix: String
+    ): ExtensionJsonObject {
+        val sourcesMapped = ext.sources.map { src ->
+            ExtensionSourceJsonObject(
+                id = src.id,
+                lang = src.language,
+                name = src.name,
+                baseUrl = src.homeUrl
+            )
+        }
+        val primaryLang = ext.sources.firstOrNull()?.language ?: "all"
+        val prefixName = if (ext.name.startsWith(prefix)) ext.name else "$prefix${ext.name}"
+        return ExtensionJsonObject(
+            name = prefixName,
+            pkg = ext.packageName,
+            apk = ext.resources.apkUrl,
+            lang = primaryLang,
+            code = ext.versionCode,
+            version = ext.versionName,
+            nsfw = if (ext.contentWarning == NetworkExtensionStore.ContentWarning.NSFW || ext.contentWarning == NetworkExtensionStore.ContentWarning.MIXED) 1 else 0,
+            hasReadme = 0,
+            hasChangelog = 0,
+            sources = sourcesMapped,
+            iconUrl = ext.resources.iconUrl,
+            extensionLib = ext.extensionLib,
+        )
     }
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)

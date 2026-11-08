@@ -318,19 +318,21 @@ class PlayerGestureManager(
         }
     }
 
-    @Suppress("ComplexMethod", "LongMethod")
-    @SuppressLint("ClickableViewAccessibility")
     private fun setupAreaGestures(
         audioManager: AudioManager,
         brightnessHide: () -> Unit,
         volumeHide: () -> Unit
     ) {
-        fun doubleTap(forward: Boolean, event: MotionEvent) {
-            if (!isLocked && isPlayerInitialized() && PrefManager.getVal<Boolean>(PrefName.DoubleTap)) {
-                seek(forward, event)
-            }
-        }
+        setupSliderControls(audioManager, brightnessHide, volumeHide)
+        setupRewindTouchArea(brightnessHide)
+        setupForwardTouchArea(volumeHide)
+    }
 
+    private fun setupSliderControls(
+        audioManager: AudioManager,
+        brightnessHide: () -> Unit,
+        volumeHide: () -> Unit
+    ) {
         exoBrightness.value = getCurrentBrightnessValue(activity) * 10f
         exoBrightness.addOnChangeListener { _, value, _ ->
             val lp = activity.window.attributes
@@ -347,49 +349,59 @@ class PlayerGestureManager(
             audioManager.setStreamVolume(STREAM_MUSIC, volume, 0)
             volumeHide()
         }
+    }
 
+    private fun updateFastForwardText(speed: Float) {
         val fastForward = playerView.findViewById<TextView>(R.id.exo_fast_forward_text)
+        fastForward?.text = String.format(Locale.US, "%.2fx", speed)
+    }
 
-        fun updateFastForwardText(speed: Float) {
-            fastForward.text = String.format(Locale.US, "%.2fx", speed)
+    private fun fastForward(event: MotionEvent) {
+        val player = getPlayer() ?: return
+        val fastForward = playerView.findViewById<TextView>(R.id.exo_fast_forward_text)
+        isFastForwarding = true
+        fastForwardStartX = event.rawX
+        fastForwardOriginalSpeed = player.playbackParameters.speed
+        fastForwardInitialSpeed = clamp(fastForwardOriginalSpeed * 2f, minLongPressSpeed, maxLongPressSpeed)
+        player.setPlaybackSpeed(fastForwardInitialSpeed)
+        lastFastForwardSpeed = fastForwardInitialSpeed
+        fastForward?.visibility = View.VISIBLE
+        updateFastForwardText(player.playbackParameters.speed)
+    }
+
+    private fun updateFastForwardSpeed(event: MotionEvent) {
+        val player = getPlayer() ?: return
+        if (!isFastForwarding) return
+        val width = playerView.width.toFloat().takeIf { it > 0f } ?: return
+        val deltaX = event.rawX - fastForwardStartX
+        if (abs(deltaX) < width * horizontalDeadZoneRatio) return
+        val deltaRatio = deltaX / width
+        val targetSpeed = clamp(
+            fastForwardInitialSpeed + (deltaRatio * dragSpeedSensitivity),
+            minLongPressSpeed,
+            maxLongPressSpeed
+        )
+        if (abs(targetSpeed - lastFastForwardSpeed) < minSpeedUpdateDelta) return
+        player.setPlaybackSpeed(targetSpeed)
+        lastFastForwardSpeed = targetSpeed
+        updateFastForwardText(player.playbackParameters.speed)
+    }
+
+    private fun stopFastForward() {
+        val player = getPlayer()
+        if (isFastForwarding && player != null) {
+            isFastForwarding = false
+            player.setPlaybackSpeed(fastForwardOriginalSpeed)
+            val fastForward = playerView.findViewById<TextView>(R.id.exo_fast_forward_text)
+            fastForward?.visibility = View.GONE
         }
+    }
 
-        fun fastForward(event: MotionEvent) {
-            val player = getPlayer() ?: return
-            isFastForwarding = true
-            fastForwardStartX = event.rawX
-            fastForwardOriginalSpeed = player.playbackParameters.speed
-            fastForwardInitialSpeed = clamp(fastForwardOriginalSpeed * 2f, minLongPressSpeed, maxLongPressSpeed)
-            player.setPlaybackSpeed(fastForwardInitialSpeed)
-            lastFastForwardSpeed = fastForwardInitialSpeed
-            fastForward.visibility = View.VISIBLE
-            updateFastForwardText(player.playbackParameters.speed)
-        }
-
-        fun updateFastForwardSpeed(event: MotionEvent) {
-            val player = getPlayer() ?: return
-            if (!isFastForwarding) return
-            val width = playerView.width.toFloat().takeIf { it > 0f } ?: return
-            val deltaX = event.rawX - fastForwardStartX
-            if (abs(deltaX) < width * horizontalDeadZoneRatio) return
-            val deltaRatio = deltaX / width
-            val targetSpeed = clamp(
-                fastForwardInitialSpeed + (deltaRatio * dragSpeedSensitivity),
-                minLongPressSpeed,
-                maxLongPressSpeed
-            )
-            if (abs(targetSpeed - lastFastForwardSpeed) < minSpeedUpdateDelta) return
-            player.setPlaybackSpeed(targetSpeed)
-            lastFastForwardSpeed = targetSpeed
-            updateFastForwardText(player.playbackParameters.speed)
-        }
-
-        fun stopFastForward() {
-            val player = getPlayer()
-            if (isFastForwarding && player != null) {
-                isFastForwarding = false
-                player.setPlaybackSpeed(fastForwardOriginalSpeed)
-                fastForward.visibility = View.GONE
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupRewindTouchArea(brightnessHide: () -> Unit) {
+        fun doubleTap(forward: Boolean, event: MotionEvent) {
+            if (!isLocked && isPlayerInitialized() && PrefManager.getVal<Boolean>(PrefName.DoubleTap)) {
+                seek(forward, event)
             }
         }
 
@@ -433,6 +445,15 @@ class PlayerGestureManager(
             }
             v.performClick()
             true
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupForwardTouchArea(volumeHide: () -> Unit) {
+        fun doubleTap(forward: Boolean, event: MotionEvent) {
+            if (!isLocked && isPlayerInitialized() && PrefManager.getVal<Boolean>(PrefName.DoubleTap)) {
+                seek(forward, event)
+            }
         }
 
         val fastForwardDetector = GestureDetector(

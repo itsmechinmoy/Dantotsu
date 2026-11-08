@@ -245,332 +245,327 @@ class SettingsCommonActivity : AppCompatActivity() {
             handleOkAction()
         }
     }
-    @Suppress("ComplexMethod", "LongMethod")
     private fun buildCommonSettingsList(
         context: AppCompatActivity,
         openDocumentLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>
     ): ArrayList<Settings> {
         return arrayListOf(
-                        Settings(
-                            type = 1,
-                            name = getString(R.string.ui_settings),
-                            desc = getString(R.string.ui_settings_desc),
-                            icon = R.drawable.ic_round_auto_awesome_24,
-                            onClick = {
-                                startActivity(
-                                    Intent(
-                                        context,
-                                        UserInterfaceSettingsActivity::class.java,
-                                    ),
-                                )
-                            },
-                            isActivity = true,
-                        ),
-                        Settings(
-                            type = 1,
-                            name = getString(R.string.download_manager_select),
-                            desc = getString(R.string.download_manager_select_desc),
-                            icon = R.drawable.ic_download_24,
-                            onClick = {
-                                val managers = arrayOf("Default", "1DM", "ADM")
-                                customAlertDialog().apply {
-                                    setTitle(getString(R.string.download_manager))
-                                    singleChoiceItems(
-                                        managers,
-                                        PrefManager.getVal(PrefName.DownloadManager),
-                                    ) { count ->
-                                        PrefManager.setVal(PrefName.DownloadManager, count)
-                                    }
-                                    show()
-                                }
-                            },
-                        ),
-                        Settings(
-                            type = 1,
-                            name = "Max Parallel Downloads",
-                            desc = "Concurrent download tasks (0 = Sequential, 1-10 = Concurrent). Note: High concurrency may trigger source rate limits.",
-                            icon = R.drawable.ic_download_24,
-                            onClick = {
-                                val options = arrayOf("0 (Off / Sequential)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
-                                val current = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
-                                customAlertDialog().apply {
-                                    setTitle("Max Parallel Downloads")
-                                    singleChoiceItems(options, current) { which ->
-                                        PrefManager.setVal(PrefName.MaxParallelDownloads, which)
-                                    }
-                                    show()
-                                }
-                            },
-                        ),
-                        Settings(
-                            type = 2,
-                            name = getString(R.string.download_wifi_only),
-                            desc = getString(R.string.download_wifi_only_desc),
-                            icon = R.drawable.lan_24,
-                            isChecked = PrefManager.getVal(PrefName.DownloadWifiOnly),
-                            switch = { isChecked, _ ->
-                                PrefManager.setVal(PrefName.DownloadWifiOnly, isChecked)
-                            }
-                        ),
-                        Settings(
-                            type = 1,
-                            name = getString(R.string.app_lock),
-                            desc = getString(R.string.app_lock_desc),
-                            icon = R.drawable.ic_round_lock_open_24,
-                            onClick = {
-                                customAlertDialog().apply {
-                                    val view = DialogSetPasswordBinding.inflate(layoutInflater)
-                                    setTitle(R.string.app_lock)
-                                    setCustomView(view.root)
-                                    setPosButton(R.string.ok) {
-                                        if (view.forgotPasswordCheckbox.isChecked) {
-                                            PrefManager.setVal(PrefName.OverridePassword, true)
-                                        }
-                                        val password = view.passwordInput.text.toString()
-                                        val confirmPassword = view.confirmPasswordInput.text.toString()
-                                        if (password == confirmPassword && password.isNotEmpty()) {
-                                            PrefManager.setVal(PrefName.AppPassword, password)
-                                            if (view.biometricCheckbox.isChecked) {
-                                                val canBiometricPrompt =
-                                                    BiometricManager
-                                                        .from(applicationContext)
-                                                        .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
-                                                        BiometricManager.BIOMETRIC_SUCCESS
-
-                                                if (canBiometricPrompt) {
-                                                    val biometricPrompt =
-                                                        BiometricPromptUtils.createBiometricPrompt(this@SettingsCommonActivity) { _ ->
-                                                            val token = UUID.randomUUID().toString()
-                                                            PrefManager.setVal(
-                                                                PrefName.BiometricToken,
-                                                                token,
-                                                            )
-                                                            toast(R.string.success)
-                                                        }
-                                                    val promptInfo =
-                                                        BiometricPromptUtils.createPromptInfo(this@SettingsCommonActivity)
-                                                    biometricPrompt.authenticate(promptInfo)
-                                                }
-                                            } else {
-                                                PrefManager.setVal(PrefName.BiometricToken, "")
-                                                toast(R.string.success)
-                                            }
-                                        } else {
-                                            toast(R.string.password_mismatch)
-                                        }
-                                    }
-                                    setNegButton(R.string.cancel)
-                                    setNeutralButton(R.string.remove) {
-                                        PrefManager.setVal(PrefName.AppPassword, "")
-                                        PrefManager.setVal(PrefName.BiometricToken, "")
-                                        PrefManager.setVal(PrefName.OverridePassword, false)
-                                        toast(R.string.success)
-                                    }
-                                    setOnShowListener {
-                                        view.passwordInput.requestFocus()
-                                        val canAuthenticate =
-                                            BiometricManager.from(applicationContext).canAuthenticate(
-                                                BiometricManager.Authenticators.BIOMETRIC_WEAK,
-                                            ) == BiometricManager.BIOMETRIC_SUCCESS
-                                        view.biometricCheckbox.isVisible = canAuthenticate
-                                        view.biometricCheckbox.isChecked =
-                                            PrefManager.getVal(PrefName.BiometricToken, "").isNotEmpty()
-                                        view.forgotPasswordCheckbox.isChecked =
-                                            PrefManager.getVal(PrefName.OverridePassword)
-                                    }
-                                    show()
-                                }
-                            },
-                        ),
-                        Settings(
-                            type = 1,
-                            name = getString(R.string.label_data_storage),
-                            desc = getString(R.string.label_data_storage_desc),
-                            icon = R.drawable.ic_round_folder_24,
-                            onClick = {
-                                startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
-                            },
-                            isActivity = true
-                        ),
-                        Settings(
-                            type = 1,
-                            name = getString(R.string.backup_restore),
-                            desc = getString(R.string.backup_restore_desc),
-                            icon = R.drawable.backup_restore,
-                            onClick = {
-                                StoragePermissions.downloadsPermission(context)
-                                val filteredLocations = Location.entries.filter { it.exportable }
-                                val selectedArray = BooleanArray(filteredLocations.size) { false }
-                                context.customAlertDialog().apply {
-                                    setTitle(R.string.backup_restore)
-                                    multiChoiceItems(
-                                        filteredLocations.map { it.name }.toTypedArray(),
-                                        selectedArray,
-                                    ) { updatedSelection ->
-                                        for (i in updatedSelection.indices) {
-                                            selectedArray[i] = updatedSelection[i]
-                                        }
-                                    }
-                                    setPosButton(R.string.button_restore) {
-                                        openDocumentLauncher.launch(arrayOf("*/*"))
-                                    }
-                                    setNegButton(R.string.button_backup) {
-                                        if (!selectedArray.contains(true)) {
-                                            toast(R.string.no_location_selected)
-                                            return@setNegButton
-                                        }
-                                        val selected =
-                                            filteredLocations.filterIndexed { index, _ -> selectedArray[index] }
-                                        if (selected.contains(Location.Protected)) {
-                                            passwordAlertDialog(true) { password ->
-                                                if (password != null) {
-                                                    savePrefsToDownloads(
-                                                        "DantotsuSettings",
-                                                        PrefManager.exportAllPrefs(selected),
-                                                        context,
-                                                        password,
-                                                    )
-                                                } else {
-                                                    toast(R.string.password_cannot_be_empty)
-                                                }
-                                            }
-                                        } else {
-                                            savePrefsToDownloads(
-                                                "DantotsuSettings",
-                                                PrefManager.exportAllPrefs(selected),
-                                                context,
-                                                null,
-                                            )
-                                        }
-                                    }
-                                    setNeutralButton(R.string.cancel) {}
-                                    show()
-                                }
-                            },
-                        ),
-                        Settings(
-                            type = 1,
-                            name = getString(R.string.change_download_location),
-                            desc = getString(R.string.change_download_location_desc),
-                            icon = R.drawable.ic_round_source_24,
-                            onClick = {
-                                context.customAlertDialog().apply {
-                                    setTitle(R.string.change_download_location)
-                                    setMessage(R.string.download_location_msg)
-                                    setPosButton(R.string.ok) {
-                                        val oldUri = PrefManager.getVal<String>(PrefName.DownloadsDir)
-                                        launcher.registerForCallback { success ->
-                                            if (success) {
-                                                toast(getString(R.string.please_wait))
-                                                val newUri =
-                                                    PrefManager.getVal<String>(PrefName.DownloadsDir)
-                                                lifecycleScope.launch(Dispatchers.IO) {
-                                                    Injekt.get<DownloadsManager>().moveDownloadsDir(
-                                                        context,
-                                                        Uri.parse(oldUri),
-                                                        Uri.parse(newUri),
-                                                    ) { finished, message ->
-                                                        if (finished) {
-                                                            toast(getString(R.string.success))
-                                                        } else {
-                                                            toast(message)
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                toast(getString(R.string.error))
-                                            }
-                                        }
-                                        launcher.launch()
-                                    }
-                                    setNegButton(R.string.cancel)
-                                    show()
-                                }
-                            },
-                        ),
-                        Settings(
-                            type = 1,
-                            name = getString(R.string.rebuild_download_index),
-                            desc = getString(R.string.rebuild_download_index_desc),
-                            icon = R.drawable.ic_download_24,
-                            onClick = {
-                                context.customAlertDialog().apply {
-                                    setTitle(R.string.rebuild_download_index)
-                                    setMessage(R.string.rebuild_download_index_msg)
-                                    setPosButton(R.string.ok) {
-                                        toast(getString(R.string.please_wait))
-                                        lifecycleScope.launch(Dispatchers.IO) {
-                                            val recovered = Injekt.get<DownloadsManager>()
-                                                .rebuildIndexFromDisk()
-                                            withContext(Dispatchers.Main) {
-                                                toast(
-                                                    getString(
-                                                        R.string.rebuild_download_index_done,
-                                                        recovered,
-                                                    )
-                                                )
-                                            }
-                                        }
-                                    }
-                                    setNegButton(R.string.cancel)
-                                    show()
-                                }
-                            },
-                        ),
-                        Settings(
-                            type = 2,
-                            name = getString(R.string.always_continue_content),
-                            desc = getString(R.string.always_continue_content_desc),
-                            icon = R.drawable.ic_round_delete_24,
-                            isChecked = PrefManager.getVal(PrefName.ContinueMedia),
-                            switch = { isChecked, _ ->
-                                PrefManager.setVal(PrefName.ContinueMedia, isChecked)
-                            },
-                        ),
-                        Settings(
-                            type = 2,
-                            name = getString(R.string.hide_private),
-                            desc = getString(R.string.hide_private_desc),
-                            icon = R.drawable.ic_round_remove_red_eye_24,
-                            isChecked = PrefManager.getVal(PrefName.HidePrivate),
-                            switch = { isChecked, _ ->
-                                PrefManager.setVal(PrefName.HidePrivate, isChecked)
-                                restartApp()
-                            },
-                        ),
-                        Settings(
-                            type = 2,
-                            name = getString(R.string.search_source_list),
-                            desc = getString(R.string.search_source_list_desc),
-                            icon = R.drawable.ic_round_search_sources_24,
-                            isChecked = PrefManager.getVal(PrefName.SearchSources),
-                            switch = { isChecked, _ ->
-                                PrefManager.setVal(PrefName.SearchSources, isChecked)
-                            },
-                        ),
-                        Settings(
-                            type = 2,
-                            name = getString(R.string.recentlyListOnly),
-                            desc = getString(R.string.recentlyListOnly_desc),
-                            icon = R.drawable.ic_round_new_releases_24,
-                            isChecked = PrefManager.getVal(PrefName.RecentlyListOnly),
-                            switch = { isChecked, _ ->
-                                PrefManager.setVal(PrefName.RecentlyListOnly, isChecked)
-                            },
-                        ),
-                        Settings(
-                            type = 2,
-                            name = getString(R.string.adult_only_content),
-                            desc = getString(R.string.adult_only_content_desc),
-                            icon = R.drawable.ic_round_nsfw_24,
-                            isChecked = PrefManager.getVal(PrefName.AdultOnly),
-                            switch = { isChecked, _ ->
-                                PrefManager.setVal(PrefName.AdultOnly, isChecked)
-                                restartApp()
-                            },
-                            isVisible = Anilist.adult,
+            Settings(
+                type = 1,
+                name = getString(R.string.ui_settings),
+                desc = getString(R.string.ui_settings_desc),
+                icon = R.drawable.ic_round_auto_awesome_24,
+                onClick = {
+                    startActivity(
+                        Intent(
+                            context,
+                            UserInterfaceSettingsActivity::class.java,
                         ),
                     )
+                },
+                isActivity = true,
+            ),
+            Settings(
+                type = 1,
+                name = getString(R.string.download_manager_select),
+                desc = getString(R.string.download_manager_select_desc),
+                icon = R.drawable.ic_download_24,
+                onClick = {
+                    val managers = arrayOf("Default", "1DM", "ADM")
+                    customAlertDialog().apply {
+                        setTitle(getString(R.string.download_manager))
+                        singleChoiceItems(
+                            managers,
+                            PrefManager.getVal(PrefName.DownloadManager),
+                        ) { count ->
+                            PrefManager.setVal(PrefName.DownloadManager, count)
+                        }
+                        show()
+                    }
+                },
+            ),
+            Settings(
+                type = 1,
+                name = "Max Parallel Downloads",
+                desc = "Concurrent download tasks (0 = Sequential, 1-10 = Concurrent). Note: High concurrency may trigger source rate limits.",
+                icon = R.drawable.ic_download_24,
+                onClick = {
+                    val options = arrayOf("0 (Off / Sequential)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
+                    val current = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
+                    customAlertDialog().apply {
+                        setTitle("Max Parallel Downloads")
+                        singleChoiceItems(options, current) { which ->
+                            PrefManager.setVal(PrefName.MaxParallelDownloads, which)
+                        }
+                        show()
+                    }
+                },
+            ),
+            Settings(
+                type = 2,
+                name = getString(R.string.download_wifi_only),
+                desc = getString(R.string.download_wifi_only_desc),
+                icon = R.drawable.lan_24,
+                isChecked = PrefManager.getVal(PrefName.DownloadWifiOnly),
+                switch = { isChecked, _ ->
+                    PrefManager.setVal(PrefName.DownloadWifiOnly, isChecked)
+                }
+            ),
+            Settings(
+                type = 1,
+                name = getString(R.string.app_lock),
+                desc = getString(R.string.app_lock_desc),
+                icon = R.drawable.ic_round_lock_open_24,
+                onClick = { showAppLockDialog() },
+            ),
+            Settings(
+                type = 1,
+                name = getString(R.string.label_data_storage),
+                desc = getString(R.string.label_data_storage_desc),
+                icon = R.drawable.ic_round_folder_24,
+                onClick = {
+                    startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
+                },
+                isActivity = true
+            ),
+            Settings(
+                type = 1,
+                name = getString(R.string.backup_restore),
+                desc = getString(R.string.backup_restore_desc),
+                icon = R.drawable.backup_restore,
+                onClick = { showBackupRestoreDialog(context, openDocumentLauncher) },
+            ),
+            Settings(
+                type = 1,
+                name = getString(R.string.change_download_location),
+                desc = getString(R.string.change_download_location_desc),
+                icon = R.drawable.ic_round_source_24,
+                onClick = { showChangeDownloadLocationDialog(context) },
+            ),
+            Settings(
+                type = 1,
+                name = getString(R.string.rebuild_download_index),
+                desc = getString(R.string.rebuild_download_index_desc),
+                icon = R.drawable.ic_download_24,
+                onClick = { showRebuildDownloadIndexDialog() },
+            ),
+            Settings(
+                type = 2,
+                name = getString(R.string.always_continue_content),
+                desc = getString(R.string.always_continue_content_desc),
+                icon = R.drawable.ic_round_delete_24,
+                isChecked = PrefManager.getVal(PrefName.ContinueMedia),
+                switch = { isChecked, _ ->
+                    PrefManager.setVal(PrefName.ContinueMedia, isChecked)
+                },
+            ),
+            Settings(
+                type = 2,
+                name = getString(R.string.hide_private),
+                desc = getString(R.string.hide_private_desc),
+                icon = R.drawable.ic_round_remove_red_eye_24,
+                isChecked = PrefManager.getVal(PrefName.HidePrivate),
+                switch = { isChecked, _ ->
+                    PrefManager.setVal(PrefName.HidePrivate, isChecked)
+                    restartApp()
+                },
+            ),
+            Settings(
+                type = 2,
+                name = getString(R.string.search_source_list),
+                desc = getString(R.string.search_source_list_desc),
+                icon = R.drawable.ic_round_search_sources_24,
+                isChecked = PrefManager.getVal(PrefName.SearchSources),
+                switch = { isChecked, _ ->
+                    PrefManager.setVal(PrefName.SearchSources, isChecked)
+                },
+            ),
+            Settings(
+                type = 2,
+                name = getString(R.string.recentlyListOnly),
+                desc = getString(R.string.recentlyListOnly_desc),
+                icon = R.drawable.ic_round_new_releases_24,
+                isChecked = PrefManager.getVal(PrefName.RecentlyListOnly),
+                switch = { isChecked, _ ->
+                    PrefManager.setVal(PrefName.RecentlyListOnly, isChecked)
+                },
+            ),
+            Settings(
+                type = 2,
+                name = getString(R.string.adult_only_content),
+                desc = getString(R.string.adult_only_content_desc),
+                icon = R.drawable.ic_round_nsfw_24,
+                isChecked = PrefManager.getVal(PrefName.AdultOnly),
+                switch = { isChecked, _ ->
+                    PrefManager.setVal(PrefName.AdultOnly, isChecked)
+                    restartApp()
+                },
+                isVisible = Anilist.adult,
+            ),
+        )
+    }
+
+    private fun showAppLockDialog() {
+        customAlertDialog().apply {
+            val view = DialogSetPasswordBinding.inflate(layoutInflater)
+            setTitle(R.string.app_lock)
+            setCustomView(view.root)
+            setPosButton(R.string.ok) {
+                if (view.forgotPasswordCheckbox.isChecked) {
+                    PrefManager.setVal(PrefName.OverridePassword, true)
+                }
+                val password = view.passwordInput.text.toString()
+                val confirmPassword = view.confirmPasswordInput.text.toString()
+                if (password == confirmPassword && password.isNotEmpty()) {
+                    PrefManager.setVal(PrefName.AppPassword, password)
+                    if (view.biometricCheckbox.isChecked) {
+                        val canBiometricPrompt =
+                            BiometricManager.from(applicationContext)
+                                .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
+                                BiometricManager.BIOMETRIC_SUCCESS
+
+                        if (canBiometricPrompt) {
+                            val biometricPrompt =
+                                BiometricPromptUtils.createBiometricPrompt(this@SettingsCommonActivity) { _ ->
+                                    val token = UUID.randomUUID().toString()
+                                    PrefManager.setVal(PrefName.BiometricToken, token)
+                                    toast(R.string.success)
+                                }
+                            val promptInfo = BiometricPromptUtils.createPromptInfo(this@SettingsCommonActivity)
+                            biometricPrompt.authenticate(promptInfo)
+                        }
+                    } else {
+                        PrefManager.setVal(PrefName.BiometricToken, "")
+                        toast(R.string.success)
+                    }
+                } else {
+                    toast(R.string.password_mismatch)
+                }
+            }
+            setNegButton(R.string.cancel)
+            setNeutralButton(R.string.remove) {
+                PrefManager.setVal(PrefName.AppPassword, "")
+                PrefManager.setVal(PrefName.BiometricToken, "")
+                PrefManager.setVal(PrefName.OverridePassword, false)
+                toast(R.string.success)
+            }
+            setOnShowListener {
+                view.passwordInput.requestFocus()
+                val canAuthenticate =
+                    BiometricManager.from(applicationContext).canAuthenticate(
+                        BiometricManager.Authenticators.BIOMETRIC_WEAK
+                    ) == BiometricManager.BIOMETRIC_SUCCESS
+                view.biometricCheckbox.isVisible = canAuthenticate
+                view.biometricCheckbox.isChecked = PrefManager.getVal(PrefName.BiometricToken, "").isNotEmpty()
+                view.forgotPasswordCheckbox.isChecked = PrefManager.getVal(PrefName.OverridePassword)
+            }
+            show()
+        }
+    }
+
+    private fun showBackupRestoreDialog(
+        context: AppCompatActivity,
+        openDocumentLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>
+    ) {
+        StoragePermissions.downloadsPermission(context)
+        val filteredLocations = Location.entries.filter { it.exportable }
+        val selectedArray = BooleanArray(filteredLocations.size) { false }
+        context.customAlertDialog().apply {
+            setTitle(R.string.backup_restore)
+            multiChoiceItems(
+                filteredLocations.map { it.name }.toTypedArray(),
+                selectedArray
+            ) { updatedSelection ->
+                for (i in updatedSelection.indices) {
+                    selectedArray[i] = updatedSelection[i]
+                }
+            }
+            setPosButton(R.string.button_restore) {
+                openDocumentLauncher.launch(arrayOf("*/*"))
+            }
+            setNegButton(R.string.button_backup) {
+                if (!selectedArray.contains(true)) {
+                    toast(R.string.no_location_selected)
+                    return@setNegButton
+                }
+                val selected = filteredLocations.filterIndexed { index, _ -> selectedArray[index] }
+                if (selected.contains(Location.Protected)) {
+                    passwordAlertDialog(true) { password ->
+                        if (password != null) {
+                            savePrefsToDownloads(
+                                "DantotsuSettings",
+                                PrefManager.exportAllPrefs(selected),
+                                context,
+                                password
+                            )
+                        } else {
+                            toast(R.string.password_cannot_be_empty)
+                        }
+                    }
+                } else {
+                    savePrefsToDownloads(
+                        "DantotsuSettings",
+                        PrefManager.exportAllPrefs(selected),
+                        context,
+                        null
+                    )
+                }
+            }
+            setNeutralButton(R.string.cancel) {}
+            show()
+        }
+    }
+
+    private fun showChangeDownloadLocationDialog(context: AppCompatActivity) {
+        context.customAlertDialog().apply {
+            setTitle(R.string.change_download_location)
+            setMessage(R.string.download_location_msg)
+            setPosButton(R.string.ok) {
+                val oldUri = PrefManager.getVal<String>(PrefName.DownloadsDir)
+                launcher.registerForCallback { success ->
+                    if (success) {
+                        toast(getString(R.string.please_wait))
+                        val newUri = PrefManager.getVal<String>(PrefName.DownloadsDir)
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            Injekt.get<DownloadsManager>().moveDownloadsDir(
+                                context,
+                                Uri.parse(oldUri),
+                                Uri.parse(newUri)
+                            ) { finished, message ->
+                                if (finished) {
+                                    toast(getString(R.string.success))
+                                } else {
+                                    toast(message)
+                                }
+                            }
+                        }
+                    } else {
+                        toast(getString(R.string.error))
+                    }
+                }
+                launcher.launch()
+            }
+            setNegButton(R.string.cancel)
+            show()
+        }
+    }
+
+    private fun showRebuildDownloadIndexDialog() {
+        customAlertDialog().apply {
+            setTitle(R.string.rebuild_download_index)
+            setMessage(R.string.rebuild_download_index_msg)
+            setPosButton(R.string.ok) {
+                toast(getString(R.string.please_wait))
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val recovered = Injekt.get<DownloadsManager>().rebuildIndexFromDisk()
+                    withContext(Dispatchers.Main) {
+                        toast(getString(R.string.rebuild_download_index_done, recovered))
+                    }
+                }
+            }
+            setNegButton(R.string.cancel)
+            show()
+        }
     }
 
 }
