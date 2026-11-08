@@ -25,7 +25,7 @@ class AudioHelper(private val context: Context) {
     private var oldVolume: Int = 0
     fun setVolume(percentage: Int) {
         oldVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        val volume = (maxVolume * percentage) / 100
+        val volume = maxVolume * percentage / 100
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0)
     }
 

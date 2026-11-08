@@ -70,7 +70,7 @@ class ActivityReplyItem(
                         } else {
                             reply.likeCount = reply.likeCount.plus(1)
                         }
-                        binding.activityLikeCount.text = (reply.likeCount).toString()
+                        binding.activityLikeCount.text = reply.likeCount.toString()
                         reply.isLiked = !reply.isLiked
                         binding.activityLike.setColorFilter(if (reply.isLiked) likeColor else notLikeColor)
 

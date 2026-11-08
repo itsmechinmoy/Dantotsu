@@ -1,5 +1,61 @@
 package ani.dantotsu.connections.anilist
 
+const val MEDIA_NODE_GRAPHQL_FIELDS = """
+          id
+          idMal
+          isAdult
+          status(version: 2)
+          chapters
+          episodes
+          nextAiringEpisode { episode }
+          type
+          meanScore
+          startDate{ year }
+          isFavourite
+          format
+          bannerImage
+          countryOfOrigin
+          coverImage { large }
+          title {
+              english
+              romaji
+              userPreferred
+          }
+          mediaListEntry {
+              progress
+              progressVolumes
+              private
+              score(format: POINT_100)
+              status
+          }
+"""
+
+const val REVIEW_GRAPHQL_FIELDS = """
+        id
+        mediaId
+        mediaType
+        summary
+        body(asHtml: true)
+        rating
+        ratingAmount
+        userRating
+        score
+        private
+        siteUrl
+        createdAt
+        updatedAt
+        user {
+          id
+          name
+          bannerImage
+          avatar {
+            medium
+            large
+          }
+        }
+"""
+
+
 val standardPageInformation = """
   pageInfo {
     total
@@ -95,33 +151,7 @@ fun studioInformation(page: Int, perPage: Int) = """
       edges {
         id
         node {
-          id
-          idMal
-          isAdult
-          status(version: 2)
-          chapters
-          episodes
-          nextAiringEpisode { episode }
-          type
-          meanScore
-          startDate{ year }
-          isFavourite
-          format
-          bannerImage
-          countryOfOrigin
-          coverImage { large }
-          title {
-              english
-              romaji
-              userPreferred
-          }
-          mediaListEntry {
-              progress
-              progressVolumes
-              private
-              score(format: POINT_100)
-              status
-          }
+$MEDIA_NODE_GRAPHQL_FIELDS
         }
       }
     }
@@ -160,33 +190,7 @@ fun staffInformation(page: Int, perPage: Int) = """
         staffRole
         id
         node {
-          id
-          idMal
-          isAdult
-          status(version: 2)
-          chapters
-          episodes
-          nextAiringEpisode { episode }
-          type
-          meanScore
-          startDate{ year }
-          isFavourite
-          format
-          bannerImage
-          countryOfOrigin
-          coverImage { large }
-          title {
-              english
-              romaji
-              userPreferred
-          }
-          mediaListEntry {
-              progress
-              progressVolumes
-              private
-              score(format: POINT_100)
-              status
-          }
+$MEDIA_NODE_GRAPHQL_FIELDS
         }
       }
     }
@@ -295,28 +299,7 @@ fun fullMediaInformation(id: Int) = """
     }
     reviews(perPage: 3, sort: SCORE_DESC) {
       nodes {
-        id
-        mediaId
-        mediaType
-        summary
-        body(asHtml: true)
-        rating
-        ratingAmount
-        userRating
-        score
-        private
-        siteUrl
-        createdAt
-        updatedAt
-        user {
-          id
-          name
-          bannerImage
-          avatar {
-            medium
-            large
-          }
-        }
+$REVIEW_GRAPHQL_FIELDS
       }
     }
     ${standardMediaInformation()}

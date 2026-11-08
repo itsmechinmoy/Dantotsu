@@ -30,7 +30,7 @@ data class User(
     // If the user is blocked by the authenticated user
     @SerialName("isBlocked") var isBlocked: Boolean? = null,
 
-    // FIXME: No documentation is provided for "Json"
+    // TODO(#issue): No documentation is provided for "Json"
     // @SerialName("bans") var bans: Json?,
 
     // The user's general options

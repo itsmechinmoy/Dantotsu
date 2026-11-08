@@ -153,7 +153,7 @@ class MainActivity : AppCompatActivity() {
         rescueLayoutParams.topMargin = 11 * offset / 12
         binding.rescueModeIcon.layoutParams = rescueLayoutParams
 
-      
+
         fun syncRescueIconMargin(incognitoOn: Boolean) {
             val p = binding.rescueModeIcon.layoutParams as ViewGroup.MarginLayoutParams
             p.marginStart = if (incognitoOn) {

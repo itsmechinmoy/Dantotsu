@@ -83,7 +83,7 @@ class ReviewActivity : AppCompatActivity() {
                     if (event?.action == MotionEvent.ACTION_UP) {
                         if (hasNextPage && !binding.listRecyclerView.canScrollVertically(1) && !binding.followRefresh.isVisible
                             && binding.listRecyclerView.adapter!!.itemCount != 0 &&
-                            (binding.listRecyclerView.layoutManager as LinearLayoutManager).findLastVisibleItemPosition() == (binding.listRecyclerView.adapter!!.itemCount - 1)
+                            (binding.listRecyclerView.layoutManager as LinearLayoutManager).findLastVisibleItemPosition() == binding.listRecyclerView.adapter!!.itemCount - 1
                         ) {
                             binding.followRefresh.visibility = ViewGroup.VISIBLE
                             loadPage(++currentPage) {

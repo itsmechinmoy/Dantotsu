@@ -679,7 +679,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
     ): String {
         val command = StringBuilder()
         val headersStr = buildHeadersString(headers)
-        command.append("${headersStr}-allowed_extensions ALL -extension_picky 0 -allowed_segment_extensions ALL -i "$videoUrl" ")
+        command.append("${headersStr}-allowed_extensions ALL -extension_picky 0 -allowed_segment_extensions ALL -i \"$videoUrl\" ")
 
         for (sub in subtitleUrls) {
             val subUrl = if (sub.first.startsWith("http://") || sub.first.startsWith("https://")) {
@@ -687,10 +687,10 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             } else {
                 ani.dantotsu.media.anime.player.PlayerSubtitleManager.resolveSubtitleUrl(sub.first, videoUrl)
             }
-            command.append("${headersStr}-i "$subUrl" ")
+            command.append("${headersStr}-i \"$subUrl\" ")
         }
         for (audio in audioUrls) {
-            command.append("${headersStr}-i "${audio.first}" ")
+            command.append("${headersStr}-i \"${audio.first}\" ")
         }
 
         val totalInputs = 1 + subtitleUrls.size + audioUrls.size
@@ -710,12 +710,12 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             command.append("-c copy ")
         }
         for ((index, sub) in subtitleUrls.withIndex()) {
-            command.append("-metadata:s:s:$index language="${sub.second}" ")
+            command.append("-metadata:s:s:$index language=\"${sub.second}\" ")
         }
         for ((index, audio) in audioUrls.withIndex()) {
-            command.append("-metadata:s:a:${index + 1} language="${audio.second}" ")
+            command.append("-metadata:s:a:${index + 1} language=\"${audio.second}\" ")
         }
-        command.append("-y "$downloadPath" ")
+        command.append("-y \"$downloadPath\" ")
         return command.toString()
     }
 
@@ -1049,7 +1049,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         while (i < lines.size) {
             val line = lines[i]
             if (line.startsWith("#EXT-X-STREAM-INF")) {
-                val bw = Regex("BANDWIDTH=(\d+)").find(line)
+                val bw = Regex("""BANDWIDTH=(\d+)""").find(line)
                     ?.groupValues?.get(1)?.toLongOrNull() ?: 0L
                 val next = lines.getOrNull(i + 1)?.trim()
                 if (!next.isNullOrBlank() && !next.startsWith("#") && bw >= bestBandwidth) {
@@ -1501,7 +1501,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         appendRemuxStreamMappings(command, subtitles.size, audios.size)
         appendRemuxCodecs(command, subtitles)
         appendRemuxMetadata(command, subtitles, audios)
-        command.append("-y -ignore_unknown \"$outputPath\"")
+        command.append("-f matroska -y -ignore_unknown \"$outputPath\"")
         return command.toString()
     }
 
@@ -1555,10 +1555,10 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             if (allAss) {
                 command.append("-c copy ")
             } else {
-                command.append("-c:v copy -c:a copy -c:s srt ")
+                command.append("-c:v copy -c:a copy -c:s copy ")
             }
         } else {
-            command.append("-c copy ")
+            command.append("-c:v copy -c:a copy -c:s copy ")
         }
     }
 

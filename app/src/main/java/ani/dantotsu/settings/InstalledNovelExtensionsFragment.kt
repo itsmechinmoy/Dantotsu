@@ -47,7 +47,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Locale
 
-class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
+class InstalledNovelExtensionsFragment : BaseInstalledExtensionsFragment(), SearchQueryHandler {
     private var _binding: FragmentNovelExtensionsBinding? = null
     private val binding get() = _binding!!
     private lateinit var extensionsRecyclerView: RecyclerView
@@ -118,47 +118,7 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
                 when (ext) {
                     is NovelExtension.Installed -> {
                         if (ext.hasUpdate) {
-                            novelExtensionManager.updateExtension(ext)
-                                .observeOn(AndroidSchedulers.mainThread())
-                                .subscribe(
-                                    { installStep ->
-                                        val builder = NotificationCompat.Builder(
-                                            context,
-                                            Notifications.CHANNEL_DOWNLOADER_PROGRESS
-                                        )
-                                            .setSmallIcon(R.drawable.ic_round_sync_24)
-                                            .setContentTitle("Updating extension")
-                                            .setContentText("Step: $installStep")
-                                            .setPriority(NotificationCompat.PRIORITY_LOW)
-                                        notificationManager.notify(1, builder.build())
-                                    },
-                                    { error ->
-                                        Injekt.get<CrashlyticsInterface>().logException(error)
-                                        Logger.log(error)
-                                        val builder = NotificationCompat.Builder(
-                                            context,
-                                            Notifications.CHANNEL_DOWNLOADER_ERROR
-                                        )
-                                            .setSmallIcon(R.drawable.ic_round_info_24)
-                                            .setContentTitle("Update failed: ${error.message}")
-                                            .setContentText("Error: ${error.message}")
-                                            .setPriority(NotificationCompat.PRIORITY_HIGH)
-                                        notificationManager.notify(1, builder.build())
-                                        snackString("Update failed: ${error.message}")
-                                    },
-                                    {
-                                        val builder = NotificationCompat.Builder(
-                                            context,
-                                            Notifications.CHANNEL_DOWNLOADER_PROGRESS
-                                        )
-                                            .setSmallIcon(R.drawable.ic_check)
-                                            .setContentTitle("Update complete")
-                                            .setContentText("The extension has been successfully updated.")
-                                            .setPriority(NotificationCompat.PRIORITY_LOW)
-                                        notificationManager.notify(1, builder.build())
-                                        snackString("Extension updated")
-                                    }
-                                )
+                            subscribeExtensionUpdate(requireContext(), novelExtensionManager.updateExtension(ext), R.drawable.ic_check)
                         } else {
                             snackString("No update available")
                         }
@@ -194,44 +154,18 @@ class InstalledNovelExtensionsFragment : Fragment(), SearchQueryHandler {
         extensionsRecyclerView.layoutManager = SafeLinearLayoutManager(requireContext())
         extensionsRecyclerView.adapter = extensionsAdapter
 
-        val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(
-            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
-        ) {
-            override fun onMove(
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder,
-                target: RecyclerView.ViewHolder
-            ): Boolean {
-                val fromPosition = viewHolder.absoluteAdapterPosition
-                val toPosition = target.absoluteAdapterPosition
+        setupExtensionsDragAndDrop(
+            extensionsRecyclerView,
+            onMoveItem = { fromPosition, toPosition ->
                 val newList = extensionsAdapter.currentList.toMutableList().apply {
                     add(toPosition, removeAt(fromPosition))
                 }
                 extensionsAdapter.submitList(newList)
-                return true
-            }
-
-            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
-
-            override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
-                super.onSelectedChanged(viewHolder, actionState)
-                if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
-                    viewHolder?.itemView?.elevation = 8f
-                    viewHolder?.itemView?.translationZ = 8f
-                }
-            }
-
-            override fun clearView(
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder
-            ) {
-                super.clearView(recyclerView, viewHolder)
+            },
+            onClearView = {
                 extensionsAdapter.updatePref()
-                viewHolder.itemView.elevation = 0f
-                viewHolder.itemView.translationZ = 0f
             }
-        }
-        ItemTouchHelper(itemTouchHelperCallback).attachToRecyclerView(extensionsRecyclerView)
+        )
 
 
         lifecycleScope.launch {

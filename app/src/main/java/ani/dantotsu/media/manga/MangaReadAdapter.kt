@@ -94,6 +94,7 @@ class MangaReadAdapter(
         return ViewHolder(bind)
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val binding = holder.binding
         _binding = binding

@@ -66,25 +66,7 @@ class NovelDictionaryDialog : BottomSheetDialogFragment() {
                 val phonetic = firstEntry.optString("phonetic", "")
                 val meanings = firstEntry.optJSONArray("meanings") ?: JSONArray()
 
-                val parsedMeanings = mutableListOf<ParsedMeaning>()
-                for (i in 0 until meanings.length()) {
-                    val m = meanings.getJSONObject(i)
-                    val pos = m.optString("partOfSpeech", "")
-                    val defs = m.optJSONArray("definitions") ?: JSONArray()
-                    val defPairs = mutableListOf<Pair<String, String?>>()
-                    for (j in 0 until defs.length().coerceAtMost(3)) {
-                        val d = defs.getJSONObject(j)
-                        val defText = d.optString("definition", "")
-                        val example = d.optString("example", "").takeIf { it.isNotBlank() }
-                        if (defText.isNotBlank()) {
-                            defPairs.add(defText to example)
-                        }
-                    }
-                    if (defPairs.isNotEmpty()) {
-                        parsedMeanings.add(ParsedMeaning(pos, defPairs))
-                    }
-                }
-
+                val parsedMeanings = parseMeanings(meanings)
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
                     binding.dictProgress.visibility = View.GONE
@@ -101,42 +83,7 @@ class NovelDictionaryDialog : BottomSheetDialogFragment() {
                         return@withContext
                     }
 
-                    binding.dictContentScroll.visibility = View.VISIBLE
-                    binding.dictMeaningsContainer.removeAllViews()
-
-                    val ctx = requireContext()
-                    for (meaning in parsedMeanings) {
-                        // Part of speech badge
-                        val posView = TextView(ctx).apply {
-                            text = meaning.partOfSpeech.replaceFirstChar { it.uppercase() }
-                            setTypeface(typeface, Typeface.BOLD_ITALIC)
-                            setTextColor(Color.parseColor("#80FFFFFF"))
-                            textSize = 13f
-                            setPadding(0, 16, 0, 4)
-                        }
-                        binding.dictMeaningsContainer.addView(posView)
-
-                        meaning.definitions.forEachIndexed { idx, (def, ex) ->
-                            val defView = TextView(ctx).apply {
-                                text = "${idx + 1}. $def"
-                                setTextColor(Color.WHITE)
-                                textSize = 14f
-                                setPadding(0, 4, 0, 2)
-                            }
-                            binding.dictMeaningsContainer.addView(defView)
-
-                            if (ex != null) {
-                                val exView = TextView(ctx).apply {
-                                    text = "   \"$ex\""
-                                    setTypeface(typeface, Typeface.ITALIC)
-                                    setTextColor(Color.parseColor("#A0FFFFFF"))
-                                    textSize = 12f
-                                    setPadding(0, 0, 0, 6)
-                                }
-                                binding.dictMeaningsContainer.addView(exView)
-                            }
-                        }
-                    }
+                    renderMeanings(parsedMeanings)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -169,4 +116,64 @@ class NovelDictionaryDialog : BottomSheetDialogFragment() {
             }
         }
     }
+    private fun parseMeanings(meanings: JSONArray): List<ParsedMeaning> {
+        val parsedMeanings = mutableListOf<ParsedMeaning>()
+        for (i in 0 until meanings.length()) {
+            val m = meanings.getJSONObject(i)
+            val pos = m.optString("partOfSpeech", "")
+            val defs = m.optJSONArray("definitions") ?: JSONArray()
+            val defPairs = mutableListOf<Pair<String, String?>>()
+            for (j in 0 until defs.length().coerceAtMost(3)) {
+                val d = defs.getJSONObject(j)
+                val defText = d.optString("definition", "")
+                val example = d.optString("example", "").takeIf { it.isNotBlank() }
+                if (defText.isNotBlank()) {
+                    defPairs.add(defText to example)
+                }
+            }
+            if (defPairs.isNotEmpty()) {
+                parsedMeanings.add(ParsedMeaning(pos, defPairs))
+            }
+        }
+        return parsedMeanings
+    }
+
+    private fun renderMeanings(parsedMeanings: List<ParsedMeaning>) {
+        binding.dictContentScroll.visibility = View.VISIBLE
+        binding.dictMeaningsContainer.removeAllViews()
+
+        val ctx = requireContext()
+        for (meaning in parsedMeanings) {
+            val posView = TextView(ctx).apply {
+                text = meaning.partOfSpeech.replaceFirstChar { it.uppercase() }
+                setTypeface(typeface, Typeface.BOLD_ITALIC)
+                setTextColor(Color.parseColor("#80FFFFFF"))
+                textSize = 13f
+                setPadding(0, 16, 0, 4)
+            }
+            binding.dictMeaningsContainer.addView(posView)
+
+            meaning.definitions.forEachIndexed { idx, (def, ex) ->
+                val defView = TextView(ctx).apply {
+                    text = "${idx + 1}. $def"
+                    setTextColor(Color.WHITE)
+                    textSize = 14f
+                    setPadding(0, 4, 0, 2)
+                }
+                binding.dictMeaningsContainer.addView(defView)
+
+                if (ex != null) {
+                    val exView = TextView(ctx).apply {
+                        text = "   \"$ex\""
+                        setTypeface(typeface, Typeface.ITALIC)
+                        setTextColor(Color.parseColor("#A0FFFFFF"))
+                        textSize = 12f
+                        setPadding(0, 0, 0, 6)
+                    }
+                    binding.dictMeaningsContainer.addView(exView)
+                }
+            }
+        }
+    }
+
 }

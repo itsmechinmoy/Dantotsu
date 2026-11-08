@@ -19,7 +19,6 @@ class RemoveBordersTransformation(private val white: Boolean, private val thresh
         val height = toTransform.height
         if (width <= 0 || height <= 0) return toTransform
 
-        // If bitmap is HARDWARE, copy to software config so getPixels is allowed
         val safeBitmap = if (toTransform.config == Bitmap.Config.HARDWARE) {
             toTransform.copy(Bitmap.Config.ARGB_8888, false) ?: return toTransform
         } else {
@@ -33,63 +32,10 @@ class RemoveBordersTransformation(private val white: Boolean, private val thresh
             return toTransform
         }
 
-        // Find the non-white area by scanning from the edges
-        var left = 0
-        var top = 0
-        var right = width - 1
-        var bottom = height - 1
-
-        // Scan from the left edge
-        for (x in 0 until width) {
-            var stop = false
-            for (y in 0 until height) {
-                if (isPixelNotWhite(pixels[y * width + x])) {
-                    left = x
-                    stop = true
-                    break
-                }
-            }
-            if (stop) break
-        }
-
-        // Scan from the right edge
-        for (x in width - 1 downTo left) {
-            var stop = false
-            for (y in 0 until height) {
-                if (isPixelNotWhite(pixels[y * width + x])) {
-                    right = x
-                    stop = true
-                    break
-                }
-            }
-            if (stop) break
-        }
-
-        // Scan from the top edge
-        for (y in 0 until height) {
-            var stop = false
-            for (x in 0 until width) {
-                if (isPixelNotWhite(pixels[y * width + x])) {
-                    top = y
-                    stop = true
-                    break
-                }
-            }
-            if (stop) break
-        }
-
-        // Scan from the bottom edge
-        for (y in height - 1 downTo top) {
-            var stop = false
-            for (x in 0 until width) {
-                if (isPixelNotWhite(pixels[y * width + x])) {
-                    bottom = y
-                    stop = true
-                    break
-                }
-            }
-            if (stop) break
-        }
+        val left = findLeftBorder(pixels, width, height)
+        val right = findRightBorder(pixels, width, height, left)
+        val top = findTopBorder(pixels, width, height)
+        val bottom = findBottomBorder(pixels, width, height, top)
 
         val cropWidth = right - left + 1
         val cropHeight = bottom - top + 1
@@ -97,7 +43,6 @@ class RemoveBordersTransformation(private val white: Boolean, private val thresh
             return toTransform
         }
 
-        // Crop the bitmap to the non-white area
         return Bitmap.createBitmap(
             safeBitmap,
             left,
@@ -105,6 +50,42 @@ class RemoveBordersTransformation(private val white: Boolean, private val thresh
             cropWidth,
             cropHeight
         )
+    }
+
+    private fun findLeftBorder(pixels: IntArray, width: Int, height: Int): Int {
+        for (x in 0 until width) {
+            for (y in 0 until height) {
+                if (isPixelNotWhite(pixels[y * width + x])) return x
+            }
+        }
+        return 0
+    }
+
+    private fun findRightBorder(pixels: IntArray, width: Int, height: Int, minLeft: Int): Int {
+        for (x in width - 1 downTo minLeft) {
+            for (y in 0 until height) {
+                if (isPixelNotWhite(pixels[y * width + x])) return x
+            }
+        }
+        return width - 1
+    }
+
+    private fun findTopBorder(pixels: IntArray, width: Int, height: Int): Int {
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                if (isPixelNotWhite(pixels[y * width + x])) return y
+            }
+        }
+        return 0
+    }
+
+    private fun findBottomBorder(pixels: IntArray, width: Int, height: Int, minTop: Int): Int {
+        for (y in height - 1 downTo minTop) {
+            for (x in 0 until width) {
+                if (isPixelNotWhite(pixels[y * width + x])) return y
+            }
+        }
+        return height - 1
     }
 
     override fun updateDiskCacheKey(messageDigest: MessageDigest) {
@@ -115,6 +96,6 @@ class RemoveBordersTransformation(private val white: Boolean, private val thresh
 
     private fun isPixelNotWhite(pixel: Int): Boolean {
         val brightness = Color.red(pixel) + Color.green(pixel) + Color.blue(pixel)
-        return if (white) brightness < (255 - threshHold) else brightness > threshHold
+        return if (white) brightness < 255 - threshHold else brightness > threshHold
     }
 }

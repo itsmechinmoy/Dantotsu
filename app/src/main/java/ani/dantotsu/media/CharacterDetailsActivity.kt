@@ -54,29 +54,9 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        ThemeManager(this).applyTheme()
         binding = ActivityCharacterBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        initActivity(this)
         screenWidth = resources.displayMetrics.run { widthPixels / density }
-        if (PrefManager.getVal(PrefName.ImmersiveMode)) this.window.statusBarColor =
-            ContextCompat.getColor(this, R.color.transparent)
-
-        val banner =
-            if (PrefManager.getVal(PrefName.BannerAnimations)) binding.characterBanner else binding.characterBannerNoKen
-
-        banner.updateLayoutParams { height += statusBarHeight }
-        binding.characterClose.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
-        binding.characterCollapsing.minimumHeight = statusBarHeight
-        binding.characterCover.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
-        binding.characterRecyclerView.updatePadding(bottom = 64f.px + navBarHeight)
-        binding.characterTitle.isSelected = true
-        binding.characterAppBar.addOnOffsetChangedListener(this)
-
-        binding.characterClose.setOnClickListener {
-            onBackPressedDispatcher.onBackPressed()
-        }
+        val banner = CharacterUiUtil.setupCharacterView(this, binding, this)
 
         binding.authorCharactersRecycler.isVisible = false
         binding.AuthorCharactersText.isVisible = false
@@ -97,48 +77,7 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
             )
         }
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-        val link = if (rescueMode) {
-            "https://myanimelist.net/character/${character.id}"
-        } else {
-            "https://anilist.co/character/${character.id}"
-        }
-        binding.characterShare.setOnClickListener {
-            val i = Intent(Intent.ACTION_SEND)
-            i.type = "text/plain"
-            i.putExtra(Intent.EXTRA_TEXT, link)
-            startActivity(Intent.createChooser(i, character.name))
-        }
-        binding.characterShare.setOnLongClickListener {
-            openLinkInBrowser(link)
-            true
-        }
-        if (!rescueMode) {
-            lifecycleScope.launch {
-                withContext(Dispatchers.IO) {
-                    character.isFav =
-                        Anilist.query.isUserFav(AnilistMutations.FavType.CHARACTER, character.id)
-                }
-                withContext(Dispatchers.Main) {
-                    binding.characterFav.setImageResource(
-                        if (character.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
-                    )
-                }
-            }
-            binding.characterFav.setOnClickListener {
-                lifecycleScope.launch {
-                    if (Anilist.mutation.toggleFav(AnilistMutations.FavType.CHARACTER, character.id)) {
-                        character.isFav = !character.isFav
-                        binding.characterFav.setImageResource(
-                            if (character.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
-                        )
-                    } else {
-                        snackString("Failed to toggle favorite")
-                    }
-                }
-            }
-        } else {
-            binding.characterFav.visibility = View.GONE
-        }
+        setupCharacterHeader(rescueMode)
         model.getCharacter().observe(this) {
             if (it != null && !loaded) {
                 val preservedFavState = character.isFav
@@ -148,23 +87,7 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
                 binding.characterProgress.visibility = View.GONE
                 binding.characterRecyclerView.visibility = View.VISIBLE
 
-                val roles = character.roles ?: arrayListOf()
-                val mediaAdaptor = MediaAdaptor(0, roles, this, matchParent = true)
-                val concatAdaptor =
-                    ConcatAdapter(CharacterDetailsAdapter(character, this), mediaAdaptor)
-
-                val gridSize = (screenWidth / 124f).toInt()
-                val gridLayoutManager = GridLayoutManager(this, gridSize)
-                gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                    override fun getSpanSize(position: Int): Int {
-                        return when (position) {
-                            0 -> gridSize
-                            else -> 1
-                        }
-                    }
-                }
-                binding.characterRecyclerView.adapter = concatAdaptor
-                binding.characterRecyclerView.layoutManager = gridLayoutManager
+                setupCharacterRecycler(character)
             }
         }
 
@@ -213,4 +136,69 @@ class CharacterDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChang
             binding.authorCharactersRecycler.adapter = null
         }
     }
+    private fun setupCharacterHeader(rescueMode: Boolean) {
+        val link = if (rescueMode) {
+            "https://myanimelist.net/character/${character.id}"
+        } else {
+            "https://anilist.co/character/${character.id}"
+        }
+        binding.characterShare.setOnClickListener {
+            val i = Intent(Intent.ACTION_SEND)
+            i.type = "text/plain"
+            i.putExtra(Intent.EXTRA_TEXT, link)
+            startActivity(Intent.createChooser(i, character.name))
+        }
+        binding.characterShare.setOnLongClickListener {
+            openLinkInBrowser(link)
+            true
+        }
+        if (!rescueMode) {
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    character.isFav =
+                        Anilist.query.isUserFav(AnilistMutations.FavType.CHARACTER, character.id)
+                }
+                withContext(Dispatchers.Main) {
+                    binding.characterFav.setImageResource(
+                        if (character.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
+                    )
+                }
+            }
+            binding.characterFav.setOnClickListener {
+                lifecycleScope.launch {
+                    if (Anilist.mutation.toggleFav(AnilistMutations.FavType.CHARACTER, character.id)) {
+                        character.isFav = !character.isFav
+                        binding.characterFav.setImageResource(
+                            if (character.isFav) R.drawable.ic_round_favorite_24 else R.drawable.ic_round_favorite_border_24
+                        )
+                    } else {
+                        snackString("Failed to toggle favorite")
+                    }
+                }
+            }
+        } else {
+            binding.characterFav.visibility = View.GONE
+        }
+    }
+
+    private fun setupCharacterRecycler(character: Character) {
+                val roles = character.roles ?: arrayListOf()
+                val mediaAdaptor = MediaAdaptor(0, roles, this, matchParent = true)
+                val concatAdaptor =
+                    ConcatAdapter(CharacterDetailsAdapter(character, this), mediaAdaptor)
+
+                val gridSize = (screenWidth / 124f).toInt()
+                val gridLayoutManager = GridLayoutManager(this, gridSize)
+                gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int {
+                        return when (position) {
+                            0 -> gridSize
+                            else -> 1
+                        }
+                    }
+                }
+                binding.characterRecyclerView.adapter = concatAdaptor
+                binding.characterRecyclerView.layoutManager = gridLayoutManager
+    }
+
 }

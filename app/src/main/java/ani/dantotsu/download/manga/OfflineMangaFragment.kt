@@ -373,8 +373,8 @@ class OfflineMangaFragment : Fragment(), OfflineMangaSearchListener {
             } else null
             if (coverUri == null && bannerUri == null) throw Exception("No cover or banner found, probably compat")
             val title = mediaModel.mainName()
-            val score = ((if (mediaModel.userScore == 0) (mediaModel.meanScore
-                ?: 0) else mediaModel.userScore) / 10.0).toString()
+            val score = ((if (mediaModel.userScore == 0) mediaModel.meanScore
+                ?: 0 else mediaModel.userScore) / 10.0).toString()
             val isOngoing =
                 mediaModel.status == currActivity()!!.getString(R.string.status_releasing)
             val isUserScored = mediaModel.userScore != 0

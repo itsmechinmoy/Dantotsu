@@ -121,56 +121,21 @@ open class ImageAdapter(
 
         parent.setTag(R.id.imgProgImageNoGestures, bitmap)
 
-        var sWidth = getSystem().displayMetrics.widthPixels
-        var sHeight = getSystem().displayMetrics.heightPixels
-
-        if (settings.layout != PAGED)
-            parent.updateLayoutParams {
-                if (settings.direction != LEFT_TO_RIGHT && settings.direction != RIGHT_TO_LEFT) {
-                    sHeight =
-                        if (settings.wrapImages) bitmap.height else (sWidth * bitmap.height * 1f / bitmap.width).toInt()
-                    height = sHeight
-                } else {
-                    sWidth =
-                        if (settings.wrapImages) bitmap.width else (sHeight * bitmap.width * 1f / bitmap.height).toInt()
-                    width = sWidth
-                }
-            }
-
-        // Apply image quality scaling when the bitmap is larger than screen and quality mode requires it.
-        // FAST: skip (SSIV's own GPU bilinear is fine). BALANCED/LANCZOS: pre-scale on IO thread.
+        val (sWidth, sHeight) = calculateDimensions(parent, bitmap)
         val quality = settings.imageQuality ?: CurrentReaderSettings.ImageQuality.FAST
-        if (quality != CurrentReaderSettings.ImageQuality.FAST &&
-            (bitmap.width > sWidth || bitmap.height > sHeight)
-        ) {
-            val targetW: Int
-            val targetH: Int
-            val bitmapRatio = bitmap.width.toFloat() / bitmap.height
-            val screenRatio = sWidth.toFloat() / sHeight
-            if (bitmapRatio > screenRatio) {
-                targetW = sWidth
-                targetH = (sWidth / bitmapRatio).toInt().coerceAtLeast(1)
-            } else {
-                targetH = sHeight
-                targetW = (sHeight * bitmapRatio).toInt().coerceAtLeast(1)
-            }
-            val scaled = withContext(Dispatchers.IO) {
-                scaleBitmap(bitmap, targetW, targetH, quality)
-            }
-            bitmap = scaled
-            if (!currentCoroutineContext().isActive) {
-                return false
-            }
+        if (quality != CurrentReaderSettings.ImageQuality.FAST && (bitmap.width > sWidth || bitmap.height > sHeight)) {
+            bitmap = maybeScaleBitmap(bitmap, sWidth, sHeight, quality)
+            if (!currentCoroutineContext().isActive) return false
             parent.setTag(R.id.imgProgImageNoGestures, bitmap)
         }
 
-        imageView.visibility = View.VISIBLE
+                imageView.visibility = View.VISIBLE
         imageView.setImage(ImageSource.cachedBitmap(bitmap))
 
         val parentArea = sWidth * sHeight * 1f
         val bitmapArea = bitmap.width * bitmap.height * 1f
         val scale =
-            if (parentArea < bitmapArea) (bitmapArea / parentArea) else (parentArea / bitmapArea)
+            if (parentArea < bitmapArea) bitmapArea / parentArea else parentArea / bitmapArea
 
         imageView.maxScale = scale * 1.1f
         imageView.minScale = scale
@@ -283,4 +248,44 @@ open class ImageAdapter(
             activity.findViewById<SubsamplingScaleImageView>(R.id.imgProgImageNoGestures)
         imageView.setScaleAndCenter(zoom, imageView.center)
     }
+    private fun calculateDimensions(parent: View, bitmap: Bitmap): Pair<Int, Int> {
+        var sWidth = getSystem().displayMetrics.widthPixels
+        var sHeight = getSystem().displayMetrics.heightPixels
+
+        if (settings.layout != PAGED) {
+            parent.updateLayoutParams {
+                if (settings.direction != LEFT_TO_RIGHT && settings.direction != RIGHT_TO_LEFT) {
+                    sHeight = if (settings.wrapImages) bitmap.height else (sWidth * bitmap.height * 1f / bitmap.width).toInt()
+                    height = sHeight
+                } else {
+                    sWidth = if (settings.wrapImages) bitmap.width else (sHeight * bitmap.width * 1f / bitmap.height).toInt()
+                    width = sWidth
+                }
+            }
+        }
+        return Pair(sWidth, sHeight)
+    }
+
+    private suspend fun maybeScaleBitmap(
+        bitmap: Bitmap,
+        sWidth: Int,
+        sHeight: Int,
+        quality: CurrentReaderSettings.ImageQuality
+    ): Bitmap {
+        val targetW: Int
+        val targetH: Int
+        val bitmapRatio = bitmap.width.toFloat() / bitmap.height
+        val screenRatio = sWidth.toFloat() / sHeight
+        if (bitmapRatio > screenRatio) {
+            targetW = sWidth
+            targetH = (sWidth / bitmapRatio).toInt().coerceAtLeast(1)
+        } else {
+            targetH = sHeight
+            targetW = (sHeight * bitmapRatio).toInt().coerceAtLeast(1)
+        }
+        return withContext(Dispatchers.IO) {
+            scaleBitmap(bitmap, targetW, targetH, quality)
+        }
+    }
+
 }

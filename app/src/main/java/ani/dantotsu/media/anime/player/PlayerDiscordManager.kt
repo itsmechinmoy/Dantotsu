@@ -39,43 +39,53 @@ class PlayerDiscordManager(
 
         if (isOnline(context) && !offline && Discord.token != null && !incognito && rpcEnabled) {
             activity.lifecycleScope.launch {
-                val buttons = mutableListOf<RPC.Link>()
-                buttons.add(RPC.Link("View Anime", "https://anilist.co/anime/${media.id}/"))
-                media.idMAL?.let {
-                    buttons.add(RPC.Link("View on MyAnimeList", "https://myanimelist.net/anime/$it"))
-                }
-
-                val now = System.currentTimeMillis()
-                val currentPosMs = if (player.currentPosition > 0) player.currentPosition else 0L
-                val safeDurationMs = if (player.duration > 0 && player.duration != C.TIME_UNSET) {
-                    player.duration
-                } else {
-                    1440000L // default 24 mins
-                }
-
-                val isPaused = !isPlaying
-                val startTimestamp = if (isPaused) null else now - currentPosMs
-                val endTimestamp = if (isPaused) null else (now - currentPosMs) + safeDurationMs
-
-                val stateText = "Episode : ${episode.number}/${media.anime?.totalEpisodes ?: "??"}"
-                val finalState = if (isPaused) "Paused - $stateText" else stateText
-
-                val rpcData = RPC.Companion.RPCData(
-                    applicationId = Discord.application_Id,
-                    type = RPC.Type.WATCHING,
-                    activityName = media.userPreferredName,
-                    details = episode.title?.takeIf { it.isNotEmpty() }
-                        ?: context.getString(R.string.episode_num, episode.number),
-                    startTimestamp = startTimestamp,
-                    stopTimestamp = endTimestamp,
-                    state = finalState,
-                    largeImage = media.cover?.let { RPC.Link(media.userPreferredName, it) },
-                    smallImage = RPC.Link("Dantotsu", Discord.small_Image),
-                    buttons = buttons,
-                )
+                val rpcData = buildDiscordRpcData(context, media, episode, player, isPlaying)
                 RPCManager.setPresence(context, rpcData)
             }
         }
+    }
+
+    private fun buildDiscordRpcData(
+        context: Context,
+        media: Media,
+        episode: Episode,
+        player: Player,
+        isPlaying: Boolean
+    ): RPC.Companion.RPCData {
+        val buttons = mutableListOf<RPC.Link>()
+        buttons.add(RPC.Link("View Anime", "https://anilist.co/anime/${media.id}/"))
+        media.idMAL?.let {
+            buttons.add(RPC.Link("View on MyAnimeList", "https://myanimelist.net/anime/$it"))
+        }
+
+        val now = System.currentTimeMillis()
+        val currentPosMs = if (player.currentPosition > 0) player.currentPosition else 0L
+        val safeDurationMs = if (player.duration > 0 && player.duration != C.TIME_UNSET) {
+            player.duration
+        } else {
+            1440000L
+        }
+
+        val isPaused = !isPlaying
+        val startTimestamp = if (isPaused) null else now - currentPosMs
+        val endTimestamp = if (isPaused) null else now - currentPosMs + safeDurationMs
+
+        val stateText = "Episode : ${episode.number}/${media.anime?.totalEpisodes ?: "??"}"
+        val finalState = if (isPaused) "Paused - $stateText" else stateText
+
+        return RPC.Companion.RPCData(
+            applicationId = Discord.application_Id,
+            type = RPC.Type.WATCHING,
+            activityName = media.userPreferredName,
+            details = episode.title?.takeIf { it.isNotEmpty() }
+                ?: context.getString(R.string.episode_num, episode.number),
+            startTimestamp = startTimestamp,
+            stopTimestamp = endTimestamp,
+            state = finalState,
+            largeImage = media.cover?.let { RPC.Link(media.userPreferredName, it) },
+            smallImage = RPC.Link("Dantotsu", Discord.small_Image),
+            buttons = buttons,
+        )
     }
 
     fun clear() {

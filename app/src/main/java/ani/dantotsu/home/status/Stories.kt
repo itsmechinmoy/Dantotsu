@@ -242,7 +242,7 @@ class Stories @JvmOverloads constructor(
     }
 
     private fun secondsToMillis(seconds: Int): Long {
-        return (seconds.toLong()).times(1000)
+        return seconds.toLong().times(1000)
     }
 
     private fun resetProgressBar(storyIndex: Int) {
@@ -346,20 +346,29 @@ class Stories @JvmOverloads constructor(
             onTouchView(v, event, true)
             v.onTouchEvent(event)
         }
-        fun visible(isList: Boolean) {
-            binding.textActivity.isVisible = !isList
-            binding.textActivityContainer.isVisible = !isList
-            binding.infoText.isVisible = isList
-            binding.coverImage.isVisible = isList
-            binding.infoText.visibility = if (isList) VISIBLE else INVISIBLE
-            binding.infoText.text = ""
-            binding.contentImageViewKen.isVisible = isList
-            binding.contentImageView.isVisible = isList
-        }
 
+
+        bindStoryByType(story)
+        bindStoryInteractions(story)
+        binding.androidStoriesLoadingView.visibility = GONE
+        timer.start()
+    }
+
+    private fun setStoryViewsVisibility(isList: Boolean) {
+        binding.textActivity.isVisible = !isList
+        binding.textActivityContainer.isVisible = !isList
+        binding.infoText.isVisible = isList
+        binding.coverImage.isVisible = isList
+        binding.infoText.visibility = if (isList) VISIBLE else INVISIBLE
+        binding.infoText.text = ""
+        binding.contentImageViewKen.isVisible = isList
+        binding.contentImageView.isVisible = isList
+    }
+
+    private fun bindStoryByType(story: Activity) {
         when (story.typename) {
             "ListActivity" -> {
-                visible(true)
+                setStoryViewsVisibility(true)
                 val text = "${
                     story.status?.replaceFirstChar {
                         if (it.isLowerCase()) {
@@ -405,7 +414,7 @@ class Stories @JvmOverloads constructor(
             }
 
             "TextActivity" -> {
-                visible(false)
+                setStoryViewsVisibility(false)
                 if (!(context as android.app.Activity).isDestroyed) {
                     val originalText = story.text ?: ""
                     val anilistLinks = AnilistLinkParser.extractAnilistLinks(originalText)
@@ -418,7 +427,7 @@ class Stories @JvmOverloads constructor(
             }
 
             "MessageActivity" -> {
-                visible(false)
+                setStoryViewsVisibility(false)
                 if (!(context as android.app.Activity).isDestroyed) {
                     val originalMessage = story.message ?: ""
                     val anilistLinks = AnilistLinkParser.extractAnilistLinks(originalMessage)
@@ -430,6 +439,9 @@ class Stories @JvmOverloads constructor(
                 }
             }
         }
+    }
+
+    private fun bindStoryInteractions(story: Activity) {
         val userList = arrayListOf<User>()
         story.likes?.forEach { i ->
             userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage, isFollowing = i.isFollowing, isFollower = i.isFollower))
@@ -499,8 +511,6 @@ class Stories @JvmOverloads constructor(
             }
             true
         }
-        binding.androidStoriesLoadingView.visibility = GONE
-        timer.start()
     }
 
     fun like() {
@@ -579,8 +589,43 @@ class Stories @JvmOverloads constructor(
         return true
     }
 
-    private fun onTouchView(view: View, event: MotionEvent, isText: Boolean = false) {
+    private fun handleTouchUp(
+        event: MotionEvent,
+        isText: Boolean,
+        leftHalf: Int,
+        leftQuarter: Double,
+        rightQuarter: Double
+    ) {
         val maxClickDuration = 200
+        val clickDuration = Calendar.getInstance().timeInMillis - startClickTime
+        if (clickDuration < maxClickDuration && !isLongPress) {
+            if (isText) {
+                if (event.x < leftQuarter) {
+                    leftPanelTouch()
+                } else if (event.x > rightQuarter) {
+                    rightPanelTouch()
+                } else {
+                    resume()
+                }
+            } else {
+                if (event.x < leftHalf) {
+                    leftPanelTouch()
+                } else {
+                    rightPanelTouch()
+                }
+            }
+        } else {
+            resume()
+        }
+        val deltaX = event.x - startX
+        val deltaY = event.y - startY
+        if (abs(deltaX) > swipeThreshold && !(abs(deltaY) > 10)) {
+            if (deltaX > 0) onStoriesPrevious()
+            else onStoriesCompleted()
+        }
+    }
+
+    private fun onTouchView(view: View, event: MotionEvent, isText: Boolean = false) {
         val screenWidth = view.width
         val leftHalf = screenWidth / 2
         val leftQuarter = screenWidth * 0.15
@@ -603,37 +648,7 @@ class Stories @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_UP -> {
-                val clickDuration = Calendar.getInstance().timeInMillis - startClickTime
-                if (isText) {
-                    if (clickDuration < maxClickDuration && !isLongPress) {
-                        if (event.x < leftQuarter) {
-                            leftPanelTouch()
-                        } else if (event.x > rightQuarter) {
-                            rightPanelTouch()
-                        } else {
-                            resume()
-                        }
-                    } else {
-                        resume()
-                    }
-                } else {
-                    if (clickDuration < maxClickDuration && !isLongPress) {
-                        if (event.x < leftHalf) {
-                            leftPanelTouch()
-                        } else {
-                            rightPanelTouch()
-                        }
-                    } else {
-                        resume()
-                    }
-                }
-                val deltaX = event.x - startX
-                val deltaY = event.y - startY
-                if (abs(deltaX) > swipeThreshold && !(abs(deltaY) > 10)) {
-                    if (deltaX > 0) onStoriesPrevious()
-                    else onStoriesCompleted()
-                }
-
+                handleTouchUp(event, isText, leftHalf, leftQuarter, rightQuarter)
             }
         }
     }

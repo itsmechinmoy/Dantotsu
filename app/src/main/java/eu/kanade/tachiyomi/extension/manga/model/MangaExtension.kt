@@ -4,17 +4,9 @@ import android.graphics.drawable.Drawable
 import eu.kanade.tachiyomi.source.MangaSource
 import tachiyomi.domain.source.manga.model.MangaSourceData
 
-sealed class MangaExtension {
+import eu.kanade.tachiyomi.extension.model.BaseExtension
 
-    abstract val name: String
-    abstract val pkgName: String
-    abstract val versionName: String
-    abstract val versionCode: Long
-    abstract val libVersion: Double
-    abstract val lang: String?
-    abstract val isNsfw: Boolean
-    abstract val hasReadme: Boolean
-    abstract val hasChangelog: Boolean
+sealed class MangaExtension : BaseExtension {
 
     data class Installed(
         override val name: String,

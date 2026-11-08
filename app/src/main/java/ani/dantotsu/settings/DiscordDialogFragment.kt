@@ -123,8 +123,8 @@ class DiscordDialogFragment : BottomSheetDialogFragment() {
                 currentBinding.tokenExpiryStatus.text = "⚠️ Token expired — will auto-refresh on next RPC"
             } else {
                 val days = remaining / (1000 * 60 * 60 * 24)
-                val hours = (remaining / (1000 * 60 * 60)) % 24
-                val mins = (remaining / (1000 * 60)) % 60
+                val hours = remaining / (1000 * 60 * 60) % 24
+                val mins = remaining / (1000 * 60) % 60
                 val timeStr = buildString {
                     if (days > 0) append("${days}d ")
                     if (hours > 0) append("${hours}h ")

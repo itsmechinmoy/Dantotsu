@@ -94,62 +94,13 @@ class SubscriptionNotificationTask : Task {
                             )
                     }
 
-                    var newSubscriptionCount = 0
-                    subscriptions.toList().map {
-                        val media = it.second
-                        val text = if (media.isAnime) {
-                            val parser =
-                                SubscriptionHelper.getAnimeParser(media.id)
-                            progress(index[it.first]!!, parser.name, media.name)
-                            val ep: Episode? =
-                                SubscriptionHelper.getEpisode(
-                                    parser,
-                                    media
-                                )
-                            if (ep != null) context.getString(R.string.episode) + "${ep.number}${
-                                if (ep.title != null) " : ${ep.title}" else ""
-                            }${
-                                if (ep.isFiller) " [Filler]" else ""
-                            } " + context.getString(R.string.just_released) to ep.thumbnail
-                            else null
-                        } else {
-                            val parser =
-                                SubscriptionHelper.getMangaParser(media.id)
-                            progress(index[it.first]!!, parser.name, media.name)
-                            val ep: MangaChapter? =
-                                SubscriptionHelper.getChapter(
-                                    parser,
-                                    media
-                                )
-                            if (ep != null) ep.number + " " + context.getString(R.string.just_released) to null
-                            else null
-                        } ?: return@map
-                        addSubscriptionToStore(
-                            SubscriptionStore(
-                                media.name,
-                                text.first,
-                                media.id,
-                                image = media.image,
-                                banner = media.banner
-                            )
-                        )
-                        newSubscriptionCount++
-                        val notification = createNotification(
-                            context.applicationContext,
-                            media,
-                            text.first,
-                            text.second
-                        )
-                        if (hasNotificationPermission(context)) {
-                            NotificationManagerCompat.from(context)
-                                .notify(
-                                    CHANNEL_SUBSCRIPTION_CHECK,
-                                    System.currentTimeMillis().toInt(),
-                                    notification
-                                )
-                        }
-                    }
-
+                    val newSubscriptionCount = processSubscriptions(
+                        context,
+                        subscriptions,
+                        index,
+                        progressNotification,
+                        notificationManager
+                    )
                     if (newSubscriptionCount > 0) {
                         val currentSubsCount = PrefManager.getVal<Int>(PrefName.UnreadSubscriptionNotifications)
                         PrefManager.setVal(PrefName.UnreadSubscriptionNotifications, currentSubsCount + newSubscriptionCount)
@@ -265,4 +216,81 @@ class SubscriptionNotificationTask : Task {
         newStore.add(notification)
         PrefManager.setVal(PrefName.SubscriptionNotificationStore, newStore)
     }
+    private suspend fun processSubscriptions(
+        context: Context,
+        subscriptions: Map<Int, SubscriptionHelper.Companion.SubscribeMedia>,
+        index: Map<Int, Int>,
+        progressNotification: androidx.core.app.NotificationCompat.Builder?,
+        notificationManager: NotificationManagerCompat
+    ): Int {
+        var newSubscriptionCount = 0
+        fun progress(progress: Int, parser: String, media: String) {
+            if (progressNotification != null && hasNotificationPermission(context))
+                notificationManager.notify(
+                    ID_SUBSCRIPTION_CHECK_PROGRESS,
+                    progressNotification
+                        .setProgress(subscriptions.size, progress, false)
+                        .setContentText("$media on $parser")
+                        .build()
+                )
+        }
+        subscriptions.toList().map {
+            val media = it.second
+            val text = checkSubscriptionMedia(context, it.first, media, index) { prg, pName ->
+                progress(prg, pName, media.name)
+            } ?: return@map
+
+            addSubscriptionToStore(
+                SubscriptionStore(
+                    media.name,
+                    text.first,
+                    media.id,
+                    image = media.image,
+                    banner = media.banner
+                )
+            )
+            newSubscriptionCount++
+            val notification = createNotification(
+                context.applicationContext,
+                media,
+                text.first,
+                text.second
+            )
+            if (hasNotificationPermission(context)) {
+                NotificationManagerCompat.from(context)
+                    .notify(
+                        CHANNEL_SUBSCRIPTION_CHECK,
+                        System.currentTimeMillis().toInt(),
+                        notification
+                    )
+            }
+        }
+        return newSubscriptionCount
+    }
+
+    private suspend fun checkSubscriptionMedia(
+        context: Context,
+        subKey: Int,
+        media: SubscriptionHelper.Companion.SubscribeMedia,
+        index: Map<Int, Int>,
+        progressCallback: (Int, String) -> Unit
+    ): Pair<String, FileUrl?>? {
+        return if (media.isAnime) {
+            val parser = SubscriptionHelper.getAnimeParser(media.id)
+            progressCallback(index[subKey]!!, parser.name)
+            val ep: Episode? = SubscriptionHelper.getEpisode(parser, media)
+            if (ep != null) {
+                val filler = if (ep.isFiller) " [Filler]" else ""
+                val title = if (ep.title != null) " : ${ep.title}" else ""
+                context.getString(R.string.episode) + "${ep.number}$title$filler " + context.getString(R.string.just_released) to ep.thumbnail
+            } else null
+        } else {
+            val parser = SubscriptionHelper.getMangaParser(media.id)
+            progressCallback(index[subKey]!!, parser.name)
+            val ep: MangaChapter? = SubscriptionHelper.getChapter(parser, media)
+            if (ep != null) ep.number + " " + context.getString(R.string.just_released) to null
+            else null
+        }
+    }
+
 }

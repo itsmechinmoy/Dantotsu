@@ -88,6 +88,7 @@ class HomeFragment : Fragment() {
 
     val model: AnilistHomeViewModel by activityViewModels()
 
+    @Suppress("ComplexMethod", "LongMethod")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val scope = viewLifecycleOwner.lifecycleScope
         Logger.log("HomeFragment")
@@ -117,7 +118,7 @@ class HomeFragment : Fragment() {
                 }
 
                 val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
-                val bannerUrl = if (rescueMode) (Anilist.bg ?: MAL.avatar) else Anilist.bg
+                val bannerUrl = if (rescueMode) Anilist.bg ?: MAL.avatar else Anilist.bg
                 blurImage(
                     if (bannerAnimations) currentBinding.homeUserBg else currentBinding.homeUserBgNoKen,
                     bannerUrl
@@ -203,7 +204,7 @@ class HomeFragment : Fragment() {
         binding.homeTopContainer.updatePadding(top = statusBarHeight)
 
         var reached = false
-        val duration = ((PrefManager.getVal(PrefName.AnimationSpeed) as Float) * 200).toLong()
+        val duration = (PrefManager.getVal<Float>(PrefName.AnimationSpeed) * 200).toLong()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             binding.homeScroll.setOnScrollChangeListener { _, _, _, _, _ ->

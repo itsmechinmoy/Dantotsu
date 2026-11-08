@@ -152,72 +152,88 @@ abstract class BaseImageAdapter(
             val toChap = transition.toChapter
 
             if (transition.isPrevious) {
-                binding.transitionFinishedHeader.text = itemView.context.getString(R.string.transition_previous)
-                if (toChap != null) {
-                    binding.transitionFinishedTitle.text = activity.getChapterDisplayTitle(toChap)
-                } else {
-                    binding.transitionFinishedTitle.text = itemView.context.getString(R.string.transition_no_previous)
-                }
+                bindPreviousTransition(transition, fromChap, toChap)
+            } else {
+                bindNextTransition(transition, fromChap, toChap)
+            }
+        }
 
+        private fun bindPreviousTransition(
+            transition: ReaderItem.Transition,
+            fromChap: MangaChapter,
+            toChap: MangaChapter?
+        ) {
+            binding.transitionFinishedHeader.text = itemView.context.getString(R.string.transition_previous)
+            if (toChap != null) {
+                binding.transitionFinishedTitle.text = activity.getChapterDisplayTitle(toChap)
+            } else {
+                binding.transitionFinishedTitle.text = itemView.context.getString(R.string.transition_no_previous)
+            }
+
+            binding.transitionNextHeader.visibility = View.VISIBLE
+            binding.transitionNextHeader.text = itemView.context.getString(R.string.transition_current)
+            binding.transitionNextTitle.visibility = View.VISIBLE
+            binding.transitionNextTitle.text = activity.getChapterDisplayTitle(fromChap)
+
+            if (transition.isLoading) {
+                binding.transitionLoadingContainer.visibility = View.VISIBLE
+                binding.transitionLoadingText.text = itemView.context.getString(R.string.transition_loading_previous)
+            } else {
+                binding.transitionLoadingContainer.visibility = View.GONE
+            }
+
+            if (settings.layout == CurrentReaderSettings.Layouts.PAGED && toChap != null) {
+                binding.transitionNextButton.visibility = View.VISIBLE
+                binding.transitionNextButton.text = itemView.context.getString(R.string.transition_read_previous)
+                binding.transitionNextButton.setIconResource(R.drawable.ic_round_arrow_back_ios_new_24)
+                binding.transitionNextButton.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_START
+                binding.transitionNextButton.setOnClickListener {
+                    activity.loadPreviousChapter()
+                }
+            } else {
+                binding.transitionNextButton.visibility = View.GONE
+            }
+        }
+
+        private fun bindNextTransition(
+            transition: ReaderItem.Transition,
+            fromChap: MangaChapter,
+            toChap: MangaChapter?
+        ) {
+            val finishedTitle = activity.getChapterDisplayTitle(fromChap)
+            binding.transitionFinishedHeader.text = itemView.context.getString(R.string.transition_finished)
+            binding.transitionFinishedTitle.text = finishedTitle
+
+            binding.transitionNextHeader.text = itemView.context.getString(R.string.transition_next)
+            if (toChap != null) {
+                val nextTitle = activity.getChapterDisplayTitle(toChap)
                 binding.transitionNextHeader.visibility = View.VISIBLE
-                binding.transitionNextHeader.text = itemView.context.getString(R.string.transition_current)
                 binding.transitionNextTitle.visibility = View.VISIBLE
-                binding.transitionNextTitle.text = activity.getChapterDisplayTitle(fromChap)
+                binding.transitionNextTitle.text = nextTitle
 
                 if (transition.isLoading) {
                     binding.transitionLoadingContainer.visibility = View.VISIBLE
-                    binding.transitionLoadingText.text = itemView.context.getString(R.string.transition_loading_previous)
                 } else {
                     binding.transitionLoadingContainer.visibility = View.GONE
                 }
 
-                if (settings.layout == CurrentReaderSettings.Layouts.PAGED && toChap != null) {
+                if (settings.layout == CurrentReaderSettings.Layouts.PAGED) {
                     binding.transitionNextButton.visibility = View.VISIBLE
-                    binding.transitionNextButton.text = itemView.context.getString(R.string.transition_read_previous)
-                    binding.transitionNextButton.setIconResource(R.drawable.ic_round_arrow_back_ios_new_24)
-                    binding.transitionNextButton.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_START
+                    binding.transitionNextButton.text = itemView.context.getString(R.string.transition_read_next)
+                    binding.transitionNextButton.setIconResource(R.drawable.ic_round_arrow_forward_ios_24)
+                    binding.transitionNextButton.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_END
                     binding.transitionNextButton.setOnClickListener {
-                        activity.loadPreviousChapter()
+                        activity.loadNextChapter()
                     }
                 } else {
                     binding.transitionNextButton.visibility = View.GONE
                 }
             } else {
-                val finishedTitle = activity.getChapterDisplayTitle(fromChap)
-                binding.transitionFinishedHeader.text = itemView.context.getString(R.string.transition_finished)
-                binding.transitionFinishedTitle.text = finishedTitle
-
-                binding.transitionNextHeader.text = itemView.context.getString(R.string.transition_next)
-                if (toChap != null) {
-                    val nextTitle = activity.getChapterDisplayTitle(toChap)
-                    binding.transitionNextHeader.visibility = View.VISIBLE
-                    binding.transitionNextTitle.visibility = View.VISIBLE
-                    binding.transitionNextTitle.text = nextTitle
-
-                    if (transition.isLoading) {
-                        binding.transitionLoadingContainer.visibility = View.VISIBLE
-                    } else {
-                        binding.transitionLoadingContainer.visibility = View.GONE
-                    }
-
-                    if (settings.layout == CurrentReaderSettings.Layouts.PAGED) {
-                        binding.transitionNextButton.visibility = View.VISIBLE
-                        binding.transitionNextButton.text = itemView.context.getString(R.string.transition_read_next)
-                        binding.transitionNextButton.setIconResource(R.drawable.ic_round_arrow_forward_ios_24)
-                        binding.transitionNextButton.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_END
-                        binding.transitionNextButton.setOnClickListener {
-                            activity.loadNextChapter()
-                        }
-                    } else {
-                        binding.transitionNextButton.visibility = View.GONE
-                    }
-                } else {
-                    binding.transitionNextHeader.visibility = View.VISIBLE
-                    binding.transitionNextTitle.visibility = View.VISIBLE
-                    binding.transitionNextTitle.text = itemView.context.getString(R.string.transition_no_next)
-                    binding.transitionLoadingContainer.visibility = View.GONE
-                    binding.transitionNextButton.visibility = View.GONE
-                }
+                binding.transitionNextHeader.visibility = View.VISIBLE
+                binding.transitionNextTitle.visibility = View.VISIBLE
+                binding.transitionNextTitle.text = itemView.context.getString(R.string.transition_no_next)
+                binding.transitionLoadingContainer.visibility = View.GONE
+                binding.transitionNextButton.visibility = View.GONE
             }
         }
     }
@@ -364,68 +380,7 @@ abstract class BaseImageAdapter(
 
                 withContext(Dispatchers.IO) {
                     val localFile = File(link.url)
-                    val baseBitmap = when {
-                        localFile.exists() -> {
-                            val glideBitmap = try {
-                                Glide.with(this@loadBitmap)
-                                    .asBitmap()
-                                    .load(localFile.absoluteFile)
-                                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                                    .submit()
-                                    .get()
-                            } catch (_: Exception) { null }
-                            glideBitmap ?: try {
-                                localFile.inputStream().use { decodeWithLibvips(it) }
-                            } catch (_: Exception) { null }
-                        }
-                        link.url.startsWith("content://") -> {
-                            val glideBitmap = try {
-                                Glide.with(this@loadBitmap)
-                                    .asBitmap()
-                                    .load(Uri.parse(link.url))
-                                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                                    .submit()
-                                    .get()
-                            } catch (_: Exception) { null }
-                            glideBitmap ?: try {
-                                contentResolver.openInputStream(Uri.parse(link.url))?.use { decodeWithLibvips(it) }
-                            } catch (_: Exception) { null }
-                        }
-                        else -> {
-                            val imageData = mangaCache.get(link.url)
-                            val cachedBitmap = imageData?.fetchAndProcessImage(
-                                imageData.page,
-                                imageData.source
-                            )
-                            cachedBitmap ?: run {
-                                val glideBitmap = try {
-                                    Glide.with(this@loadBitmap)
-                                        .asBitmap()
-                                        .load(GlideUrl(link.url) { link.headers })
-                                        .diskCacheStrategy(DiskCacheStrategy.DATA)
-                                        .submit()
-                                        .get()
-                                } catch (_: Exception) {
-                                    null
-                                }
-                                glideBitmap ?: run {
-                                    // Fallback to native libvips over network for unsupported/exotic formats (e.g. JXL / AVIF / HEIF)
-                                    try {
-                                        val okHttpClient = uy.kohesive.injekt.Injekt.get<OkHttpClient>()
-                                        val requestBuilder = Request.Builder().url(link.url)
-                                        link.headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
-                                        okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
-                                            if (response.isSuccessful) {
-                                                response.body?.byteStream()?.use { decodeWithLibvips(it) }
-                                            } else null
-                                        }
-                                    } catch (_: Exception) {
-                                        null
-                                    }
-                                }
-                            }
-                        }
-                    } ?: return@withContext null
+                    val baseBitmap = this@loadBitmap.decodeSourceBitmap(link, mangaCache) ?: return@withContext null
 
                     val result = if (transforms.isEmpty()) {
                         baseBitmap
@@ -506,15 +461,32 @@ abstract class BaseImageAdapter(
         ): Bitmap {
             if (dstWidth <= 0 || dstHeight <= 0) return src
             if (src.width == dstWidth && src.height == dstHeight) return src
-            return when (quality) {
-                CurrentReaderSettings.ImageQuality.FAST ->
-                    Bitmap.createScaledBitmap(src, dstWidth, dstHeight, true)
+            return try {
+                when (quality) {
+                    CurrentReaderSettings.ImageQuality.FAST ->
+                        Bitmap.createScaledBitmap(src, dstWidth, dstHeight, true)
 
-                CurrentReaderSettings.ImageQuality.BALANCED ->
+                    CurrentReaderSettings.ImageQuality.BALANCED ->
+                        scaleBoxFilter(src, dstWidth, dstHeight)
+
+                    CurrentReaderSettings.ImageQuality.LANCZOS -> {
+                        if (src.width * src.height > 6_000_000L || dstWidth * dstHeight > 6_000_000L) {
+                            scaleBoxFilter(src, dstWidth, dstHeight)
+                        } else {
+                            scaleLanczos3(src, dstWidth, dstHeight)
+                        }
+                    }
+                }
+            } catch (_: Throwable) {
+                try {
                     scaleBoxFilter(src, dstWidth, dstHeight)
-
-                CurrentReaderSettings.ImageQuality.LANCZOS ->
-                    scaleLanczos3(src, dstWidth, dstHeight)
+                } catch (_: Throwable) {
+                    try {
+                        Bitmap.createScaledBitmap(src, dstWidth, dstHeight, true)
+                    } catch (_: Throwable) {
+                        src
+                    }
+                }
             }
         }
 
@@ -574,64 +546,159 @@ abstract class BaseImageAdapter(
             val scaleX = srcW.toDouble() / dstW
             val scaleY = srcH.toDouble() / dstH
 
-            // Horizontal pass into intermediate 1D float buffer (RGBA)
-            val intermediate = FloatArray(dstW * srcH * 4)
+            // Precalculate horizontal filter weights once for each destination X coordinate
+            val hStarts = IntArray(dstW)
+            val hWeights = Array(dstW) { FloatArray(0) }
             for (x in 0 until dstW) {
                 val srcXf = (x + 0.5) * scaleX - 0.5
                 val start = (floor(srcXf).toInt() - LANCZOS_A + 1).coerceAtLeast(0)
-                val end   = (floor(srcXf).toInt() + LANCZOS_A).coerceAtMost(srcW - 1)
-                val weights = DoubleArray(end - start + 1) { lanczosKernel(srcXf - (start + it)) }
+                val end = (floor(srcXf).toInt() + LANCZOS_A).coerceAtMost(srcW - 1)
+                val count = end - start + 1
+                val weights = DoubleArray(count) { lanczosKernel(srcXf - (start + it)) }
                 val weightSum = weights.sum().coerceAtLeast(1e-9)
-                val xOffset = x * srcH * 4
-                for (y in 0 until srcH) {
-                    var r = 0.0; var g = 0.0; var b = 0.0; var a = 0.0
-                    for ((i, sx) in (start..end).withIndex()) {
-                        val px = srcPixels[y * srcW + sx]
-                        val w = weights[i]
-                        a += Color.alpha(px) * w
-                        r += Color.red(px) * w
-                        g += Color.green(px) * w
-                        b += Color.blue(px) * w
+                hStarts[x] = start
+                hWeights[x] = FloatArray(count) { (weights[it] / weightSum).toFloat() }
+            }
+
+            // Sliding window cache of horizontally-filtered rows (at most 2 * LANCZOS_A rows in memory at any time)
+            // Memory footprint: ~6 rows * dstW * 4 floats ~= 100 KB instead of 244 MB!
+            val rowCache = HashMap<Int, FloatArray>(16)
+
+            fun getResampledRow(sy: Int): FloatArray {
+                return rowCache.getOrPut(sy) {
+                    val row = FloatArray(dstW * 4)
+                    val srcRowOffset = sy * srcW
+                    for (x in 0 until dstW) {
+                        val start = hStarts[x]
+                        val weights = hWeights[x]
+                        var r = 0f; var g = 0f; var b = 0f; var a = 0f
+                        for (i in 0 until weights.size) {
+                            val px = srcPixels[srcRowOffset + start + i]
+                            val w = weights[i]
+                            a += ((px ushr 24) and 0xFF) * w
+                            r += ((px ushr 16) and 0xFF) * w
+                            g += ((px ushr 8) and 0xFF) * w
+                            b += (px and 0xFF) * w
+                        }
+                        val base = x * 4
+                        row[base] = r
+                        row[base + 1] = g
+                        row[base + 2] = b
+                        row[base + 3] = a
                     }
-                    val base = xOffset + y * 4
-                    intermediate[base    ] = (r / weightSum).toFloat()
-                    intermediate[base + 1] = (g / weightSum).toFloat()
-                    intermediate[base + 2] = (b / weightSum).toFloat()
-                    intermediate[base + 3] = (a / weightSum).toFloat()
+                    row
                 }
             }
 
-            // Vertical pass from intermediate into dst
+            // Vertical pass from intermediate rows directly into dstPixels
             for (y in 0 until dstH) {
                 val srcYf = (y + 0.5) * scaleY - 0.5
                 val start = (floor(srcYf).toInt() - LANCZOS_A + 1).coerceAtLeast(0)
                 val end   = (floor(srcYf).toInt() + LANCZOS_A).coerceAtMost(srcH - 1)
-                val weights = DoubleArray(end - start + 1) { lanczosKernel(srcYf - (start + it)) }
+                val count = end - start + 1
+                val weights = DoubleArray(count) { lanczosKernel(srcYf - (start + it)) }
                 val weightSum = weights.sum().coerceAtLeast(1e-9)
+
+                // Evict rows that will never be used again
+                rowCache.keys.retainAll { it >= start }
+
+                // Pre-warm needed rows
+                for (sy in start..end) {
+                    getResampledRow(sy)
+                }
+
                 val yDstOffset = y * dstW
                 for (x in 0 until dstW) {
-                    var r = 0.0; var g = 0.0; var b = 0.0; var a = 0.0
-                    val xOffset = x * srcH * 4
-                    for ((i, sy) in (start..end).withIndex()) {
-                        val base = xOffset + sy * 4
-                        val w = weights[i]
-                        r += intermediate[base    ] * w
-                        g += intermediate[base + 1] * w
-                        b += intermediate[base + 2] * w
-                        a += intermediate[base + 3] * w
+                    var r = 0f; var g = 0f; var b = 0f; var a = 0f
+                    val base = x * 4
+                    for (i in 0 until count) {
+                        val sy = start + i
+                        val intermediateRow = rowCache[sy] ?: continue
+                        val w = (weights[i] / weightSum).toFloat()
+                        r += intermediateRow[base] * w
+                        g += intermediateRow[base + 1] * w
+                        b += intermediateRow[base + 2] * w
+                        a += intermediateRow[base + 3] * w
                     }
-                    dstPixels[yDstOffset + x] = Color.argb(
-                        (a / weightSum).roundToInt().coerceIn(0, 255),
-                        (r / weightSum).roundToInt().coerceIn(0, 255),
-                        (g / weightSum).roundToInt().coerceIn(0, 255),
-                        (b / weightSum).roundToInt().coerceIn(0, 255)
-                    )
+                    dstPixels[yDstOffset + x] =
+                        (a.roundToInt().coerceIn(0, 255) shl 24) or
+                        (r.roundToInt().coerceIn(0, 255) shl 16) or
+                        (g.roundToInt().coerceIn(0, 255) shl 8) or
+                        b.roundToInt().coerceIn(0, 255)
                 }
             }
 
             val dst = Bitmap.createBitmap(dstW, dstH, Bitmap.Config.ARGB_8888)
             dst.setPixels(dstPixels, 0, dstW, 0, 0, dstW, dstH)
             return dst
+        }
+
+        private suspend fun Context.decodeSourceBitmap(
+            link: FileUrl,
+            mangaCache: MangaCache
+        ): Bitmap? {
+            val localFile = File(link.url)
+            return when {
+                localFile.exists() -> {
+                    val glideBitmap = try {
+                        Glide.with(this)
+                            .asBitmap()
+                            .load(localFile.absoluteFile)
+                            .diskCacheStrategy(DiskCacheStrategy.NONE)
+                            .submit()
+                            .get()
+                    } catch (_: Exception) { null }
+                    glideBitmap ?: try {
+                        localFile.inputStream().use { decodeWithLibvips(it) }
+                    } catch (_: Exception) { null }
+                }
+                link.url.startsWith("content://") -> {
+                    val glideBitmap = try {
+                        Glide.with(this)
+                            .asBitmap()
+                            .load(Uri.parse(link.url))
+                            .diskCacheStrategy(DiskCacheStrategy.NONE)
+                            .submit()
+                            .get()
+                    } catch (_: Exception) { null }
+                    glideBitmap ?: try {
+                        contentResolver.openInputStream(Uri.parse(link.url))?.use { decodeWithLibvips(it) }
+                    } catch (_: Exception) { null }
+                }
+                else -> {
+                    val imageData = mangaCache.get(link.url)
+                    val cachedBitmap = imageData?.fetchAndProcessImage(
+                        imageData.page,
+                        imageData.source
+                    )
+                    cachedBitmap ?: run {
+                        val glideBitmap = try {
+                            Glide.with(this)
+                                .asBitmap()
+                                .load(GlideUrl(link.url) { link.headers })
+                                .diskCacheStrategy(DiskCacheStrategy.DATA)
+                                .submit()
+                                .get()
+                        } catch (_: Exception) {
+                            null
+                        }
+                        glideBitmap ?: run {
+                            try {
+                                val okHttpClient = uy.kohesive.injekt.Injekt.get<OkHttpClient>()
+                                val requestBuilder = Request.Builder().url(link.url)
+                                link.headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
+                                okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+                                    if (response.isSuccessful) {
+                                        response.body?.byteStream()?.use { decodeWithLibvips(it) }
+                                    } else null
+                                }
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

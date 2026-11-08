@@ -70,21 +70,8 @@ class LocalNovelSource(
             0L
         }
 
-        val localDir = baseDir.findFile("local") ?: baseDir
-        val localNovelDir = localDir.findFile("novel") ?: localDir
-
-        var novelDirs = localNovelDir.listFiles()
-            .filter { it.isDirectory && !it.name.orEmpty().startsWith('.') }
-            .distinctBy { it.name }
-            .filter {
-                if (lastModifiedLimit == 0L && query.isBlank()) {
-                    true
-                } else if (lastModifiedLimit == 0L) {
-                    it.name.orEmpty().contains(query, ignoreCase = true)
-                } else {
-                    it.lastModified() >= lastModifiedLimit
-                }
-            }
+        val localNovelDir = tachiyomi.source.local.LocalSourceHelper.resolveTargetDir(baseDir, "novel")
+        var novelDirs = tachiyomi.source.local.LocalSourceHelper.filterEntries(localNovelDir, lastModifiedLimit, query)
 
         filters.forEach { filter ->
             when (filter) {

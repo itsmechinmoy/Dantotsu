@@ -89,35 +89,8 @@ class AnimeExtensionPagingSource(
 ) : PagingSource<Int, AnimeExtension.Available>() {
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, AnimeExtension.Available> {
-        val position = params.key ?: 0
-        val installedExtensions = installedExtensionsFlow.map { it.pkgName }.toSet()
-        val availableExtensions =
-            availableExtensionsFlow.filterNot { it.pkgName in installedExtensions }
-        val query = searchQuery
-        val isNsfwEnabled: Boolean = PrefManager.getVal(PrefName.NSFWExtension)
-
-        val filteredExtensions = if (query.isEmpty()) {
-            availableExtensions
-        } else {
-            availableExtensions.filter { it.name.contains(query, ignoreCase = true) }
-        }
-        val lang: String = PrefManager.getVal(PrefName.LangSort)
-        val langFilter =
-            if (lang != "all") filteredExtensions.filter { it.lang == lang } else filteredExtensions
-        val filternfsw = if (isNsfwEnabled) langFilter else langFilter.filterNot { it.isNsfw }
-        return try {
-            val sublist = filternfsw.subList(
-                fromIndex = position,
-                toIndex = (position + params.loadSize).coerceAtMost(filternfsw.size)
-            )
-            LoadResult.Page(
-                data = sublist,
-                prevKey = if (position == 0) null else position - params.loadSize,
-                nextKey = if (position + params.loadSize >= filternfsw.size) null else position + params.loadSize
-            )
-        } catch (e: Exception) {
-            LoadResult.Error(e)
-        }
+        val installedPkgs = installedExtensionsFlow.map { it.pkgName }.toSet()
+        return ExtensionPagingHelper.filterAndPaginate(availableExtensionsFlow, installedPkgs, searchQuery, params)
     }
 
     override fun getRefreshKey(state: PagingState<Int, AnimeExtension.Available>): Int? {
@@ -181,19 +154,7 @@ class AnimeExtensionAdapter(private val clickListener: OnAnimeInstallClickListen
                 val extension = getItem(bindingAdapterPosition)
                 if (extension != null) {
                     clickListener.onInstallClick(extension)
-                    binding.closeTextView.setImageResource(R.drawable.ic_sync)
-                    scope.launch {
-                        while (isActive) {
-                            withContext(Dispatchers.Main) {
-                                binding.closeTextView.animate()
-                                    .rotationBy(360f)
-                                    .setDuration(1000)
-                                    .setInterpolator(LinearInterpolator())
-                                    .start()
-                            }
-                            delay(1000)
-                        }
-                    }
+                    ExtensionPagingHelper.animateInstallSync(binding.closeTextView, scope)
                 }
             }
         }

@@ -483,47 +483,62 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
 
     fun openSettings(pkg: MangaExtension.Installed) {
         val changeUIVisibility: (Boolean) -> Unit = { show ->
-            val mediaActivity = activity as? MediaDetailsActivity
-            val viewPager =
-                mediaActivity?.findViewById<ViewPager2>(R.id.mediaViewPager)
-            val appbar =
-                mediaActivity?.findViewById<AppBarLayout>(R.id.mediaAppBar)
-            val shadow = mediaActivity?.findViewById<View>(R.id.mediaDetailsShadow)
-            val parent =
-                mediaActivity?.findViewById<FrameLayout>(R.id.mediaExtensionPref)
-            val card =
-                mediaActivity?.findViewById<CardView>(R.id.mediaExtensionPrefCard)
-
-            viewPager?.isGone = !show
-            shadow?.isGone = !show
-            appbar?.isGone = !show
-            parent?.isVisible = !show
-            card?.isVisible = !show
-            if (show) {
-                mediaActivity?.let {
-                    setNavigationTheme()
-                }
-            } else {
-                parent?.updatePadding(top = 0, bottom = 0)
+            val activity = activity
+            if (activity is MediaDetailsActivity && isAdded) {
+                activity.findViewById<AppBarLayout>(R.id.mediaAppBar).isVisible = show
+                activity.findViewById<ViewPager2>(R.id.mediaViewPager).isVisible = show
+                activity.findViewById<CardView>(R.id.mediaCover).isVisible = show
+                activity.findViewById<CardView>(R.id.mediaClose).isVisible = show
+                activity.navBar.isVisible = show
+                activity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer).isGone = show
             }
         }
+        var itemSelected = false
+        val allSettings = pkg.sources.filterIsInstance<ConfigurableSource>()
+        if (allSettings.isNotEmpty()) {
+            var selectedSetting = allSettings[0]
+            if (allSettings.size > 1) {
+                val names =
+                    allSettings.map { LanguageMapper.getLanguageName(it.lang) }.toTypedArray()
+                requireContext().customAlertDialog().apply {
+                    setTitle("Select a Source")
+                    singleChoiceItems(names) { which ->
+                        selectedSetting = allSettings[which]
+                        itemSelected = true
 
-        val fragment = MangaSourcePreferencesFragment.getInstance(pkg.pkgName)
-        fragment.onDismissListener = {
-            changeUIVisibility(true)
+                        val fragment =
+                            MangaSourcePreferencesFragment().getInstance(selectedSetting.id) {
+                                changeUIVisibility(true)
+                                loadChapters(media.selected!!.sourceIndex, true)
+                            }
+                        parentFragmentManager.beginTransaction()
+                            .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
+                            .replace(R.id.fragmentExtensionsContainer, fragment)
+                            .addToBackStack(null)
+                            .commit()
+                    }
+                    onDismiss {
+                        if (!itemSelected) {
+                            changeUIVisibility(true)
+                        }
+                    }
+                    show()
+                }
+            } else {
+                val fragment = MangaSourcePreferencesFragment().getInstance(selectedSetting.id) {
+                    changeUIVisibility(true)
+                    loadChapters(media.selected!!.sourceIndex, true)
+                }
+                parentFragmentManager.beginTransaction()
+                    .setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
+                    .replace(R.id.fragmentExtensionsContainer, fragment)
+                    .addToBackStack(null)
+                    .commit()
+            }
+            changeUIVisibility(false)
+        } else {
+            Toast.makeText(requireContext(), "Source is not configurable", Toast.LENGTH_SHORT).show()
         }
-        val sources = pkg.sources.filterIsInstance<ConfigurableSource>()
-        val hasAllSourcesSelected =
-            pkg.sources.size == model.mangaReadSources?.list?.filterIsInstance<DynamicMangaParser>()
-                ?.map { it.extension }?.size
-        if (sources.isEmpty() || hasAllSourcesSelected) {
-            snackString(getString(R.string.no_sources_detected))
-            return
-        }
-        val transaction = childFragmentManager.beginTransaction()
-        transaction.replace(R.id.mediaExtensionPref, fragment)
-        transaction.commit()
-        changeUIVisibility(false)
     }
 
     fun onMangaChapterClick(i: MangaChapter) {

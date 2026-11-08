@@ -3,6 +3,7 @@ package ani.dantotsu.parsers
 import ani.dantotsu.FileUrl
 import eu.kanade.tachiyomi.animesource.model.Track
 import java.io.Serializable
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Used to extract videos from a specific video host,
@@ -68,6 +69,8 @@ data class VideoServer(
 ) : Serializable {
     val isPreferred: Boolean
         get() = video?.preferred == true
+    val hoster: String?
+        get() = (video?.memo?.get("hoster") as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
     constructor(name: String, embedUrl: String, extraData: Map<String, String>? = null)
             : this(name, FileUrl(embedUrl), extraData)
 
@@ -143,6 +146,7 @@ data class Video(
      * **/
     val drm: DrmInfo? = null,
     val preferred: Boolean = false,
+    val hoster: String? = null,
 ) : Serializable {
 
     constructor(

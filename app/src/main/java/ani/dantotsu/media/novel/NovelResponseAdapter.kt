@@ -33,6 +33,7 @@ class NovelResponseAdapter(
 
     inner class CoverViewHolder(val binding: ItemNovelResponseBinding) :
         RecyclerView.ViewHolder(binding.root) {
+        @Suppress("ComplexMethod", "LongMethod")
         fun bind(novel: ShowResponse, position: Int) {
             setAnimation(fragment.requireContext(), binding.root)
             binding.itemMediaImage.loadImage(novel.coverUrl, 400, 0)
@@ -73,6 +74,7 @@ class NovelResponseAdapter(
         
         private val activeCoroutines = mutableSetOf<String>()
 
+        @Suppress("ComplexMethod", "LongMethod")
         fun bind(novel: ShowResponse, position: Int) {
             binding.itemChapterNumber.text = novel.name
             
@@ -211,6 +213,7 @@ class NovelResponseAdapter(
 
     inner class CompactViewHolder(val binding: ItemEpisodeCompactBinding) :
         RecyclerView.ViewHolder(binding.root) {
+        @Suppress("ComplexMethod", "LongMethod")
         fun bind(novel: ShowResponse, position: Int) {
             val chapterNumStr = novel.extra?.get("chapterNumber") ?: novel.name
             val parsedNumber = ani.dantotsu.media.MediaNameAdapter.findChapterNumber(chapterNumStr)

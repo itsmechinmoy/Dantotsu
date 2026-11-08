@@ -47,179 +47,9 @@ object LnReaderJsEngine {
             val jsoupElements = mutableMapOf<Int, org.jsoup.nodes.Element>()
             var elementCounter = 0
 
-            qjs.set("__dantotsuJsoup", JsoupBridge::class.java, object : JsoupBridge {
-                override fun parse(html: String): Int {
-                    val doc = org.jsoup.Jsoup.parse(html)
-                    val id = ++elementCounter
-                    jsoupElements[id] = doc
-                    return id
-                }
-                override fun select(nodeIdsJson: String, selector: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    val resultIds = mutableListOf<Int>()
-                    for (id in ids) {
-                        val node = jsoupElements[id] ?: continue
-                        try {
-                            val elements = node.select(selector)
-                            for (el in elements) {
-                                val newId = ++elementCounter
-                                jsoupElements[newId] = el
-                                resultIds.add(newId)
-                            }
-                        } catch (e: Exception) {
-                            Logger.log("Jsoup select error for '$selector': ${e.message}")
-                        }
-                    }
-                    return Json.encodeToString(resultIds)
-                }
-                override fun text(nodeIdsJson: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    return ids.mapNotNull { jsoupElements[it]?.text() }.joinToString("")
-                }
-                override fun attr(nodeIdsJson: String, attr: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    return jsoupElements[ids.firstOrNull()]?.attr(attr) ?: ""
-                }
-                override fun html(nodeIdsJson: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    return ids.mapNotNull { jsoupElements[it]?.html() }.joinToString("\n")
-                }
-                override fun outerHtml(nodeIdsJson: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    return ids.mapNotNull { jsoupElements[it]?.outerHtml() }.joinToString("\n")
-                }
-                override fun remove(nodeIdsJson: String) {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    ids.forEach { jsoupElements[it]?.remove() }
-                }
-                override fun removeAttr(nodeIdsJson: String, attr: String) {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    ids.forEach { jsoupElements[it]?.removeAttr(attr) }
-                }
-                override fun setAttr(nodeIdsJson: String, attr: String, value: String) {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    ids.forEach { jsoupElements[it]?.attr(attr, value) }
-                }
-                override fun addClass(nodeIdsJson: String, className: String) {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    ids.forEach { jsoupElements[it]?.addClass(className) }
-                }
-                override fun removeClass(nodeIdsJson: String, className: String) {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    ids.forEach { jsoupElements[it]?.removeClass(className) }
-                }
-                override fun next(nodeIdsJson: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    val resultIds = mutableListOf<Int>()
-                    for (id in ids) {
-                        jsoupElements[id]?.nextElementSibling()?.let {
-                            val newId = ++elementCounter
-                            jsoupElements[newId] = it
-                            resultIds.add(newId)
-                        }
-                    }
-                    return Json.encodeToString(resultIds)
-                }
-                override fun prev(nodeIdsJson: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    val resultIds = mutableListOf<Int>()
-                    for (id in ids) {
-                        jsoupElements[id]?.previousElementSibling()?.let {
-                            val newId = ++elementCounter
-                            jsoupElements[newId] = it
-                            resultIds.add(newId)
-                        }
-                    }
-                    return Json.encodeToString(resultIds)
-                }
-                override fun parent(nodeIdsJson: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    val resultIds = mutableListOf<Int>()
-                    for (id in ids) {
-                        jsoupElements[id]?.parent()?.let {
-                            val newId = ++elementCounter
-                            jsoupElements[newId] = it
-                            resultIds.add(newId)
-                        }
-                    }
-                    return Json.encodeToString(resultIds)
-                }
-                override fun parents(nodeIdsJson: String, selector: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    val resultIds = mutableListOf<Int>()
-                    for (id in ids) {
-                        val node = jsoupElements[id] ?: continue
-                        val pList = if (selector.isNotBlank()) node.parents().select(selector) else node.parents()
-                        for (el in pList) {
-                            val newId = ++elementCounter
-                            jsoupElements[newId] = el
-                            resultIds.add(newId)
-                        }
-                    }
-                    return Json.encodeToString(resultIds)
-                }
-                override fun closest(nodeIdsJson: String, selector: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    val resultIds = mutableListOf<Int>()
-                    for (id in ids) {
-                        var curr = jsoupElements[id]
-                        while (curr != null) {
-                            if (selector.isBlank() || curr.`is`(selector)) {
-                                val newId = ++elementCounter
-                                jsoupElements[newId] = curr
-                                resultIds.add(newId)
-                                break
-                            }
-                            curr = curr.parent()
-                        }
-                    }
-                    return Json.encodeToString(resultIds)
-                }
-                override fun children(nodeIdsJson: String, selector: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    val resultIds = mutableListOf<Int>()
-                    for (id in ids) {
-                        val node = jsoupElements[id] ?: continue
-                        val ch = if (selector.isNotBlank()) node.children().select(selector) else node.children()
-                        for (el in ch) {
-                            val newId = ++elementCounter
-                            jsoupElements[newId] = el
-                            resultIds.add(newId)
-                        }
-                    }
-                    return Json.encodeToString(resultIds)
-                }
-                override fun siblings(nodeIdsJson: String, selector: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    val resultIds = mutableListOf<Int>()
-                    for (id in ids) {
-                        val node = jsoupElements[id] ?: continue
-                        val sibs = if (selector.isNotBlank()) node.siblingElements().select(selector) else node.siblingElements()
-                        for (el in sibs) {
-                            val newId = ++elementCounter
-                            jsoupElements[newId] = el
-                            resultIds.add(newId)
-                        }
-                    }
-                    return Json.encodeToString(resultIds)
-                }
-                override fun hasClass(nodeIdsJson: String, className: String): Boolean {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    return ids.any { jsoupElements[it]?.hasClass(className) == true }
-                }
-                override fun attrs(nodeIdsJson: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    val element = jsoupElements[ids.firstOrNull()] ?: return "{}"
-                    val map = element.attributes().associate { it.key to it.value }
-                    return Json.encodeToString(map)
-                }
-                override fun tagName(nodeIdsJson: String): String {
-                    val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
-                    return jsoupElements[ids.firstOrNull()]?.tagName() ?: ""
-                }
-            })
+            registerJsoupBridge(qjs, jsoupElements)
 
-            qjs.set("__dantotsuFetch", FetchBridge::class.java, object : FetchBridge {
+                        qjs.set("__dantotsuFetch", FetchBridge::class.java, object : FetchBridge {
                 override fun fetch(url: String, method: String, headersJson: String, body: String?): String {
                     return executeFetch(url, method, headersJson, body)
                 }
@@ -291,6 +121,11 @@ object LnReaderJsEngine {
                         var fn = target["$method"];
                         if (typeof fn !== "function") throw new Error("Method '$method' not found on plugin '$pluginId'");
                         var args = JSON.parse(${Json.encodeToString(argsJson)});
+                        if (args && args.length > 1 && typeof args[1] === "object" && args[1] !== null) {
+                            if (!args[1].filters && target.filters) {
+                                args[1].filters = target.filters;
+                            }
+                        }
                         var p = Promise.resolve(fn.apply(target, args));
                         p.then(
                             function(r) {
@@ -937,16 +772,77 @@ String.prototype.substringBetween = function(l,r){
 """.trimIndent()
 
     private val FETCH_BRIDGE_JS = """
+class Headers {
+    constructor(obj) {
+        this._map = {};
+        if (obj) {
+            if (obj instanceof Headers) {
+                for (var k in obj._map) this._map[k] = obj._map[k];
+            } else if (typeof obj === 'object') {
+                for (var k in obj) {
+                    if (Object.prototype.hasOwnProperty.call(obj, k)) {
+                        this._map[String(k).toLowerCase()] = String(obj[k]);
+                    }
+                }
+            }
+        }
+    }
+    get(name) {
+        if (!name) return null;
+        var v = this._map[String(name).toLowerCase()];
+        return v === undefined ? null : v;
+    }
+    has(name) {
+        return Object.prototype.hasOwnProperty.call(this._map, String(name).toLowerCase());
+    }
+    set(name, value) {
+        this._map[String(name).toLowerCase()] = String(value);
+    }
+    append(name, value) {
+        var key = String(name).toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(this._map, key)) {
+            this._map[key] += ", " + value;
+        } else {
+            this._map[key] = String(value);
+        }
+    }
+    delete(name) {
+        delete this._map[String(name).toLowerCase()];
+    }
+    forEach(fn) {
+        for (var k in this._map) fn(this._map[k], k, this);
+    }
+    entries() {
+        var map = this._map;
+        return Object.keys(map).map(function(k) { return [k, map[k]]; });
+    }
+    toJSON() {
+        return this._map;
+    }
+}
+globalThis.Headers = Headers;
+
 var fetchApi = function(url, init) {
     var method = (init && init.method) ? init.method.toUpperCase() : "GET";
-    var headers = (init && init.headers) ? JSON.parse(JSON.stringify(init.headers)) : {};
+    var headersObj = {};
+    if (init && init.headers) {
+        if (init.headers instanceof Headers) {
+            headersObj = init.headers.toJSON();
+        } else if (typeof init.headers === 'object') {
+            for (var hk in init.headers) {
+                if (Object.prototype.hasOwnProperty.call(init.headers, hk)) {
+                    headersObj[String(hk).toLowerCase()] = String(init.headers[hk]);
+                }
+            }
+        }
+    }
     var body = null;
     
     if (init && init.body) {
         if (init.body instanceof FormData) {
             body = init.body.toString();
-            var hasContentType = Object.keys(headers).some(function(k) { return k.toLowerCase() === 'content-type'; });
-            if (!hasContentType) headers['content-type'] = 'application/x-www-form-urlencoded';
+            var hasContentType = Object.keys(headersObj).some(function(k) { return k.toLowerCase() === 'content-type'; });
+            if (!hasContentType) headersObj['content-type'] = 'application/x-www-form-urlencoded';
         } else if (typeof init.body === "string") {
             body = init.body;
         } else {
@@ -955,28 +851,20 @@ var fetchApi = function(url, init) {
     }
     
     if (init && init.referrer) {
-        headers['Referer'] = init.referrer;
+        headersObj['referer'] = init.referrer;
     }
     
-    var headersJson = JSON.stringify(headers);
+    var headersJson = JSON.stringify(headersObj);
     var resultStr = __dantotsuFetch.fetch(url, method, headersJson, body);
     var result = JSON.parse(resultStr);
-    var responseHeaders = result.headers || {};
-    responseHeaders.get = function(key) {
-        if (!key) return null;
-        var lk = key.toLowerCase();
-        for (var k in result.headers) {
-            if (k.toLowerCase() === lk) return result.headers[k];
-        }
-        return null;
-    };
+    var respHeaders = new Headers(result.headers || {});
     return Promise.resolve({
         status: result.statusCode,
         statusText: result.reasonPhrase,
         ok: result.statusCode >= 200 && result.statusCode < 300,
         url: result.url || url,
-        headers: responseHeaders,
-        text: function() { return Promise.resolve(result.body); },
+        headers: respHeaders,
+        text: function() { return Promise.resolve(result.body || ""); },
         json: function() { 
             try {
                 return Promise.resolve(JSON.parse(result.body));
@@ -984,16 +872,24 @@ var fetchApi = function(url, init) {
                 return Promise.resolve({});
             }
         },
-        body: result.body
+        body: result.body || ""
     });
 };
 
 var fetchText = function(url, init) {
-    return fetchApi(url, init).then(function(res) { return res.text(); });
+    return fetchApi(url, init).then(function(res) { 
+        return res.text(); 
+    }).catch(function() { 
+        return ""; 
+    });
 };
 
 var fetch = fetchApi;
 globalThis.fetch = fetchApi;
+globalThis.TextEncoder = TextEncoder;
+globalThis.TextDecoder = TextDecoder;
+globalThis.btoa = btoa;
+globalThis.atob = atob;
 """.trimIndent()
 
     private val HTMLPARSER_JS = """
@@ -1314,4 +1210,207 @@ function load(html) {
     return $;
 }
 """.trimIndent()
+    private fun registerJsoupBridge(
+        qjs: QuickJs,
+        jsoupElements: MutableMap<Int, org.jsoup.nodes.Element>
+    ) {
+        qjs.set("__dantotsuJsoup", JsoupBridge::class.java, QuickJsJsoupBridge(jsoupElements))
+    }
+
+    private class QuickJsJsoupBridge(
+        private val jsoupElements: MutableMap<Int, org.jsoup.nodes.Element>
+    ) : JsoupBridge {
+        private var elementCounter = 0
+
+        override fun parse(html: String): Int {
+            val doc = org.jsoup.Jsoup.parse(html)
+            val id = ++elementCounter
+            jsoupElements[id] = doc
+            return id
+        }
+
+        override fun select(nodeIdsJson: String, selector: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            val resultIds = mutableListOf<Int>()
+            for (id in ids) {
+                val node = jsoupElements[id] ?: continue
+                try {
+                    val elements = node.select(selector)
+                    for (el in elements) {
+                        val newId = ++elementCounter
+                        jsoupElements[newId] = el
+                        resultIds.add(newId)
+                    }
+                } catch (e: Exception) {
+                    Logger.log("Jsoup select error for '$selector': ${e.message}")
+                }
+            }
+            return Json.encodeToString(resultIds)
+        }
+
+        override fun text(nodeIdsJson: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            return ids.mapNotNull { jsoupElements[it]?.text() }.joinToString("")
+        }
+
+        override fun attr(nodeIdsJson: String, attr: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            return jsoupElements[ids.firstOrNull()]?.attr(attr) ?: ""
+        }
+
+        override fun html(nodeIdsJson: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            return ids.mapNotNull { jsoupElements[it]?.html() }.joinToString("\n")
+        }
+
+        override fun outerHtml(nodeIdsJson: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            return ids.mapNotNull { jsoupElements[it]?.outerHtml() }.joinToString("\n")
+        }
+
+        override fun remove(nodeIdsJson: String) {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            ids.forEach { jsoupElements[it]?.remove() }
+        }
+
+        override fun removeAttr(nodeIdsJson: String, attr: String) {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            ids.forEach { jsoupElements[it]?.removeAttr(attr) }
+        }
+
+        override fun setAttr(nodeIdsJson: String, attr: String, value: String) {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            ids.forEach { jsoupElements[it]?.attr(attr, value) }
+        }
+
+        override fun addClass(nodeIdsJson: String, className: String) {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            ids.forEach { jsoupElements[it]?.addClass(className) }
+        }
+
+        override fun removeClass(nodeIdsJson: String, className: String) {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            ids.forEach { jsoupElements[it]?.removeClass(className) }
+        }
+
+        override fun next(nodeIdsJson: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            val resultIds = mutableListOf<Int>()
+            for (id in ids) {
+                jsoupElements[id]?.nextElementSibling()?.let {
+                    val newId = ++elementCounter
+                    jsoupElements[newId] = it
+                    resultIds.add(newId)
+                }
+            }
+            return Json.encodeToString(resultIds)
+        }
+
+        override fun prev(nodeIdsJson: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            val resultIds = mutableListOf<Int>()
+            for (id in ids) {
+                jsoupElements[id]?.previousElementSibling()?.let {
+                    val newId = ++elementCounter
+                    jsoupElements[newId] = it
+                    resultIds.add(newId)
+                }
+            }
+            return Json.encodeToString(resultIds)
+        }
+
+        override fun parent(nodeIdsJson: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            val resultIds = mutableListOf<Int>()
+            for (id in ids) {
+                jsoupElements[id]?.parent()?.let {
+                    val newId = ++elementCounter
+                    jsoupElements[newId] = it
+                    resultIds.add(newId)
+                }
+            }
+            return Json.encodeToString(resultIds)
+        }
+
+        override fun parents(nodeIdsJson: String, selector: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            val resultIds = mutableListOf<Int>()
+            for (id in ids) {
+                val node = jsoupElements[id] ?: continue
+                val pList = if (selector.isNotBlank()) node.parents().select(selector) else node.parents()
+                for (el in pList) {
+                    val newId = ++elementCounter
+                    jsoupElements[newId] = el
+                    resultIds.add(newId)
+                }
+            }
+            return Json.encodeToString(resultIds)
+        }
+
+        override fun closest(nodeIdsJson: String, selector: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            val resultIds = mutableListOf<Int>()
+            for (id in ids) {
+                var curr = jsoupElements[id]
+                while (curr != null) {
+                    if (selector.isBlank() || curr.`is`(selector)) {
+                        val newId = ++elementCounter
+                        jsoupElements[newId] = curr
+                        resultIds.add(newId)
+                        break
+                    }
+                    curr = curr.parent()
+                }
+            }
+            return Json.encodeToString(resultIds)
+        }
+
+        override fun children(nodeIdsJson: String, selector: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            val resultIds = mutableListOf<Int>()
+            for (id in ids) {
+                val node = jsoupElements[id] ?: continue
+                val ch = if (selector.isNotBlank()) node.children().select(selector) else node.children()
+                for (el in ch) {
+                    val newId = ++elementCounter
+                    jsoupElements[newId] = el
+                    resultIds.add(newId)
+                }
+            }
+            return Json.encodeToString(resultIds)
+        }
+
+        override fun siblings(nodeIdsJson: String, selector: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            val resultIds = mutableListOf<Int>()
+            for (id in ids) {
+                val node = jsoupElements[id] ?: continue
+                val sibs = if (selector.isNotBlank()) node.siblingElements().select(selector) else node.siblingElements()
+                for (el in sibs) {
+                    val newId = ++elementCounter
+                    jsoupElements[newId] = el
+                    resultIds.add(newId)
+                }
+            }
+            return Json.encodeToString(resultIds)
+        }
+
+        override fun hasClass(nodeIdsJson: String, className: String): Boolean {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            return ids.any { jsoupElements[it]?.hasClass(className) == true }
+        }
+
+        override fun attrs(nodeIdsJson: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            val element = jsoupElements[ids.firstOrNull()] ?: return "{}"
+            val map = element.attributes().associate { it.key to it.value }
+            return Json.encodeToString(map)
+        }
+
+        override fun tagName(nodeIdsJson: String): String {
+            val ids = runCatching { Json.decodeFromString<List<Int>>(nodeIdsJson) }.getOrDefault(emptyList())
+            return jsoupElements[ids.firstOrNull()]?.tagName() ?: ""
+        }
+    }
+
 }

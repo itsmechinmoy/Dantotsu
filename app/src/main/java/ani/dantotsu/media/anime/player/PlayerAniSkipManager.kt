@@ -134,7 +134,7 @@ class PlayerAniSkipManager(
         val playerCurrentTime = player.currentPosition / 1000.0
         currentTimeStamp = model.timeStamps.value?.find { timestamp ->
             timestamp.interval.startTime <= playerCurrentTime &&
-                    playerCurrentTime < (timestamp.interval.endTime - 1)
+                    playerCurrentTime < timestamp.interval.endTime - 1
         }
 
         val new = currentTimeStamp

@@ -1,6 +1,7 @@
 package ani.dantotsu.media
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
 import android.os.Parcelable
 import android.view.View
@@ -78,105 +79,7 @@ class SearchActivity : AppCompatActivity() {
 
         val notSet = model.notSet
         searchType = SearchType.fromString(intent.getStringExtra("type") ?: "ANIME")
-        when (searchType) {
-            SearchType.ANIME, SearchType.MANGA -> {
-                style = PrefManager.getVal(PrefName.SearchStyle)
-                var listOnly: Boolean? = intent.getBooleanExtra("listOnly", false)
-                if (!listOnly!!) listOnly = null
-
-                if (model.notSet) {
-                    model.notSet = false
-                    model.aniMangaSearchResults = AniMangaSearchResults(
-                        intent.getStringExtra("type") ?: "ANIME",
-                        isAdult = if (Anilist.adult) intent.getBooleanExtra(
-                            "hentai",
-                            false
-                        ) else false,
-                        onList = listOnly,
-                        search = intent.getStringExtra("query"),
-                        genres = intent.getStringExtra("genre")?.let { mutableListOf(it) },
-                        tags = intent.getStringExtra("tag")?.let { mutableListOf(it) },
-                        sort = intent.getStringExtra("sortBy"),
-                        status = intent.getStringExtra("status"),
-                        source = intent.getStringExtra("source"),
-                        countryOfOrigin = intent.getStringExtra("country"),
-                        season = intent.getStringExtra("season"),
-                        seasonYear = if (intent.getStringExtra("type") == "ANIME") intent.getStringExtra(
-                            "seasonYear"
-                        )
-                            ?.toIntOrNull() else null,
-                        startYear = if (intent.getStringExtra("type") == "MANGA") intent.getStringExtra(
-                            "seasonYear"
-                        )
-                            ?.toIntOrNull() else null,
-                        results = mutableListOf(),
-                        hasNextPage = false
-                    )
-                }
-
-                aniMangaResult = model.aniMangaSearchResults
-                mediaAdaptor =
-                    MediaAdaptor(
-                        style,
-                        model.aniMangaSearchResults.results,
-                        this,
-                        matchParent = true
-                    )
-            }
-
-            SearchType.CHARACTER -> {
-                if (model.notSet) {
-                    model.notSet = false
-                    model.characterSearchResults = CharacterSearchResults(
-                        search = intent.getStringExtra("query"),
-                        results = mutableListOf(),
-                        hasNextPage = false
-                    )
-                }
-                characterResult = model.characterSearchResults
-                characterAdaptor = CharacterAdapter(model.characterSearchResults.results)
-            }
-
-            SearchType.STUDIO -> {
-                if (model.notSet) {
-                    model.notSet = false
-                    model.studioSearchResults = StudioSearchResults(
-                        search = intent.getStringExtra("query"),
-                        results = mutableListOf(),
-                        hasNextPage = false
-                    )
-                }
-                studioResult = model.studioSearchResults
-                studioAdaptor = StudioAdapter(model.studioSearchResults.results)
-            }
-
-            SearchType.STAFF -> {
-                if (model.notSet) {
-                    model.notSet = false
-                    model.staffSearchResults = StaffSearchResults(
-                        search = intent.getStringExtra("query"),
-                        results = mutableListOf(),
-                        hasNextPage = false
-                    )
-                }
-                staffResult = model.staffSearchResults
-                staffAdaptor = AuthorAdapter(model.staffSearchResults.results)
-            }
-
-            SearchType.USER -> {
-                if (model.notSet) {
-                    model.notSet = false
-                    model.userSearchResults = UserSearchResults(
-                        search = intent.getStringExtra("query"),
-                        results = mutableListOf(),
-                        hasNextPage = false
-                    )
-                }
-                userResult = model.userSearchResults
-                usersAdapter = UsersAdapter(model.userSearchResults.results, grid = true)
-            }
-        }
-
+        initSearchAdapters(intent)
         progressAdapter = ProgressAdapter(searched = model.searched)
         headerAdaptor = if (searchType == SearchType.ANIME || searchType == SearchType.MANGA) {
             SearchAdapter(this, searchType)
@@ -472,4 +375,106 @@ class SearchActivity : AppCompatActivity() {
         super.onResume()
         binding.searchRecyclerView.layoutManager?.onRestoreInstanceState(state)
     }
+    private fun initSearchAdapters(intent: Intent) {
+        when (searchType) {
+            SearchType.ANIME, SearchType.MANGA -> {
+                style = PrefManager.getVal(PrefName.SearchStyle)
+                var listOnly: Boolean? = intent.getBooleanExtra("listOnly", false)
+                if (!listOnly!!) listOnly = null
+
+                if (model.notSet) {
+                    model.notSet = false
+                    model.aniMangaSearchResults = AniMangaSearchResults(
+                        type = intent.getStringExtra("type") ?: "ANIME",
+                        isAdult = if (Anilist.adult) intent.getBooleanExtra(
+                            "hentai",
+                            false
+                        ) else false,
+                        onList = listOnly,
+                        search = intent.getStringExtra("query"),
+                        genres = intent.getStringExtra("genre")?.let { mutableListOf(it) },
+                        tags = intent.getStringExtra("tag")?.let { mutableListOf(it) },
+                        sort = intent.getStringExtra("sortBy"),
+                        status = intent.getStringExtra("status"),
+                        source = intent.getStringExtra("source"),
+                        countryOfOrigin = intent.getStringExtra("country"),
+                        season = intent.getStringExtra("season"),
+                        seasonYear = if (intent.getStringExtra("type") == "ANIME") intent.getStringExtra(
+                            "seasonYear"
+                        )
+                            ?.toIntOrNull() else null,
+                        startYear = if (intent.getStringExtra("type") == "MANGA") intent.getStringExtra(
+                            "seasonYear"
+                        )
+                            ?.toIntOrNull() else null,
+                        results = mutableListOf(),
+                        hasNextPage = false
+                    )
+                }
+
+                aniMangaResult = model.aniMangaSearchResults
+                mediaAdaptor =
+                    MediaAdaptor(
+                        style,
+                        model.aniMangaSearchResults.results,
+                        this,
+                        matchParent = true
+                    )
+            }
+
+            SearchType.CHARACTER -> {
+                if (model.notSet) {
+                    model.notSet = false
+                    model.characterSearchResults = CharacterSearchResults(
+                        search = intent.getStringExtra("query"),
+                        results = mutableListOf(),
+                        hasNextPage = false
+                    )
+                }
+                characterResult = model.characterSearchResults
+                characterAdaptor = CharacterAdapter(model.characterSearchResults.results)
+            }
+
+            SearchType.STUDIO -> {
+                if (model.notSet) {
+                    model.notSet = false
+                    model.studioSearchResults = StudioSearchResults(
+                        search = intent.getStringExtra("query"),
+                        results = mutableListOf(),
+                        hasNextPage = false
+                    )
+                }
+                studioResult = model.studioSearchResults
+                studioAdaptor = StudioAdapter(model.studioSearchResults.results)
+            }
+
+            SearchType.STAFF -> {
+                if (model.notSet) {
+                    model.notSet = false
+                    model.staffSearchResults = StaffSearchResults(
+                        search = intent.getStringExtra("query"),
+                        results = mutableListOf(),
+                        hasNextPage = false
+                    )
+                }
+                staffResult = model.staffSearchResults
+                staffAdaptor = AuthorAdapter(model.staffSearchResults.results)
+            }
+
+            SearchType.USER -> {
+                if (model.notSet) {
+                    model.notSet = false
+                    model.userSearchResults = UserSearchResults(
+                        search = intent.getStringExtra("query"),
+                        results = mutableListOf(),
+                        hasNextPage = false
+                    )
+                }
+                userResult = model.userSearchResults
+                usersAdapter = UsersAdapter(model.userSearchResults.results, grid = true)
+            }
+        }
+
+    }
+
 }

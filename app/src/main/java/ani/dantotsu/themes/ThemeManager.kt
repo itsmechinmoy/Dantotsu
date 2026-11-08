@@ -22,39 +22,10 @@ class ThemeManager(private val context: Activity) {
         val customTheme: Int = PrefManager.getVal(PrefName.CustomThemeInt)
         val useSource: Boolean = PrefManager.getVal(PrefName.UseSourceTheme)
         val useMaterial: Boolean = PrefManager.getVal(PrefName.UseMaterialYou)
-        if (useSource) {
-            val returnedEarly = applyDynamicColors(
-                useMaterial,
-                context,
-                useOLED,
-                fromImage,
-                useCustom = if (useCustomTheme) customTheme else null
-            )
-            if (!returnedEarly) return
-        } else if (useCustomTheme) {
-            val returnedEarly =
-                applyDynamicColors(useMaterial, context, useOLED, useCustom = customTheme)
-            if (!returnedEarly) return
-        } else {
-            val returnedEarly = applyDynamicColors(useMaterial, context, useOLED, useCustom = null)
-            if (!returnedEarly) return
-        }
+        if (!applyColors(useSource, useCustomTheme, customTheme, useMaterial, useOLED, fromImage)) return
         val theme: String = PrefManager.getVal(PrefName.Theme)
 
-        val themeToApply = when (theme) {
-            "BLUE" -> if (useOLED) R.style.Theme_Dantotsu_BlueOLED else R.style.Theme_Dantotsu_Blue
-            "GREEN" -> if (useOLED) R.style.Theme_Dantotsu_GreenOLED else R.style.Theme_Dantotsu_Green
-            "PURPLE" -> if (useOLED) R.style.Theme_Dantotsu_PurpleOLED else R.style.Theme_Dantotsu_Purple
-            "PINK" -> if (useOLED) R.style.Theme_Dantotsu_PinkOLED else R.style.Theme_Dantotsu_Pink
-            "ORIAX" -> if (useOLED) R.style.Theme_Dantotsu_OriaxOLED else R.style.Theme_Dantotsu_Oriax
-            "SAIKOU" -> if (useOLED) R.style.Theme_Dantotsu_SaikouOLED else R.style.Theme_Dantotsu_Saikou
-            "RED" -> if (useOLED) R.style.Theme_Dantotsu_RedOLED else R.style.Theme_Dantotsu_Red
-            "LAVENDER" -> if (useOLED) R.style.Theme_Dantotsu_LavenderOLED else R.style.Theme_Dantotsu_Lavender
-            "OCEAN" -> if (useOLED) R.style.Theme_Dantotsu_OceanOLED else R.style.Theme_Dantotsu_Ocean
-            "MONOCHROME (BETA)" -> if (useOLED) R.style.Theme_Dantotsu_MonochromeOLED else R.style.Theme_Dantotsu_Monochrome
-            else -> if (useOLED) R.style.Theme_Dantotsu_PurpleOLED else R.style.Theme_Dantotsu_Purple
-        }
-
+        val themeToApply = resolveThemeRes(theme, useOLED)
         val window = context.window
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             @Suppress("DEPRECATION")
@@ -162,4 +133,50 @@ class ThemeManager(private val context: Activity) {
             }
         }
     }
+    private fun applyColors(
+        useSource: Boolean,
+        useCustomTheme: Boolean,
+        customTheme: Int,
+        useMaterial: Boolean,
+        useOLED: Boolean,
+        fromImage: Bitmap?
+    ): Boolean {
+        if (useSource) {
+            val returnedEarly = applyDynamicColors(
+                useMaterial,
+                context,
+                useOLED,
+                fromImage,
+                useCustom = if (useCustomTheme) customTheme else null
+            )
+            return returnedEarly
+        } else if (useCustomTheme) {
+            val returnedEarly =
+                applyDynamicColors(useMaterial, context, useOLED, useCustom = customTheme)
+            return returnedEarly
+        } else {
+            val returnedEarly = applyDynamicColors(useMaterial, context, useOLED, useCustom = null)
+            return returnedEarly
+        }
+        return true
+    }
+
+    private val themeMap = mapOf(
+        "BLUE" to (R.style.Theme_Dantotsu_Blue to R.style.Theme_Dantotsu_BlueOLED),
+        "GREEN" to (R.style.Theme_Dantotsu_Green to R.style.Theme_Dantotsu_GreenOLED),
+        "PURPLE" to (R.style.Theme_Dantotsu_Purple to R.style.Theme_Dantotsu_PurpleOLED),
+        "PINK" to (R.style.Theme_Dantotsu_Pink to R.style.Theme_Dantotsu_PinkOLED),
+        "ORIAX" to (R.style.Theme_Dantotsu_Oriax to R.style.Theme_Dantotsu_OriaxOLED),
+        "SAIKOU" to (R.style.Theme_Dantotsu_Saikou to R.style.Theme_Dantotsu_SaikouOLED),
+        "RED" to (R.style.Theme_Dantotsu_Red to R.style.Theme_Dantotsu_RedOLED),
+        "LAVENDER" to (R.style.Theme_Dantotsu_Lavender to R.style.Theme_Dantotsu_LavenderOLED),
+        "OCEAN" to (R.style.Theme_Dantotsu_Ocean to R.style.Theme_Dantotsu_OceanOLED),
+        "MONOCHROME (BETA)" to (R.style.Theme_Dantotsu_Monochrome to R.style.Theme_Dantotsu_MonochromeOLED),
+    )
+
+    private fun resolveThemeRes(theme: String, useOLED: Boolean): Int {
+        val pair = themeMap[theme] ?: (R.style.Theme_Dantotsu_Purple to R.style.Theme_Dantotsu_PurpleOLED)
+        return if (useOLED) pair.second else pair.first
+    }
+
 }

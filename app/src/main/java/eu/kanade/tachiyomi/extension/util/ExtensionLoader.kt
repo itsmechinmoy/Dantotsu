@@ -287,7 +287,8 @@ internal object ExtensionLoader {
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
             ?: emptySequence()
 
-        val extPkgs = sharedExtPkgs + privateExtPkgs
+        @Suppress("UnnecessaryParentheses") // Required for operator precedence before .distinctBy
+        val extPkgs = (sharedExtPkgs + privateExtPkgs)
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
                 val privatePkg = privateExtPkgs
@@ -337,7 +338,8 @@ internal object ExtensionLoader {
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
             ?: emptySequence()
 
-        val extPkgs = sharedExtPkgs + privateExtPkgs
+        @Suppress("UnnecessaryParentheses") // Required for operator precedence before .distinctBy
+        val extPkgs = (sharedExtPkgs + privateExtPkgs)
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
                 val privatePkg = privateExtPkgs
@@ -387,7 +389,8 @@ internal object ExtensionLoader {
             ?.map { ExtensionInfo(packageInfo = it, isShared = false) }
             ?: emptySequence()
 
-        val extPkgs = sharedExtPkgs + privateExtPkgs
+        @Suppress("UnnecessaryParentheses") // Required for operator precedence before .distinctBy
+        val extPkgs = (sharedExtPkgs + privateExtPkgs)
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
                 val privatePkg = privateExtPkgs
@@ -442,11 +445,11 @@ internal object ExtensionLoader {
         val pkgName = pkgInfo.packageName
         val pkgManager = context.packageManager
 
-        val appInfo = (try {
+        val appInfo = try {
             pkgManager.getApplicationInfo(pkgName, PackageManager.GET_META_DATA)
         } catch (e: Exception) {
             pkgInfo.applicationInfo
-        }) ?: return AnimeLoadResult.Error
+        } ?: return AnimeLoadResult.Error
 
         if (!extensionInfo.isShared) {
             val privateFile = File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
@@ -715,7 +718,7 @@ internal object ExtensionLoader {
             val parts = versionName.split('.')
             if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDoubleOrNull() else versionName.toDoubleOrNull()
         }
-        if (libVersion == null || libVersion < MANGA_LIB_VERSION_MIN || libVersion > (MANGA_LIB_VERSION_MAX + 0.09)) {
+        if (libVersion == null || libVersion < MANGA_LIB_VERSION_MIN || libVersion > MANGA_LIB_VERSION_MAX + 0.09) {
             Logger.log(
                 "Lib version is $libVersion, while only versions " +
                         "$MANGA_LIB_VERSION_MIN to $MANGA_LIB_VERSION_MAX are allowed"

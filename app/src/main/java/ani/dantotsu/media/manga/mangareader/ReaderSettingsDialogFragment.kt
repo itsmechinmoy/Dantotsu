@@ -105,7 +105,13 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
             btn.setOnClickListener { selectTab(idx) }
         }
 
-        // ================= TAB 1: LAYOUT =================
+        setupLayoutTab(activity, settings)
+        setupNavigationTab(activity, settings)
+        setupDisplayTab(activity, settings)
+        setupDataTab(activity, settings)
+    }
+
+    private fun setupLayoutTab(activity: MangaReaderActivity, settings: CurrentReaderSettings) {
         val layoutButtons = listOf(
             binding.readerPaged,
             binding.readerContinuousPaged,
@@ -139,13 +145,13 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
 
         binding.readerDirectionText.text =
             resources.getStringArray(R.array.manga_directions)[settings.direction.ordinal]
-        binding.readerDirection.rotation = 90f * (settings.direction.ordinal)
+        binding.readerDirection.rotation = 90f * settings.direction.ordinal
         binding.readerDirection.setOnClickListener {
             settings.direction =
                 Directions[settings.direction.ordinal + 1] ?: Directions.TOP_TO_BOTTOM
             binding.readerDirectionText.text =
                 resources.getStringArray(R.array.manga_directions)[settings.direction.ordinal]
-            binding.readerDirection.rotation = 90f * (settings.direction.ordinal)
+            binding.readerDirection.rotation = 90f * settings.direction.ordinal
             activity.applySettings()
         }
 
@@ -202,7 +208,9 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
             activity.applySettings()
         }
 
-        // ================= TAB 2: NAVIGATION =================
+    }
+
+    private fun setupNavigationTab(activity: MangaReaderActivity, settings: CurrentReaderSettings) {
         binding.readerOneHandZoom.isChecked = settings.oneHandZoom
         binding.readerOneHandZoom.setOnCheckedChangeListener { _, isChecked ->
             settings.oneHandZoom = isChecked
@@ -245,7 +253,9 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
             activity.applySettings()
         }
 
-        // ================= TAB 3: DISPLAY =================
+    }
+
+    private fun setupDisplayTab(activity: MangaReaderActivity, settings: CurrentReaderSettings) {
         // Image Quality chips
         val currentQuality = settings.imageQuality ?: CurrentReaderSettings.ImageQuality.FAST
         when (currentQuality) {
@@ -376,7 +386,9 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
             activity.applySettings()
         }
 
-        // ================= TAB 4: DATA & PRELOAD =================
+    }
+
+    private fun setupDataTab(activity: MangaReaderActivity, settings: CurrentReaderSettings) {
         binding.readerPreloadSlider.value = settings.preloadAmount.toFloat()
         binding.readerPreloadText.text = "${settings.preloadAmount} Pages"
         binding.readerPreloadSlider.addOnChangeListener { _, value, fromUser ->
@@ -472,7 +484,7 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
         (activity as? MangaReaderActivity)?.saveCurrentSettings()
         _binding = null
         super.onDestroyView()
-    }
+        }
 
     companion object {
         fun newInstance() = ReaderSettingsDialogFragment()

@@ -163,11 +163,11 @@ class SubscriptionHelper {
 
         @Suppress("UNCHECKED_CAST")
         fun getSubscriptions(): Map<Int, SubscribeMedia> =
-            (PrefManager.getNullableCustomVal(
+            PrefManager.getNullableCustomVal(
                 SUBSCRIPTIONS,
                 null,
                 Map::class.java
-            ) as? Map<Int, SubscribeMedia>)
+            ) as? Map<Int, SubscribeMedia>
                 ?: mapOf<Int, SubscribeMedia>().also { PrefManager.setCustomVal(SUBSCRIPTIONS, it) }
 
         @Suppress("UNCHECKED_CAST")

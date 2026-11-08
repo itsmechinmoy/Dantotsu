@@ -74,6 +74,7 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         )
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

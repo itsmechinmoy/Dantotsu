@@ -13,7 +13,11 @@ import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.NO_HOSTER_LIST
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.copyFrom
 import eu.kanade.tachiyomi.animesource.model.SEpisode
@@ -34,7 +38,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.copyFrom
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.lang.awaitSingle
+import tachiyomi.core.util.lang.awaitSingle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -229,46 +233,8 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
                 }
             }
 
-            val sortedEpisodes = if (res.all { it.episode_number > 0f }) {
-                res.sortedBy { it.episode_number }
-            } else if (res[0].episode_number == -1f) {
-                val sortedByStringNumber = res.sortedBy {
-                    val number = it.episode_number.takeIf { n -> n > 0f }
-                        ?: MediaNameAdapter.findEpisodeNumber(it.name)
-                        ?: MediaNameAdapter.findEpisodeNumber(it.url)
-                        ?: Float.MAX_VALUE
-                    it.episode_number = number
-                    number
-                }
-                var incrementingNumber = 1f
-                sortedByStringNumber.map {
-                    if (it.episode_number == Float.MAX_VALUE) {
-                        it.episode_number = incrementingNumber++
-                    }
-                    it
-                }
-            } else if (episodesAreIncrementing(res)) {
-                res.sortedBy { it.episode_number }
-            } else {
-                var episodeCounter = 1f
-                val seasonGroups = res.groupBy { MediaNameAdapter.findSeasonNumber(it.name) ?: 0 }
-                seasonGroups.keys.sortedBy { it }.flatMap { season ->
-                    seasonGroups[season]?.sortedBy { it.episode_number }?.map { episode ->
-                        if (episode.episode_number <= 0f) {
-                            val potentialNumber = MediaNameAdapter.findEpisodeNumber(episode.name)
-                                ?: MediaNameAdapter.findEpisodeNumber(episode.url)
-                            if (potentialNumber != null) {
-                                episode.episode_number = potentialNumber
-                            } else {
-                                episode.episode_number = episodeCounter
-                            }
-                            episodeCounter++
-                        }
-                        episode
-                    } ?: emptyList()
-                }
-            }
-            return@withContext sortedEpisodes.map { sEpisodeToEpisode(it) }
+            val sortedEpisodes = sortLoadedEpisodes(res)
+                        return@withContext sortedEpisodes.map { sEpisodeToEpisode(it) }
         } catch (e: Exception) {
             Logger.log("Exception: $e")
         }
@@ -333,41 +299,9 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             activeHosters
         }
 
-        val hosterVideos = if (hostersToFetch.isNotEmpty()) {
-            coroutineScope {
-                hostersToFetch.map { hoster ->
-                    async(Dispatchers.IO) {
-                        val videos = when {
-                            !hoster.videoList.isNullOrEmpty() -> hoster.videoList
-                            else -> runCatching {
-                                source.getVideoList(hoster)
-                            }.getOrElse { emptyList() }
-                        }
+        val hosterVideos = fetchHosterVideos(source, hostersToFetch)
 
-                        videos.map { video ->
-                            val resolved = resolveVideo(source, video)
-                            val title = if (
-                                hoster.hosterName.isBlank() ||
-                                hoster.hosterName == NO_HOSTER_LIST
-                            ) {
-                                resolved.videoTitle
-                            } else {
-                                "${hoster.hosterName} - ${resolved.videoTitle}"
-                            }
-
-                            resolved.copy(
-                                videoTitle = title,
-                                initialized = true
-                            )
-                        }
-                    }
-                }.awaitAll().flatten()
-            }
-        } else {
-            emptyList()
-        }
-
-        val resolvedDirect = if (directVideos.isNotEmpty()) {
+                val resolvedDirect = if (directVideos.isNotEmpty()) {
             coroutineScope {
                 directVideos.map {
                     async(Dispatchers.IO) {
@@ -510,6 +444,77 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             video
         )
     }
+
+    private suspend fun fetchHosterVideos(source: AnimeSource, hostersToFetch: List<Hoster>): List<Video> {
+        if (hostersToFetch.isEmpty()) return emptyList()
+        return coroutineScope {
+            hostersToFetch.map { hoster ->
+                async(Dispatchers.IO) {
+                    val videos = when {
+                        !hoster.videoList.isNullOrEmpty() -> hoster.videoList
+                        else -> runCatching { source.getVideoList(hoster) }.getOrElse { emptyList() }
+                    }
+
+                    videos.map { video ->
+                        val resolved = resolveVideo(source, video)
+                        val named = hoster.hosterName.isNotBlank() && hoster.hosterName != NO_HOSTER_LIST
+                        val title = if (named) "${hoster.hosterName} - ${resolved.videoTitle}" else resolved.videoTitle
+
+                        resolved.copy(
+                            videoTitle = title,
+                            initialized = true,
+                            memo = if (named) {
+                                JsonObject(resolved.memo + ("hoster" to JsonPrimitive(hoster.hosterName)))
+                            } else resolved.memo
+                        )
+                    }
+                }
+            }.awaitAll().flatten()
+        }
+    }
+
+    private fun sortLoadedEpisodes(res: List<SEpisode>): List<SEpisode> {
+        return if (res.all { it.episode_number > 0f }) {
+            res.sortedBy { it.episode_number }
+        } else if (res[0].episode_number == -1f) {
+            val sortedByStringNumber = res.sortedBy {
+                val number = it.episode_number.takeIf { n -> n > 0f }
+                    ?: MediaNameAdapter.findEpisodeNumber(it.name)
+                    ?: MediaNameAdapter.findEpisodeNumber(it.url)
+                    ?: Float.MAX_VALUE
+                it.episode_number = number
+                number
+            }
+            var incrementingNumber = 1f
+            sortedByStringNumber.map {
+                if (it.episode_number == Float.MAX_VALUE) {
+                    it.episode_number = incrementingNumber++
+                }
+                it
+            }
+        } else if (episodesAreIncrementing(res)) {
+            res.sortedBy { it.episode_number }
+        } else {
+            var episodeCounter = 1f
+            val seasonGroups = res.groupBy { MediaNameAdapter.findSeasonNumber(it.name) ?: 0 }
+            seasonGroups.keys.sortedBy { it }.flatMap { season ->
+                seasonGroups[season]?.sortedBy { it.episode_number }?.map { episode ->
+                    if (episode.episode_number <= 0f) {
+                        val potentialNumber = MediaNameAdapter.findEpisodeNumber(episode.name)
+                            ?: MediaNameAdapter.findEpisodeNumber(episode.url)
+                        if (potentialNumber != null) {
+                            episode.episode_number = potentialNumber
+                        } else {
+                            episode.episode_number = episodeCounter
+                        }
+                        episodeCounter++
+                    }
+                    episode
+                } ?: emptyList()
+            }
+        }
+    }
+
 }
 
 class DynamicMangaParser(extension: MangaExtension.Installed) : MangaParser() {
@@ -763,6 +768,7 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
         }
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     private fun aniVideoToSaiVideo(aniVideo: Video): ani.dantotsu.parsers.Video {
         // Find the number value from the .quality string
         val number = Regex("""\d+""").find(aniVideo.quality)?.value?.toInt() ?: 0
@@ -775,7 +781,7 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
         var format: VideoType?
 
         try {
-            val urlObj = URL(videoUrl)
+            val urlObj = java.net.URL(videoUrl)
             val path = urlObj.path
             val query = urlObj.query
 
@@ -785,8 +791,8 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
                 val queryPairs: List<Pair<String, String>> = query.split("&").mapNotNull {
                     val idx = it.indexOf("=")
                     if (idx != -1) {
-                        val key = runCatching { URLDecoder.decode(it.substring(0, idx), "UTF-8") }.getOrNull() ?: ""
-                        val value = runCatching { URLDecoder.decode(it.substring(idx + 1), "UTF-8") }.getOrNull() ?: ""
+                        val key = runCatching { java.net.URLDecoder.decode(it.substring(0, idx), "UTF-8") }.getOrNull() ?: ""
+                        val value = runCatching { java.net.URLDecoder.decode(it.substring(idx + 1), "UTF-8") }.getOrNull() ?: ""
                         Pair(key, value)
                     } else null
                 }
@@ -834,24 +840,26 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
                 Logger.log("Unknown video format: $videoUrl")
                 format = VideoType.CONTAINER
             }
-        } catch (malformed: MalformedURLException) {
+        } catch (malformed: java.net.MalformedURLException) {
             if (videoUrl.startsWith("magnet:") || videoUrl.endsWith(".torrent"))
                 format = VideoType.CONTAINER
             else
                 throw malformed
         }
+
         val headersMap: Map<String, String> =
             aniVideo.headers?.toMultimap()?.mapValues { it.value.joinToString() } ?: mapOf()
 
-
+        val hosterName = (aniVideo.memo["hoster"] as? JsonPrimitive)?.contentOrNull
         return Video(
             number,
             format!!,
             FileUrl(videoUrl, headersMap),
             null,
-            null,
+            hosterName,
             parseDrmInfo(aniVideo.internalData),
-            preferred = aniVideo.preferred
+            preferred = aniVideo.preferred,
+            hoster = hosterName
         )
     }
 

@@ -68,26 +68,7 @@ object SubSourceSubtitles {
                 if (subJson.isBlank()) return@withContext emptyList()
                 val subResult = Mapper.json.decodeFromString<SubSourceListResponseV1>(subJson)
 
-                val epStr = episode.toString()
-                val epPad = episode.toString().padStart(2, '0')
-                val epPattern1 = "E$epPad"
-                val epPattern2 = "E$epStr"
-                val epPattern3 = " $epStr "
-                val epPattern4 = " - $epStr"
-
-                val matched = subResult.data.filter { item ->
-                    val relText = (item.releaseInfo.joinToString(" ") + " " + (item.commentary ?: "")).trim()
-                    if (relText.isBlank()) return@filter true
-                    relText.contains(epPattern1, ignoreCase = true) ||
-                    relText.contains(epPattern2, ignoreCase = true) ||
-                    relText.contains(epPattern3, ignoreCase = true) ||
-                    relText.contains(epPattern4, ignoreCase = true) ||
-                    relText.contains("Episode $epStr", ignoreCase = true) ||
-                    relText.contains("Ep $epStr", ignoreCase = true) ||
-                    relText.contains("Ep. $epStr", ignoreCase = true) ||
-                    relText.contains(" $epPad ", ignoreCase = true)
-                }
-
+                val matched = subResult.data.filter { isSubSourceEpisodeMatch(it, episode) }
                 matched.map { item ->
                     val releaseTitle = item.releaseInfo.joinToString(" • ").ifBlank { item.commentary ?: "SubSource Subtitle" }
                     SubSourceSub(
@@ -145,6 +126,20 @@ object SubSourceSubtitles {
                 null
             }
         }
+    }
+    private fun isSubSourceEpisodeMatch(item: SubSourceItemV1, episode: Int): Boolean {
+        val relText = (item.releaseInfo.joinToString(" ") + " " + (item.commentary ?: "")).trim()
+        if (relText.isBlank()) return true
+        val epStr = episode.toString()
+        val epPad = episode.toString().padStart(2, '0')
+        return relText.contains("E$epPad", ignoreCase = true) ||
+               relText.contains("E$epStr", ignoreCase = true) ||
+               relText.contains(" $epStr ", ignoreCase = true) ||
+               relText.contains(" - $epStr", ignoreCase = true) ||
+               relText.contains("Episode $epStr", ignoreCase = true) ||
+               relText.contains("Ep $epStr", ignoreCase = true) ||
+               relText.contains("Ep. $epStr", ignoreCase = true) ||
+               relText.contains(" $epPad ", ignoreCase = true)
     }
 }
 

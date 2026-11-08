@@ -91,21 +91,8 @@ class LocalMangaSource(
             0L
         }
         
-        val localDir = baseDir.findFile("local") ?: baseDir
-        val localMangaDir = localDir.findFile("manga") ?: localDir
-
-        var mangaDirs = localMangaDir.listFiles()
-            .filter { it.isDirectory && !it.name.orEmpty().startsWith('.') }
-            .distinctBy { it.name }
-            .filter {
-                if (lastModifiedLimit == 0L && query.isBlank()) {
-                    true
-                } else if (lastModifiedLimit == 0L) {
-                    it.name.orEmpty().contains(query, ignoreCase = true)
-                } else {
-                    it.lastModified() >= lastModifiedLimit
-                }
-            }
+        val localMangaDir = tachiyomi.source.local.LocalSourceHelper.resolveTargetDir(baseDir, "manga")
+        var mangaDirs = tachiyomi.source.local.LocalSourceHelper.filterEntries(localMangaDir, lastModifiedLimit, query)
 
         filters.forEach { filter ->
             when (filter) {

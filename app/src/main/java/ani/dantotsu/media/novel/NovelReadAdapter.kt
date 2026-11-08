@@ -56,6 +56,7 @@ class NovelReadAdapter(
     private val imm = fragment.requireContext()
         .getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
 
+    @Suppress("ComplexMethod", "LongMethod")
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val binding = holder.binding
         _binding = binding
@@ -160,7 +161,7 @@ class NovelReadAdapter(
                     onSourceSelected = { selected ->
                         val isLnReader = fragment.model.novelSources[fragment.source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
                         if (isLnReader) {
-                            fragment.overrideNovelSource(selected)
+                            fragment.overrideNovelSource(selected, fragment.source)
                         } else {
                             fragment.resetChapterState()
                             fragment.onNovelClick(selected)
@@ -188,6 +189,7 @@ class NovelReadAdapter(
         }
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     private fun showFilterDialog() {
         val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
         var run = false
@@ -333,7 +335,7 @@ class NovelReadAdapter(
     fun updateContinue(responses: List<ShowResponse>) {
         if (progress == null) return
         val lastReadName = PrefManager.getCustomVal("${media.id}_last_read_volume", "")
-        
+
         var continueNovel: ShowResponse? = null
         if (lastReadName.isNotBlank() && responses.isNotEmpty()) {
             continueNovel = responses.firstOrNull { it.name == lastReadName } ?: responses.first()

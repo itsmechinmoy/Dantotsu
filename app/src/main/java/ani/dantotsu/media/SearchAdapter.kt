@@ -22,6 +22,7 @@ import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.AnilistSearch.SearchType
 import ani.dantotsu.databinding.ItemChipBinding
+import ani.dantotsu.databinding.ItemSearchHeaderBinding
 import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.others.imagesearch.ImageSearchActivity
 import ani.dantotsu.settings.saving.PrefManager
@@ -108,65 +109,7 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
         binding.searchFilter.setOnClickListener {
             SearchFilterBottomDialog.newInstance().show(activity.supportFragmentManager, "dialog")
         }
-        binding.searchFilter.setOnLongClickListener {
-            val popupMenu = PopupMenu(activity, binding.searchFilter)
-            popupMenu.menuInflater.inflate(R.menu.sortby_filter_menu, popupMenu.menu)
-            popupMenu.setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    R.id.sort_by_score -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[0]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_popular -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[1]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_trending -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[2]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_recent -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[3]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_a_z -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[4]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_z_a -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[5]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-
-                    R.id.sort_by_pure_pain -> {
-                        activity.aniMangaResult.sort = Anilist.sortBy[6]
-                        activity.updateChips.invoke()
-                        activity.search()
-                        updateFilterTextViewDrawable()
-                    }
-                }
-                true
-            }
-            popupMenu.show()
-            true
-        }
+        setupFilterLongClick()
         if (activity.aniMangaResult.type != "ANIME") {
             binding.searchByImage.visibility = View.GONE
         }
@@ -192,41 +135,7 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
             activity.search()
         }
 
-        textWatcher = object : TextWatcher {
-            override fun afterTextChanged(s: Editable) {}
-
-            override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
-
-            override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-                if (s.toString().isBlank()) {
-                    activity.emptyMediaAdapter()
-                    CoroutineScope(Dispatchers.IO).launch {
-                        delay(200)
-                        activity.runOnUiThread {
-                            setHistoryVisibility(true)
-                        }
-                    }
-                } else {
-                    setHistoryVisibility(false)
-                    searchTitle()
-                }
-            }
-        }
-        binding.searchBarText.addTextChangedListener(textWatcher)
-
-        binding.searchBarText.setOnEditorActionListener { _, actionId, _ ->
-            return@setOnEditorActionListener when (actionId) {
-                EditorInfo.IME_ACTION_SEARCH -> {
-                    searchTitle()
-                    binding.searchBarText.clearFocus()
-                    imm.hideSoftInputFromWindow(binding.searchBarText.windowToken, 0)
-                    true
-                }
-
-                else -> false
-            }
-        }
-        binding.searchBar.setEndIconOnClickListener { searchTitle() }
+        textWatcher = setupSearchInputListeners(binding, activity, imm, { setHistoryVisibility(it) }, { searchTitle() })
 
         binding.searchResultGrid.setOnClickListener {
             it.alpha = 1f
@@ -321,4 +230,108 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
 
         override fun getItemCount(): Int = chips.size
     }
+    companion object {
+        fun setupSearchInputListeners(
+            binding: ItemSearchHeaderBinding,
+            activity: SearchActivity,
+            imm: InputMethodManager,
+            setHistoryVisibility: (Boolean) -> Unit,
+            searchTitle: () -> Unit
+        ): TextWatcher {
+            val watcher = object : TextWatcher {
+                override fun afterTextChanged(s: Editable) {}
+                override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
+                    if (s.toString().isBlank()) {
+                        activity.emptyMediaAdapter()
+                        CoroutineScope(Dispatchers.IO).launch {
+                            delay(200)
+                            activity.runOnUiThread {
+                                setHistoryVisibility(true)
+                            }
+                        }
+                    } else {
+                        setHistoryVisibility(false)
+                        searchTitle()
+                    }
+                }
+            }
+            binding.searchBarText.addTextChangedListener(watcher)
+            binding.searchBarText.setOnEditorActionListener { _, actionId, _ ->
+                when (actionId) {
+                    EditorInfo.IME_ACTION_SEARCH -> {
+                        searchTitle()
+                        binding.searchBarText.clearFocus()
+                        imm.hideSoftInputFromWindow(binding.searchBarText.windowToken, 0)
+                        true
+                    }
+                    else -> false
+                }
+            }
+            binding.searchBar.setEndIconOnClickListener { searchTitle() }
+            return watcher
+        }
+    }
+    private fun setupFilterLongClick() {
+        binding.searchFilter.setOnLongClickListener {
+            val popupMenu = PopupMenu(activity, binding.searchFilter)
+            popupMenu.menuInflater.inflate(R.menu.sortby_filter_menu, popupMenu.menu)
+            popupMenu.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.sort_by_score -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[0]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_popular -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[1]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_trending -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[2]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_recent -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[3]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_a_z -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[4]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_z_a -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[5]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+
+                    R.id.sort_by_pure_pain -> {
+                        activity.aniMangaResult.sort = Anilist.sortBy[6]
+                        activity.updateChips.invoke()
+                        activity.search()
+                        updateFilterTextViewDrawable()
+                    }
+                }
+                true
+            }
+            popupMenu.show()
+            true
+        }
+    }
+
 }

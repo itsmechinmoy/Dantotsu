@@ -198,7 +198,7 @@ class AnilistQueries {
         return media
     }
 
-    private fun fetchAndParseMediaDetails(media: Media) {
+    private suspend fun fetchAndParseMediaDetails(media: Media) {
         var response =
             executeQuery<Query.Media>(fullMediaInformation(media.id), force = true)
         if (response != null) {

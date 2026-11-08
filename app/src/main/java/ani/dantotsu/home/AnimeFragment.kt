@@ -154,26 +154,12 @@ class AnimeFragment : Fragment() {
 
         model.getPopular().observe(viewLifecycleOwner) {
             if (it != null) {
-                if (oldIncludeList == (it.onList != false)) {
-                    val prev = model.aniMangaSearchResults.results.size
-                    model.aniMangaSearchResults.results.addAll(it.results)
-                    popularAdaptor.notifyItemRangeInserted(prev, it.results.size)
-                } else {
-                    model.aniMangaSearchResults.results.addAll(it.results)
-                    popularAdaptor.notifyDataSetChanged()
-                    oldIncludeList = it.onList ?: true
-                }
-                model.aniMangaSearchResults.onList = it.onList
-                model.aniMangaSearchResults.hasNextPage = it.hasNextPage
-                model.aniMangaSearchResults.page = it.page
-                if (it.hasNextPage)
-                    progressAdaptor.bar?.visibility = View.VISIBLE
-                else {
-                    if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-                        snackString(getString(R.string.jobless_message))
-                    }
-                    progressAdaptor.bar?.visibility = View.GONE
-                }
+                HomePageAdapterHelper.handlePopularResults(
+                    it, model.aniMangaSearchResults, popularAdaptor, progressAdaptor, oldIncludeList,
+                    { updated -> oldIncludeList = updated },
+                    { msg -> snackString(msg) },
+                    getString(R.string.jobless_message)
+                )
                 loading = false
             }
         }
@@ -207,6 +193,49 @@ class AnimeFragment : Fragment() {
                 super.onScrolled(v, dx, dy)
             }
         })
+        setupAdapterReadyObserver()
+
+        fun load() = scope.launch(Dispatchers.Main) {
+            animePageAdapter.updateAvatar()
+        }
+
+        animePageAdapter.onSeasonClick = { i ->
+            scope.launch(Dispatchers.IO) {
+                model.loadTrending(i)
+            }
+        }
+
+        animePageAdapter.onSeasonLongClick = { i ->
+            val (season, year) = Anilist.currentSeasons[i]
+            ContextCompat.startActivity(
+                requireContext(),
+                Intent(requireContext(), SearchActivity::class.java)
+                    .putExtra("type", "ANIME")
+                    .putExtra("season", season)
+                    .putExtra("seasonYear", year.toString())
+                    .putExtra("search", true),
+                null
+            )
+            true
+        }
+
+        var running = false
+        setupRefreshObserver(popularAdaptor, scope)
+    }
+
+    override fun onResume() {
+        if (!model.loaded) Refresh.activity[this.hashCode()]!!.postValue(true)
+        if (animePageAdapter.trendingViewPager != null) {
+            binding.root.requestApplyInsets()
+            binding.root.requestLayout()
+        }
+        if (this::animePageAdapter.isInitialized && _binding != null) {
+            animePageAdapter.updateNotificationCount()
+        }
+        super.onResume()
+    }
+    private fun setupAdapterReadyObserver() {
+        val scope = viewLifecycleOwner.lifecycleScope
         animePageAdapter.ready.observe(viewLifecycleOwner) { i ->
             if (i) {
                 model.getUpdated().observe(viewLifecycleOwner) {
@@ -254,32 +283,15 @@ class AnimeFragment : Fragment() {
                     -(navBarHeight + (bottomBarOrNull?.height ?: 0) + (bottomBarOrNull?.marginBottom ?: 0)).toFloat()
             }
         }
+    }
 
-
+    private fun setupRefreshObserver(
+        popularAdaptor: MediaAdaptor,
+        scope: androidx.lifecycle.LifecycleCoroutineScope
+    ) {
         fun load() = scope.launch(Dispatchers.Main) {
             animePageAdapter.updateAvatar()
         }
-
-        animePageAdapter.onSeasonClick = { i ->
-            scope.launch(Dispatchers.IO) {
-                model.loadTrending(i)
-            }
-        }
-
-        animePageAdapter.onSeasonLongClick = { i ->
-            val (season, year) = Anilist.currentSeasons[i]
-            ContextCompat.startActivity(
-                requireContext(),
-                Intent(requireContext(), SearchActivity::class.java)
-                    .putExtra("type", "ANIME")
-                    .putExtra("season", season)
-                    .putExtra("seasonYear", year.toString())
-                    .putExtra("search", true),
-                null
-            )
-            true
-        }
-
         var running = false
         val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(false) }
         live.observe(viewLifecycleOwner) {
@@ -323,15 +335,4 @@ class AnimeFragment : Fragment() {
         }
     }
 
-    override fun onResume() {
-        if (!model.loaded) Refresh.activity[this.hashCode()]!!.postValue(true)
-        if (animePageAdapter.trendingViewPager != null) {
-            binding.root.requestApplyInsets()
-            binding.root.requestLayout()
-        }
-        if (this::animePageAdapter.isInitialized && _binding != null) {
-            animePageAdapter.updateNotificationCount()
-        }
-        super.onResume()
-    }
 }

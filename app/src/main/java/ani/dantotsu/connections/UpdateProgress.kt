@@ -24,27 +24,9 @@ fun updateProgress(media: Media, number: String) {
     val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
     val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
 
-    val autoDelete = PrefManager.getCustomVal("auto_delete_downloads", false)
-    if (autoDelete) {
-        val type = if (media.anime != null) MediaType.ANIME else if (media.format == "NOVEL") MediaType.NOVEL else MediaType.MANGA
-        val downloadsManager = Injekt.get<DownloadsManager>()
-        val downloadedTypes = when (type) {
-            MediaType.ANIME -> downloadsManager.animeDownloadedTypes
-            MediaType.MANGA -> downloadsManager.mangaDownloadedTypes
-            MediaType.NOVEL -> downloadsManager.novelDownloadedTypes
-        }
-        val targetNum = ani.dantotsu.media.MediaNameAdapter.findChapterNumber(number)
-        val downloadedType = downloadedTypes.find {
-            it.titleName == media.mainName().findValidName() &&
-            (it.chapterName == number.findValidName() ||
-             (targetNum != null && ani.dantotsu.media.MediaNameAdapter.findChapterNumber(it.chapterName) == targetNum))
-        }
-        if (downloadedType != null) {
-            downloadsManager.removeDownload(downloadedType, toast = false) {}
-        }
-    }
+    checkAndAutoDeleteDownload(media, number)
 
-    val progressInt = ani.dantotsu.media.MediaNameAdapter.findEpisodeNumber(number)?.toInt()
+        val progressInt = ani.dantotsu.media.MediaNameAdapter.findEpisodeNumber(number)?.toInt()
         ?: number.toFloatOrNull()?.toInt()
         ?: return
 
@@ -124,38 +106,11 @@ fun syncPendingProgressUpdates() {
     CoroutineScope(Dispatchers.IO).launch {
         val remaining = pending.toMutableList()
         for (update in pending) {
-            try {
-                
-                val anilistId: Int = if (update.idMAL != null && update.mediaId == update.idMAL) {
-                    val type = if (update.isAnime) "ANIME" else "MANGA"
-                    val resolved = Anilist.query.getMedia(update.idMAL, mal = true, type = type)?.id
-                    if (resolved == null) {
-                        if (Anilist.anilistDisabledSignal) break
-                        remaining.remove(update)
-                        continue
-                    }
-                    resolved
-                } else {
-                    update.mediaId
-                }
-                Anilist.mutation.editList(
-                    mediaID = anilistId,
-                    progress = update.progress,
-                    score = update.score,
-                    repeat = update.rewatch,
-                    notes = update.notes,
-                    status = update.status,
-                    private = update.isPrivate,
-                    startedAt = update.startDate,
-                    completedAt = update.endDate,
-                    customList = update.customLists,
-                )
-                if (!Anilist.anilistDisabledSignal) {
-                    remaining.remove(update)
-                } else {
-                    break
-                }
-            } catch (_: Exception) {
+            val success = syncSingleProgressUpdate(update)
+            if (success) {
+                remaining.remove(update)
+            } else if (Anilist.anilistDisabledSignal) {
+                break
             }
         }
         PrefManager.setVal(PrefName.PendingProgressUpdates, remaining)
@@ -229,3 +184,57 @@ fun syncPendingDeletions() {
         Refresh.all()
     }
 }
+
+private fun checkAndAutoDeleteDownload(media: Media, number: String) {
+    val autoDelete = PrefManager.getCustomVal("auto_delete_downloads", false)
+    if (autoDelete) {
+        val type = if (media.anime != null) MediaType.ANIME else if (media.format == "NOVEL") MediaType.NOVEL else MediaType.MANGA
+        val downloadsManager = Injekt.get<DownloadsManager>()
+        val downloadedTypes = when (type) {
+            MediaType.ANIME -> downloadsManager.animeDownloadedTypes
+            MediaType.MANGA -> downloadsManager.mangaDownloadedTypes
+            MediaType.NOVEL -> downloadsManager.novelDownloadedTypes
+        }
+        val targetNum = ani.dantotsu.media.MediaNameAdapter.findChapterNumber(number)
+        val downloadedType = downloadedTypes.find {
+            it.titleName == media.mainName().findValidName() &&
+            (it.chapterName == number.findValidName() ||
+             (targetNum != null && ani.dantotsu.media.MediaNameAdapter.findChapterNumber(it.chapterName) == targetNum))
+        }
+        if (downloadedType != null) {
+            downloadsManager.removeDownload(downloadedType, toast = false) {}
+        }
+    }
+
+}
+
+private suspend fun syncSingleProgressUpdate(update: PendingProgressUpdate): Boolean {
+        return try {
+            val anilistId: Int = if (update.idMAL != null && update.mediaId == update.idMAL) {
+                val type = if (update.isAnime) "ANIME" else "MANGA"
+                val resolved = Anilist.query.getMedia(update.idMAL, mal = true, type = type)?.id
+                if (resolved == null) {
+                    return !Anilist.anilistDisabledSignal
+                }
+                resolved
+            } else {
+                update.mediaId
+            }
+            Anilist.mutation.editList(
+                mediaID = anilistId,
+                progress = update.progress,
+                score = update.score,
+                repeat = update.rewatch,
+                notes = update.notes,
+                status = update.status,
+                private = update.isPrivate,
+                startedAt = update.startDate,
+                completedAt = update.endDate,
+                customList = update.customLists,
+            )
+            !Anilist.anilistDisabledSignal
+        } catch (_: Exception) {
+            false
+        }
+    }
+

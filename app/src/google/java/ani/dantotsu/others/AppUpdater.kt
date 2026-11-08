@@ -149,26 +149,7 @@ object AppUpdater {
         if (post) snackString(currContext()?.getString(R.string.checking_for_update))
         val repo = activity.getString(R.string.repo)
         tryWithSuspend {
-            // First check user's custom updater repository
-            val customUpdate = fetchFromCustomUpdater()
-            val (md, version, isCustom) = if (customUpdate != null && isOutdated(customUpdate.second, BuildConfig.VERSION_NAME)) {
-                Triple(customUpdate.first, customUpdate.second, true)
-            } else {
-                // Fallback to original Dantotsu update mechanism
-                val originalUpdate = try {
-                    fetchFromGithub(repo, BuildConfig.DEBUG)
-                } catch (e: Exception) {
-                    Logger.log("Github fetch failed, trying fallback: ${e.message}")
-                    try {
-                        fetchFromFallback(BuildConfig.DEBUG)
-                    } catch (e: Exception) {
-                        Logger.log("Fallback fetch failed: ${e.message}")
-                        null
-                    }
-                } ?: return@tryWithSuspend
-                Triple(originalUpdate.first, originalUpdate.second, false)
-            }
-
+            val (md, version, isCustom) = fetchUpdateInfo(repo) ?: return@tryWithSuspend
             Logger.log("Git Version : $version")
             val dontShow = PrefManager.getCustomVal("dont_ask_for_update_$version", false)
             val shouldUpdate = if (isCustom) {
@@ -177,116 +158,16 @@ object AppUpdater {
                 version > BuildConfig.VERSION_NAME
             }
 
-            if (shouldUpdate && !dontShow && !activity.isDestroyed) activity.runOnUiThread {
-                CustomBottomDialog.newInstance().apply {
-                    setTitleText(
-                        "${if (BuildConfig.DEBUG) "Beta " else ""}Update " + currContext()!!.getString(
-                            R.string.available
-                        )
-                    )
-                    addView(
-                        TextView(activity).apply {
-                            val markWon = try {
-                                buildMarkwon(activity, false)
-                            } catch (e: IllegalArgumentException) {
-                                return@runOnUiThread
-                            }
-                            markWon.setMarkdown(this, md)
-                        }
-                    )
-
-                    setCheck(
-                        currContext()!!.getString(R.string.dont_show_again, version),
-                        false
-                    ) { isChecked ->
-                        if (isChecked) {
-                            PrefManager.setCustomVal("dont_ask_for_update_$version", true)
-                        }
-                    }
-                    setPositiveButton(currContext()!!.getString(R.string.lets_go)) {
-                        MainScope().launch(Dispatchers.IO) {
-                            try {
-                                val apkUrl = if (isCustom) {
-                                    fetchApkUrlFromCustomUpdater(UPDATER_REPO, version)
-                                        ?: try {
-                                            fetchApkUrlFromGithub(repo, version)
-                                        } catch (e: Exception) {
-                                            fetchApkUrlFromFallback(version, BuildConfig.DEBUG)
-                                        }
-                                } else {
-                                    try {
-                                        fetchApkUrlFromGithub(repo, version)
-                                    } catch (e: Exception) {
-                                        Logger.log("Github APK fetch failed, trying fallback: ${e.message}")
-                                        try {
-                                            fetchApkUrlFromFallback(version, BuildConfig.DEBUG)
-                                        } catch (e: Exception) {
-                                            Logger.log("Fallback APK fetch failed: ${e.message}")
-                                            null
-                                        }
-                                    }
-                                }
-                                if (apkUrl != null) {
-                                    activity.downloadUpdate(version, apkUrl)
-                                } else {
-                                    val targetRepo = if (isCustom) UPDATER_REPO else repo
-                                    openLinkInBrowser("https://github.com/$targetRepo/releases/tag/v$version")
-                                }
-                            } catch (e: Exception) {
-                                logError(e)
-                            }
-                        }
-                        dismiss()
-                    }
-                    setNegativeButton(currContext()!!.getString(R.string.cope)) {
-                        dismiss()
-                    }
-                    show(activity.supportFragmentManager, "dialog")
-                }
+            if (shouldUpdate && !dontShow && !activity.isDestroyed) {
+                showUpdateDialog(activity, version, md, isCustom, repo)
             } else {
                 if (post) snackString(currContext()?.getString(R.string.no_update_found))
             }
         }
     }
 
-    private fun isOutdated(latestTag: String, currentVersion: String): Boolean {
-        val latest = latestTag.removePrefix("v").trim()
-        val current = currentVersion.removePrefix("v").trim()
-        if (latest == current) return false
-
-        val latestBase = latest.substringBefore("+").substringBefore("-").trim()
-        val currentBase = current.substringBefore("+").substringBefore("-").trim()
-
-        val lParts = latestBase.split(".").mapNotNull { it.toIntOrNull() }
-        val cParts = currentBase.split(".").mapNotNull { it.toIntOrNull() }
-
-        if (lParts.isNotEmpty() && cParts.isNotEmpty()) {
-            val maxLen = maxOf(lParts.size, cParts.size)
-            for (i in 0 until maxLen) {
-                val l = lParts.getOrElse(i) { 0 }
-                val c = cParts.getOrElse(i) { 0 }
-                if (l > c) return true
-                if (l < c) return false
-            }
-        }
-
-        val latestHash = when {
-            "+" in latest -> latest.substringAfter("+").substringBefore("-").trim()
-            lParts.isEmpty() && latest.isNotBlank() -> latest.substringBefore("-").trim()
-            else -> ""
-        }
-        val currentHash = when {
-            "+" in current -> current.substringAfter("+").substringBefore("-").trim()
-            cParts.isEmpty() && current.isNotBlank() -> current.substringBefore("-").trim()
-            else -> ""
-        }
-
-        if (latestHash.isNotEmpty() && currentHash.isNotEmpty()) {
-            return !(latestHash.startsWith(currentHash) || currentHash.startsWith(latestHash))
-        }
-
-        return latestHash.isNotEmpty() && currentHash.isEmpty()
-    }
+    private fun isOutdated(latestTag: String, currentVersion: String): Boolean =
+        ani.dantotsu.util.VersionUtil.isOutdated(latestTag, currentVersion)
 
 
     //Blatantly kanged from https://github.com/LagradOst/CloudStream-3/blob/master/app/src/main/java/com/lagradost/cloudstream3/utils/InAppUpdater.kt
@@ -375,4 +256,104 @@ object AppUpdater {
             return dateFormat.parse(createdAt)!!.time
         }
     }
+    private suspend fun fetchUpdateInfo(repo: String): Triple<String, String, Boolean>? {
+        val customUpdate = fetchFromCustomUpdater()
+        return if (customUpdate != null && isOutdated(customUpdate.second, BuildConfig.VERSION_NAME)) {
+            Triple(customUpdate.first, customUpdate.second, true)
+        } else {
+            val originalUpdate = try {
+                fetchFromGithub(repo, BuildConfig.DEBUG)
+            } catch (e: Exception) {
+                Logger.log("Github fetch failed, trying fallback: ${e.message}")
+                try {
+                    fetchFromFallback(BuildConfig.DEBUG)
+                } catch (e: Exception) {
+                    Logger.log("Fallback fetch failed: ${e.message}")
+                    null
+                }
+            } ?: return null
+            Triple(originalUpdate.first, originalUpdate.second, false)
+        }
+    }
+
+    private fun showUpdateDialog(
+        activity: FragmentActivity,
+        version: String,
+        md: String,
+        isCustom: Boolean,
+        repo: String
+    ) {
+        activity.runOnUiThread {
+            CustomBottomDialog.newInstance().apply {
+                setTitleText(
+                    "${if (BuildConfig.DEBUG) "Beta " else ""}Update " + currContext()!!.getString(
+                        R.string.available
+                    )
+                )
+                addView(
+                    TextView(activity).apply {
+                        val markWon = try {
+                            buildMarkwon(activity, false)
+                        } catch (e: IllegalArgumentException) {
+                            return@runOnUiThread
+                        }
+                        markWon.setMarkdown(this, md)
+                    }
+                )
+
+                setCheck(
+                    currContext()!!.getString(R.string.dont_show_again, version),
+                    false
+                ) { isChecked ->
+                    if (isChecked) {
+                        PrefManager.setCustomVal("dont_ask_for_update_$version", true)
+                    }
+                }
+                setPositiveButton(currContext()!!.getString(R.string.lets_go)) {
+                    MainScope().launch(Dispatchers.IO) {
+                        try {
+                            val apkUrl = resolveApkUrl(isCustom, repo, version)
+                            if (apkUrl != null) {
+                                activity.downloadUpdate(version, apkUrl)
+                            } else {
+                                val targetRepo = if (isCustom) UPDATER_REPO else repo
+                                openLinkInBrowser("https://github.com/$targetRepo/releases/tag/v$version")
+                            }
+                        } catch (e: Exception) {
+                            logError(e)
+                        }
+                    }
+                    dismiss()
+                }
+                setNegativeButton(currContext()!!.getString(R.string.cope)) {
+                    dismiss()
+                }
+                show(activity.supportFragmentManager, "dialog")
+            }
+        }
+    }
+
+    private suspend fun resolveApkUrl(isCustom: Boolean, repo: String, version: String): String? {
+        return if (isCustom) {
+            fetchApkUrlFromCustomUpdater(UPDATER_REPO, version)
+                ?: try {
+                    fetchApkUrlFromGithub(repo, version)
+                } catch (e: Exception) {
+                    fetchApkUrlFromFallback(version, BuildConfig.DEBUG)
+                }
+        } else {
+            try {
+                fetchApkUrlFromGithub(repo, version)
+            } catch (e: Exception) {
+                Logger.log("Github APK fetch failed, trying fallback: ${e.message}")
+                try {
+                    fetchApkUrlFromFallback(version, BuildConfig.DEBUG)
+                } catch (e: Exception) {
+                    Logger.log("Fallback APK fetch failed: ${e.message}")
+                    null
+                }
+            }
+        }
+    }
+
 }

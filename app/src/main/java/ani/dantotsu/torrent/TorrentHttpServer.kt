@@ -52,6 +52,7 @@ class TorrentHttpServer(
         Logger.log("TorrentHttpServer: Stopped")
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     private fun handleClient(socket: Socket) {
         socket.use { client ->
             try {
@@ -213,7 +214,7 @@ class TorrentHttpServer(
                         if (pieceIndex != lastPrebufferedPiece) {
                             // If seek occurred (jump > 2 pieces away), deprioritize previous lookahead window
                             if (lastPrebufferedPiece != -1 && kotlin.math.abs(pieceIndex - lastPrebufferedPiece) > 2) {
-                                for (p in lastPrebufferedPiece until (lastPrebufferedPiece + lastLookaheadPieces)) {
+                                for (p in lastPrebufferedPiece until lastPrebufferedPiece + lastLookaheadPieces) {
                                     if (p < totalPieces && p != pieceIndex) {
                                         try {
                                             torrentHandle.resetPieceDeadline(p)
@@ -232,7 +233,7 @@ class TorrentHttpServer(
                                 val nextPiece = pieceIndex + i
                                 if (nextPiece < totalPieces) {
                                     torrentHandle.piecePriority(nextPiece, Priority.TOP_PRIORITY)
-                                    val deadlineMs = if (i == 0) 0 else (150 + i * 150)
+                                    val deadlineMs = if (i == 0) 0 else 150 + i * 150
                                     torrentHandle.setPieceDeadline(nextPiece, deadlineMs)
                                 }
                             }

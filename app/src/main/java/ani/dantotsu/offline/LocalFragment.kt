@@ -527,52 +527,7 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                 val localItems = mangasPage?.mangas?.map { sManga ->
                     val details = localMangaSource.getMangaDetails(sManga)
                     val chapters = localMangaSource.getChapterList(sManga)
-
-                    val title = details.title
-                    val totalChaps = chapters.size.toString()
-
-                    val cachedCover = ani.dantotsu.settings.saving.PrefManager
-                        .getCustomVal<String>("local_cover_${title}", "")
-                        .takeIf { s -> s.isNotEmpty() && s != "null" }
-                    val cachedBanner = ani.dantotsu.settings.saving.PrefManager
-                        .getCustomVal<String>("local_banner_${title}", "")
-                        .takeIf { s -> s.isNotEmpty() && s != "null" }
-
-                    val coverUri = if (cachedCover != null) {
-                        Uri.parse(cachedCover)
-                    } else {
-                        details.thumbnail_url?.let { Uri.parse(it) }
-                    }
-                    val bannerUri = if (cachedBanner != null) {
-                        Uri.parse(cachedBanner)
-                    } else {
-                        null
-                    }
-
-                    OfflineAnimeModel(
-                        title = title,
-                        folderName = sManga.url ?: title,
-                        score = "0",
-                        totalEpisode = totalChaps,
-                        totalEpisodeList = totalChaps,
-                        watchedEpisode = "~",
-                        type = "local",
-                        episodes = " Chapters",
-                        isOngoing = false,
-                        isUserScored = false,
-                        image = coverUri,
-                        banner = bannerUri,
-                        description = details.description,
-                        genres = details.genre,
-                        status = when (details.status) {
-                            SManga.ONGOING -> "RELEASING"
-                            SManga.COMPLETED -> "FINISHED"
-                            SManga.CANCELLED -> "CANCELLED"
-                            SManga.ON_HIATUS -> "HIATUS"
-                            else -> "UNKNOWN"
-                        },
-                        author = details.author ?: details.artist
-                    )
+                    createLocalOfflineModel(sManga, details, chapters.size, " Chapters")
                 } ?: emptyList()
 
                 val appDownloadsManager = ani.dantotsu.download.DownloadsManager(requireContext())
@@ -700,52 +655,7 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
                 val newDownloads = mangasPage.mangas.map { sManga ->
                     val details = localNovelSource.getMangaDetails(sManga)
                     val chapters = localNovelSource.getChapterList(sManga)
-
-                    val title = details.title
-                    val totalChaps = chapters.size.toString()
-
-                    val cachedCover = ani.dantotsu.settings.saving.PrefManager
-                        .getCustomVal<String>("local_cover_${title}", "")
-                        .takeIf { s -> s.isNotEmpty() && s != "null" }
-                    val cachedBanner = ani.dantotsu.settings.saving.PrefManager
-                        .getCustomVal<String>("local_banner_${title}", "")
-                        .takeIf { s -> s.isNotEmpty() && s != "null" }
-
-                    val coverUri = if (cachedCover != null) {
-                        Uri.parse(cachedCover)
-                    } else {
-                        details.thumbnail_url?.let { Uri.parse(it) }
-                    }
-                    val bannerUri = if (cachedBanner != null) {
-                        Uri.parse(cachedBanner)
-                    } else {
-                        null
-                    }
-
-                    OfflineAnimeModel(
-                        title = title,
-                        folderName = sManga.url ?: title,
-                        score = "0",
-                        totalEpisode = totalChaps,
-                        totalEpisodeList = totalChaps,
-                        watchedEpisode = "~",
-                        type = "local",
-                        episodes = " Volumes",
-                        isOngoing = false,
-                        isUserScored = false,
-                        image = coverUri,
-                        banner = bannerUri,
-                        description = details.description,
-                        genres = details.genre,
-                        status = when (details.status) {
-                            SManga.ONGOING -> "RELEASING"
-                            SManga.COMPLETED -> "FINISHED"
-                            SManga.CANCELLED -> "CANCELLED"
-                            SManga.ON_HIATUS -> "HIATUS"
-                            else -> "UNKNOWN"
-                        },
-                        author = details.author ?: details.artist
-                    )
+                    createLocalOfflineModel(sManga, details, chapters.size, " Volumes")
                 }
                 downloads = newDownloads
                 novelDownloadsCache = newDownloads
@@ -799,5 +709,57 @@ class LocalFragment : Fragment(), OfflineAnimeSearchListener {
         var animeDownloadsCache: List<OfflineAnimeModel>? = null
         var mangaDownloadsCache: List<OfflineAnimeModel>? = null
         var novelDownloadsCache: List<OfflineAnimeModel>? = null
+    }
+    private fun createLocalOfflineModel(
+        sManga: SManga,
+        details: SManga,
+        chaptersCount: Int,
+        episodesSuffix: String
+    ): OfflineAnimeModel {
+        val title = details.title
+        val totalChaps = chaptersCount.toString()
+
+        val cachedCover = ani.dantotsu.settings.saving.PrefManager
+            .getCustomVal<String>("local_cover_${title}", "")
+            .takeIf { s -> s.isNotEmpty() && s != "null" }
+        val cachedBanner = ani.dantotsu.settings.saving.PrefManager
+            .getCustomVal<String>("local_banner_${title}", "")
+            .takeIf { s -> s.isNotEmpty() && s != "null" }
+
+        val coverUri = if (cachedCover != null) {
+            Uri.parse(cachedCover)
+        } else {
+            details.thumbnail_url?.let { Uri.parse(it) }
+        }
+        val bannerUri = if (cachedBanner != null) {
+            Uri.parse(cachedBanner)
+        } else {
+            null
+        }
+
+        return OfflineAnimeModel(
+            title = title,
+            folderName = sManga.url ?: title,
+            score = "0",
+            totalEpisode = totalChaps,
+            totalEpisodeList = totalChaps,
+            watchedEpisode = "~",
+            type = "local",
+            episodes = episodesSuffix,
+            isOngoing = false,
+            isUserScored = false,
+            image = coverUri,
+            banner = bannerUri,
+            description = details.description,
+            genres = details.genre,
+            status = when (details.status) {
+                SManga.ONGOING -> "RELEASING"
+                SManga.COMPLETED -> "FINISHED"
+                SManga.CANCELLED -> "CANCELLED"
+                SManga.ON_HIATUS -> "HIATUS"
+                else -> "UNKNOWN"
+            },
+            author = details.author ?: details.artist
+        )
     }
 }

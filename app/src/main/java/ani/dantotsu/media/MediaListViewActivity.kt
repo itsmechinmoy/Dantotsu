@@ -93,6 +93,10 @@ class MediaListViewActivity : AppCompatActivity() {
             if (view == 1) 1 else (screenWidth / 120f).toInt()
         )
 
+        setupRecommendedPaging(mediaList)
+    }
+
+    private fun setupRecommendedPaging(mediaList: ArrayList<Media>) {
         val isRecommended = intent.getStringExtra("type") == "RECOMMENDED" ||
                 intent.getStringExtra("title") == getString(R.string.recommended)
         if (isRecommended && !PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
@@ -146,7 +150,6 @@ class MediaListViewActivity : AppCompatActivity() {
             })
         }
     }
-
     companion object {
         var passedMedia: ArrayList<Media>? = null
     }

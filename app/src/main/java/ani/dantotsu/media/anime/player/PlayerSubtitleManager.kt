@@ -1,5 +1,6 @@
 package ani.dantotsu.media.anime.player
 
+import android.graphics.Typeface
 import android.net.Uri
 import android.util.Log
 import android.util.TypedValue
@@ -767,7 +768,7 @@ class PlayerSubtitleManager(
         return when {
             filename?.endsWith(".vtt", ignoreCase = true) == true || content.trimStart().startsWith("WEBVTT") -> "VTT"
             filename?.endsWith(".ass", ignoreCase = true) == true || filename?.endsWith(".ssa", ignoreCase = true) == true ||
-                content.contains("[Script Info]") || content.contains("\[Events\]") -> "ASS"
+                content.contains("[Script Info]") || content.contains("[Events]") -> "ASS"
             filename?.endsWith(".ttml", ignoreCase = true) == true || content.contains("<tt ") || content.contains("<tt>") -> "TTML"
             else -> "SRT"
         }

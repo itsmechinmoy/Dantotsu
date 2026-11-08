@@ -353,6 +353,7 @@ class MangaChapterAdapter(
         }
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (holder) {
             is ChapterCompactViewHolder -> {
@@ -450,7 +451,7 @@ class MangaChapterAdapter(
         return when (val daysDifference = difference / (1000 * 60 * 60 * 24)) {
             0L -> {
                 val hoursDifference = difference / (1000 * 60 * 60)
-                val minutesDifference = (difference / (1000 * 60)) % 60
+                val minutesDifference = difference / (1000 * 60) % 60
 
                 when {
                     hoursDifference > 0 -> "$hoursDifference hour${if (hoursDifference > 1) "s" else ""} ago"

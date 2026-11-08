@@ -77,233 +77,244 @@ class SettingsNotificationActivity : AppCompatActivity() {
                 else getString(R.string.do_not_update)
             }
             val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
+            val allSettings = ArrayList<Settings>().apply {
+                addAll(buildSubscriptionSettings(context, timeNames))
+                addAll(buildAnilistNotificationSettings(context, aTimeNames, aItems, cTimeNames, cItems))
+                addAll(buildBehaviorSettings(context))
+            }
             settingsRecyclerView.adapter = SettingsAdapter(
-                arrayListOf(
-                    Settings(
-                        type = 1,
-                        name = getString(
-                            R.string.subscriptions_checking_time_s,
-                            timeNames[curTime]
-                        ),
-                        desc = getString(R.string.subscriptions_info),
-                        icon = R.drawable.ic_round_notifications_none_24,
-                        onClick = {
-                            context.customAlertDialog().apply {
-                                setTitle(R.string.subscriptions_checking_time)
-                                singleChoiceItems(timeNames, curTime) { i ->
-                                    curTime = i
-                                    it.settingsTitle.text = getString(R.string.subscriptions_checking_time_s, timeNames[i])
-                                    PrefManager.setVal(PrefName.SubscriptionNotificationInterval, curTime)
-                                    TaskScheduler.create(context, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(context)
-                                }
-                                show()
-                            }
-                        },
-                        onLongClick = {
-                            TaskScheduler.create(
-                                context, PrefManager.getVal(PrefName.UseAlarmManager)
-                            ).scheduleAllTasks(context)
+                allSettings,
+                highlightKey = highlightKey
+            )
+            settingsRecyclerView.apply {
+                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
+                setHasFixedSize(true)
+            }
+        }
+    }
+    private fun buildSubscriptionSettings(context: Context, timeNames: Array<String>): List<Settings> {
+        var curTime = PrefManager.getVal<Int>(PrefName.SubscriptionNotificationInterval)
+        return listOf(
+            Settings(
+                type = 1,
+                name = getString(
+                    R.string.subscriptions_checking_time_s,
+                    timeNames[curTime]
+                ),
+                desc = getString(R.string.subscriptions_info),
+                icon = R.drawable.ic_round_notifications_none_24,
+                onClick = {
+                    context.customAlertDialog().apply {
+                        setTitle(R.string.subscriptions_checking_time)
+                        singleChoiceItems(timeNames, curTime) { i ->
+                            curTime = i
+                            it.settingsTitle.text = getString(R.string.subscriptions_checking_time_s, timeNames[i])
+                            PrefManager.setVal(PrefName.SubscriptionNotificationInterval, curTime)
+                            TaskScheduler.create(context, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(context)
                         }
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.view_subscriptions),
-                        desc = getString(R.string.view_subscriptions_desc),
-                        icon = R.drawable.ic_round_search_24,
-                        onClick = {
-                            val subscriptions = SubscriptionHelper.getSubscriptions()
-                            SubscriptionsBottomDialog.newInstance(subscriptions).show(
-                                supportFragmentManager,
-                                "subscriptions"
-                            )
+                        show()
+                    }
+                },
+                onLongClick = {
+                    TaskScheduler.create(
+                        context, PrefManager.getVal(PrefName.UseAlarmManager)
+                    ).scheduleAllTasks(context)
+                }
+            ),
+            Settings(
+                type = 1,
+                name = getString(R.string.view_subscriptions),
+                desc = getString(R.string.view_subscriptions_desc),
+                icon = R.drawable.ic_round_search_24,
+                onClick = {
+                    val subscriptions = SubscriptionHelper.getSubscriptions()
+                    SubscriptionsBottomDialog.newInstance(subscriptions).show(
+                        supportFragmentManager,
+                        "subscriptions"
+                    )
+                }
+            ),
+            Settings(
+                type = 1,
+                name = getString(R.string.import_anilist_lists_to_subscriptions),
+                desc = getString(R.string.import_anilist_lists_to_subscriptions_desc),
+                icon = R.drawable.ic_round_playlist_add_24,
+                onClick = { importAnilistLists(context) }
+            ),
+            Settings(
+                type = 1,
+                name = getString(R.string.import_anilist_statuses_to_subscriptions),
+                desc = getString(R.string.import_anilist_statuses_to_subscriptions_desc),
+                icon = R.drawable.ic_round_playlist_add_24,
+                onClick = { importAnilistStatuses(context) }
+            )
+        )
+    }
+
+    private fun importAnilistLists(context: Context) {
+        if (isImportingLists) {
+            toast(getString(R.string.loading))
+            return
+        }
+        isImportingLists = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val userId = Anilist.userid
+                    ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull()
+                if (userId == null) {
+                    withContext(Dispatchers.Main) { toast(getString(R.string.login_to_anilist_first)) }
+                    return@launch
+                }
+
+                val animeLists = Anilist.query.getMediaLists(true, userId)
+                val mangaLists = Anilist.query.getMediaLists(false, userId)
+
+                val selectableLists = linkedMapOf<String, ArrayList<Media>>()
+                fun addSelectableLists(prefix: String, lists: MutableMap<String, ArrayList<Media>>) {
+                    lists.forEach { (name, media) ->
+                        if (name != "All" && name != "Favourites" && media.isNotEmpty()) {
+                            selectableLists["$prefix • $name"] = media
                         }
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.import_anilist_lists_to_subscriptions),
-                        desc = getString(R.string.import_anilist_lists_to_subscriptions_desc),
-                        icon = R.drawable.ic_round_playlist_add_24,
-                        onClick = {
-                            if (isImportingLists) {
-                                toast(getString(R.string.loading))
-                                return@Settings
-                            }
-                            isImportingLists = true
+                    }
+                }
+                addSelectableLists(getString(R.string.anime), animeLists)
+                addSelectableLists(getString(R.string.manga), mangaLists)
+
+                if (selectableLists.isEmpty()) {
+                    withContext(Dispatchers.Main) { toast(getString(R.string.no_lists_available_to_import)) }
+                    return@launch
+                }
+
+                val titles = selectableLists.keys.toTypedArray()
+                val selected = BooleanArray(titles.size) { false }
+                withContext(Dispatchers.Main) {
+                    context.customAlertDialog().apply {
+                        setTitle(R.string.select_lists_to_import)
+                        multiChoiceItems(titles, selected) {}
+                        setPosButton(R.string.import_action) {
                             lifecycleScope.launch(Dispatchers.IO) {
-                                try {
-                                    val userId = (Anilist.userid
-                                        ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull())
-                                    if (userId == null) {
-                                        withContext(Dispatchers.Main) { toast(getString(R.string.login_to_anilist_first)) }
-                                        return@launch
-                                    }
-
-                                    val animeLists = Anilist.query.getMediaLists(true, userId)
-                                    val mangaLists = Anilist.query.getMediaLists(false, userId)
-
-                                    val selectableLists = linkedMapOf<String, ArrayList<Media>>()
-                                    fun addSelectableLists(prefix: String, lists: MutableMap<String, ArrayList<Media>>) {
-                                        lists.forEach { (name, media) ->
-                                            if (name != "All" && name != "Favourites" && media.isNotEmpty()) {
-                                                selectableLists["$prefix • $name"] = media
+                                val existingIds = SubscriptionHelper.getSubscriptions().keys.toMutableSet()
+                                var importedCount = 0
+                                titles.forEachIndexed { index, title ->
+                                    if (selected[index]) {
+                                        selectableLists[title]?.forEach { media ->
+                                            if (!existingIds.contains(media.id)) {
+                                                existingIds.add(media.id)
+                                                importedCount++
+                                                SubscriptionHelper.saveSubscription(media, true)
                                             }
                                         }
                                     }
-                                    addSelectableLists(getString(R.string.anime), animeLists)
-                                    addSelectableLists(getString(R.string.manga), mangaLists)
-
-                                    if (selectableLists.isEmpty()) {
-                                        withContext(Dispatchers.Main) { toast(getString(R.string.no_lists_available_to_import)) }
-                                        return@launch
-                                    }
-
-                                    val titles = selectableLists.keys.toTypedArray()
-                                    val selected = BooleanArray(titles.size) { false }
-                                    withContext(Dispatchers.Main) {
-                                        context.customAlertDialog().apply {
-                                            setTitle(R.string.select_lists_to_import)
-                                            multiChoiceItems(titles, selected) {}
-                                            setPosButton(R.string.import_action) {
-                                                lifecycleScope.launch(Dispatchers.IO) {
-                                                    val existingIds = SubscriptionHelper.getSubscriptions().keys.toMutableSet()
-                                                    var importedCount = 0
-                                                    titles.forEachIndexed { index, title ->
-                                                        if (selected[index]) {
-                                                            selectableLists[title]?.forEach { media ->
-                                                                if (!existingIds.contains(media.id)) {
-                                                                    existingIds.add(media.id)
-                                                                    importedCount++
-                                                                    SubscriptionHelper.saveSubscription(media, true)
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    withContext(Dispatchers.Main) {
-                                                        toast(
-                                                            getString(
-                                                                R.string.imported_subscriptions_count,
-                                                                importedCount
-                                                            )
-                                                        )
-                                                        isImportingLists = false
-                                                    }
-                                                }
-                                            }
-                                            setNegButton(R.string.cancel) { isImportingLists = false }
-                                            show()
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    withContext(Dispatchers.Main) { isImportingLists = false }
+                                }
+                                withContext(Dispatchers.Main) {
+                                    toast(getString(R.string.imported_subscriptions_count, importedCount))
+                                    isImportingLists = false
                                 }
                             }
                         }
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.import_anilist_statuses_to_subscriptions),
-                        desc = getString(R.string.import_anilist_statuses_to_subscriptions_desc),
-                        icon = R.drawable.ic_round_playlist_add_24,
-                        onClick = {
-                            if (isImportingStatuses) {
-                                toast(getString(R.string.loading))
-                                return@Settings
-                            }
-                            isImportingStatuses = true
+                        setNegButton(R.string.cancel) { isImportingLists = false }
+                        show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { isImportingLists = false }
+            }
+        }
+    }
+
+    private fun importAnilistStatuses(context: Context) {
+        if (isImportingStatuses) {
+            toast(getString(R.string.loading))
+            return
+        }
+        isImportingStatuses = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val userId = Anilist.userid
+                    ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull()
+                if (userId == null) {
+                    withContext(Dispatchers.Main) { toast(getString(R.string.login_to_anilist_first)) }
+                    return@launch
+                }
+
+                val animeLists = Anilist.query.getMediaLists(true, userId)
+                val mangaLists = Anilist.query.getMediaLists(false, userId)
+                val animeAll = animeLists["All"] ?: arrayListOf()
+                val mangaAll = mangaLists["All"] ?: arrayListOf()
+
+                if (animeAll.isEmpty() && mangaAll.isEmpty()) {
+                    withContext(Dispatchers.Main) { toast(getString(R.string.no_lists_available_to_import)) }
+                    return@launch
+                }
+
+                val statusKeys = resources.getStringArray(R.array.status)
+                val animeStatuses = resources.getStringArray(R.array.status_anime)
+                val mangaStatuses = resources.getStringArray(R.array.status_manga)
+                val count = minOf(statusKeys.size, animeStatuses.size, mangaStatuses.size)
+                val titles = ArrayList<String>(count * 2)
+                val statusMeta = ArrayList<Pair<Boolean, String>>(count * 2)
+                repeat(count) { index ->
+                    titles.add("${getString(R.string.anime)} • ${animeStatuses[index]}")
+                    statusMeta.add(true to statusKeys[index])
+                    titles.add("${getString(R.string.manga)} • ${mangaStatuses[index]}")
+                    statusMeta.add(false to statusKeys[index])
+                }
+                val selected = BooleanArray(titles.size) { false }
+
+                withContext(Dispatchers.Main) {
+                    context.customAlertDialog().apply {
+                        setTitle(R.string.select_statuses_to_import)
+                        multiChoiceItems(titles.toTypedArray(), selected) {}
+                        setPosButton(R.string.import_action) {
                             lifecycleScope.launch(Dispatchers.IO) {
-                                try {
-                                    val userId = (Anilist.userid
-                                        ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull())
-                                    if (userId == null) {
-                                        withContext(Dispatchers.Main) { toast(getString(R.string.login_to_anilist_first)) }
-                                        return@launch
+                                val animeSelected = mutableSetOf<String>()
+                                val mangaSelected = mutableSetOf<String>()
+                                statusMeta.forEachIndexed { index, (isAnime, status) ->
+                                    if (selected[index]) {
+                                        if (isAnime) animeSelected.add(status)
+                                        else mangaSelected.add(status)
                                     }
-
-                                    val animeLists = Anilist.query.getMediaLists(true, userId)
-                                    val mangaLists = Anilist.query.getMediaLists(false, userId)
-                                    val animeAll = animeLists["All"] ?: arrayListOf()
-                                    val mangaAll = mangaLists["All"] ?: arrayListOf()
-
-                                    if (animeAll.isEmpty() && mangaAll.isEmpty()) {
-                                        withContext(Dispatchers.Main) { toast(getString(R.string.no_lists_available_to_import)) }
-                                        return@launch
-                                    }
-
-                                    val statusKeys = resources.getStringArray(R.array.status)
-                                    val animeStatuses = resources.getStringArray(R.array.status_anime)
-                                    val mangaStatuses = resources.getStringArray(R.array.status_manga)
-                                    val count = minOf(
-                                        statusKeys.size,
-                                        animeStatuses.size,
-                                        mangaStatuses.size
-                                    )
-                                    val titles = ArrayList<String>(count * 2)
-                                    val statusMeta = ArrayList<Pair<Boolean, String>>(count * 2)
-                                    repeat(count) { index ->
-                                        titles.add("${getString(R.string.anime)} • ${animeStatuses[index]}")
-                                        statusMeta.add(true to statusKeys[index])
-                                        titles.add("${getString(R.string.manga)} • ${mangaStatuses[index]}")
-                                        statusMeta.add(false to statusKeys[index])
-                                    }
-                                    val selected = BooleanArray(titles.size) { false }
-
-                                    withContext(Dispatchers.Main) {
-                                        context.customAlertDialog().apply {
-                                            setTitle(R.string.select_statuses_to_import)
-                                            multiChoiceItems(titles.toTypedArray(), selected) {}
-                                            setPosButton(R.string.import_action) {
-                                                lifecycleScope.launch(Dispatchers.IO) {
-                                                    val animeSelected = mutableSetOf<String>()
-                                                    val mangaSelected = mutableSetOf<String>()
-                                                    statusMeta.forEachIndexed { index, (isAnime, status) ->
-                                                        if (selected[index]) {
-                                                            if (isAnime) animeSelected.add(status)
-                                                            else mangaSelected.add(status)
-                                                        }
-                                                    }
-                                                    val existingIds =
-                                                        SubscriptionHelper.getSubscriptions().keys.toMutableSet()
-                                                    var importedCount = 0
-                                                    fun importMedia(
-                                                        list: List<Media>,
-                                                        statuses: Set<String>
-                                                    ) {
-                                                        list.forEach { media ->
-                                                            if (media.userStatus != null &&
-                                                                statuses.contains(media.userStatus)
-                                                            ) {
-                                                                if (!existingIds.contains(media.id)) {
-                                                                    existingIds.add(media.id)
-                                                                    importedCount++
-                                                                    SubscriptionHelper.saveSubscription(media, true)
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    importMedia(animeAll, animeSelected)
-                                                    importMedia(mangaAll, mangaSelected)
-                                                    withContext(Dispatchers.Main) {
-                                                        toast(
-                                                            getString(
-                                                                R.string.imported_subscriptions_count,
-                                                                importedCount
-                                                            )
-                                                        )
-                                                        isImportingStatuses = false
-                                                    }
-                                                }
+                                }
+                                val existingIds = SubscriptionHelper.getSubscriptions().keys.toMutableSet()
+                                var importedCount = 0
+                                fun importMedia(list: List<Media>, statuses: Set<String>) {
+                                    list.forEach { media ->
+                                        if (media.userStatus != null && statuses.contains(media.userStatus)) {
+                                            if (!existingIds.contains(media.id)) {
+                                                existingIds.add(media.id)
+                                                importedCount++
+                                                SubscriptionHelper.saveSubscription(media, true)
                                             }
-                                            setNegButton(R.string.cancel) { isImportingStatuses = false }
-                                            show()
                                         }
                                     }
-                                } catch (e: Exception) {
-                                    withContext(Dispatchers.Main) { isImportingStatuses = false }
+                                }
+                                importMedia(animeAll, animeSelected)
+                                importMedia(mangaAll, mangaSelected)
+                                withContext(Dispatchers.Main) {
+                                    toast(getString(R.string.imported_subscriptions_count, importedCount))
+                                    isImportingStatuses = false
                                 }
                             }
                         }
-                    ),
-                    Settings(
+                        setNegButton(R.string.cancel) { isImportingStatuses = false }
+                        show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { isImportingStatuses = false }
+            }
+        }
+    }
+
+    private fun buildAnilistNotificationSettings(
+        context: Context,
+        aTimeNames: List<Int>,
+        aItems: List<String>,
+        cTimeNames: List<Int>,
+        cItems: List<String>
+    ): List<Settings> {
+        return listOf(
+Settings(
                         type = 1,
                         name = getString(R.string.anilist_notification_filters),
                         desc = getString(R.string.anilist_notification_filters_desc),
@@ -394,8 +405,13 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                 show()
                             }
                         }
-                    ),
-                    Settings(
+                    )
+        )
+    }
+
+    private fun buildBehaviorSettings(context: Context): List<Settings> {
+        return listOf(
+Settings(
                         type = 2,
                         name = getString(R.string.notification_for_checking_subscriptions),
                         desc = getString(R.string.notification_for_checking_subscriptions_desc),
@@ -460,13 +476,6 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             }
                         },
                     ),
-                ),
-                highlightKey = highlightKey
-            )
-            settingsRecyclerView.apply {
-                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-                setHasFixedSize(true)
-            }
-        }
+        )
     }
 }

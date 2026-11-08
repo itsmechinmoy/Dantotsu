@@ -309,7 +309,7 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
         episodes.forEach { (i, episode) ->
             enrichEpisode(episode, i, isTorrentSource, metadataPriority)
         }
-        media.anime?.episodes = episodes
+        media.anime?.episodes = episodes.toMutableMap()
         headerAdapter.options = getScanlators(episodes)
         if (headerAdapter.options.size > 1) {
             if (media.selected!!.scanlators != null) {

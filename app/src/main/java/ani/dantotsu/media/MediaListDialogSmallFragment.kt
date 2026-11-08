@@ -64,6 +64,7 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
     }
 
 
+    @Suppress("ComplexMethod", "LongMethod")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.mediaListContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> { bottomMargin += navBarHeight }
         val scope = viewLifecycleOwner.lifecycleScope
@@ -195,7 +196,7 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
                 withContext(Dispatchers.IO) {
                     val progress = _binding?.mediaListProgress?.text.toString().toIntOrNull()
                     val progressVolumes = media.userProgressVolumes
-                    val score = (_binding?.mediaListScore?.text.toString().toDoubleOrNull()?.times(10))?.toInt()
+                    val score = _binding?.mediaListScore?.text.toString().toDoubleOrNull()?.times(10)?.toInt()
                     val statusText = _binding?.mediaListStatus?.text.toString()
                     val status = statuses[statusStrings.indexOf(statusText).coerceAtLeast(0)]
                     val startD = media.userStartedAt

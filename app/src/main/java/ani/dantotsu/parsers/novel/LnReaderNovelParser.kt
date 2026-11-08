@@ -37,17 +37,26 @@ class LnReaderNovelParser(
                     engineCall("searchNovels", """["${query.jsEscape()}", 1]""")
                 } catch (e: Exception) {
                     Logger.log("LnReaderNovelParser[${plugin.id}] searchNovels failed, fallback to popular: ${e.message}")
-                    engineCall("popularNovels", """[1, {}]""")
+                    engineCall("popularNovels", """[1, {"showLatestNovels": false, "filters": {}}]""")
                 }
             } else {
-                engineCall("popularNovels", """[1, {"showLatestNovels": true}]""")
+                engineCall("popularNovels", """[1, {"showLatestNovels": true, "filters": {}}]""")
             }
-            val jsonArr = runCatching { Json.parseToJsonElement(raw) as? JsonArray }.getOrNull() ?: return emptyList()
+            val parsedElement = runCatching { Json.parseToJsonElement(raw) }.getOrNull() ?: return emptyList()
+            val jsonArr: JsonArray = when (parsedElement) {
+                is JsonArray -> parsedElement
+                is JsonObject -> parsedElement["novels"] as? JsonArray
+                    ?: parsedElement["list"] as? JsonArray
+                    ?: parsedElement["data"] as? JsonArray
+                    ?: parsedElement["results"] as? JsonArray
+                    ?: return emptyList()
+                else -> return emptyList()
+            }
             jsonArr.mapNotNull { el ->
                 val obj = el as? JsonObject ?: return@mapNotNull null
-                val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                val path = obj["path"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                val rawCover = obj["cover"]?.jsonPrimitive?.contentOrNull ?: ""
+                val name = (obj["name"] ?: obj["title"])?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val path = (obj["path"] ?: obj["url"] ?: obj["id"])?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val rawCover = (obj["cover"] ?: obj["coverUrl"] ?: obj["image"])?.jsonPrimitive?.contentOrNull ?: ""
                 val cover = resolveUrl(rawCover)
                 ShowResponse(
                     name     = name,

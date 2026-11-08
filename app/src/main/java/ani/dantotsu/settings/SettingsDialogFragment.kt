@@ -72,54 +72,9 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
         binding.settingsNotification.setImageResource(notificationIcon)
         if (isRescueModeEarly) binding.settingsNotification.visibility = View.GONE
 
-        if (Anilist.token != null) {
-            binding.settingsLogin.setText(R.string.logout)
-            binding.settingsLogin.setOnClickListener {
-                requireContext().customAlertDialog().apply {
-                    setTitle(R.string.logout)
-                    setMessage(R.string.logout_confirm)
-                    setPosButton(R.string.yes) {
-                        Anilist.removeSavedToken()
-                        startMainActivity(requireActivity())
-                    }
-                    setNegButton(R.string.no)
-                    show()
-                }
-            }
-            val isRescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-            binding.settingsUsername.text = if (isRescueMode) MAL.username ?: "MAL User" else Anilist.username
-            binding.settingsUserAvatar.loadImage(if (isRescueMode) MAL.avatar else Anilist.avatar)
-        } else {
-            binding.settingsUsername.visibility = View.GONE
-            binding.settingsLogin.setText(R.string.login)
-            binding.settingsLogin.setOnClickListener {
-                dismiss()
-                Anilist.loginIntent(requireActivity())
-            }
-        }
-        val isRescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-        binding.settingsNotificationCount.isVisible = !isRescueMode && Anilist.unreadNotificationCount > 0
-        binding.settingsNotificationCount.text = Anilist.unreadNotificationCount.toString()
-        if (isRescueMode) {
-            binding.settingsActivity.visibility = View.GONE
-        }
-        binding.settingsUserAvatar.setOnClickListener {
-            if (isRescueMode) {
-                val malUsername = MAL.username
-                if (!malUsername.isNullOrBlank()) {
-                    openLinkInCustomTab("https://myanimelist.net/profile/$malUsername")
-                } else {
-                    snackString(getString(R.string.rescue_mode_active))
-                }
-                return@setOnClickListener
-            }
-            ContextCompat.startActivity(
-                requireContext(), Intent(requireContext(), ProfileActivity::class.java)
-                    .putExtra("userId", Anilist.userid), null
-            )
-        }
+        setupLoginAndUserHeader(isRescueModeEarly)
 
-        binding.settingsIncognito.isChecked = PrefManager.getVal(PrefName.Incognito)
+                binding.settingsIncognito.isChecked = PrefManager.getVal(PrefName.Incognito)
         binding.settingsIncognito.setOnCheckedChangeListener { _, isChecked ->
             // Added check to ensure fragment is still active before updating
             if (isAdded) {
@@ -252,4 +207,53 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
             return fragment
         }
     }
+    private fun setupLoginAndUserHeader(isRescueModeEarly: Boolean) {
+        if (Anilist.token != null) {
+            binding.settingsLogin.setText(R.string.logout)
+            binding.settingsLogin.setOnClickListener {
+                requireContext().customAlertDialog().apply {
+                    setTitle(R.string.logout)
+                    setMessage(R.string.logout_confirm)
+                    setPosButton(R.string.yes) {
+                        Anilist.removeSavedToken()
+                        startMainActivity(requireActivity())
+                    }
+                    setNegButton(R.string.no)
+                    show()
+                }
+            }
+            val isRescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+            binding.settingsUsername.text = if (isRescueMode) MAL.username ?: "MAL User" else Anilist.username
+            binding.settingsUserAvatar.loadImage(if (isRescueMode) MAL.avatar else Anilist.avatar)
+        } else {
+            binding.settingsUsername.visibility = View.GONE
+            binding.settingsLogin.setText(R.string.login)
+            binding.settingsLogin.setOnClickListener {
+                dismiss()
+                Anilist.loginIntent(requireActivity())
+            }
+        }
+        val isRescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        binding.settingsNotificationCount.isVisible = !isRescueMode && Anilist.unreadNotificationCount > 0
+        binding.settingsNotificationCount.text = Anilist.unreadNotificationCount.toString()
+        if (isRescueMode) {
+            binding.settingsActivity.visibility = View.GONE
+        }
+        binding.settingsUserAvatar.setOnClickListener {
+            if (isRescueMode) {
+                val malUsername = MAL.username
+                if (!malUsername.isNullOrBlank()) {
+                    openLinkInCustomTab("https://myanimelist.net/profile/$malUsername")
+                } else {
+                    snackString(getString(R.string.rescue_mode_active))
+                }
+                return@setOnClickListener
+            }
+            ContextCompat.startActivity(
+                requireContext(), Intent(requireContext(), ProfileActivity::class.java)
+                    .putExtra("userId", Anilist.userid), null
+            )
+        }
+    }
+
 }

@@ -291,6 +291,7 @@ class AnimeDownloaderService : Service() {
         notificationManager.notify(NOTIFICATION_ID, builder.build())
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     @androidx.annotation.OptIn(UnstableApi::class)
     suspend fun download(task: AnimeDownloadTask) {
         withContext(Dispatchers.IO) {

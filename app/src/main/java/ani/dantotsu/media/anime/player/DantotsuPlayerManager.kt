@@ -103,6 +103,7 @@ class DantotsuPlayerManager(
         }
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     fun buildMediaSource(
         video: Video,
         subConfigs: List<MediaItem.SubtitleConfiguration>,

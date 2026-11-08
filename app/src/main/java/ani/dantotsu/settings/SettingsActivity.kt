@@ -1,5 +1,6 @@
 package ani.dantotsu.settings
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Animatable
 import android.os.Build.BRAND
@@ -96,122 +97,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
 
-            val mainAdapter = SettingsAdapter(
-                arrayListOf(
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.accounts),
-                        desc = getString(R.string.accounts_desc),
-                        icon = R.drawable.ic_round_person_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAccountActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.theme),
-                        desc = getString(R.string.theme_desc),
-                        icon = R.drawable.ic_palette,
-                        onClick = {
-                            startActivity(Intent(context, SettingsThemeActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.common),
-                        desc = getString(R.string.common_desc),
-                        icon = R.drawable.ic_lightbulb_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsCommonActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.label_data_storage),
-                        desc = getString(R.string.label_data_storage_desc),
-                        icon = R.drawable.ic_round_folder_24,
-                        onClick = {
-                            startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.anime),
-                        desc = getString(R.string.anime_desc),
-                        icon = R.drawable.ic_round_movie_filter_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAnimeActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.manga),
-                        desc = getString(R.string.manga_desc),
-                        icon = R.drawable.ic_round_import_contacts_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsMangaActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.extensions),
-                        desc = getString(R.string.extensions_desc),
-                        icon = R.drawable.ic_extension,
-                        onClick = {
-                            startActivity(Intent(context, SettingsExtensionsActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    /*
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.addons),
-                        desc = getString(R.string.addons_desc),
-                        icon = R.drawable.ic_round_restaurant_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAddonActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    */
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.torrent_settings),
-                        desc = getString(R.string.torrent_settings_desc),
-                        icon = R.drawable.ic_round_dns_24,
-                        onClick = {
-                            startActivity(Intent(context, TorrentSettingsActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.notifications),
-                        desc = getString(R.string.notifications_desc),
-                        icon = R.drawable.ic_round_notifications_none_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsNotificationActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.about),
-                        desc = getString(R.string.about_desc),
-                        icon = R.drawable.ic_round_info_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAboutActivity::class.java))
-                        },
-                        isActivity = true
-                    )
-                )
-            )
+            val mainAdapter = SettingsAdapter(buildSettingsItems(context))
 
             val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
 
@@ -357,45 +243,8 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun isOutdated(latestTag: String, currentVersion: String): Boolean {
-        val latest = latestTag.removePrefix("v").trim()
-        val current = currentVersion.removePrefix("v").trim()
-        if (latest == current) return false
-
-        val latestBase = latest.substringBefore("+").substringBefore("-").trim()
-        val currentBase = current.substringBefore("+").substringBefore("-").trim()
-
-        val lParts = latestBase.split(".").mapNotNull { it.toIntOrNull() }
-        val cParts = currentBase.split(".").mapNotNull { it.toIntOrNull() }
-
-        // Compare semantic version numbers only when both versions actually supply them
-        if (lParts.isNotEmpty() && cParts.isNotEmpty()) {
-            val maxLen = maxOf(lParts.size, cParts.size)
-            for (i in 0 until maxLen) {
-                val l = lParts.getOrElse(i) { 0 }
-                val c = cParts.getOrElse(i) { 0 }
-                if (l > c) return true
-                if (l < c) return false
-            }
-        }
-
-        val latestHash = when {
-            "+" in latest -> latest.substringAfter("+").substringBefore("-").trim()
-            lParts.isEmpty() && latest.isNotBlank() -> latest.substringBefore("-").trim()
-            else -> ""
-        }
-        val currentHash = when {
-            "+" in current -> current.substringAfter("+").substringBefore("-").trim()
-            cParts.isEmpty() && current.isNotBlank() -> current.substringBefore("-").trim()
-            else -> ""
-        }
-
-        if (latestHash.isNotEmpty() && currentHash.isNotEmpty()) {
-            return !(latestHash.startsWith(currentHash) || currentHash.startsWith(latestHash))
-        }
-
-        return latestHash.isNotEmpty() && currentHash.isEmpty()
-    }
+    private fun isOutdated(latestTag: String, currentVersion: String): Boolean =
+        ani.dantotsu.util.VersionUtil.isOutdated(latestTag, currentVersion)
 
     companion object {
         fun getDeviceInfo(): String {
@@ -425,4 +274,121 @@ class SettingsActivity : AppCompatActivity() {
         ThemeManager(this).applyTheme()
         super.onResume()
     }
+    private fun buildSettingsItems(context: Context): ArrayList<Settings> {
+        return arrayListOf(
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.accounts),
+                        desc = getString(R.string.accounts_desc),
+                        icon = R.drawable.ic_round_person_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsAccountActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.theme),
+                        desc = getString(R.string.theme_desc),
+                        icon = R.drawable.ic_palette,
+                        onClick = {
+                            startActivity(Intent(context, SettingsThemeActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.common),
+                        desc = getString(R.string.common_desc),
+                        icon = R.drawable.ic_lightbulb_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsCommonActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.label_data_storage),
+                        desc = getString(R.string.label_data_storage_desc),
+                        icon = R.drawable.ic_round_folder_24,
+                        onClick = {
+                            startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.anime),
+                        desc = getString(R.string.anime_desc),
+                        icon = R.drawable.ic_round_movie_filter_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsAnimeActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.manga),
+                        desc = getString(R.string.manga_desc),
+                        icon = R.drawable.ic_round_import_contacts_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsMangaActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.extensions),
+                        desc = getString(R.string.extensions_desc),
+                        icon = R.drawable.ic_extension,
+                        onClick = {
+                            startActivity(Intent(context, SettingsExtensionsActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    /*
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.addons),
+                        desc = getString(R.string.addons_desc),
+                        icon = R.drawable.ic_round_restaurant_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsAddonActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    */
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.torrent_settings),
+                        desc = getString(R.string.torrent_settings_desc),
+                        icon = R.drawable.ic_round_dns_24,
+                        onClick = {
+                            startActivity(Intent(context, TorrentSettingsActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.notifications),
+                        desc = getString(R.string.notifications_desc),
+                        icon = R.drawable.ic_round_notifications_none_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsNotificationActivity::class.java))
+                        },
+                        isActivity = true
+                    ),
+                    Settings(
+                        type = 1,
+                        name = getString(R.string.about),
+                        desc = getString(R.string.about_desc),
+                        icon = R.drawable.ic_round_info_24,
+                        onClick = {
+                            startActivity(Intent(context, SettingsAboutActivity::class.java))
+                        },
+                        isActivity = true
+                    )
+                )
+    }
+
 }

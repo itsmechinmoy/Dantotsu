@@ -149,7 +149,7 @@ fun saveImage(
 class MangaCache {
     private val maxEntries = 500
     private val cache = LruCache<String, ImageData>(maxEntries)
-    private val cacheSizeKb = ((Runtime.getRuntime().maxMemory() / 1024) / 8).toInt().coerceIn(32 * 1024, 96 * 1024)
+    private val cacheSizeKb = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceIn(32 * 1024, 96 * 1024)
     private class CachedBitmap(val bitmap: Bitmap, val sizeKb: Int)
 
     private val bitmapCache = object : LruCache<String, CachedBitmap>(cacheSizeKb) {

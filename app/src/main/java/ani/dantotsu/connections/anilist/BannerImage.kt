@@ -7,6 +7,6 @@ data class BannerImage(
     var time: Long,
 ) : Serializable {
     fun checkTime(): Boolean {
-        return (System.currentTimeMillis() - time) >= (1000 * 60 * 60 * 6)
+        return System.currentTimeMillis() - time >= 1000 * 60 * 60 * 6
     }
 }

@@ -1,5 +1,6 @@
 package ani.dantotsu.settings
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
@@ -67,6 +68,60 @@ class SettingsAccountActivity : AppCompatActivity() {
                 }.show(supportFragmentManager, "dialog")
             }
 
+            setupAccountConnections(context)
+        }
+        val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
+        binding.settingsRecyclerView.adapter = SettingsAdapter(
+            arrayListOf(
+                Settings(
+                    type = 2,
+                    name = getString(R.string.enable_rpc),
+                    desc = getString(R.string.enable_rpc_desc),
+                    icon = R.drawable.interests_24,
+                    isChecked = PrefManager.getVal(PrefName.rpcEnabled),
+                    switch = { isChecked, _ ->
+                        PrefManager.setVal(PrefName.rpcEnabled, isChecked)
+                    },
+                    isVisible = Discord.token != null
+                ),
+                Settings(
+                    type = 1,
+                    name = getString(R.string.anilist_settings),
+                    desc = getString(R.string.alsettings_desc),
+                    icon = R.drawable.ic_anilist,
+                    onClick = {
+                        lifecycleScope.launch {
+                            Anilist.query.getUserData()
+                            startActivity(Intent(context, AnilistSettingsActivity::class.java))
+                        }
+                    },
+                    isActivity = true
+                ),
+                Settings(
+                    type = 2,
+                    name = getString(R.string.comments_button),
+                    desc = getString(R.string.comments_button_desc),
+                    icon = R.drawable.ic_round_comment_24,
+                    isChecked = PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1,
+                    switch = { isChecked, _ ->
+                        PrefManager.setVal(PrefName.CommentsEnabled, if (isChecked) 1 else 2)
+                        reload()
+                    },
+                    isVisible = Anilist.token != null
+                ),
+            ),
+            highlightKey = highlightKey
+        )
+        binding.settingsRecyclerView.layoutManager =
+            LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
+
+    }
+
+    fun reload() {
+        snackString(getString(R.string.restart_app_extra))
+    }
+    private fun setupAccountConnections(context: Context) {
+        binding.apply {
             fun reload() {
                 if (Anilist.token != null) {
                     settingsAnilistLogin.setText(R.string.logout)
@@ -233,55 +288,7 @@ class SettingsAccountActivity : AppCompatActivity() {
                 }
             }
             reload()
-        }
-        val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
-        binding.settingsRecyclerView.adapter = SettingsAdapter(
-            arrayListOf(
-                Settings(
-                    type = 2,
-                    name = getString(R.string.enable_rpc),
-                    desc = getString(R.string.enable_rpc_desc),
-                    icon = R.drawable.interests_24,
-                    isChecked = PrefManager.getVal(PrefName.rpcEnabled),
-                    switch = { isChecked, _ ->
-                        PrefManager.setVal(PrefName.rpcEnabled, isChecked)
-                    },
-                    isVisible = Discord.token != null
-                ),
-                Settings(
-                    type = 1,
-                    name = getString(R.string.anilist_settings),
-                    desc = getString(R.string.alsettings_desc),
-                    icon = R.drawable.ic_anilist,
-                    onClick = {
-                        lifecycleScope.launch {
-                            Anilist.query.getUserData()
-                            startActivity(Intent(context, AnilistSettingsActivity::class.java))
-                        }
-                    },
-                    isActivity = true
-                ),
-                Settings(
-                    type = 2,
-                    name = getString(R.string.comments_button),
-                    desc = getString(R.string.comments_button_desc),
-                    icon = R.drawable.ic_round_comment_24,
-                    isChecked = PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1,
-                    switch = { isChecked, _ ->
-                        PrefManager.setVal(PrefName.CommentsEnabled, if (isChecked) 1 else 2)
-                        reload()
-                    },
-                    isVisible = Anilist.token != null
-                ),
-            ),
-            highlightKey = highlightKey
-        )
-        binding.settingsRecyclerView.layoutManager =
-            LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-
+                }
     }
 
-    fun reload() {
-        snackString(getString(R.string.restart_app_extra))
-    }
 }

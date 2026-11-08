@@ -54,7 +54,7 @@ class MALQueries {
             }
         }
 
-        return lastResponse ?: throw (lastException ?: Exception("Request failed after $maxAttempts attempts"))
+        return lastResponse ?: throw lastException ?: Exception("Request failed after $maxAttempts attempts")
     }
 
     suspend fun getUserData(): Boolean {
@@ -116,19 +116,9 @@ class MALQueries {
     ) {
         if (idMAL == null) return
         val headers = authHeader ?: return
-        val data = mutableMapOf("status" to convertStatus(isAnime, status))
-        if (progress != null)
-            data[if (isAnime) "num_watched_episodes" else "num_chapters_read"] = progress.toString()
-        data[if (isAnime) "is_rewatching" else "is_rereading"] = (status == "REPEATING").toString()
-        if (score != null)
-            data["score"] = Math.round(score / 10.0).coerceIn(0L, 10L).toString()
-        if (rewatch != null)
-            data[if (isAnime) "num_times_rewatched" else "num_times_reread"] = rewatch.toString()
-        if (start != null && !start.isEmpty())
-            data["start_date"] = start.toMALString()
-        if (end != null && !end.isEmpty())
-            data["finish_date"] = end.toMALString()
-        tryWithSuspend {
+        val data = buildMALStatusMap(isAnime, status, progress, score, rewatch, start, end)
+
+                tryWithSuspend {
             executeRequest {
                 client.put(
                     "$apiUrl/${if (isAnime) "anime" else "manga"}/$idMAL/my_list_status",
@@ -365,4 +355,29 @@ class MALQueries {
         }
         return allIds
     }
+    private fun buildMALStatusMap(
+        isAnime: Boolean,
+        status: String,
+        progress: Int?,
+        score: Int?,
+        rewatch: Int?,
+        start: FuzzyDate?,
+        end: FuzzyDate?
+    ): Map<String, String> {
+        val data = mutableMapOf("status" to convertStatus(isAnime, status))
+        if (progress != null)
+            data[if (isAnime) "num_watched_episodes" else "num_chapters_read"] = progress.toString()
+        data[if (isAnime) "is_rewatching" else "is_rereading"] = (status == "REPEATING").toString()
+        if (score != null)
+            data["score"] = Math.round(score / 10.0).coerceIn(0L, 10L).toString()
+        if (rewatch != null)
+            data[if (isAnime) "num_times_rewatched" else "num_times_reread"] = rewatch.toString()
+        if (start != null && !start.isEmpty())
+            data["start_date"] = start.toMALString()
+        if (end != null && !end.isEmpty())
+            data["finish_date"] = end.toMALString()
+
+        return data
+    }
+
 }

@@ -1,6 +1,8 @@
 package ani.dantotsu.others
 
 import android.animation.ObjectAnimator
+import android.content.Context
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -87,34 +89,7 @@ class ImageViewDialog : BottomSheetDialogFragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val binding = _binding ?: return@launch
 
-            val preloaded = preloadedBitmap
-            preloadedBitmap = null
-            val mangaCache = try { Injekt.get<MangaCache>() } catch (_: Exception) { null }
-
-            var bitmap = if (preloaded != null && !preloaded.isRecycled) {
-                preloaded
-            } else {
-                mangaCache?.getBitmap(image.url)
-            }
-
-            var bitmap2 = if (image2 != null) mangaCache?.getBitmap(image2.url) else null
-
-            if (bitmap == null) {
-                bitmap = context.loadBitmap(image, trans1 ?: listOf())
-                if (bitmap == null) {
-                    bitmap = context.loadBitmapOld(image, trans1 ?: listOf())
-                }
-            }
-            if (image2 != null && bitmap2 == null) {
-                bitmap2 = context.loadBitmap(image2, trans2 ?: listOf())
-                if (bitmap2 == null) {
-                    bitmap2 = context.loadBitmapOld(image2, trans2 ?: listOf())
-                }
-            }
-
-            bitmap =
-                if (bitmap2 != null && bitmap != null) mergeBitmap(bitmap, bitmap2) else bitmap
-
+            val bitmap = loadBitmaps(context, image, image2)
             if (bitmap != null) {
                 binding.bottomImageShare.isEnabled = true
                 binding.bottomImageSave.isEnabled = true
@@ -174,4 +149,40 @@ class ImageViewDialog : BottomSheetDialogFragment() {
             return true
         }
     }
+    private suspend fun loadBitmaps(
+        context: Context,
+        image: FileUrl,
+        image2: FileUrl?
+    ): Bitmap? {
+            val preloaded = preloadedBitmap
+            preloadedBitmap = null
+            val mangaCache = try { Injekt.get<MangaCache>() } catch (_: Exception) { null }
+
+            var bitmap = if (preloaded != null && !preloaded.isRecycled) {
+                preloaded
+            } else {
+                mangaCache?.getBitmap(image.url)
+            }
+
+            var bitmap2 = if (image2 != null) mangaCache?.getBitmap(image2.url) else null
+
+            if (bitmap == null) {
+                bitmap = context.loadBitmap(image, trans1 ?: listOf())
+                if (bitmap == null) {
+                    bitmap = context.loadBitmapOld(image, trans1 ?: listOf())
+                }
+            }
+            if (image2 != null && bitmap2 == null) {
+                bitmap2 = context.loadBitmap(image2, trans2 ?: listOf())
+                if (bitmap2 == null) {
+                    bitmap2 = context.loadBitmapOld(image2, trans2 ?: listOf())
+                }
+            }
+
+            bitmap =
+                if (bitmap2 != null && bitmap != null) mergeBitmap(bitmap, bitmap2) else bitmap
+
+        return bitmap
+    }
+
 }

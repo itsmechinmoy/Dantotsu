@@ -82,46 +82,8 @@ class LocalAnimeSource(
                 }
             }
 
-        filters.forEach { filter ->
-            when (filter) {
-                is AnimeOrderBy.Popular -> {
-                    animeDirs = if (filter.state!!.ascending) {
-                        animeDirs.sortedWith(
-                            compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.orEmpty() }
-                        )
-                    } else {
-                        animeDirs.sortedWith(
-                            compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.name.orEmpty() }
-                        )
-                    }
-                }
-                is AnimeOrderBy.Latest -> {
-                    animeDirs = if (filter.state!!.ascending) {
-                        animeDirs.sortedBy { it.lastModified() }
-                    } else {
-                        animeDirs.sortedByDescending { it.lastModified() }
-                    }
-                }
-                else -> { /* Do nothing */ }
-            }
-        }
-
-        val animes = animeDirs.map { animeDir ->
-            SAnime.create().apply {
-                title = animeDir.name.orEmpty()
-                url = animeDir.name.orEmpty()
-
-                val coverFile = findCoverFile(animeDir)
-                if (coverFile != null) {
-                    thumbnail_url = coverFile.uri.toString()
-                } else {
-                    val firstVideo = animeDir.listFiles().firstOrNull { !it.name.orEmpty().startsWith('.') && isSupportedVideo(it) }
-                    if (firstVideo != null) {
-                        thumbnail_url = firstVideo.uri.toString()
-                    }
-                }
-            }
-        }
+        animeDirs = sortAnimeDirs(animeDirs, filters)
+        val animes = animeDirs.map { buildSAnimeFromDir(it) }
 
         AnimesPage(animes, false)
     }
@@ -335,6 +297,53 @@ class LocalAnimeSource(
                 if (current == null) break
             }
             return current
+        }
+    }
+    private fun sortAnimeDirs(
+        dirs: List<DocumentFile>,
+        filters: AnimeFilterList
+    ): List<DocumentFile> {
+        var animeDirs = dirs
+        filters.forEach { filter ->
+            when (filter) {
+                is AnimeOrderBy.Popular -> {
+                    animeDirs = if (filter.state!!.ascending) {
+                        animeDirs.sortedWith(
+                            compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.orEmpty() }
+                        )
+                    } else {
+                        animeDirs.sortedWith(
+                            compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.name.orEmpty() }
+                        )
+                    }
+                }
+                is AnimeOrderBy.Latest -> {
+                    animeDirs = if (filter.state!!.ascending) {
+                        animeDirs.sortedBy { it.lastModified() }
+                    } else {
+                        animeDirs.sortedByDescending { it.lastModified() }
+                    }
+                }
+                else -> { /* Do nothing */ }
+            }
+        }
+        return animeDirs
+    }
+
+    private fun buildSAnimeFromDir(animeDir: DocumentFile): SAnime {
+        return SAnime.create().apply {
+            title = animeDir.name.orEmpty()
+            url = animeDir.name.orEmpty()
+
+            val coverFile = findCoverFile(animeDir)
+            if (coverFile != null) {
+                thumbnail_url = coverFile.uri.toString()
+            } else {
+                val firstVideo = (animeDir.listFiles() ?: emptyArray()).firstOrNull { !it.name.orEmpty().startsWith('.') && isSupportedVideo(it) }
+                if (firstVideo != null) {
+                    thumbnail_url = firstVideo.uri.toString()
+                }
+            }
         }
     }
 }

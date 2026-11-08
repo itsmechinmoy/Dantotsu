@@ -43,7 +43,7 @@ abstract class WatchSources : BaseSources() {
                 }
             }
 
-            val res = parser.autoSearch(media) ?: return@tryWithSuspend (cached ?: mutableMapOf())
+            val res = parser.autoSearch(media) ?: return@tryWithSuspend cached ?: mutableMapOf()
             if (cached.isNullOrEmpty() && !invalidate && parser !is OfflineAnimeParser) {
                 cached = EpisodeStorage.loadEpisodes(sourceKey, res.link)
                 if (!cached.isNullOrEmpty()) {
@@ -131,7 +131,7 @@ abstract class MangaReadSources : BaseSources() {
                 }
             }
 
-            val res = parser.autoSearch(media) ?: return@tryWithSuspend (cached ?: mutableMapOf())
+            val res = parser.autoSearch(media) ?: return@tryWithSuspend cached ?: mutableMapOf()
             if (cached.isNullOrEmpty() && !invalidate && parser !is OfflineMangaParser) {
                 cached = ChapterStorage.loadChapters(sourceKey, res.link)
                 if (!cached.isNullOrEmpty()) {

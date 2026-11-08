@@ -280,42 +280,43 @@ class DownloadQueueActivity : AppCompatActivity() {
                 MediaType.MANGA -> downloadsManager.mangaDownloadedTypes
                 MediaType.NOVEL -> downloadsManager.novelDownloadedTypes
             }
-            val titles = downloadedTypes.map { it.titleName }.distinct()
-            for (title in titles) {
-                val folder = DownloadsManager.getSubDirectory(this@DownloadQueueActivity, type, false, title, null)
-                val size = getFolderSize(folder)
-                folderSizeCache[title] = size
-
-                val coverFile = folder?.findFile("cover.jpg")
-                val coverPath = if (coverFile != null && coverFile.exists()) {
-                    coverFile.uri.toString()
-                } else {
-                    val cachedCover = PrefManager.getCustomVal<String>("local_cover_${title}", "")
-                    if (cachedCover.isNotEmpty() && cachedCover != "null") cachedCover else null
-                }
-                coverPathCache[title] = coverPath
-            }
-
-            // Also cache covers for active queue items
-            val activeQueue = getActiveQueueTasks(type)
-            for (item in activeQueue) {
-                val itemType = item.mediaType
-                val itemTitle = item.title
-                if (!coverPathCache.containsKey(itemTitle)) {
-                    val folder = DownloadsManager.getSubDirectory(this@DownloadQueueActivity, itemType, false, itemTitle, null)
-                    val coverFile = folder?.findFile("cover.jpg")
-                    val coverPath = if (coverFile != null && coverFile.exists()) {
-                        coverFile.uri.toString()
-                    } else {
-                        val cachedCover = PrefManager.getCustomVal<String>("local_cover_${itemTitle}", "")
-                        if (cachedCover.isNotEmpty() && cachedCover != "null") cachedCover else null
-                    }
-                    coverPathCache[itemTitle] = coverPath
-                }
-            }
+            cacheDownloadedTitles(type, downloadedTypes)
+            cacheActiveQueueCovers(type)
 
             withContext(Dispatchers.Main) {
                 refreshUI()
+            }
+        }
+    }
+
+    private fun resolveCoverPath(folder: DocumentFile?, title: String): String? {
+        val coverFile = folder?.findFile("cover.jpg")
+        return if (coverFile != null && coverFile.exists()) {
+            coverFile.uri.toString()
+        } else {
+            val cachedCover = PrefManager.getCustomVal<String>("local_cover_${title}", "")
+            if (cachedCover.isNotEmpty() && cachedCover != "null") cachedCover else null
+        }
+    }
+
+    private fun cacheDownloadedTitles(type: MediaType, downloadedTypes: List<ani.dantotsu.download.DownloadedType>) {
+        val titles = downloadedTypes.map { it.titleName }.distinct()
+        for (title in titles) {
+            val folder = DownloadsManager.getSubDirectory(this@DownloadQueueActivity, type, false, title, null)
+            val size = getFolderSize(folder)
+            folderSizeCache[title] = size
+            coverPathCache[title] = resolveCoverPath(folder, title)
+        }
+    }
+
+    private fun cacheActiveQueueCovers(type: MediaType) {
+        val activeQueue = getActiveQueueTasks(type)
+        for (item in activeQueue) {
+            val itemType = item.mediaType
+            val itemTitle = item.title
+            if (!coverPathCache.containsKey(itemTitle)) {
+                val folder = DownloadsManager.getSubDirectory(this@DownloadQueueActivity, itemType, false, itemTitle, null)
+                coverPathCache[itemTitle] = resolveCoverPath(folder, itemTitle)
             }
         }
     }

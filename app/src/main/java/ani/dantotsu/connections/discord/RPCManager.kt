@@ -293,6 +293,40 @@ object RPCManager {
             null to null
         }
 
+        val buttons = buildDiscordActivityButtons(data, mode)
+
+                return DiscordActivity(
+            applicationId = data.applicationId,
+            name = data.activityName?.takeIf { it.isNotBlank() } ?: "Dantotsu",
+            platform = "android", // Required by Discord
+            type = data.type?.ordinal,
+            statusDisplayType = 0,
+            details = data.details,
+            state = data.state,
+            assets = DiscordActivity.Assets(
+                largeImage = data.largeImage?.url,
+                largeText = data.largeImage?.label,
+                largeUrl = null,
+                smallImage = smallIconUrl,
+                smallText = smallIconText,
+                smallUrl = null,
+            ),
+            timestamps = if (data.startTimestamp != null)
+                DiscordActivity.Timestamps(
+                    start = data.startTimestamp,
+                    end = data.stopTimestamp
+                )
+            else null,
+            buttons = buttons.take(2).takeIf { it.isNotEmpty() },
+        )
+    }
+
+    /** Validate that a URL is a proper http/https link. */
+    private fun String?.isValidUrl(): Boolean {
+        return this != null && isNotEmpty() &&
+                (startsWith("http://") || startsWith("https://"))
+    }
+    private fun buildDiscordActivityButtons(data: RPC.Companion.RPCData, mode: String): List<DiscordActivity.Button> {
         // Build Buttons based on mode
         val buttons = mutableListOf<DiscordActivity.Button>()
         if (mode != "nothing") {
@@ -327,35 +361,8 @@ object RPCManager {
             }
         }
 
-        return DiscordActivity(
-            applicationId = data.applicationId,
-            name = data.activityName?.takeIf { it.isNotBlank() } ?: "Dantotsu",
-            platform = "android", // Required by Discord
-            type = data.type?.ordinal,
-            statusDisplayType = 0,
-            details = data.details,
-            state = data.state,
-            assets = DiscordActivity.Assets(
-                largeImage = data.largeImage?.url,
-                largeText = data.largeImage?.label,
-                largeUrl = null,
-                smallImage = smallIconUrl,
-                smallText = smallIconText,
-                smallUrl = null,
-            ),
-            timestamps = if (data.startTimestamp != null)
-                DiscordActivity.Timestamps(
-                    start = data.startTimestamp,
-                    end = data.stopTimestamp
-                )
-            else null,
-            buttons = buttons.take(2).takeIf { it.isNotEmpty() },
-        )
+
+        return buttons
     }
 
-    /** Validate that a URL is a proper http/https link. */
-    private fun String?.isValidUrl(): Boolean {
-        return this != null && isNotEmpty() &&
-                (startsWith("http://") || startsWith("https://"))
-    }
 }

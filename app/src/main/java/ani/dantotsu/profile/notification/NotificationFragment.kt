@@ -197,7 +197,7 @@ class NotificationFragment : Fragment() {
         val adapter = binding.notificationRecyclerView.adapter
 
         return hasNextPage && !binding.notificationRefresh.isVisible && adapter?.itemCount != 0 &&
-                layoutManager == (adapter!!.itemCount - 1) &&
+                layoutManager == adapter!!.itemCount - 1 &&
                 !binding.notificationRecyclerView.canScrollVertically(1)
     }
 

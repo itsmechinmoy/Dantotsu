@@ -377,7 +377,7 @@ class MangaExtensionManager(
 
         if (availableExt.versionName.isNotBlank() && availableExt.versionName == versionName) return false
 
-        return (availableExt.versionCode > versionCode || availableExt.libVersion > (libVersion + 0.001))
+        return availableExt.versionCode > versionCode || availableExt.libVersion > libVersion + 0.001
     }
 
     private fun updatePendingUpdatesCount() {

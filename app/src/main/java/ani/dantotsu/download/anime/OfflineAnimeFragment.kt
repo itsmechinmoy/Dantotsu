@@ -135,24 +135,22 @@ class OfflineAnimeFragment : Fragment(), OfflineAnimeSearchListener {
             selected.alpha = 1f
         }
 
-        layoutList.setOnClickListener {
-            selected(it as ImageView)
-            style = 0
+        fun switchLayoutMode(newStyle: Int, icon: ImageView, targetGridId: Int) {
+            selected(icon)
+            style = newStyle
             PrefManager.setVal(PrefName.OfflineView, style)
             gridView.visibility = View.GONE
-            gridView = view.findViewById(R.id.gridView)
+            gridView = view.findViewById(targetGridId)
             adapter.notifyNewGrid()
             grid()
         }
 
+        layoutList.setOnClickListener {
+            switchLayoutMode(0, it as ImageView, R.id.gridView)
+        }
+
         layoutCompact.setOnClickListener {
-            selected(it as ImageView)
-            style = 1
-            PrefManager.setVal(PrefName.OfflineView, style)
-            gridView.visibility = View.GONE
-            gridView = view.findViewById(R.id.gridView1)
-            adapter.notifyNewGrid()
-            grid()
+            switchLayoutMode(1, it as ImageView, R.id.gridView1)
         }
 
         gridView =
@@ -382,18 +380,18 @@ class OfflineAnimeFragment : Fragment(), OfflineAnimeSearchListener {
             } else null
             if (coverUri == null && bannerUri == null) throw Exception("No cover or banner found, probably compat")
             val title = mediaModel.mainName()
-            val score = ((if (mediaModel.userScore == 0) (mediaModel.meanScore
-                ?: 0) else mediaModel.userScore) / 10.0).toString()
+            val score = ((if (mediaModel.userScore == 0) mediaModel.meanScore
+                ?: 0 else mediaModel.userScore) / 10.0).toString()
             val isOngoing =
                 mediaModel.status == (context ?: currContext())?.getString(R.string.status_releasing)
             val isUserScored = mediaModel.userScore != 0
             val watchedEpisodes = (mediaModel.userProgress ?: "~").toString()
             val totalEpisode =
-                if (mediaModel.anime?.nextAiringEpisode != null) (mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
-                    ?: "~").toString()) else (mediaModel.anime?.totalEpisodes ?: "~").toString()
+                if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
+                    ?: "~").toString() else (mediaModel.anime?.totalEpisodes ?: "~").toString()
             val chapters = " Episodes"
             val totalEpisodesList =
-                if (mediaModel.anime?.nextAiringEpisode != null) (mediaModel.anime.nextAiringEpisode.toString()) else (mediaModel.anime?.totalEpisodes
+                if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() else (mediaModel.anime?.totalEpisodes
                     ?: "~").toString()
             return OfflineAnimeModel(
                 title,
