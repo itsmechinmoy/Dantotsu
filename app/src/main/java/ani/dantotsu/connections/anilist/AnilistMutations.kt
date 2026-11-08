@@ -684,6 +684,7 @@ $REVIEW_GRAPHQL_FIELDS
         }
         return Gson().toJson(sb.toString())
     }
+    @Suppress("ComplexMethod", "LongMethod")
     private fun buildMutationVariables(
         mediaID: Int,
         private: Boolean?,

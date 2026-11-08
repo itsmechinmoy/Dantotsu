@@ -36,7 +36,7 @@ open class BaseInstalledExtensionsFragment : Fragment() {
             extActivity.findViewById<TextInputLayout>(R.id.searchView)?.isVisible = show
             extActivity.findViewById<ImageView>(R.id.languageselect)?.isVisible = show
             extActivity.findViewById<TextView>(R.id.extensions)?.text =
-                if (show) extActivity.getString(R.string.extensions) else (titleName ?: "")
+                if (show) extActivity.getString(R.string.extensions) else titleName ?: ""
             extActivity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer)?.isGone = show
         }
     }

@@ -245,6 +245,7 @@ class SettingsCommonActivity : AppCompatActivity() {
             handleOkAction()
         }
     }
+    @Suppress("ComplexMethod", "LongMethod")
     private fun buildCommonSettingsList(
         context: AppCompatActivity,
         openDocumentLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>

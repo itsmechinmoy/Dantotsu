@@ -1210,6 +1210,7 @@ function load(html) {
     return $;
 }
 """.trimIndent()
+    @Suppress("ComplexMethod", "LongMethod")
     private fun registerJsoupBridge(
         qjs: QuickJs,
         jsoupElements: MutableMap<Int, org.jsoup.nodes.Element>

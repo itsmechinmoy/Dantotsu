@@ -620,12 +620,11 @@ abstract class BaseImageAdapter(
                         b += intermediateRow[base + 2] * w
                         a += intermediateRow[base + 3] * w
                     }
-                    dstPixels[yDstOffset + x] = (
+                    dstPixels[yDstOffset + x] =
                         (a.roundToInt().coerceIn(0, 255) shl 24) or
                         (r.roundToInt().coerceIn(0, 255) shl 16) or
                         (g.roundToInt().coerceIn(0, 255) shl 8) or
                         b.roundToInt().coerceIn(0, 255)
-                    )
                 }
             }
 

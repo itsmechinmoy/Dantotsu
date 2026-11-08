@@ -45,10 +45,10 @@ class LnReaderNovelParser(
             val parsedElement = runCatching { Json.parseToJsonElement(raw) }.getOrNull() ?: return emptyList()
             val jsonArr: JsonArray = when (parsedElement) {
                 is JsonArray -> parsedElement
-                is JsonObject -> (parsedElement["novels"] as? JsonArray)
-                    ?: (parsedElement["list"] as? JsonArray)
-                    ?: (parsedElement["data"] as? JsonArray)
-                    ?: (parsedElement["results"] as? JsonArray)
+                is JsonObject -> parsedElement["novels"] as? JsonArray
+                    ?: parsedElement["list"] as? JsonArray
+                    ?: parsedElement["data"] as? JsonArray
+                    ?: parsedElement["results"] as? JsonArray
                     ?: return emptyList()
                 else -> return emptyList()
             }

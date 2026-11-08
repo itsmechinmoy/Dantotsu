@@ -18,6 +18,7 @@ object MalScraper {
         fallbackToJikan(media, malId)
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     private suspend fun scrapeMalDirectly(media: Media, malId: Int) {
         // 1. Try scraping MyAnimeList directly
         try {

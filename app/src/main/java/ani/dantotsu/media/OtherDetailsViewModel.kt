@@ -187,6 +187,7 @@ class OtherDetailsViewModel : ViewModel() {
 
     private val author: MutableLiveData<Author> = MutableLiveData(null)
     fun getAuthor(): LiveData<Author> = author
+    @Suppress("ComplexMethod", "LongMethod")
     private suspend fun loadAuthorFromJikan(m: Author) {
             tryWithSuspend {
                 val jikanData = MAL.jikan.getPersonFull(m.id)

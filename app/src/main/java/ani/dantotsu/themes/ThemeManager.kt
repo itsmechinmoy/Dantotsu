@@ -161,6 +161,7 @@ class ThemeManager(private val context: Activity) {
         return true
     }
 
+    @Suppress("ComplexMethod")
     private fun resolveThemeRes(theme: String, useOLED: Boolean): Int {
         return when (theme) {
             "BLUE" -> if (useOLED) R.style.Theme_Dantotsu_BlueOLED else R.style.Theme_Dantotsu_Blue

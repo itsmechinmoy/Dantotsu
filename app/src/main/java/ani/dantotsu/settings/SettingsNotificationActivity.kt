@@ -92,6 +92,7 @@ class SettingsNotificationActivity : AppCompatActivity() {
             }
         }
     }
+    @Suppress("ComplexMethod", "LongMethod")
     private fun buildSubscriptionSettings(context: Context, timeNames: Array<String>): List<Settings> {
         var curTime = PrefManager.getVal<Int>(PrefName.SubscriptionNotificationInterval)
         return listOf(

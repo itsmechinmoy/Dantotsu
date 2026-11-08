@@ -441,6 +441,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
         binding.activeSubBadge.text = badgeText
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     private fun loadSubtitlesTab(episodeId: String) {
         val media = model.getMedia().value ?: return
         val items = mutableListOf<Any>()
@@ -520,6 +521,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
         binding.localSubtitlesRecycler.adapter = SubtitleAdapter(localSubs, TabType.LOCAL)
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     private fun performOnlineSearch() {
         searchJob?.cancel()
         val media = model.getMedia().value ?: return
@@ -831,6 +833,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             return SubtitleViewHolder(binding)
         }
 
+        @Suppress("ComplexMethod", "LongMethod")
         @SuppressLint("SetTextI18n")
         override fun onBindViewHolder(holder: SubtitleViewHolder, position: Int) {
             val itemBinding = holder.binding
@@ -1059,7 +1062,8 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
                     itemBinding.subtitleDetails.text = "${getString(R.string.embedded_stream_subs)} • ${item.label ?: "Track ${item.flatIndex + 1}"}"
 
                     val uniqueKey = "Embedded:$accurateName"
-                    val isSelected = effectiveOnlineId == null && (if (savedLang != null) savedLang == uniqueKey else item.group.isTrackSelected(item.trackIndex))
+                    val isTrackMatched = if (savedLang != null) savedLang == uniqueKey else item.group.isTrackSelected(item.trackIndex)
+                    val isSelected = effectiveOnlineId == null && isTrackMatched
                     if (isSelected) {
                         itemBinding.subtitleCardRoot.setCardBackgroundColor(highlightColor)
                         itemBinding.subtitleCardRoot.strokeColor = borderSelectedColor

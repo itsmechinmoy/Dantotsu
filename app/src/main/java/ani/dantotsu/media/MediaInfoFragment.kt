@@ -154,6 +154,7 @@ class MediaInfoFragment : Fragment() {
             }
             .start()
     }
+    @Suppress("ComplexMethod", "LongMethod")
     @SuppressLint("SetJavaScriptEnabled")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val model: MediaDetailsViewModel by activityViewModels()
@@ -234,7 +235,7 @@ class MediaInfoFragment : Fragment() {
                     binding.mediaInfoDurationContainer.visibility = View.VISIBLE
                     binding.mediaInfoSeasonContainer.visibility = View.VISIBLE
                     val seasonInfo =
-                        "${(media.anime.season ?: "??")} ${(media.anime.seasonYear ?: "??")}"
+                        "${media.anime.season ?: "??"} ${media.anime.seasonYear ?: "??"}"
                     binding.mediaInfoSeason.text = seasonInfo
 
                     if (media.anime.mainStudio != null) {

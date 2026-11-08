@@ -244,6 +244,7 @@ internal class ExtensionGithubApi {
         return LegacyRepoCheck.None
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private suspend fun parseAnimeStorePayload(
         responseBytes: ByteArray,
@@ -330,6 +331,7 @@ internal class ExtensionGithubApi {
         return null
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private suspend fun parseMangaStorePayload(
         responseBytes: ByteArray,

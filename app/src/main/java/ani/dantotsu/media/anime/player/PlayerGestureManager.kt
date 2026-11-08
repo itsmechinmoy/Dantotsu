@@ -318,6 +318,7 @@ class PlayerGestureManager(
         }
     }
 
+    @Suppress("ComplexMethod", "LongMethod")
     @SuppressLint("ClickableViewAccessibility")
     private fun setupAreaGestures(
         audioManager: AudioManager,
