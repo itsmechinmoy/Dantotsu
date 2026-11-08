@@ -149,7 +149,7 @@ object LnReaderJsEngine {
             var isDone = false
             var iterations = 0
             while (!isDone && iterations < 500) {
-                isDone = (qjs.evaluate("globalThis.__callDone === true") as? Boolean) == true
+                isDone = qjs.evaluate("globalThis.__callDone === true") as? Boolean == true
                 iterations++
             }
 

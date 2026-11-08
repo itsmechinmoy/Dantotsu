@@ -81,11 +81,15 @@ internal object ExtensionLoader {
     const val MANGA_LIB_VERSION_MIN = 1.2
     const val MANGA_LIB_VERSION_MAX = 2.0
 
-    val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or
-            PackageManager.GET_META_DATA or
-            @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES or
-            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
-                PackageManager.GET_SIGNING_CERTIFICATES else 0)
+    val PACKAGE_FLAGS = run {
+        var flags = PackageManager.GET_CONFIGURATIONS or
+                PackageManager.GET_META_DATA or
+                @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            flags = flags or PackageManager.GET_SIGNING_CERTIFICATES
+        }
+        flags
+    }
 
     fun getPackageArchiveInfoSafe(pkgManager: PackageManager, apkPath: String): PackageInfo? {
         return try {

@@ -158,6 +158,62 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     }
 
 
+    private suspend fun fetchSeasonEpisodes(
+        source: AnimeSource,
+        sAnime: SAnime,
+        seasons: List<SAnime>?
+    ): List<SEpisode> {
+        if (seasons.isNullOrEmpty()) {
+            return source.getEpisodeListCompat(sAnime)
+        }
+        val semaphore = Semaphore(3)
+        val allEpisodes = coroutineScope {
+            seasons.map { season ->
+                async {
+                    semaphore.withPermit {
+                        val seasonAnime = runCatching {
+                            if (source is AnimeHttpSource) source.getAnimeDetails(season) else season
+                        }.getOrDefault(season)
+                        val seasonEpisodes = runCatching {
+                            source.getEpisodeListCompat(seasonAnime)
+                        }.getOrDefault(emptyList())
+                        seasonEpisodes.forEach { ep ->
+                            if (ep.scanlator.isNullOrBlank()) {
+                                ep.scanlator = seasonAnime.title.ifBlank { null } ?: season.title
+                            }
+                        }
+                        seasonEpisodes
+                    }
+                }
+            }.awaitAll().flatten()
+        }
+        return if (allEpisodes.isEmpty()) {
+            source.getEpisodeListCompat(sAnime)
+        } else {
+            allEpisodes
+        }
+    }
+
+    private fun preprocessLoadedEpisodes(episodes: List<SEpisode>) {
+        episodes.forEach { ep ->
+            val normalizedName = ep.name.replace('\\', '/')
+            if (normalizedName.contains('/')) {
+                val parts = normalizedName.split('/').filter { it.isNotBlank() }
+                if (parts.size > 1) {
+                    if (ep.scanlator.isNullOrBlank()) {
+                        ep.scanlator = parts.dropLast(1).joinToString(" / ")
+                    }
+                    ep.name = parts.last()
+                }
+            }
+            val detected = MediaNameAdapter.findEpisodeNumber(ep.name)
+                ?: MediaNameAdapter.findEpisodeNumber(ep.url)
+            if (detected != null && (ep.episode_number <= 0f || ep.episode_number == -1f)) {
+                ep.episode_number = detected
+            }
+        }
+    }
+
     override suspend fun loadEpisodes(
         animeLink: String,
         extra: Map<String, String>?,
@@ -179,62 +235,13 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
                 source.getSeasonListCompat(sAnime)
             }.getOrNull()
 
-            val res = if (!seasons.isNullOrEmpty()) {
-                val semaphore = Semaphore(3)
-                val allEpisodes = coroutineScope {
-                    seasons.map { season ->
-                        async {
-                            semaphore.withPermit {
-                                val seasonAnime = runCatching {
-                                    if (source is AnimeHttpSource) source.getAnimeDetails(season) else season
-                                }.getOrDefault(season)
-                                val seasonEpisodes = runCatching {
-                                    source.getEpisodeListCompat(seasonAnime)
-                                }.getOrDefault(emptyList())
-                                seasonEpisodes.forEach { ep ->
-                                    if (ep.scanlator.isNullOrBlank()) {
-                                        ep.scanlator = seasonAnime.title.ifBlank { null } ?: season.title
-                                    }
-                                }
-                                seasonEpisodes
-                            }
-                        }
-                    }.awaitAll().flatten()
-                }
-                if (allEpisodes.isEmpty()) {
-                    source.getEpisodeListCompat(sAnime)
-                } else {
-                    allEpisodes
-                }
-            } else {
-                source.getEpisodeListCompat(sAnime)
-            }
-
-
-
+            val res = fetchSeasonEpisodes(source, sAnime, seasons)
             if (res.isEmpty()) return@withContext emptyList()
 
-            // Pre-process episodes: extract folder hierarchy for scanlator/season chips and detect true episode numbers
-            res.forEach { ep ->
-                val normalizedName = ep.name.replace('\\', '/')
-                if (normalizedName.contains('/')) {
-                    val parts = normalizedName.split('/').filter { it.isNotBlank() }
-                    if (parts.size > 1) {
-                        if (ep.scanlator.isNullOrBlank()) {
-                            ep.scanlator = parts.dropLast(1).joinToString(" / ")
-                        }
-                        ep.name = parts.last()
-                    }
-                }
-                val detected = MediaNameAdapter.findEpisodeNumber(ep.name)
-                    ?: MediaNameAdapter.findEpisodeNumber(ep.url)
-                if (detected != null && (ep.episode_number <= 0f || ep.episode_number == -1f)) {
-                    ep.episode_number = detected
-                }
-            }
+            preprocessLoadedEpisodes(res)
 
             val sortedEpisodes = sortLoadedEpisodes(res)
-                        return@withContext sortedEpisodes.map { sEpisodeToEpisode(it) }
+            return@withContext sortedEpisodes.map { sEpisodeToEpisode(it) }
         } catch (e: Exception) {
             Logger.log("Exception: $e")
         }
@@ -270,6 +277,48 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             emptyList()
         }
     }
+    private fun getActiveHostersToFetch(source: AnimeSource, hosters: List<Hoster>): List<Hoster> {
+        val sortedHosters = runCatching {
+            if (source is AnimeHttpSource) source.run { hosters.sortHosters() } else hosters
+        }.getOrElse { hosters }
+
+        val activeHosters = sortedHosters.filterNot { it.lazy }
+        return if (activeHosters.isEmpty() && sortedHosters.isNotEmpty()) {
+            listOf(sortedHosters.first())
+        } else {
+            activeHosters
+        }
+    }
+
+    private suspend fun resolveDirectVideos(source: AnimeSource, directVideos: List<Video>): List<Video> {
+        if (directVideos.isEmpty()) return emptyList()
+        return coroutineScope {
+            directVideos.map {
+                async(Dispatchers.IO) {
+                    resolveVideo(source, it)
+                }
+            }.awaitAll()
+        }
+    }
+
+    private fun videoIdentifier(video: Video): String {
+        return if (video.videoUrl.isNotBlank() && video.videoUrl != "null") video.videoUrl
+        else if (video.url.isNotBlank() && video.url != "null") video.url
+        else video.videoTitle
+    }
+
+    private fun isValidVideo(video: Video): Boolean {
+        val hasVideoUrl = video.videoUrl.isNotBlank() && video.videoUrl != "null"
+        val hasUrl = video.url.isNotBlank() && video.url != "null"
+        return hasVideoUrl || hasUrl
+    }
+
+    private fun filterAndDeduplicateVideos(videos: List<Video>): List<Video> {
+        return videos
+            .distinctBy { videoIdentifier(it) }
+            .filter { isValidVideo(it) }
+    }
+
     suspend fun getVideoList(
         source: AnimeSource,
         episode: SEpisode
@@ -287,71 +336,54 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             emptyList()
         }
 
-        val sortedHosters = runCatching {
-            if (source is AnimeHttpSource) source.run { hosters.sortHosters() } else hosters
-        }.getOrElse { hosters }
-
-        // Filter out lazy hosters from initial extraction; if all are lazy, prioritize the first (preferred) hoster
-        val activeHosters = sortedHosters.filterNot { it.lazy }
-        val hostersToFetch = if (activeHosters.isEmpty() && sortedHosters.isNotEmpty()) {
-            listOf(sortedHosters.first())
-        } else {
-            activeHosters
-        }
-
+        val hostersToFetch = getActiveHostersToFetch(source, hosters)
         val hosterVideos = fetchHosterVideos(source, hostersToFetch)
-
-                val resolvedDirect = if (directVideos.isNotEmpty()) {
-            coroutineScope {
-                directVideos.map {
-                    async(Dispatchers.IO) {
-                        resolveVideo(source, it)
-                    }
-                }.awaitAll()
-            }
-        } else {
-            emptyList()
-        }
-
-        val allVideos = (resolvedDirect + hosterVideos)
-            .distinctBy {
-                if (it.videoUrl.isNotBlank() && it.videoUrl != "null") it.videoUrl
-                else if (it.url.isNotBlank() && it.url != "null") it.url
-                else it.videoTitle
-            }
-            .filter { (it.videoUrl.isNotBlank() && it.videoUrl != "null") || (it.url.isNotBlank() && it.url != "null") }
+        val resolvedDirect = resolveDirectVideos(source, directVideos)
+        val allVideos = filterAndDeduplicateVideos(resolvedDirect + hosterVideos)
 
         return@withContext runCatching {
             if (source is AnimeHttpSource) source.run { allVideos.sortVideos() } else allVideos
         }.getOrElse { allVideos }
     }
 
+    private fun isFullyResolved(video: Video?): Boolean {
+        if (video == null) return false
+        val url = video.videoUrl
+        return url.isNotBlank() && url != "null"
+    }
+
+    private suspend fun tryModernResolve(source: AnimeSource, video: Video): Video? {
+        val resolved = runCatching {
+            if (source is AnimeHttpSource) source.resolveVideo(video) else null
+        }.getOrNull()
+        return if (isFullyResolved(resolved)) resolved else null
+    }
+
+    private suspend fun tryLegacyResolve(source: AnimeSource, video: Video): Video? {
+        val newUrl = runCatching {
+            if (source is AnimeHttpSource) source.getVideoUrl(video) else null
+        }.getOrNull()
+        return if (!newUrl.isNullOrEmpty() && newUrl != "null") {
+            video.copy(videoUrl = newUrl, initialized = true)
+        } else {
+            null
+        }
+    }
+
     private suspend fun resolveVideo(
         source: AnimeSource,
         video: Video
     ): Video = withContext(Dispatchers.IO) {
-        if (video.initialized && video.videoUrl.isNotEmpty() && video.videoUrl != "null") {
+        if (video.initialized && isFullyResolved(video)) {
             return@withContext video
         }
 
-        // 1. Modern lib 16 API: call resolveVideo directly (avoids throwing UnsupportedOperationException from getVideoUrl)
-        val resolved = runCatching {
-            if (source is AnimeHttpSource) source.resolveVideo(video) else null
-        }.getOrNull()
+        val modern = tryModernResolve(source, video)
+        if (modern != null) return@withContext modern
 
-        if (resolved != null && resolved.videoUrl.isNotBlank() && resolved.videoUrl != "null") {
-            return@withContext resolved
-        }
-
-        // 2. Legacy fallback for old sources: only call getVideoUrl if resolveVideo returned null and url is blank
-        if (video.videoUrl == "null" || video.videoUrl.isEmpty()) {
-            val newUrl = runCatching {
-                if (source is AnimeHttpSource) source.getVideoUrl(video) else null
-            }.getOrNull()
-
-            if (!newUrl.isNullOrEmpty() && newUrl != "null") {
-                return@withContext video.copy(videoUrl = newUrl, initialized = true)
-            }
+        if (!isFullyResolved(video)) {
+            val legacy = tryLegacyResolve(source, video)
+            if (legacy != null) return@withContext legacy
         }
 
         return@withContext video
@@ -768,7 +800,72 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
         }
     }
 
-    @Suppress("ComplexMethod", "LongMethod")
+    private fun parseFormatFromQuery(query: String?, videoUrl: String): VideoType? {
+        if (query == null) return null
+        val queryPairs = query.split("&").mapNotNull {
+            val idx = it.indexOf("=")
+            if (idx != -1) {
+                val key = runCatching { java.net.URLDecoder.decode(it.substring(0, idx), "UTF-8") }.getOrNull() ?: ""
+                val value = runCatching { java.net.URLDecoder.decode(it.substring(idx + 1), "UTF-8") }.getOrNull() ?: ""
+                Pair(key, value)
+            } else null
+        }
+        val typeParam = queryPairs.find { it.first.equals("type", ignoreCase = true) }?.second ?: ""
+        if (typeParam.isNotBlank()) {
+            val f = getVideoType(typeParam)
+            if (f != null) return f
+        }
+        val targetParam = queryPairs.find { it.first == "url" || it.first == "file" }?.second ?: ""
+        if (targetParam.isNotBlank()) {
+            val f = getVideoType(targetParam)
+            if (f != null) return f
+        }
+        if (videoUrl.contains(".m3u8", ignoreCase = true) || query.contains(".m3u8", ignoreCase = true)) {
+            return VideoType.M3U8
+        }
+        return null
+    }
+
+    private fun parseFormatFromStream(urlObj: java.net.URL): VideoType? {
+        if (StreamTypeDetector.isLocalMp4(urlObj)) {
+            return VideoType.CONTAINER
+        }
+        if (StreamTypeDetector.isLocalhost(urlObj) && !StreamTypeDetector.isTorrentStream(urlObj)) {
+            return if (StreamTypeDetector.isLocalDash(urlObj)) VideoType.DASH else VideoType.M3U8
+        }
+        return null
+    }
+
+    private fun parseFormatFromTitle(aniVideo: Video): VideoType? {
+        val titleOrQuality = "${aniVideo.videoTitle} ${aniVideo.quality}"
+        return if (titleOrQuality.contains("hls", ignoreCase = true) || titleOrQuality.contains("m3u8", ignoreCase = true)) {
+            VideoType.M3U8
+        } else if (titleOrQuality.contains("dash", ignoreCase = true) || titleOrQuality.contains("mpd", ignoreCase = true)) {
+            VideoType.DASH
+        } else {
+            null
+        }
+    }
+
+    private fun determineVideoFormat(videoUrl: String, aniVideo: Video): VideoType {
+        try {
+            val urlObj = java.net.URL(videoUrl)
+            return getVideoType(urlObj.path)
+                ?: parseFormatFromQuery(urlObj.query, videoUrl)
+                ?: parseFormatFromStream(urlObj)
+                ?: parseFormatFromTitle(aniVideo)
+                ?: run {
+                    Logger.log("Unknown video format: $videoUrl")
+                    VideoType.CONTAINER
+                }
+        } catch (malformed: java.net.MalformedURLException) {
+            if (videoUrl.startsWith("magnet:") || videoUrl.endsWith(".torrent")) {
+                return VideoType.CONTAINER
+            }
+            throw malformed
+        }
+    }
+
     private fun aniVideoToSaiVideo(aniVideo: Video): ani.dantotsu.parsers.Video {
         // Find the number value from the .quality string
         val number = Regex("""\d+""").find(aniVideo.quality)?.value?.toInt() ?: 0
@@ -778,74 +875,7 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
             ?: aniVideo.url.takeIf { it.isNotBlank() && it != "null" }
             ?: throw Exception("Video URL is null")
 
-        var format: VideoType?
-
-        try {
-            val urlObj = java.net.URL(videoUrl)
-            val path = urlObj.path
-            val query = urlObj.query
-
-            format = getVideoType(path)
-
-            if (format == null && query != null) {
-                val queryPairs: List<Pair<String, String>> = query.split("&").mapNotNull {
-                    val idx = it.indexOf("=")
-                    if (idx != -1) {
-                        val key = runCatching { java.net.URLDecoder.decode(it.substring(0, idx), "UTF-8") }.getOrNull() ?: ""
-                        val value = runCatching { java.net.URLDecoder.decode(it.substring(idx + 1), "UTF-8") }.getOrNull() ?: ""
-                        Pair(key, value)
-                    } else null
-                }
-
-                val typeParam = queryPairs.find { it.first.equals("type", ignoreCase = true) }?.second ?: ""
-                if (typeParam.isNotBlank()) {
-                    format = getVideoType(typeParam)
-                }
-
-                if (format == null) {
-                    val targetParam = queryPairs.find { it.first == "url" || it.first == "file" }?.second ?: ""
-                    if (targetParam.isNotBlank()) {
-                        format = getVideoType(targetParam)
-                    }
-                }
-
-                if (format == null && (videoUrl.contains(".m3u8", ignoreCase = true) || query.contains(".m3u8", ignoreCase = true))) {
-                    format = VideoType.M3U8
-                }
-            }
-
-            if (format == null) {
-                if (StreamTypeDetector.isLocalMp4(urlObj)) {
-                    format = VideoType.CONTAINER
-                } else if (StreamTypeDetector.isLocalhost(urlObj) && !StreamTypeDetector.isTorrentStream(urlObj)) {
-                    if (StreamTypeDetector.isLocalDash(urlObj)) {
-                        format = VideoType.DASH
-                    } else {
-                        format = VideoType.M3U8
-                    }
-                }
-            }
-
-            if (format == null) {
-                val titleOrQuality = "${aniVideo.videoTitle} ${aniVideo.quality}"
-                if (titleOrQuality.contains("hls", ignoreCase = true) || titleOrQuality.contains("m3u8", ignoreCase = true)) {
-                    format = VideoType.M3U8
-                } else if (titleOrQuality.contains("dash", ignoreCase = true) || titleOrQuality.contains("mpd", ignoreCase = true)) {
-                    format = VideoType.DASH
-                }
-            }
-
-            // If the format is still undetermined, log an error
-            if (format == null) {
-                Logger.log("Unknown video format: $videoUrl")
-                format = VideoType.CONTAINER
-            }
-        } catch (malformed: java.net.MalformedURLException) {
-            if (videoUrl.startsWith("magnet:") || videoUrl.endsWith(".torrent"))
-                format = VideoType.CONTAINER
-            else
-                throw malformed
-        }
+        val format = determineVideoFormat(videoUrl, aniVideo)
 
         val headersMap: Map<String, String> =
             aniVideo.headers?.toMultimap()?.mapValues { it.value.joinToString() } ?: mapOf()
@@ -853,7 +883,7 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
         val hosterName = (aniVideo.memo["hoster"] as? JsonPrimitive)?.contentOrNull
         return Video(
             number,
-            format!!,
+            format,
             FileUrl(videoUrl, headersMap),
             null,
             hosterName,
@@ -913,35 +943,33 @@ class VideoServerPassthrough(private val videoServer: VideoServer) : VideoExtrac
         }.getOrNull()
     }
 
-    private fun getVideoType(fileName: String): VideoType? {
-        val type = when {
-            fileName.endsWith(".mp4", ignoreCase = true) || fileName.endsWith(
-                ".mkv",
-                ignoreCase = true
-            ) || fileName.endsWith(
-                ".webm",
-                ignoreCase = true
-            ) || fileName.contains("/mp4", ignoreCase = true) ||
-                    fileName.contains("format=mp4", ignoreCase = true) -> VideoType.CONTAINER
+    private fun isContainerFormat(name: String): Boolean {
+        val lower = name.lowercase(Locale.ROOT)
+        return lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".webm") ||
+                lower.contains("/mp4") || lower.contains("format=mp4")
+    }
 
-            fileName.endsWith(".m3u8", ignoreCase = true) ||
-                    fileName.contains(".m3u8", ignoreCase = true) ||
-                    fileName.contains("/m3u8", ignoreCase = true) ||
-                    fileName.contains("/pl/", ignoreCase = true) ||
-                    fileName.contains("/playlist/", ignoreCase = true) ||
-                    fileName.contains("/hls/", ignoreCase = true) ||
-                    fileName.contains("format=m3u8", ignoreCase = true) ||
-                    fileName.contains("type=m3u8", ignoreCase = true) ||
-                    fileName.equals("m3u8", ignoreCase = true) -> VideoType.M3U8
-            fileName.endsWith(".mpd", ignoreCase = true) ||
-                    fileName.contains(".mpd", ignoreCase = true) ||
-                    fileName.contains("/mpd", ignoreCase = true) ||
-                    fileName.contains("/dash/", ignoreCase = true) ||
-                    fileName.contains("format=mpd", ignoreCase = true) -> VideoType.DASH
+    private fun isM3u8Format(name: String): Boolean {
+        val lower = name.lowercase(Locale.ROOT)
+        if (lower == "m3u8" || lower.endsWith(".m3u8")) return true
+        val patterns = listOf(".m3u8", "/m3u8", "/pl/", "/playlist/", "/hls/", "format=m3u8", "type=m3u8")
+        return patterns.any { lower.contains(it) }
+    }
+
+    private fun isDashFormat(name: String): Boolean {
+        val lower = name.lowercase(Locale.ROOT)
+        if (lower.endsWith(".mpd")) return true
+        val patterns = listOf(".mpd", "/mpd", "/dash/", "format=mpd")
+        return patterns.any { lower.contains(it) }
+    }
+
+    private fun getVideoType(fileName: String): VideoType? {
+        return when {
+            isContainerFormat(fileName) -> VideoType.CONTAINER
+            isM3u8Format(fileName) -> VideoType.M3U8
+            isDashFormat(fileName) -> VideoType.DASH
             else -> null
         }
-
-        return type
     }
 
     @Suppress("unused")

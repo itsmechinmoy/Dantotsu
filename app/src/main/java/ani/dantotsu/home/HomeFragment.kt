@@ -1,6 +1,7 @@
 package ani.dantotsu.home
 
 import android.animation.ObjectAnimator
+import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Animatable
 import android.net.Uri
@@ -59,11 +60,11 @@ import ani.dantotsu.util.customAlertDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
-
 
 class HomeFragment : Fragment() {
     private var _binding: FragmentHomeBinding? = null
@@ -88,75 +89,114 @@ class HomeFragment : Fragment() {
 
     val model: AnilistHomeViewModel by activityViewModels()
 
-    @Suppress("ComplexMethod", "LongMethod")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val scope = viewLifecycleOwner.lifecycleScope
         Logger.log("HomeFragment")
-        fun load() {
-            Logger.log("Loading HomeFragment")
-            if (activity != null && _binding != null) viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
-                val currentBinding = _binding ?: return@launch
-                val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-                if (rescueMode && MAL.token != null) {
-                    currentBinding.homeUserName.text = MAL.username ?: Anilist.username
-                    currentBinding.homeUserAvatar.loadImage(MAL.avatar ?: Anilist.avatar)
-                } else {
-                    currentBinding.homeUserName.text = Anilist.username
-                    currentBinding.homeUserAvatar.loadImage(Anilist.avatar)
-                }
 
-                if (!rescueMode) {
-                    currentBinding.homeUserEpisodesWatched.text = Anilist.episodesWatched.toString()
-                    currentBinding.homeUserChaptersRead.text = Anilist.chapterRead.toString()
-                    currentBinding.homeNotificationCount.isVisible = Anilist.unreadNotificationCount > 0
-                            && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
-                    currentBinding.homeNotificationCount.text = Anilist.unreadNotificationCount.toString()
-                } else {
-                    currentBinding.homeUserEpisodesWatched.text = MAL.episodesWatched?.toString() ?: "—"
-                    currentBinding.homeUserChaptersRead.text = MAL.chaptersRead?.toString() ?: "—"
-                    currentBinding.homeNotificationCount.isVisible = false
-                }
+        setupHeaderListeners()
+        setupScrollAndInsets()
 
-                val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
-                val bannerUrl = if (rescueMode) Anilist.bg ?: MAL.avatar else Anilist.bg
-                blurImage(
-                    if (bannerAnimations) currentBinding.homeUserBg else currentBinding.homeUserBgNoKen,
-                    bannerUrl
-                )
-                currentBinding.homeUserDataProgressBar.visibility = View.GONE
+        // UserData
+        loadUserData()
 
-                val listUserId = Anilist.userid ?: 0
-                val listUsername = if (rescueMode) MAL.username ?: Anilist.username else Anilist.username
-                currentBinding.homeAnimeList.setOnClickListener {
-                    ContextCompat.startActivity(
-                        requireActivity(), Intent(requireActivity(), ListActivity::class.java)
-                            .putExtra("anime", true)
-                            .putExtra("userId", listUserId)
-                            .putExtra("username", listUsername), null
-                    )
-                }
-                currentBinding.homeMangaList.setOnClickListener {
-                    ContextCompat.startActivity(
-                        requireActivity(), Intent(requireActivity(), ListActivity::class.java)
-                            .putExtra("anime", false)
-                            .putExtra("userId", listUserId)
-                            .putExtra("username", listUsername), null
-                    )
-                }
-
-                binding.homeUserAvatarContainer.startAnimation(setSlideUp())
-                binding.homeUserDataContainer.visibility = View.VISIBLE
-                binding.homeUserDataContainer.layoutAnimation =
-                    LayoutAnimationController(setSlideUp(), 0.25f)
-                binding.homeAnimeList.visibility = View.VISIBLE
-                binding.homeMangaList.visibility = View.VISIBLE
-                binding.homeListContainer.layoutAnimation =
-                    LayoutAnimationController(setSlideIn(), 0.25f)
-            }
-            else {
-                snackString(currContext()?.getString(R.string.please_reload))
+        // List Images
+        model.getListImages().observe(viewLifecycleOwner) {
+            if (it.isNotEmpty()) {
+                binding.homeAnimeListImage.loadImage(it[0] ?: "https://bit.ly/31bsIHq")
+                binding.homeMangaListImage.loadImage(it[1] ?: "https://bit.ly/2ZGfcuG")
             }
         }
+
+        setupMediaSections(scope)
+        setupUserStatusStories()
+        setupHiddenItems()
+
+        binding.homeUserAvatarContainer.startAnimation(setSlideUp())
+
+        setupDynamicLayoutAndRefresh(scope)
+    }
+
+    private fun bindUserHeader(currentBinding: FragmentHomeBinding, rescueMode: Boolean) {
+        if (rescueMode && MAL.token != null) {
+            currentBinding.homeUserName.text = MAL.username ?: Anilist.username
+            currentBinding.homeUserAvatar.loadImage(MAL.avatar ?: Anilist.avatar)
+        } else {
+            currentBinding.homeUserName.text = Anilist.username
+            currentBinding.homeUserAvatar.loadImage(Anilist.avatar)
+        }
+    }
+
+    private fun bindUserStats(currentBinding: FragmentHomeBinding, rescueMode: Boolean) {
+        if (!rescueMode) {
+            currentBinding.homeUserEpisodesWatched.text = Anilist.episodesWatched.toString()
+            currentBinding.homeUserChaptersRead.text = Anilist.chapterRead.toString()
+            currentBinding.homeNotificationCount.isVisible = Anilist.unreadNotificationCount > 0
+                    && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
+            currentBinding.homeNotificationCount.text = Anilist.unreadNotificationCount.toString()
+        } else {
+            currentBinding.homeUserEpisodesWatched.text = MAL.episodesWatched?.toString() ?: "—"
+            currentBinding.homeUserChaptersRead.text = MAL.chaptersRead?.toString() ?: "—"
+            currentBinding.homeNotificationCount.isVisible = false
+        }
+    }
+
+    private fun bindUserBanner(currentBinding: FragmentHomeBinding, rescueMode: Boolean) {
+        val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
+        val bannerUrl = if (rescueMode) Anilist.bg ?: MAL.avatar else Anilist.bg
+        blurImage(
+            if (bannerAnimations) currentBinding.homeUserBg else currentBinding.homeUserBgNoKen,
+            bannerUrl
+        )
+        currentBinding.homeUserDataProgressBar.visibility = View.GONE
+    }
+
+    private fun bindUserLists(currentBinding: FragmentHomeBinding, rescueMode: Boolean) {
+        val listUserId = Anilist.userid ?: 0
+        val listUsername = if (rescueMode) MAL.username ?: Anilist.username else Anilist.username
+        currentBinding.homeAnimeList.setOnClickListener {
+            ContextCompat.startActivity(
+                requireActivity(), Intent(requireActivity(), ListActivity::class.java)
+                    .putExtra("anime", true)
+                    .putExtra("userId", listUserId)
+                    .putExtra("username", listUsername), null
+            )
+        }
+        currentBinding.homeMangaList.setOnClickListener {
+            ContextCompat.startActivity(
+                requireActivity(), Intent(requireActivity(), ListActivity::class.java)
+                    .putExtra("anime", false)
+                    .putExtra("userId", listUserId)
+                    .putExtra("username", listUsername), null
+            )
+        }
+
+        binding.homeUserAvatarContainer.startAnimation(setSlideUp())
+        binding.homeUserDataContainer.visibility = View.VISIBLE
+        binding.homeUserDataContainer.layoutAnimation =
+            LayoutAnimationController(setSlideUp(), 0.25f)
+        binding.homeAnimeList.visibility = View.VISIBLE
+        binding.homeMangaList.visibility = View.VISIBLE
+        binding.homeListContainer.layoutAnimation =
+            LayoutAnimationController(setSlideIn(), 0.25f)
+    }
+
+    private fun loadUserData() {
+        Logger.log("Loading HomeFragment")
+        if (activity != null && _binding != null) {
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                val currentBinding = _binding ?: return@launch
+                val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+                bindUserHeader(currentBinding, rescueMode)
+                bindUserStats(currentBinding, rescueMode)
+                bindUserBanner(currentBinding, rescueMode)
+                bindUserLists(currentBinding, rescueMode)
+            }
+        } else {
+            snackString(currContext()?.getString(R.string.please_reload))
+        }
+    }
+
+    private fun setupHeaderListeners() {
         binding.homeUserAvatarContainer.setSafeOnClickListener {
             val dialogFragment =
                 SettingsDialogFragment.newInstance(SettingsDialogFragment.Companion.PageType.HOME)
@@ -195,7 +235,21 @@ class HomeFragment : Fragment() {
             }
             false
         }
+    }
 
+    private fun calculateCutoutHeight(): Int {
+        var height = statusBarHeight
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val displayCutout = activity?.window?.decorView?.rootWindowInsets?.displayCutout
+            if (displayCutout != null && displayCutout.boundingRects.isNotEmpty()) {
+                val rect = displayCutout.boundingRects[0]
+                height = max(statusBarHeight, min(rect.width(), rect.height()))
+            }
+        }
+        return height
+    }
+
+    private fun setupScrollAndInsets() {
         binding.homeContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
             bottomMargin = navBarHeight
         }
@@ -212,137 +266,107 @@ class HomeFragment : Fragment() {
                 if (!binding.homeScroll.canScrollVertically(1)) {
                     reached = true
                     bar.animate().translationZ(0f).setDuration(duration).start()
-                    ObjectAnimator.ofFloat(bar, "elevation", 4f, 0f).setDuration(duration)
-                        .start()
-                } else {
-                    if (reached) {
-                        bar.animate().translationZ(12f).setDuration(duration).start()
-                        ObjectAnimator.ofFloat(bar, "elevation", 0f, 4f).setDuration(duration)
-                            .start()
-                    }
+                    ObjectAnimator.ofFloat(bar, "elevation", 4f, 0f).setDuration(duration).start()
+                } else if (reached) {
+                    bar.animate().translationZ(12f).setDuration(duration).start()
+                    ObjectAnimator.ofFloat(bar, "elevation", 0f, 4f).setDuration(duration).start()
                 }
             }
         }
-        var height = statusBarHeight
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val displayCutout = activity?.window?.decorView?.rootWindowInsets?.displayCutout
-            if (displayCutout != null) {
-                if (displayCutout.boundingRects.size > 0) {
-                    height =
-                        max(
-                            statusBarHeight,
-                            min(
-                                displayCutout.boundingRects[0].width(),
-                                displayCutout.boundingRects[0].height()
-                            )
-                        )
-                }
-            }
-        }
+        val height = calculateCutoutHeight()
         binding.homeRefresh.setSlingshotDistance(height + 128)
         binding.homeRefresh.setProgressViewEndTarget(false, height + 128)
         binding.homeRefresh.setOnRefreshListener {
             Refresh.activity[1]!!.postValue(true)
         }
+    }
 
-        //UserData
-        load()
-        //List Images
-        model.getListImages().observe(viewLifecycleOwner) {
-            if (it.isNotEmpty()) {
-                binding.homeAnimeListImage.loadImage(it[0] ?: "https://bit.ly/31bsIHq")
-                binding.homeMangaListImage.loadImage(it[1] ?: "https://bit.ly/2ZGfcuG")
-            }
-        }
-
-        fun getSkeletonMediaList(count: Int = 7): ArrayList<Media> {
-            val list = ArrayList<Media>()
-            for (i in 0 until count) {
-                list.add(
-                    Media(
-                        anime = ani.dantotsu.media.anime.Anime(),
-                        manga = null,
-                        id = -100 - i,
-                        name = "•••",
-                        nameRomaji = "•••",
-                        userPreferredName = "••••••••••••",
-                        cover = null,
-                        isAdult = false,
-                        meanScore = 0,
-                        userProgress = 0
-                    )
+    private fun getSkeletonMediaList(count: Int = 7): ArrayList<Media> {
+        val list = ArrayList<Media>()
+        for (i in 0 until count) {
+            list.add(
+                Media(
+                    anime = ani.dantotsu.media.anime.Anime(),
+                    manga = null,
+                    id = -100 - i,
+                    name = "—",
+                    nameRomaji = "—",
+                    userPreferredName = "—",
+                    cover = null,
+                    isAdult = false,
+                    meanScore = 0,
+                    userProgress = 0
                 )
-            }
-            return list
+            )
         }
+        return list
+    }
 
-        //Function For Recycler Views
-        fun initRecyclerView(
-            mode: LiveData<ArrayList<Media>>,
-            container: View,
-            recyclerView: RecyclerView,
-            progress: View,
-            empty: View,
-            title: View,
-            more: View,
-            string: String
-        ) {
-            container.visibility = View.VISIBLE
-            progress.visibility = View.GONE
-            empty.visibility = View.GONE
-            title.visibility = View.VISIBLE
-            more.visibility = View.VISIBLE
-            recyclerView.visibility = View.VISIBLE
-
-            recyclerView.adapter = MediaAdaptor(0, getSkeletonMediaList(), requireActivity())
+    private fun updateRecyclerAdapter(recyclerView: RecyclerView, it: ArrayList<Media>) {
+        val currentAdapter = recyclerView.adapter as? MediaAdaptor
+        if (currentAdapter != null && currentAdapter.type == 0 && currentAdapter.mediaList === it && recyclerView.tag == "loaded") {
+            currentAdapter.notifyDataSetChanged()
+        } else {
+            recyclerView.tag = "loaded"
+            recyclerView.adapter = MediaAdaptor(0, it, requireActivity())
             recyclerView.layoutManager = LinearLayoutManager(
                 requireContext(),
                 LinearLayoutManager.HORIZONTAL,
                 false
             )
+            recyclerView.visibility = View.VISIBLE
+            recyclerView.layoutAnimation = LayoutAnimationController(setSlideIn(), 0.25f)
+        }
+    }
 
-            mode.observe(viewLifecycleOwner) {
-                if (it != null) {
-                    if (it.isNotEmpty()) {
-                        empty.visibility = View.GONE
-                        val currentAdapter = recyclerView.adapter as? MediaAdaptor
-                        if (currentAdapter != null && currentAdapter.type == 0 && currentAdapter.mediaList === it && recyclerView.tag == "loaded") {
-                            currentAdapter.notifyDataSetChanged()
-                        } else {
-                            recyclerView.tag = "loaded"
-                            recyclerView.adapter = MediaAdaptor(0, it, requireActivity())
-                            recyclerView.layoutManager = LinearLayoutManager(
-                                requireContext(),
-                                LinearLayoutManager.HORIZONTAL,
-                                false
-                            )
-                            recyclerView.visibility = View.VISIBLE
-                            recyclerView.layoutAnimation =
-                                LayoutAnimationController(setSlideIn(), 0.25f)
+    private fun initRecyclerView(
+        mode: LiveData<ArrayList<Media>>,
+        container: View,
+        recyclerView: RecyclerView,
+        progress: View,
+        empty: View,
+        title: View,
+        more: View,
+        string: String
+    ) {
+        container.visibility = View.VISIBLE
+        progress.visibility = View.GONE
+        empty.visibility = View.GONE
+        title.visibility = View.VISIBLE
+        more.visibility = View.VISIBLE
+        recyclerView.visibility = View.VISIBLE
+
+        recyclerView.adapter = MediaAdaptor(0, getSkeletonMediaList(), requireActivity())
+        recyclerView.layoutManager = LinearLayoutManager(
+            requireContext(),
+            LinearLayoutManager.HORIZONTAL,
+            false
+        )
+
+        mode.observe(viewLifecycleOwner) { it ->
+            if (it != null) {
+                if (it.isNotEmpty()) {
+                    empty.visibility = View.GONE
+                    updateRecyclerAdapter(recyclerView, it)
+                    more.setOnClickListener { i ->
+                        MediaListViewActivity.passedMedia = it
+                        val intent = Intent(i.context, MediaListViewActivity::class.java)
+                            .putExtra("title", string)
+                        if (string == getString(R.string.recommended)) {
+                            intent.putExtra("type", "RECOMMENDED")
+                            intent.putExtra("page", model.recommendationPage)
                         }
-                        more.setOnClickListener { i ->
-                            MediaListViewActivity.passedMedia = it
-                            val intent = Intent(i.context, MediaListViewActivity::class.java)
-                                .putExtra("title", string)
-                            if (string == getString(R.string.recommended)) {
-                                intent.putExtra("type", "RECOMMENDED")
-                                intent.putExtra("page", model.recommendationPage)
-                            }
-                            ContextCompat.startActivity(
-                                i.context, intent,
-                                null
-                            )
-                        }
-                    } else {
-                        recyclerView.visibility = View.GONE
-                        empty.visibility = View.VISIBLE
+                        ContextCompat.startActivity(i.context, intent, null)
                     }
+                } else {
+                    recyclerView.visibility = View.GONE
+                    empty.visibility = View.VISIBLE
                 }
             }
-
         }
+    }
 
-        // Recycler Views
+    private fun setupMediaSections(scope: kotlinx.coroutines.CoroutineScope) {
         initRecyclerView(
             model.getAnimeContinue(),
             binding.homeContinueWatchingContainer,
@@ -442,8 +466,7 @@ class HomeFragment : Fragment() {
             binding.homeRecommendedMore,
             getString(R.string.recommended)
         )
-binding.homeRecommendedRecyclerView.addOnScrollListener(object :
-            RecyclerView.OnScrollListener() {
+        binding.homeRecommendedRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (!recyclerView.canScrollHorizontally(1)) {
                     if (model.recommendationHasNextPage && !model.recommendationLoading) {
@@ -455,6 +478,9 @@ binding.homeRecommendedRecyclerView.addOnScrollListener(object :
                 super.onScrolled(recyclerView, dx, dy)
             }
         })
+    }
+
+    private fun setupUserStatusStories() {
         val storiesEnabled = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout)
             .getOrElse(7) { true } && !PrefManager.getVal<Boolean>(PrefName.RescueMode)
         binding.homeUserStatusContainer.visibility =
@@ -472,8 +498,7 @@ binding.homeRecommendedRecyclerView.addOnScrollListener(object :
             when {
                 users == null -> {
                     val show = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout)
-                        .getOrElse(7) { true } &&
-                        !PrefManager.getVal<Boolean>(PrefName.RescueMode)
+                        .getOrElse(7) { true } && !PrefManager.getVal<Boolean>(PrefName.RescueMode)
                     if (show) {
                         binding.homeUserStatusContainer.visibility = View.VISIBLE
                         binding.homeUserStatusProgressBar.visibility = View.VISIBLE
@@ -504,41 +529,37 @@ binding.homeRecommendedRecyclerView.addOnScrollListener(object :
                         UserStatusAdapter(latestStatusUsers)
                 }
             }
+    }
+
+    private fun setupHiddenItems() {
         binding.homeHiddenItemsContainer.visibility = View.GONE
         model.getHidden().observe(viewLifecycleOwner) {
-            if (it != null) {
-                if (it.isNotEmpty()) {
-                    binding.homeHiddenItemsRecyclerView.adapter =
-                        MediaAdaptor(0, it, requireActivity())
-                    binding.homeHiddenItemsRecyclerView.layoutManager = LinearLayoutManager(
-                        requireContext(),
-                        LinearLayoutManager.HORIZONTAL,
-                        false
+            if (!it.isNullOrEmpty()) {
+                binding.homeHiddenItemsRecyclerView.adapter =
+                    MediaAdaptor(0, it, requireActivity())
+                binding.homeHiddenItemsRecyclerView.layoutManager = LinearLayoutManager(
+                    requireContext(),
+                    LinearLayoutManager.HORIZONTAL,
+                    false
+                )
+                binding.homeContinueWatch.setOnLongClickListener {
+                    binding.homeHiddenItemsContainer.visibility = View.VISIBLE
+                    binding.homeHiddenItemsRecyclerView.layoutAnimation =
+                        LayoutAnimationController(setSlideIn(), 0.25f)
+                    true
+                }
+                binding.homeHiddenItemsMore.setSafeOnClickListener { _ ->
+                    MediaListViewActivity.passedMedia = it
+                    ContextCompat.startActivity(
+                        requireActivity(),
+                        Intent(requireActivity(), MediaListViewActivity::class.java)
+                            .putExtra("title", getString(R.string.hidden)),
+                        null
                     )
-                    binding.homeContinueWatch.setOnLongClickListener {
-                        binding.homeHiddenItemsContainer.visibility = View.VISIBLE
-                        binding.homeHiddenItemsRecyclerView.layoutAnimation =
-                            LayoutAnimationController(setSlideIn(), 0.25f)
-                        true
-                    }
-                    binding.homeHiddenItemsMore.setSafeOnClickListener { _ ->
-                        MediaListViewActivity.passedMedia = it
-                        ContextCompat.startActivity(
-                            requireActivity(),
-                            Intent(requireActivity(), MediaListViewActivity::class.java)
-                                .putExtra("title", getString(R.string.hidden)),
-                            null
-                        )
-                    }
-                    binding.homeHiddenItemsTitle.setOnLongClickListener {
-                        binding.homeHiddenItemsContainer.visibility = View.GONE
-                        true
-                    }
-                } else {
-                    binding.homeContinueWatch.setOnLongClickListener {
-                        snackString(getString(R.string.no_hidden_items))
-                        true
-                    }
+                }
+                binding.homeHiddenItemsTitle.setOnLongClickListener {
+                    binding.homeHiddenItemsContainer.visibility = View.GONE
+                    true
                 }
             } else {
                 binding.homeContinueWatch.setOnLongClickListener {
@@ -547,33 +568,62 @@ binding.homeRecommendedRecyclerView.addOnScrollListener(object :
                 }
             }
         }
+    }
 
-        binding.homeUserAvatarContainer.startAnimation(setSlideUp())
+    private fun showRescueModeOfflineDialog(ctx: Context) {
+        if (!isAdded || _binding == null) return
+        ctx.customAlertDialog().apply {
+            setTitle(R.string.rescue_mode_prompt_title)
+            setMessage(R.string.rescue_mode_offline_prompt_message)
+            setPosButton(R.string.use_offline_cache) {
+                Anilist.anilistDisabledSignal = false
+                snackString(ctx.getString(R.string.offline_mode_active))
+            }
+            setNeutralButton(R.string.rescue_mode_enable) {
+                PrefManager.setVal(PrefName.RescueMode, true)
+                Anilist.anilistDisabledSignal = false
+                val intent = Intent(ctx, MainActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                startActivity(intent)
+                activity?.overridePendingTransition(0, 0)
+                activity?.finish()
+                activity?.overridePendingTransition(0, 0)
+            }
+            setNegButton(R.string.cancel) {
+                Anilist.anilistDisabledSignal = false
+            }
+            show()
+        }
+    }
 
-        model.empty.observe(viewLifecycleOwner)
-        {
-            binding.homeDantotsuContainer.visibility = if (it == true) View.VISIBLE else View.GONE
-            (binding.homeDantotsuIcon.drawable as Animatable).start()
-            binding.homeDantotsuContainer.startAnimation(setSlideUp())
-            binding.homeDantotsuIcon.setSafeOnClickListener {
-                (binding.homeDantotsuIcon.drawable as Animatable).start()
+    private fun applyDynamicHomeLayout(containers: Array<View>): Boolean {
+        var empty = true
+        val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
+        val homeLayoutOrderPref: List<Int> = PrefManager.getVal(PrefName.HomeLayoutOrder)
+        val homeLayoutOrder = if (homeLayoutOrderPref.isEmpty()) (0..7).toList() else homeLayoutOrderPref
+
+        containers.indices.forEach { i ->
+            if (homeLayoutShow.getOrElse(i) { true }) {
+                empty = false
+            } else {
+                containers[i].visibility = View.GONE
             }
         }
 
+        var insertIndex = binding.homeContainer.indexOfChild(binding.homeHiddenItemsContainer) + 1
+        homeLayoutOrder.forEach { i ->
+            val container = containers.getOrNull(i)
+            if (container != null) {
+                binding.homeContainer.removeView(container)
+                binding.homeContainer.addView(container, insertIndex)
+                insertIndex++
+            }
+        }
+        return empty
+    }
 
-        val array = arrayOf(
-            "AnimeContinue",
-            "AnimeFav",
-            "AnimePlanned",
-            "MangaContinue",
-            "MangaFav",
-            "MangaPlanned",
-            "Recommendation",
-            "UserStatus",
-            "MissingSequels",
-        )
-
-        val containers = arrayOf(
+    private fun setupDynamicLayoutAndRefresh(scope: kotlinx.coroutines.CoroutineScope) {
+        val containers: Array<View> = arrayOf(
             binding.homeContinueWatchingContainer,
             binding.homeFavAnimeContainer,
             binding.homePlannedAnimeContainer,
@@ -585,149 +635,72 @@ binding.homeRecommendedRecyclerView.addOnScrollListener(object :
             binding.homeMissingSequelsContainer,
         )
 
-        var running = false
-        val live = Refresh.activity.getOrPut(1) { MutableLiveData(true) }
-
-        PrefManager.getLiveVal(PrefName.RescueMode, false).asLiveBool()
-            .observe(viewLifecycleOwner) { inRescueMode ->
-
-                val alOnlySections = listOf(
-                    binding.homeFavAnimeContainer,
-                    binding.homeFavMangaContainer,
-                    binding.homeUserStatusContainer,
-                    binding.homeMissingSequelsContainer,
-                )
-                binding.homeRescueModeBanner.visibility =
-                    if (inRescueMode) View.VISIBLE else View.GONE
-                if (inRescueMode) {
-                    alOnlySections.forEach { it.visibility = View.GONE }
-
-                    binding.homeContinueWatchingContainer.visibility = View.VISIBLE
-                    binding.homePlannedAnimeContainer.visibility = View.VISIBLE
-                    binding.homeContinueReadingContainer.visibility = View.VISIBLE
-                    binding.homePlannedMangaContainer.visibility = View.VISIBLE
-                } else {
-                    val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
-                    val alOnlyIndices = listOf(1, 4, 7, 8)
-                    alOnlySections.forEachIndexed { idx, view ->
-                        if (homeLayoutShow.getOrElse(alOnlyIndices[idx]) { true }) {
-                            view.visibility = View.VISIBLE
-                        } else {
-                            view.visibility = View.GONE
-                        }
-                    }
+        model.empty.observe(viewLifecycleOwner) { isEmpty ->
+            if (_binding != null) {
+                binding.homeDantotsuContainer.visibility = if (isEmpty == true) View.VISIBLE else View.GONE
+                (binding.homeDantotsuIcon.drawable as? Animatable)?.start()
+                binding.homeDantotsuContainer.startAnimation(setSlideUp())
+                binding.homeDantotsuIcon.setSafeOnClickListener {
+                    (binding.homeDantotsuIcon.drawable as? Animatable)?.start()
                 }
             }
+        }
 
+        var running = false
+        val live = Refresh.activity.getOrPut(1) { MutableLiveData(true) }
         live.observe(viewLifecycleOwner) { shouldRefresh ->
-            if (!running && shouldRefresh) {
+            if (shouldRefresh && !running) {
                 running = true
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-                        if (rescueMode) {
-                            if (MAL.token != null && MAL.episodesWatched == null) {
-                                tryWithSuspend { MAL.query.getUserData() }
-                            }
-                            withContext(Dispatchers.Main) { load() }
-                        } else {
-                            Anilist.userid =
-                                PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
-                                    ?.toIntOrNull()
-                            if (Anilist.userid == null) {
-                                withContext(Dispatchers.Main) {
-                                    getUserId(context) {
-                                        load()
-                                    }
-                                }
-                            } else {
-                                launch(Dispatchers.Main) {
-                                    getUserId(context) {
-                                        load()
-                                    }
-                                }
-                            }
-                        }
-                        model.loaded = true
-                    }
-
-                    if (Anilist.anilistDisabledSignal && !PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-                        withContext(Dispatchers.Main) {
-                            val ctx = context ?: return@withContext
-                            if (isAdded && _binding != null) {
-                                ctx.customAlertDialog().apply {
-                                    setTitle(R.string.rescue_mode_prompt_title)
-                                    setMessage(R.string.rescue_mode_offline_prompt_message)
-                                    setPosButton(R.string.use_offline_cache) {
-                                        Anilist.anilistDisabledSignal = false
-                                        snackString(ctx.getString(R.string.offline_mode_active))
-                                    }
-                                    setNeutralButton(R.string.rescue_mode_enable) {
-                                        PrefManager.setVal(PrefName.RescueMode, true)
-                                        Anilist.anilistDisabledSignal = false
-                                        val intent = Intent(ctx, MainActivity::class.java)
-                                        intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-                                        startActivity(intent)
-                                        activity?.overridePendingTransition(0, 0)
-                                        activity?.finish()
-                                        activity?.overridePendingTransition(0, 0)
-                                    }
-                                    setNegButton(R.string.cancel) {
-                                        Anilist.anilistDisabledSignal = false
-                                    }
-                                    show()
-                                }
-                            }
-                        }
-                    }
-
-                    var empty = true
-                    val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
-                    var homeLayoutOrder: List<Int> = PrefManager.getVal(PrefName.HomeLayoutOrder)
-                    if (homeLayoutOrder.isEmpty()) {
-                        homeLayoutOrder = (0..7).toList()
-                    }
-
-                    withContext(Dispatchers.Main) {
-                        containers.indices.forEach { i ->
-                            if (homeLayoutShow.getOrElse(i) { true }) {
-                                empty = false
-                            } else {
-                                containers[i].visibility = View.GONE
-                            }
-                        }
-
-                        var insertIndex = binding.homeContainer.indexOfChild(binding.homeHiddenItemsContainer) + 1
-
-                        homeLayoutOrder.forEach { i ->
-                            val container = containers.getOrNull(i)
-                            if (container != null) {
-                                binding.homeContainer.removeView(container)
-                                binding.homeContainer.addView(container, insertIndex)
-                                insertIndex++
-                            }
-                        }
-                    }
-
-                    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-                    val isPullToRefresh = _binding?.homeRefresh?.isRefreshing == true
-                    val initHomePage = async(Dispatchers.IO) { model.initHomePage(forceRefresh = isPullToRefresh) }
-                    async(Dispatchers.IO) { model.setListImages() }
-                    if (!rescueMode) {
-                        async(Dispatchers.IO) { model.initUserStatus(forceRefresh = isPullToRefresh) }
-                    }
-                    initHomePage.await()
-
-                    withContext(Dispatchers.Main) {
-                        model.empty.postValue(empty)
-                        binding.homeHiddenItemsContainer.visibility = View.GONE
-                    }
-
-                    live.postValue(false)
-                    _binding?.homeRefresh?.isRefreshing = false
+                    performHomeRefresh(containers, live)
                     running = false
                 }
             }
+        }
+    }
+
+    private suspend fun performHomeRefresh(
+        containers: Array<View>,
+        live: MutableLiveData<Boolean>
+    ) = coroutineScope {
+        if (_binding != null) {
+            if (!model.loaded) {
+                withContext(Dispatchers.Main) {
+                    if (activity != null) {
+                        if (Anilist.token != null || MAL.token != null) {
+                            loadUserData()
+                        }
+                    }
+                }
+                model.loaded = true
+            }
+
+            if (Anilist.anilistDisabledSignal && !PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+                withContext(Dispatchers.Main) {
+                    context?.let { showRescueModeOfflineDialog(it) }
+                }
+            }
+
+            val empty = withContext(Dispatchers.Main) {
+                applyDynamicHomeLayout(containers)
+            }
+
+            val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+            val isPullToRefresh = _binding?.homeRefresh?.isRefreshing == true
+            val initHomePage = async(Dispatchers.IO) { model.initHomePage(forceRefresh = isPullToRefresh) }
+            async(Dispatchers.IO) { model.setListImages() }
+            if (!rescueMode) {
+                async(Dispatchers.IO) { model.initUserStatus(forceRefresh = isPullToRefresh) }
+            }
+            initHomePage.await()
+
+            withContext(Dispatchers.Main) {
+                model.empty.postValue(empty)
+                binding.homeHiddenItemsContainer.visibility = View.GONE
+            }
+
+            live.postValue(false)
+            _binding?.homeRefresh?.isRefreshing = false
         }
     }
 
