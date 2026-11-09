@@ -175,51 +175,76 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         return true
     }
 
+    private suspend fun postActivityMutation(data: CreatorData, isEdit: Boolean): String {
+        return if (isEdit) Anilist.mutation.postActivity(text, data.editId) else Anilist.mutation.postActivity(text)
+    }
+
+    private suspend fun postReplyActivityMutation(data: CreatorData, isEdit: Boolean): String {
+        return if (isEdit) Anilist.mutation.postReply(parentId, text, data.editId) else Anilist.mutation.postReply(parentId, text)
+    }
+
+    private suspend fun postMessageMutation(data: CreatorData, isEdit: Boolean): String {
+        return if (isEdit) {
+            Anilist.mutation.postMessage(data.userId, text, data.editId)
+        } else {
+            Anilist.mutation.postMessage(data.userId, text, isPrivate = data.isPrivate)
+        }
+    }
+
+    private suspend fun postReviewMutation(data: CreatorData, isEdit: Boolean): String {
+        val score = binding.reviewScoreEditText.text.toString().trim().toIntOrNull() ?: 0
+        val summary = binding.reviewSummaryEditText.text.toString().trim()
+        val edit = if (isEdit) data.editId else null
+        return Anilist.mutation.postReview(
+            summary = summary,
+            body = text,
+            mediaId = data.mediaId,
+            score = score,
+            edit = edit,
+            isPrivate = data.isPrivate
+        )
+    }
+
+    private suspend fun postThreadMutation(data: CreatorData, isEdit: Boolean): String {
+        val titleText = binding.threadTitleEditText.text.toString().trim()
+        val mediaCategories = intent.getIntegerArrayListExtra("mediaCategories")
+        val edit = if (isEdit) data.editId else null
+        return Anilist.mutation.saveThread(
+            title = titleText,
+            body = text,
+            categories = arrayListOf(data.selectedCategoryId),
+            mediaCategories = mediaCategories,
+            edit = edit
+        )
+    }
+
+    private suspend fun postThreadCommentMutation(data: CreatorData, isEdit: Boolean): String {
+        val parentCommentId = if (parentId != -1) parentId else null
+        val threadId = intent.getIntExtra("threadId", -1)
+        val edit = if (isEdit) data.editId else null
+        return Anilist.mutation.saveThreadComment(
+            threadId = threadId,
+            comment = text,
+            parentCommentId = parentCommentId,
+            edit = edit
+        )
+    }
+
+    private suspend fun updateUserBioMutation(): String {
+        val ok = Anilist.mutation.updateUserBio(text)
+        return if (ok) "Profile bio updated" else "Failed to update bio"
+    }
+
     private suspend fun executePostMutation(data: CreatorData): String {
         val isEdit = data.editId != -1
-        val summary = binding.reviewSummaryEditText.text.toString().trim()
-        val scoreText = binding.reviewScoreEditText.text.toString().trim()
-        val titleText = binding.threadTitleEditText.text.toString().trim()
-
         return when (type) {
-            "activity" -> if (isEdit) Anilist.mutation.postActivity(text, data.editId) else Anilist.mutation.postActivity(text)
-            "review" -> {
-                val score = scoreText.toIntOrNull() ?: 0
-                Anilist.mutation.postReview(
-                    summary = summary,
-                    body = text,
-                    mediaId = data.mediaId,
-                    score = score,
-                    edit = if (isEdit) data.editId else null,
-                    isPrivate = data.isPrivate
-                )
-            }
-            "bio" -> {
-                val ok = Anilist.mutation.updateUserBio(text)
-                if (ok) "Profile bio updated" else "Failed to update bio"
-            }
-            "thread" -> {
-                val mediaCategories = intent.getIntegerArrayListExtra("mediaCategories")
-                Anilist.mutation.saveThread(
-                    title = titleText,
-                    body = text,
-                    categories = arrayListOf(data.selectedCategoryId),
-                    mediaCategories = mediaCategories,
-                    edit = if (isEdit) data.editId else null
-                )
-            }
-            "threadComment" -> {
-                val parentCommentId = if (parentId != -1) parentId else null
-                val threadId = intent.getIntExtra("threadId", -1)
-                Anilist.mutation.saveThreadComment(
-                    threadId = threadId,
-                    comment = text,
-                    parentCommentId = parentCommentId,
-                    edit = if (isEdit) data.editId else null
-                )
-            }
-            "replyActivity" -> if (isEdit) Anilist.mutation.postReply(parentId, text, data.editId) else Anilist.mutation.postReply(parentId, text)
-            "message" -> if (isEdit) Anilist.mutation.postMessage(data.userId, text, data.editId) else Anilist.mutation.postMessage(data.userId, text, isPrivate = data.isPrivate)
+            "activity" -> postActivityMutation(data, isEdit)
+            "review" -> postReviewMutation(data, isEdit)
+            "bio" -> updateUserBioMutation()
+            "thread" -> postThreadMutation(data, isEdit)
+            "threadComment" -> postThreadCommentMutation(data, isEdit)
+            "replyActivity" -> postReplyActivityMutation(data, isEdit)
+            "message" -> postMessageMutation(data, isEdit)
             else -> "Error: Unknown type"
         }
     }
