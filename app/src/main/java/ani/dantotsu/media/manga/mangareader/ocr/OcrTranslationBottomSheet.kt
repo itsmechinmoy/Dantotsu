@@ -50,80 +50,84 @@ class OcrTranslationBottomSheet : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        val bitmap = currentBitmap
-        if (bitmap == null || bitmap.isRecycled) {
-            if (isAdded) Toast.makeText(context, "No page image available for translation", Toast.LENGTH_SHORT).show()
-            dismiss()
-            return
-        }
+        val bitmap = validateBitmap() ?: return
 
         lifecycleScope.launch {
             var detectedText = ""
             try {
-                // 1. Recognize text using ML Kit on-device recognizer
                 detectedText = recognizeText(bitmap)
-
                 if (!isAdded) return@launch
-
                 if (detectedText.isBlank()) {
-                    binding.ocrProgressBar.visibility = View.GONE
-                    binding.ocrStatusText.visibility = View.GONE
-                    binding.ocrResultsContainer.visibility = View.VISIBLE
-                    binding.ocrDetectedText.text = getString(R.string.no_text_detected)
-                    binding.ocrTranslatedText.text = getString(R.string.no_text_detected)
+                    showEmptyOcrResult()
                     return@launch
                 }
-
-                // 2. Check if text is already Latin/English (all ASCII ≤ 127)
-                //    If so, skip translation — just show the detected text directly.
-                val isLikelyLatin = detectedText.all { it.code <= 127 }
-
-                val translatedText = if (isLikelyLatin) {
-                    detectedText  // Don't translate English → English
-                } else {
-                    binding.ocrStatusText.text = "Translating text..."
-                    translateText(detectedText)
-                }
-
+                val translatedText = resolveTranslation(detectedText)
                 if (!isAdded) return@launch
-
-                // 3. Update UI
-                binding.ocrProgressBar.visibility = View.GONE
-                binding.ocrStatusText.visibility = View.GONE
-                binding.ocrResultsContainer.visibility = View.VISIBLE
-                binding.ocrDetectedText.text = detectedText
-                binding.ocrTranslatedText.text = translatedText
-
-                binding.ocrCopyButton.setOnClickListener {
-                    val ctx = context ?: return@setOnClickListener
-                    val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                    val clip = ClipData.newPlainText("Manga Translation", translatedText)
-                    clipboard?.setPrimaryClip(clip)
-                    if (isAdded) Toast.makeText(ctx, getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
-                }
-
-                binding.ocrCloseButton.setOnClickListener {
-                    dismiss()
-                }
+                showOcrSuccess(detectedText, translatedText)
             } catch (e: Exception) {
                 e.printStackTrace()
-                if (!isAdded) return@launch
-                // Don't dismiss — show whatever we detected so user can still copy it
-                binding.ocrProgressBar.visibility = View.GONE
-                binding.ocrStatusText.visibility = View.GONE
-                binding.ocrResultsContainer.visibility = View.VISIBLE
-                binding.ocrDetectedText.text = detectedText.ifBlank { getString(R.string.no_text_detected) }
-                binding.ocrTranslatedText.text = "Translation failed: ${e.localizedMessage ?: "Network error"}"
-                binding.ocrCopyButton.setOnClickListener {
-                    val ctx = context ?: return@setOnClickListener
-                    val textToCopy = detectedText.ifBlank { return@setOnClickListener }
-                    val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                    clipboard?.setPrimaryClip(ClipData.newPlainText("Manga OCR", textToCopy))
-                    if (isAdded) Toast.makeText(ctx, getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
+                if (isAdded) {
+                    showOcrError(detectedText, e)
                 }
-                binding.ocrCloseButton.setOnClickListener { dismiss() }
             }
+        }
+    }
+
+    private fun validateBitmap(): Bitmap? {
+        val bitmap = currentBitmap
+        if (bitmap == null || bitmap.isRecycled) {
+            if (isAdded) Toast.makeText(context, "No page image available for translation", Toast.LENGTH_SHORT).show()
+            dismiss()
+            return null
+        }
+        return bitmap
+    }
+
+    private fun showEmptyOcrResult() {
+        binding.ocrProgressBar.visibility = View.GONE
+        binding.ocrStatusText.visibility = View.GONE
+        binding.ocrResultsContainer.visibility = View.VISIBLE
+        binding.ocrDetectedText.text = getString(R.string.no_text_detected)
+        binding.ocrTranslatedText.text = getString(R.string.no_text_detected)
+    }
+
+    private fun setupCopyAction(text: String, label: String) {
+        binding.ocrCopyButton.setOnClickListener {
+            val ctx = context ?: return@setOnClickListener
+            if (text.isBlank()) return@setOnClickListener
+            val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            clipboard?.setPrimaryClip(ClipData.newPlainText(label, text))
+            if (isAdded) Toast.makeText(ctx, getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showOcrSuccess(detectedText: String, translatedText: String) {
+        binding.ocrProgressBar.visibility = View.GONE
+        binding.ocrStatusText.visibility = View.GONE
+        binding.ocrResultsContainer.visibility = View.VISIBLE
+        binding.ocrDetectedText.text = detectedText
+        binding.ocrTranslatedText.text = translatedText
+        setupCopyAction(translatedText, "Manga Translation")
+        binding.ocrCloseButton.setOnClickListener { dismiss() }
+    }
+
+    private fun showOcrError(detectedText: String, error: Throwable) {
+        binding.ocrProgressBar.visibility = View.GONE
+        binding.ocrStatusText.visibility = View.GONE
+        binding.ocrResultsContainer.visibility = View.VISIBLE
+        binding.ocrDetectedText.text = detectedText.ifBlank { getString(R.string.no_text_detected) }
+        binding.ocrTranslatedText.text = "Translation failed: ${error.localizedMessage ?: "Network error"}"
+        setupCopyAction(detectedText, "Manga OCR")
+        binding.ocrCloseButton.setOnClickListener { dismiss() }
+    }
+
+    private suspend fun resolveTranslation(detectedText: String): String {
+        val isLikelyLatin = detectedText.all { it.code <= 127 }
+        return if (isLikelyLatin) {
+            detectedText
+        } else {
+            binding.ocrStatusText.text = "Translating text..."
+            translateText(detectedText)
         }
     }
 

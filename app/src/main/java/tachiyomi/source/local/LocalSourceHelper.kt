@@ -4,6 +4,19 @@ import androidx.documentfile.provider.DocumentFile
 
 object LocalSourceHelper {
 
+    fun getFilteredDirectories(
+        baseDir: DocumentFile?,
+        subfolder: String,
+        isLatest: Boolean,
+        threshold: Long,
+        query: String
+    ): List<DocumentFile>? {
+        if (baseDir == null) return null
+        val limit = if (isLatest) System.currentTimeMillis() - threshold else 0L
+        val dir = resolveTargetDir(baseDir, subfolder)
+        return filterEntries(dir, limit, query)
+    }
+
     fun resolveTargetDir(baseDir: DocumentFile?, subfolder: String): DocumentFile? {
         if (baseDir == null) return null
         val localDir = baseDir.findFile("local") ?: baseDir

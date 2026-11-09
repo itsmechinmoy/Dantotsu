@@ -1,6 +1,7 @@
 package ani.dantotsu.settings.data
 
 import android.annotation.SuppressLint
+import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -145,11 +146,36 @@ class SettingsDataActivity : AppCompatActivity() {
         }
     }
 
-    private fun resolveFromMediaStore(docId: String, uriString: String): String? {
+    private fun extractMediaId(docId: String, uriString: String): String? {
         if (!docId.startsWith("msd:") && !uriString.contains("msd:")) return null
         val mediaId = docId.substringAfterLast(":")
-        if (mediaId.isEmpty() || !mediaId.all { it.isDigit() }) return null
+        return if (mediaId.isNotEmpty() && mediaId.all { it.isDigit() }) mediaId else null
+    }
 
+    private fun resolveFallbackPathFromCursor(cursor: Cursor): String? {
+        val relIdx = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+        val nameIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+        val rel = if (relIdx != -1) cursor.getString(relIdx) else null
+        val name = if (nameIdx != -1) cursor.getString(nameIdx) else null
+        return when {
+            !rel.isNullOrBlank() -> "/storage/emulated/0/${rel.trimEnd('/')}"
+            !name.isNullOrBlank() -> "/storage/emulated/0/Download/$name"
+            else -> null
+        }
+    }
+
+    private fun extractPathFromCursor(cursor: Cursor): String? {
+        if (!cursor.moveToFirst()) return null
+        val dataIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+        if (dataIdx != -1) {
+            val path = cursor.getString(dataIdx)
+            if (!path.isNullOrBlank()) return path
+        }
+        return resolveFallbackPathFromCursor(cursor)
+    }
+
+    private fun resolveFromMediaStore(docId: String, uriString: String): String? {
+        val mediaId = extractMediaId(docId, uriString) ?: return null
         val contentUri = MediaStore.Files.getContentUri("external")
         val projection = arrayOf(
             MediaStore.MediaColumns.DATA,
@@ -162,25 +188,7 @@ class SettingsDataActivity : AppCompatActivity() {
             "${MediaStore.MediaColumns._ID} = ?",
             arrayOf(mediaId),
             null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val dataIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
-                if (dataIdx != -1) {
-                    val path = cursor.getString(dataIdx)
-                    if (!path.isNullOrBlank()) return@use path
-                }
-                val relIdx = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
-                val nameIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
-                val rel = if (relIdx != -1) cursor.getString(relIdx) else null
-                val name = if (nameIdx != -1) cursor.getString(nameIdx) else null
-                if (!rel.isNullOrBlank()) {
-                    val sub = rel.trimEnd('/')
-                    "/storage/emulated/0/$sub"
-                } else if (!name.isNullOrBlank()) {
-                    "/storage/emulated/0/Download/$name"
-                } else null
-            } else null
-        }
+        )?.use { extractPathFromCursor(it) }
     }
 
     private fun resolveFromDocId(docId: String): String? {

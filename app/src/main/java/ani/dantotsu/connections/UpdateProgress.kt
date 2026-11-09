@@ -124,63 +124,80 @@ fun syncPendingProgressUpdates() {
 }
 
 // sync changes to anilist in background 
-fun syncPendingDeletions() {
-    if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) return
-    if (Anilist.userid == null) return
+private fun loadPendingDeletions(): List<PendingDeletion>? {
+    if (PrefManager.getVal<Boolean>(PrefName.RescueMode) || Anilist.userid == null) return null
     val pending: List<PendingDeletion> = try {
         PrefManager.getVal(PrefName.PendingDeletions, listOf())
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         PrefManager.setVal(PrefName.PendingDeletions, listOf<PendingDeletion>())
-        return
+        return null
     }
-    if (pending.isEmpty()) return
+    return pending.ifEmpty { null }
+}
+
+private suspend fun resolveDeletionAnilistId(deletion: PendingDeletion): Int? {
+    if (deletion.idMAL == null || deletion.mediaId != deletion.idMAL) {
+        return deletion.mediaId
+    }
+    val type = if (deletion.isAnime) "ANIME" else "MANGA"
+    return Anilist.query.getMedia(deletion.idMAL, mal = true, type = type)?.id
+}
+
+private fun cleanupPendingUpdatesForDeletion(deletion: PendingDeletion, anilistId: Int) {
+    val removeList = PrefManager.getCustomVal<Set<String>>("removeList", emptySet())
+    PrefManager.setCustomVal("removeList", removeList.minus(anilistId.toString()))
+    val progressUpdates: List<PendingProgressUpdate> =
+        PrefManager.getVal(PrefName.PendingProgressUpdates, listOf())
+    val filteredUpdates = progressUpdates.filterNot { update ->
+        update.mediaId == deletion.mediaId ||
+            (deletion.idMAL != null && update.idMAL == deletion.idMAL && update.mediaId == update.idMAL)
+    }
+    if (filteredUpdates.size != progressUpdates.size) {
+        PrefManager.setVal(PrefName.PendingProgressUpdates, filteredUpdates)
+    }
+}
+
+private suspend fun processSingleDeletion(
+    deletion: PendingDeletion,
+    remaining: MutableList<PendingDeletion>
+): Boolean {
+    if (Anilist.anilistDisabledSignal) return false
+    try {
+        val anilistId = resolveDeletionAnilistId(deletion)
+        if (anilistId == null) {
+            if (Anilist.anilistDisabledSignal) return false
+            remaining.remove(deletion)
+            return true
+        }
+        val fakeMedia = emptyMedia().copy(id = anilistId, idMAL = deletion.idMAL)
+        val listId = Anilist.query.userMediaDetails(fakeMedia).userListId
+        if (listId != null) {
+            Anilist.mutation.deleteList(listId)
+        }
+        cleanupPendingUpdatesForDeletion(deletion, anilistId)
+        if (!Anilist.anilistDisabledSignal) {
+            remaining.remove(deletion)
+        }
+    } catch (_: Exception) {
+    }
+    return !Anilist.anilistDisabledSignal
+}
+
+fun syncPendingDeletions() {
+    val pending = loadPendingDeletions() ?: return
     toast(currContext()?.getString(R.string.syncing_deletions, pending.size))
     CoroutineScope(Dispatchers.IO).launch {
         val remaining = pending.toMutableList()
         for (deletion in pending) {
-            if (Anilist.anilistDisabledSignal) break
-            try {
-                val anilistId: Int = if (deletion.idMAL != null && deletion.mediaId == deletion.idMAL) {
-                    val type = if (deletion.isAnime) "ANIME" else "MANGA"
-                    val resolved = Anilist.query.getMedia(deletion.idMAL, mal = true, type = type)?.id
-                    if (resolved == null) {
-                        if (Anilist.anilistDisabledSignal) break  // AniList down — abort entire sync
-                        remaining.remove(deletion)
-                        continue
-                    }
-                    resolved
-                } else {
-                    deletion.mediaId
-                }
-                val fakeMedia = emptyMedia().copy(id = anilistId, idMAL = deletion.idMAL)
-                val listId = Anilist.query.userMediaDetails(fakeMedia).userListId
-                if (listId != null) {
-                    Anilist.mutation.deleteList(listId)
-                }
-                val removeList = PrefManager.getCustomVal<Set<String>>("removeList", emptySet())
-                PrefManager.setCustomVal("removeList", removeList.minus(anilistId.toString()))
-                val progressUpdates: List<PendingProgressUpdate> =
-                    PrefManager.getVal(PrefName.PendingProgressUpdates, listOf())
-                val filteredUpdates = progressUpdates.filterNot { update ->
-                    update.mediaId == deletion.mediaId ||
-                        (deletion.idMAL != null && update.idMAL == deletion.idMAL && update.mediaId == update.idMAL)
-                }
-                if (filteredUpdates.size != progressUpdates.size) {
-                    PrefManager.setVal(PrefName.PendingProgressUpdates, filteredUpdates)
-                }
-                if (!Anilist.anilistDisabledSignal) {
-                    remaining.remove(deletion)
-                }
-            } catch (_: Exception) {
-            }
+            if (!processSingleDeletion(deletion, remaining)) break
         }
         PrefManager.setVal(PrefName.PendingDeletions, remaining)
-        if (remaining.isEmpty()) {
-            toast(currContext()?.getString(R.string.sync_complete))
+        val msg = if (remaining.isEmpty()) {
+            currContext()?.getString(R.string.sync_complete)
         } else {
-            toast(currContext()?.getString(R.string.sync_partial, remaining.size))
+            currContext()?.getString(R.string.sync_partial, remaining.size)
         }
-
+        toast(msg)
         Refresh.all()
     }
 }

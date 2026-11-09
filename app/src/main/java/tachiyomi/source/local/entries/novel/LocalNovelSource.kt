@@ -62,16 +62,13 @@ class LocalNovelSource(
         filters: FilterList,
     ): MangasPage {
         val baseDir = getBaseDirectory(context)
-            ?: return MangasPage(emptyList(), false)
-
-        val lastModifiedLimit = if (filters === LATEST_FILTERS) {
-            System.currentTimeMillis() - LATEST_THRESHOLD
-        } else {
-            0L
-        }
-
-        val localNovelDir = tachiyomi.source.local.LocalSourceHelper.resolveTargetDir(baseDir, "novel")
-        var novelDirs = tachiyomi.source.local.LocalSourceHelper.filterEntries(localNovelDir, lastModifiedLimit, query)
+        var novelDirs = tachiyomi.source.local.LocalSourceHelper.getFilteredDirectories(
+            baseDir,
+            "novel",
+            filters === LATEST_FILTERS,
+            LATEST_THRESHOLD,
+            query
+        ) ?: return MangasPage(emptyList(), false)
 
         filters.forEach { filter ->
             when (filter) {
