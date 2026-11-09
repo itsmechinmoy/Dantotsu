@@ -289,21 +289,11 @@ class AnimePageAdapter : RecyclerView.Adapter<AnimePageAdapter.AnimePageViewHold
         media: MutableList<Media>
     ) = HomePageAdapterHelper.initMediaRow(adaptor, recyclerView, progress, title, more, string, media)
 
-    fun updateAvatar() {
-        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-        val avatarUrl = if (rescueMode) MAL.avatar else Anilist.avatar
-        if (avatarUrl != null && ready.value == true) {
-            trendingBinding.userAvatar.loadImage(avatarUrl)
-            trendingBinding.userAvatar.imageTintList = null
-        }
-    }
+    fun updateAvatar() = HomePageAdapterHelper.updateTrendingAvatar(trendingBinding, ready.value == true)
 
     fun updateNotificationCount() {
         if (this::binding.isInitialized) {
-            val isRescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-            trendingBinding.notificationCount.isVisible = !isRescueMode && Anilist.unreadNotificationCount > 0
-                    && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
-            trendingBinding.notificationCount.text = Anilist.unreadNotificationCount.toString()
+            HomePageAdapterHelper.updateTrendingNotificationCount(trendingBinding)
         }
     }
 

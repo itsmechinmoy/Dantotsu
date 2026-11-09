@@ -71,6 +71,39 @@ class DownloadCompat {
             }
         }
 
+        fun buildOfflineAnimeModel(
+            mediaModel: Media,
+            title: String,
+            score: String,
+            type: String,
+            isOngoing: Boolean,
+            isUserScored: Boolean,
+            coverUri: Uri?,
+            bannerUri: Uri?
+        ): OfflineAnimeModel {
+            val watchedEpisodes = (mediaModel.userProgress ?: "~").toString()
+            val totalEpisode =
+                if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
+                    ?: "~").toString() else (mediaModel.anime?.totalEpisodes ?: "~").toString()
+            val chapters = " Episodes"
+            val totalEpisodesList =
+                if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() else (mediaModel.anime?.totalEpisodes
+                    ?: "~").toString()
+            return OfflineAnimeModel(
+                title,
+                score,
+                totalEpisode,
+                totalEpisodesList,
+                watchedEpisodes,
+                type,
+                chapters,
+                isOngoing,
+                isUserScored,
+                coverUri,
+                bannerUri
+            )
+        }
+
         @Deprecated("external storage is deprecated, use SAF instead")
         fun loadOfflineAnimeModelCompat(downloadedType: DownloadedType): OfflineAnimeModel {
             try {
@@ -83,26 +116,15 @@ class DownloadCompat {
                 val isOngoing = info.isOngoing
                 val isUserScored = info.isUserScored
                 val type = info.type
-                val watchedEpisodes = (mediaModel.userProgress ?: "~").toString()
-                val totalEpisode =
-                    if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
-                        ?: "~").toString() else (mediaModel.anime?.totalEpisodes ?: "~").toString()
-                val chapters = " Episodes"
-                val totalEpisodesList =
-                    if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() else (mediaModel.anime?.totalEpisodes
-                        ?: "~").toString()
-                return OfflineAnimeModel(
-                    title,
-                    score,
-                    totalEpisode,
-                    totalEpisodesList,
-                    watchedEpisodes,
-                    type,
-                    chapters,
-                    isOngoing,
-                    isUserScored,
-                    coverUri,
-                    bannerUri
+                return buildOfflineAnimeModel(
+                    mediaModel = mediaModel,
+                    title = title,
+                    score = score,
+                    type = type,
+                    isOngoing = isOngoing,
+                    isUserScored = isUserScored,
+                    coverUri = coverUri,
+                    bannerUri = bannerUri
                 )
             } catch (e: Exception) {
                 Logger.log("Error loading media.json: ${e.message}")

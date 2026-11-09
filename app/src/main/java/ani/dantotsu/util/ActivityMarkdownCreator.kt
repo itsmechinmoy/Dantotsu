@@ -74,7 +74,195 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         )
     }
 
-    @Suppress("ComplexMethod", "LongMethod")
+    private class CreatorData(
+        val editId: Int,
+        val userId: Int,
+        val mediaId: Int,
+        var selectedCategoryId: Int,
+        var isPrivate: Boolean
+    )
+
+    private fun extractCreatorData(): CreatorData {
+        val initialCategories = intent.getIntegerArrayListExtra("categories")
+        return CreatorData(
+            editId = intent.getIntExtra("edit", -1),
+            userId = intent.getIntExtra("userId", -1),
+            mediaId = intent.getIntExtra("mediaId", -1),
+            selectedCategoryId = initialCategories?.firstOrNull() ?: 1,
+            isPrivate = intent.getBooleanExtra("private", false)
+        )
+    }
+
+    private fun setupTypeViews(
+        data: CreatorData,
+        initialSummary: String,
+        initialScore: Int,
+        initialTitle: String
+    ) {
+        when (type) {
+            "replyActivity" -> if (parentId == -1) {
+                toast("Error: No parent ID")
+                finish()
+            }
+            "activity" -> {
+                binding.privateCheckbox.visibility = ViewGroup.GONE
+            }
+            "message" -> {
+                if (data.editId == -1) binding.privateCheckbox.visibility = ViewGroup.VISIBLE
+            }
+            "review" -> setupReviewViews(data, initialSummary, initialScore)
+            "thread" -> setupThreadViews(data, initialTitle)
+        }
+    }
+
+    private fun setupReviewViews(data: CreatorData, initialSummary: String, initialScore: Int) {
+        binding.reviewInputsContainer.visibility = ViewGroup.VISIBLE
+        binding.privateCheckbox.visibility = ViewGroup.VISIBLE
+        if (initialSummary.isNotEmpty()) binding.reviewSummaryEditText.setText(initialSummary)
+        if (initialScore > 0) binding.reviewScoreEditText.setText(initialScore.toString())
+        binding.privateCheckbox.isChecked = data.isPrivate
+        binding.reviewBodyCountText.text = "Review body: ${text.length} / 2200 min characters"
+    }
+
+    private fun setupThreadViews(data: CreatorData, initialTitle: String) {
+        binding.threadTitleLayout.visibility = ViewGroup.VISIBLE
+        binding.threadCategoryLayout.visibility = ViewGroup.VISIBLE
+        if (initialTitle.isNotEmpty()) binding.threadTitleEditText.setText(initialTitle)
+        val categoryNames = FORUM_CATEGORIES.map { it.second }
+        val categoryAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_dropdown_item_1line,
+            categoryNames
+        )
+        binding.threadCategoryAutoComplete.setAdapter(categoryAdapter)
+        val defaultCategory = FORUM_CATEGORIES.find { it.first == data.selectedCategoryId }
+            ?: FORUM_CATEGORIES.first()
+        binding.threadCategoryAutoComplete.setText(defaultCategory.second, false)
+        binding.threadCategoryAutoComplete.setOnItemClickListener { _, _, position, _ ->
+            data.selectedCategoryId = FORUM_CATEGORIES.getOrNull(position)?.first ?: 1
+        }
+    }
+
+    private fun validateCreatorInputs(): Boolean {
+        if (text.isBlank()) {
+            toast(getString(R.string.cannot_be_empty))
+            return false
+        }
+        val summary = binding.reviewSummaryEditText.text.toString().trim()
+        val scoreText = binding.reviewScoreEditText.text.toString().trim()
+        val titleText = binding.threadTitleEditText.text.toString().trim()
+
+        if (type == "review") {
+            if (text.length < 2200) {
+                toast(getString(R.string.review_body_min_length_error, text.length))
+                return false
+            }
+            if (summary.length < 20 || summary.length > 120) {
+                toast(getString(R.string.review_summary_length_error))
+                return false
+            }
+            val score = scoreText.toIntOrNull()
+            if (score == null || score < 0 || score > 100) {
+                toast("Please enter a valid score between 0 and 100")
+                return false
+            }
+        } else if (type == "thread") {
+            if (titleText.length < 6) {
+                toast(getString(R.string.thread_title_length_error))
+                return false
+            }
+        }
+        return true
+    }
+
+    private suspend fun executePostMutation(data: CreatorData): String {
+        val isEdit = data.editId != -1
+        val summary = binding.reviewSummaryEditText.text.toString().trim()
+        val scoreText = binding.reviewScoreEditText.text.toString().trim()
+        val titleText = binding.threadTitleEditText.text.toString().trim()
+
+        return when (type) {
+            "activity" -> if (isEdit) Anilist.mutation.postActivity(text, data.editId) else Anilist.mutation.postActivity(text)
+            "review" -> {
+                val score = scoreText.toIntOrNull() ?: 0
+                Anilist.mutation.postReview(
+                    summary = summary,
+                    body = text,
+                    mediaId = data.mediaId,
+                    score = score,
+                    edit = if (isEdit) data.editId else null,
+                    isPrivate = data.isPrivate
+                )
+            }
+            "bio" -> {
+                val ok = Anilist.mutation.updateUserBio(text)
+                if (ok) "Profile bio updated" else "Failed to update bio"
+            }
+            "thread" -> {
+                val mediaCategories = intent.getIntegerArrayListExtra("mediaCategories")
+                Anilist.mutation.saveThread(
+                    title = titleText,
+                    body = text,
+                    categories = arrayListOf(data.selectedCategoryId),
+                    mediaCategories = mediaCategories,
+                    edit = if (isEdit) data.editId else null
+                )
+            }
+            "threadComment" -> {
+                val parentCommentId = if (parentId != -1) parentId else null
+                val threadId = intent.getIntExtra("threadId", -1)
+                Anilist.mutation.saveThreadComment(
+                    threadId = threadId,
+                    comment = text,
+                    parentCommentId = parentCommentId,
+                    edit = if (isEdit) data.editId else null
+                )
+            }
+            "replyActivity" -> if (isEdit) Anilist.mutation.postReply(parentId, text, data.editId) else Anilist.mutation.postReply(parentId, text)
+            "message" -> if (isEdit) Anilist.mutation.postMessage(data.userId, text, data.editId) else Anilist.mutation.postMessage(data.userId, text, isPrivate = data.isPrivate)
+            else -> "Error: Unknown type"
+        }
+    }
+
+    private fun showPostConfirmationDialog(data: CreatorData) {
+        customAlertDialog().apply {
+            setTitle(R.string.warning)
+            setMessage(R.string.post_to_anilist_warning)
+            setPosButton(R.string.ok) {
+                launchIO {
+                    val success = executePostMutation(data)
+                    val isSuccess = success == getString(R.string.success) ||
+                            success == "Success" ||
+                            success == "Profile bio updated"
+                    withContext(Dispatchers.Main) {
+                        toast(success)
+                        if (isSuccess) finish()
+                    }
+                }
+            }
+            setNeutralButton(R.string.open_rules) {
+                openLinkInBrowser("https://anilist.co/forum/thread/14")
+            }
+            setNegButton(R.string.cancel)
+            show()
+        }
+    }
+
+    private fun checkAndLoadBio() {
+        if (type == "bio" && text.isBlank()) {
+            launchIO {
+                val currentBio = Anilist.userid?.let { Anilist.query.getUserRawBio(it) } ?: ""
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    if (currentBio.isNotBlank() && !isFinishing) {
+                        text = currentBio
+                        binding.editText.setText(currentBio)
+                        binding.editText.setSelection(currentBio.length)
+                    }
+                }
+            }
+        }
+    }
+
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,97 +282,36 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         params.marginEnd = 16 * resources.displayMetrics.density.toInt()
         binding.createButton.layoutParams = params
 
-        if (intent.hasExtra("type")) {
-            type = intent.getStringExtra("type")!!
-        } else {
+        if (!intent.hasExtra("type")) {
             toast("Error: No type")
             finish()
             return
         }
-        val editId = intent.getIntExtra("edit", -1)
-        val userId = intent.getIntExtra("userId", -1)
-        val mediaId = intent.getIntExtra("mediaId", -1)
-        val initialSummary = intent.getStringExtra("summary") ?: ""
-        val initialScore = intent.getIntExtra("score", 0)
-        val initialTitle = intent.getStringExtra("title") ?: ""
-        val initialCategories = intent.getIntegerArrayListExtra("categories")
-        var selectedCategoryId = initialCategories?.firstOrNull() ?: 1
-        var private = intent.getBooleanExtra("private", false)
+        type = intent.getStringExtra("type")!!
         parentId = intent.getIntExtra("parentId", -1)
+        val data = extractCreatorData()
 
         ping = intent.getStringExtra("other")
         text = ping ?: ""
         binding.editText.setText(text)
         binding.editText.addTextChangedListener {
-            if (!isPreviewMode) {
-                text = it.toString()
-            }
+            if (!isPreviewMode) text = it.toString()
             if (type == "review") {
                 binding.reviewBodyCountText.text = "Review body: ${it?.length ?: 0} / 2200 min characters"
             }
         }
 
-        when (type) {
-            "replyActivity" -> if (parentId == -1) {
-                toast("Error: No parent ID")
-                finish()
-                return
-            }
-
-            "activity" -> {
-                binding.privateCheckbox.visibility = ViewGroup.GONE
-            }
-
-            "message" -> {
-                if (editId == -1) {
-                    binding.privateCheckbox.visibility = ViewGroup.VISIBLE
-                }
-            }
-
-            "review" -> {
-                binding.reviewInputsContainer.visibility = ViewGroup.VISIBLE
-                binding.privateCheckbox.visibility = ViewGroup.VISIBLE
-                if (initialSummary.isNotEmpty()) binding.reviewSummaryEditText.setText(initialSummary)
-                if (initialScore > 0) binding.reviewScoreEditText.setText(initialScore.toString())
-                binding.privateCheckbox.isChecked = private
-                binding.reviewBodyCountText.text = "Review body: ${text.length} / 2200 min characters"
-            }
-
-            "thread" -> {
-                binding.threadTitleLayout.visibility = ViewGroup.VISIBLE
-                binding.threadCategoryLayout.visibility = ViewGroup.VISIBLE
-                if (initialTitle.isNotEmpty()) binding.threadTitleEditText.setText(initialTitle)
-                val categoryNames = FORUM_CATEGORIES.map { it.second }
-                val categoryAdapter = ArrayAdapter(
-                    this,
-                    android.R.layout.simple_dropdown_item_1line,
-                    categoryNames
-                )
-                binding.threadCategoryAutoComplete.setAdapter(categoryAdapter)
-                val defaultCategory = FORUM_CATEGORIES.find { it.first == selectedCategoryId }
-                    ?: FORUM_CATEGORIES.first()
-                binding.threadCategoryAutoComplete.setText(defaultCategory.second, false)
-                binding.threadCategoryAutoComplete.setOnItemClickListener { _, _, position, _ ->
-                    selectedCategoryId = FORUM_CATEGORIES.getOrNull(position)?.first ?: 1
-                }
-            }
-        }
+        setupTypeViews(
+            data,
+            initialSummary = intent.getStringExtra("summary") ?: "",
+            initialScore = intent.getIntExtra("score", 0),
+            initialTitle = intent.getStringExtra("title") ?: ""
+        )
 
         binding.privateCheckbox.setOnCheckedChangeListener { _, isChecked ->
-            private = isChecked
+            data.isPrivate = isChecked
         }
-        if (type == "bio" && text.isBlank()) {
-            launchIO {
-                val currentBio = Anilist.userid?.let { Anilist.query.getUserRawBio(it) } ?: ""
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    if (currentBio.isNotBlank() && !isFinishing) {
-                        text = currentBio
-                        binding.editText.setText(currentBio)
-                        binding.editText.setSelection(currentBio.length)
-                    }
-                }
-            }
-        }
+        checkAndLoadBio()
         previewMarkdown(false)
 
         binding.markdownCreatorBack.setOnClickListener {
@@ -192,129 +319,15 @@ class ActivityMarkdownCreator : AppCompatActivity() {
         }
 
         binding.createButton.setOnClickListener {
-            if (text.isBlank()) {
-                toast(getString(R.string.cannot_be_empty))
-                return@setOnClickListener
-            }
-
-            val summary = binding.reviewSummaryEditText.text.toString().trim()
-            val scoreText = binding.reviewScoreEditText.text.toString().trim()
-            val titleText = binding.threadTitleEditText.text.toString().trim()
-
-            if (type == "review") {
-                if (text.length < 2200) {
-                    toast(getString(R.string.review_body_min_length_error, text.length))
-                    return@setOnClickListener
-                }
-                if (summary.length < 20 || summary.length > 120) {
-                    toast(getString(R.string.review_summary_length_error))
-                    return@setOnClickListener
-                }
-                val score = scoreText.toIntOrNull()
-                if (score == null || score < 0 || score > 100) {
-                    toast("Please enter a valid score between 0 and 100")
-                    return@setOnClickListener
-                }
-            } else if (type == "thread") {
-                if (titleText.length < 6) {
-                    toast(getString(R.string.thread_title_length_error))
-                    return@setOnClickListener
-                }
-            }
-
-            customAlertDialog().apply {
-                setTitle(R.string.warning)
-                setMessage(R.string.post_to_anilist_warning)
-                setPosButton(R.string.ok) {
-                    launchIO {
-                        val isEdit = editId != -1
-                        val success = when (type) {
-                            "activity" -> if (isEdit) {
-                                Anilist.mutation.postActivity(text, editId)
-                            } else {
-                                Anilist.mutation.postActivity(text)
-                            }
-
-                            "review" -> {
-                                val score = scoreText.toIntOrNull() ?: 0
-                                Anilist.mutation.postReview(
-                                    summary = summary,
-                                    body = text,
-                                    mediaId = mediaId,
-                                    score = score,
-                                    edit = if (isEdit) editId else null,
-                                    isPrivate = private
-                                )
-                            }
-
-                            "bio" -> {
-                                val ok = Anilist.mutation.updateUserBio(text)
-                                if (ok) "Profile bio updated" else "Failed to update bio"
-                            }
-
-                            "thread" -> {
-                                val mediaCategories = intent.getIntegerArrayListExtra("mediaCategories")
-                                Anilist.mutation.saveThread(
-                                    title = titleText,
-                                    body = text,
-                                    categories = arrayListOf(selectedCategoryId),
-                                    mediaCategories = mediaCategories,
-                                    edit = if (isEdit) editId else null
-                                )
-                            }
-
-                            "threadComment" -> {
-                                val parentCommentId = if (parentId != -1) parentId else null
-                                val threadId = intent.getIntExtra("threadId", -1)
-                                Anilist.mutation.saveThreadComment(
-                                    threadId = threadId,
-                                    comment = text,
-                                    parentCommentId = parentCommentId,
-                                    edit = if (isEdit) editId else null
-                                )
-                            }
-
-                            "replyActivity" -> if (isEdit) {
-                                Anilist.mutation.postReply(parentId, text, editId)
-                            } else {
-                                Anilist.mutation.postReply(parentId, text)
-                            }
-
-                            "message" -> if (isEdit) {
-                                Anilist.mutation.postMessage(userId, text, editId)
-                            } else {
-                                Anilist.mutation.postMessage(userId, text, isPrivate = private)
-                            }
-
-                            else -> "Error: Unknown type"
-                        }
-                        val isSuccess = success == getString(R.string.success) ||
-                                success == "Success" ||
-                                success == "Profile bio updated"
-                        withContext(Dispatchers.Main) {
-                            toast(success)
-                            if (isSuccess) {
-                                finish()
-                            }
-                        }
-                    }
-                }
-                setNeutralButton(R.string.open_rules) {
-                    openLinkInBrowser("https://anilist.co/forum/thread/14")
-                }
-                setNegButton(R.string.cancel)
-                show()
+            if (validateCreatorInputs()) {
+                showPostConfirmationDialog(data)
             }
         }
 
         binding.previewCheckbox.setOnClickListener {
             isPreviewMode = !isPreviewMode
             previewMarkdown(isPreviewMode)
-            if (isPreviewMode) {
-                toast("Preview enabled")
-            } else {
-                toast("Preview disabled")
-            }
+            toast(if (isPreviewMode) "Preview enabled" else "Preview disabled")
         }
         binding.editText.requestFocus()
         setupMarkdownButtons()

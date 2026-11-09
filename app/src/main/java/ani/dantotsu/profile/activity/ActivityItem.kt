@@ -1,5 +1,6 @@
 package ani.dantotsu.profile.activity
 
+import android.content.Context
 import android.content.Intent
 import android.view.View
 import androidx.core.content.ContextCompat
@@ -57,13 +58,16 @@ class ActivityItem(
             activity.user?.avatar?.medium ?: activity.messenger?.avatar?.medium
         )
         binding.activityTime.text = ActivityItemBuilder.getDateTime(activity.createdAt)
-        val likeColor = ContextCompat.getColor(binding.root.context, R.color.yt_red)
-        val notLikeColor = ContextCompat.getColor(binding.root.context, R.color.bg_opp)
-        binding.activityLike.setColorFilter(if (activity.isLiked == true) likeColor else notLikeColor)
-        val userList = arrayListOf<User>()
-        activity.likes?.forEach { i ->
-            userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage, isFollowing = i.isFollowing, isFollower = i.isFollower))
-        }
+
+        setupLikes(scope)
+        setupReplies(context)
+        setupDeleteAction(scope)
+        setupPin(scope)
+        setupSubscription(scope)
+        bindContentByType(context)
+    }
+
+    private fun setupReplies(context: Context) {
         binding.activityRepliesContainer.setOnClickListener {
             RepliesBottomDialog.newInstance(activity.id)
                 .show((context as FragmentActivity).supportFragmentManager, "replies")
@@ -75,6 +79,17 @@ class ActivityItem(
                 R.color.bg_opp
             )
         )
+    }
+
+    private fun setupLikes(scope: CoroutineScope) {
+        val context = binding.root.context
+        val likeColor = ContextCompat.getColor(context, R.color.yt_red)
+        val notLikeColor = ContextCompat.getColor(context, R.color.bg_opp)
+        binding.activityLike.setColorFilter(if (activity.isLiked == true) likeColor else notLikeColor)
+        val userList = arrayListOf<User>()
+        activity.likes?.forEach { i ->
+            userList.add(User(i.id, i.name.toString(), i.avatar?.medium, i.bannerImage, isFollowing = i.isFollowing, isFollower = i.isFollower))
+        }
         binding.activityLikeContainer.setOnLongClickListener {
             UsersDialogFragment().apply {
                 userList(userList)
@@ -103,8 +118,9 @@ class ActivityItem(
                 }
             }
         }
-        setupDeleteAction(scope)
+    }
 
+    private fun setupPin(scope: CoroutineScope) {
         binding.activityPin.isVisible = activity.userId == Anilist.userid
         binding.activityPin.text = if (activity.isPinned == true) "Unpin" else "Pin"
         binding.activityPin.setOnClickListener {
@@ -122,7 +138,9 @@ class ActivityItem(
                 }
             }
         }
+    }
 
+    private fun setupSubscription(scope: CoroutineScope) {
         binding.activitySubscribe.isVisible = Anilist.token != null
         binding.activitySubscribe.text = if (activity.isSubscribed == true) "Unsubscribe" else "Subscribe"
         binding.activitySubscribe.setOnClickListener {
@@ -140,100 +158,107 @@ class ActivityItem(
                 }
             }
         }
+    }
+
+    private fun bindContentByType(context: Context) {
         when (activity.typename) {
-            "ListActivity" -> {
-                val cover = activity.media?.coverImage?.large
-                val banner = activity.media?.bannerImage
-                binding.activityContent.visibility = View.GONE
-                binding.activityBannerContainer.visibility = View.VISIBLE
-                binding.activityPrivate.visibility = View.GONE
-                binding.activityMediaName.text = activity.media?.title?.userPreferred
-                val activityText = "${activity.user!!.name} ${activity.status} ${
-                    activity.progress
-                        ?: activity.media?.title?.userPreferred
-                }"
-                binding.activityText.text = activityText
-                binding.activityCover.loadImage(cover)
-                blurImage(binding.activityBannerImage, banner ?: cover)
-                binding.activityAvatarContainer.setOnClickListener {
-                    clickCallback(activity.userId ?: -1, "USER")
-                }
-                binding.activityUserName.setOnClickListener {
-                    clickCallback(activity.userId ?: -1, "USER")
-                }
-                binding.activityCoverContainer.setOnClickListener {
-                    clickCallback(activity.media?.id ?: -1, "MEDIA")
-                }
-                binding.activityMediaName.setOnClickListener {
-                    clickCallback(activity.media?.id ?: -1, "MEDIA")
-                }
-                binding.activityEdit.isVisible = false
-            }
+            "ListActivity" -> bindListActivity()
+            "TextActivity" -> bindTextActivity(context)
+            "MessageActivity" -> bindMessageActivity(context)
+        }
+    }
 
-            "TextActivity" -> {
-                binding.activityBannerContainer.visibility = View.GONE
-                binding.activityContent.visibility = View.VISIBLE
-                binding.activityPrivate.visibility = View.GONE
-                if (!(context as android.app.Activity).isDestroyed) {
-                    val rawText = activity.text ?: ""
-                    val anilistLinks = AnilistLinkParser.extractAnilistLinks(rawText)
-                    val html = getBasicAniHTML(rawText)
-                    val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(html)
-                    val markwon = buildMarkwon(context, false)
-                    markwon.setMarkdown(binding.activityContent, cleanedHtml)
-                    addLinkPreviews(anilistLinks, rawText)
-                }
-                binding.activityAvatarContainer.setOnClickListener {
-                    clickCallback(activity.userId ?: -1, "USER")
-                }
-                binding.activityUserName.setOnClickListener {
-                    clickCallback(activity.userId ?: -1, "USER")
-                }
-                binding.activityEdit.isVisible = activity.userId == Anilist.userid
-                binding.activityEdit.setOnClickListener {
-                    context.startActivity(
-                        Intent(context, ActivityMarkdownCreator::class.java).apply {
-                            putExtra("type","activity")
-                            putExtra("other",activity.text)
-                            putExtra("edit",activity.id)
-                        }
-                    )
-                }
-            }
+    private fun bindListActivity() {
+        val cover = activity.media?.coverImage?.large
+        val banner = activity.media?.bannerImage
+        binding.activityContent.visibility = View.GONE
+        binding.activityBannerContainer.visibility = View.VISIBLE
+        binding.activityPrivate.visibility = View.GONE
+        binding.activityMediaName.text = activity.media?.title?.userPreferred
+        val activityText = "${activity.user!!.name} ${activity.status} ${
+            activity.progress
+                ?: activity.media?.title?.userPreferred
+        }"
+        binding.activityText.text = activityText
+        binding.activityCover.loadImage(cover)
+        blurImage(binding.activityBannerImage, banner ?: cover)
+        binding.activityAvatarContainer.setOnClickListener {
+            clickCallback(activity.userId ?: -1, "USER")
+        }
+        binding.activityUserName.setOnClickListener {
+            clickCallback(activity.userId ?: -1, "USER")
+        }
+        binding.activityCoverContainer.setOnClickListener {
+            clickCallback(activity.media?.id ?: -1, "MEDIA")
+        }
+        binding.activityMediaName.setOnClickListener {
+            clickCallback(activity.media?.id ?: -1, "MEDIA")
+        }
+        binding.activityEdit.isVisible = false
+    }
 
-            "MessageActivity" -> {
-                binding.activityBannerContainer.visibility = View.GONE
-                binding.activityContent.visibility = View.VISIBLE
-                binding.activityPrivate.visibility =
-                    if (activity.isPrivate == true) View.VISIBLE else View.GONE
-                if (!(context as android.app.Activity).isDestroyed) {
-                    val rawMessage = activity.message ?: ""
-                    val anilistLinks = AnilistLinkParser.extractAnilistLinks(rawMessage)
-                    val html = getBasicAniHTML(rawMessage)
-                    val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(html)
-                    val markwon = buildMarkwon(context, false)
-                    markwon.setMarkdown(binding.activityContent, cleanedHtml)
-                    addLinkPreviews(anilistLinks, rawMessage)
+    private fun bindTextActivity(context: Context) {
+        binding.activityBannerContainer.visibility = View.GONE
+        binding.activityContent.visibility = View.VISIBLE
+        binding.activityPrivate.visibility = View.GONE
+        if (!(context as android.app.Activity).isDestroyed) {
+            val rawText = activity.text ?: ""
+            val anilistLinks = AnilistLinkParser.extractAnilistLinks(rawText)
+            val html = getBasicAniHTML(rawText)
+            val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(html)
+            val markwon = buildMarkwon(context, false)
+            markwon.setMarkdown(binding.activityContent, cleanedHtml)
+            addLinkPreviews(anilistLinks, rawText)
+        }
+        binding.activityAvatarContainer.setOnClickListener {
+            clickCallback(activity.userId ?: -1, "USER")
+        }
+        binding.activityUserName.setOnClickListener {
+            clickCallback(activity.userId ?: -1, "USER")
+        }
+        binding.activityEdit.isVisible = activity.userId == Anilist.userid
+        binding.activityEdit.setOnClickListener {
+            context.startActivity(
+                Intent(context, ActivityMarkdownCreator::class.java).apply {
+                    putExtra("type","activity")
+                    putExtra("other",activity.text)
+                    putExtra("edit",activity.id)
                 }
-                binding.activityAvatarContainer.setOnClickListener {
-                    clickCallback(activity.messengerId ?: -1, "USER")
+            )
+        }
+    }
+
+    private fun bindMessageActivity(context: Context) {
+        binding.activityBannerContainer.visibility = View.GONE
+        binding.activityContent.visibility = View.VISIBLE
+        binding.activityPrivate.visibility =
+            if (activity.isPrivate == true) View.VISIBLE else View.GONE
+        if (!(context as android.app.Activity).isDestroyed) {
+            val rawMessage = activity.message ?: ""
+            val anilistLinks = AnilistLinkParser.extractAnilistLinks(rawMessage)
+            val html = getBasicAniHTML(rawMessage)
+            val cleanedHtml = AnilistLinkParser.removeAnilistUrlsFromHtml(html)
+            val markwon = buildMarkwon(context, false)
+            markwon.setMarkdown(binding.activityContent, cleanedHtml)
+            addLinkPreviews(anilistLinks, rawMessage)
+        }
+        binding.activityAvatarContainer.setOnClickListener {
+            clickCallback(activity.messengerId ?: -1, "USER")
+        }
+        binding.activityUserName.setOnClickListener {
+            clickCallback(activity.messengerId ?: -1, "USER")
+        }
+        binding.activityEdit.isVisible = false
+        binding.activityEdit.isVisible = activity.messenger?.id == Anilist.userid
+        binding.activityEdit.setOnClickListener {
+            context.startActivity(
+                Intent(context, ActivityMarkdownCreator::class.java).apply{
+                    putExtra("type","message")
+                    putExtra("other",activity.message)
+                    putExtra("edit",activity.id)
+                    putExtra("userId",activity.recipientId)
                 }
-                binding.activityUserName.setOnClickListener {
-                    clickCallback(activity.messengerId ?: -1, "USER")
-                }
-                binding.activityEdit.isVisible = false
-                binding.activityEdit.isVisible = activity.messenger?.id == Anilist.userid
-                binding.activityEdit.setOnClickListener {
-                    context.startActivity(
-                        Intent(context, ActivityMarkdownCreator::class.java).apply{
-                            putExtra("type","message")
-                            putExtra("other",activity.message)
-                            putExtra("edit",activity.id)
-                            putExtra("userId",activity.recipientId)
-                        }
-                    )
-                }
-            }
+            )
         }
     }
 

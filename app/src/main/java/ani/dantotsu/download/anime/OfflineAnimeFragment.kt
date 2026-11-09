@@ -30,6 +30,7 @@ import ani.dantotsu.bottomBarOrNull
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.currActivity
 import ani.dantotsu.currContext
+import ani.dantotsu.download.DownloadCompat
 import ani.dantotsu.download.DownloadCompat.Companion.loadMediaCompat
 import ani.dantotsu.download.DownloadCompat.Companion.loadOfflineAnimeModelCompat
 import ani.dantotsu.download.DownloadedType
@@ -385,26 +386,15 @@ class OfflineAnimeFragment : Fragment(), OfflineAnimeSearchListener {
             val isOngoing =
                 mediaModel.status == (context ?: currContext())?.getString(R.string.status_releasing)
             val isUserScored = mediaModel.userScore != 0
-            val watchedEpisodes = (mediaModel.userProgress ?: "~").toString()
-            val totalEpisode =
-                if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() + " | " + (mediaModel.anime.totalEpisodes
-                    ?: "~").toString() else (mediaModel.anime?.totalEpisodes ?: "~").toString()
-            val chapters = " Episodes"
-            val totalEpisodesList =
-                if (mediaModel.anime?.nextAiringEpisode != null) mediaModel.anime.nextAiringEpisode.toString() else (mediaModel.anime?.totalEpisodes
-                    ?: "~").toString()
-            return OfflineAnimeModel(
-                title,
-                score,
-                totalEpisode,
-                totalEpisodesList,
-                watchedEpisodes,
-                type,
-                chapters,
-                isOngoing,
-                isUserScored,
-                coverUri,
-                bannerUri
+            return DownloadCompat.buildOfflineAnimeModel(
+                mediaModel = mediaModel,
+                title = title,
+                score = score,
+                type = type,
+                isOngoing = isOngoing,
+                isUserScored = isUserScored,
+                coverUri = coverUri,
+                bannerUri = bannerUri
             )
         } catch (e: Exception) {
             Logger.log(e)

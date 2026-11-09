@@ -74,124 +74,138 @@ class NovelResponseAdapter(
         
         private val activeCoroutines = mutableSetOf<String>()
 
-        @Suppress("ComplexMethod", "LongMethod")
         fun bind(novel: ShowResponse, position: Int) {
             binding.itemChapterNumber.text = novel.name
-            
+            updateDownloadButtonState(novel)
+            binding.itemDownload.setOnClickListener { handleSingleDownloadClick(novel, it) }
+            binding.itemDownload.setOnLongClickListener { handleMultiChapterLongClick(it) }
+            bindChapterExtra(novel)
+            binding.itemEpisodeViewed.visibility = View.GONE
+            setupClickListeners(binding.root, novel)
+        }
+
+        private fun updateDownloadButtonState(novel: ShowResponse) {
             if (fragment.media.format == "LOCAL" || fragment.media.format == "LOCAL_NOVEL") {
                 binding.itemDownload.visibility = View.GONE
+                return
+            }
+            binding.itemDownload.visibility = View.VISIBLE
+            if (activeDownloads.contains(novel.link)) {
+                binding.itemDownload.setImageResource(R.drawable.ic_sync)
+                startOrContinueRotation(novel.link) {
+                    binding.itemDownload.rotation = 0f
+                }
+            } else if (downloadedCheckCallback.downloadedCheck(novel) || downloadedChapters.contains(novel.link)) {
+                binding.itemDownload.setImageResource(R.drawable.ic_round_delete_24)
+                binding.itemDownload.rotation = 0f
             } else {
-                binding.itemDownload.visibility = View.VISIBLE
-                
-                if (activeDownloads.contains(novel.link)) {
-                    binding.itemDownload.setImageResource(R.drawable.ic_sync)
-                    startOrContinueRotation(novel.link) {
-                        binding.itemDownload.rotation = 0f
-                    }
-                } else if (downloadedCheckCallback.downloadedCheck(novel) || downloadedChapters.contains(novel.link)) {
-                    binding.itemDownload.setImageResource(R.drawable.ic_round_delete_24)
-                    binding.itemDownload.rotation = 0f
-                } else {
-                    binding.itemDownload.setImageResource(R.drawable.ic_download_24)
-                    binding.itemDownload.rotation = 0f
-                }
+                binding.itemDownload.setImageResource(R.drawable.ic_download_24)
+                binding.itemDownload.rotation = 0f
             }
+        }
 
-            binding.itemDownload.setOnClickListener {
-                if (activeDownloads.contains(novel.link)) {
-                    return@setOnClickListener
-                } else if (downloadedCheckCallback.downloadedCheck(novel) || downloadedChapters.contains(novel.link)) {
-                    it.context.customAlertDialog().apply {
-                        setTitle("Delete Chapter")
-                        setMessage("Are you sure you want to delete ${novel.name}?")
-                        setPosButton(R.string.delete) {
-                            fragment.deleteDownload(novel)
-                            deleteDownload(novel.link)
-                        }
-                        setNegButton(R.string.cancel)
-                        show()
+        private fun handleSingleDownloadClick(novel: ShowResponse, view: View) {
+            if (activeDownloads.contains(novel.link)) return
+            if (downloadedCheckCallback.downloadedCheck(novel) || downloadedChapters.contains(novel.link)) {
+                view.context.customAlertDialog().apply {
+                    setTitle("Delete Chapter")
+                    setMessage("Are you sure you want to delete ${novel.name}?")
+                    setPosButton(R.string.delete) {
+                        fragment.deleteDownload(novel)
+                        deleteDownload(novel.link)
                     }
-                } else {
-                    downloadTriggerCallback.downloadTrigger(
-                        ani.dantotsu.media.novel.NovelDownloadPackage(
-                            novel.link,
-                            novel.coverUrl.url,
-                            novel.name,
-                            novel.link
-                        )
+                    setNegButton(R.string.cancel)
+                    show()
+                }
+            } else {
+                downloadTriggerCallback.downloadTrigger(
+                    ani.dantotsu.media.novel.NovelDownloadPackage(
+                        novel.link,
+                        novel.coverUrl.url,
+                        novel.name,
+                        novel.link
                     )
-                }
+                )
             }
-            
-            binding.itemDownload.setOnLongClickListener {
-                if (0 <= bindingAdapterPosition && bindingAdapterPosition < list.size) {
-                    val currentNovel = list[bindingAdapterPosition]
-                    if (activeDownloads.contains(currentNovel.link) || downloadedCheckCallback.downloadedCheck(currentNovel) || downloadedChapters.contains(currentNovel.link)) {
-                        it.context.customAlertDialog().apply {
-                            setTitle("Multi Chapter Deleter")
-                            setMessage("Enter the number of chapters to delete")
-                            val input = android.widget.NumberPicker(ani.dantotsu.currContext())
-                            input.minValue = 1
-                            input.maxValue = itemCount - bindingAdapterPosition
-                            input.value = 1
-                            setCustomView(input)
-                            setPosButton(R.string.ok) {
-                                binding.root.context.customAlertDialog().apply {
-                                    setTitle("Delete Chapters")
-                                    setMessage("Are you sure you want to delete the next ${input.value} chapters?")
-                                    setPosButton(R.string.yes) {
-                                        deleteNChaptersFrom(bindingAdapterPosition, input.value)
-                                    }
-                                    setNegButton(R.string.no)
-                                }.show()
-                            }
-                            setNegButton(R.string.cancel)
-                            show()
-                        }
-                    } else {
-                        it.context.customAlertDialog().apply {
-                            setTitle("Multi Chapter Downloader")
-                            setMessage("Enter the number of chapters to download")
-                            val input = android.widget.NumberPicker(ani.dantotsu.currContext())
-                            input.minValue = 1
-                            input.maxValue = itemCount - bindingAdapterPosition
-                            input.value = 1
-                            setCustomView(input)
-                            setPosButton("OK") {
-                                downloadNChaptersFrom(bindingAdapterPosition, input.value)
-                            }
-                            setNegButton("Cancel")
-                            show()
-                        }
-                    }
-                }
-                true
-            }
+        }
 
+        private fun handleMultiChapterLongClick(view: View): Boolean {
+            if (bindingAdapterPosition !in 0 until list.size) return true
+            val currentNovel = list[bindingAdapterPosition]
+            val isDownloadedOrActive = activeDownloads.contains(currentNovel.link) ||
+                    downloadedCheckCallback.downloadedCheck(currentNovel) ||
+                    downloadedChapters.contains(currentNovel.link)
+
+            if (isDownloadedOrActive) {
+                showMultiDeleteDialog(view, bindingAdapterPosition)
+            } else {
+                showMultiDownloadDialog(view, bindingAdapterPosition)
+            }
+            return true
+        }
+
+        private fun showMultiDeleteDialog(view: View, position: Int) {
+            view.context.customAlertDialog().apply {
+                setTitle("Multi Chapter Deleter")
+                setMessage("Enter the number of chapters to delete")
+                val input = android.widget.NumberPicker(ani.dantotsu.currContext()).apply {
+                    minValue = 1
+                    maxValue = itemCount - position
+                    value = 1
+                }
+                setCustomView(input)
+                setPosButton(R.string.ok) {
+                    binding.root.context.customAlertDialog().apply {
+                        setTitle("Delete Chapters")
+                        setMessage("Are you sure you want to delete the next ${input.value} chapters?")
+                        setPosButton(R.string.yes) {
+                            deleteNChaptersFrom(position, input.value)
+                        }
+                        setNegButton(R.string.no)
+                    }.show()
+                }
+                setNegButton(R.string.cancel)
+                show()
+            }
+        }
+
+        private fun showMultiDownloadDialog(view: View, position: Int) {
+            view.context.customAlertDialog().apply {
+                setTitle("Multi Chapter Downloader")
+                setMessage("Enter the number of chapters to download")
+                val input = android.widget.NumberPicker(ani.dantotsu.currContext()).apply {
+                    minValue = 1
+                    maxValue = itemCount - position
+                    value = 1
+                }
+                setCustomView(input)
+                setPosButton("OK") {
+                    downloadNChaptersFrom(position, input.value)
+                }
+                setNegButton("Cancel")
+                show()
+            }
+        }
+
+        private fun bindChapterExtra(novel: ShowResponse) {
             val releaseTime = novel.extra?.get("releaseTime")
             val sourceName = novel.extra?.get("sourceName")
-            if (!releaseTime.isNullOrBlank() || !sourceName.isNullOrBlank()) {
+            val hasReleaseTime = !releaseTime.isNullOrBlank()
+            val hasSourceName = !sourceName.isNullOrBlank()
+
+            if (hasReleaseTime || hasSourceName) {
                 binding.itemChapterDateLayout.visibility = View.VISIBLE
-                if (!releaseTime.isNullOrBlank()) {
-                    binding.itemChapterDate.text = releaseTime
-                    binding.itemChapterDate.visibility = View.VISIBLE
-                } else {
-                    binding.itemChapterDate.visibility = View.GONE
-                }
-                if (!sourceName.isNullOrBlank()) {
-                    binding.itemChapterScan.text = sourceName
-                    binding.itemChapterScan.visibility = View.VISIBLE
-                } else {
-                    binding.itemChapterScan.visibility = View.GONE
-                }
+                binding.itemChapterDate.visibility = if (hasReleaseTime) View.VISIBLE else View.GONE
+                if (hasReleaseTime) binding.itemChapterDate.text = releaseTime
+
+                binding.itemChapterScan.visibility = if (hasSourceName) View.VISIBLE else View.GONE
+                if (hasSourceName) binding.itemChapterScan.text = sourceName
+
                 binding.itemChapterDateDivider.visibility =
-                    if (!releaseTime.isNullOrBlank() && !sourceName.isNullOrBlank()) View.VISIBLE else View.GONE
+                    if (hasReleaseTime && hasSourceName) View.VISIBLE else View.GONE
             } else {
                 binding.itemChapterDateLayout.visibility = View.GONE
             }
-            binding.itemEpisodeViewed.visibility = View.GONE
-
-            setupClickListeners(binding.root, novel)
         }
 
         private fun startOrContinueRotation(link: String, resetRotation: () -> Unit) {
