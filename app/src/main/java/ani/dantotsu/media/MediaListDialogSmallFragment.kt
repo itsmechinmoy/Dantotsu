@@ -18,6 +18,7 @@ import ani.dantotsu.connections.PendingProgressUpdate
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.api.FuzzyDate
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.mangabaka.MangaBaka
 import ani.dantotsu.databinding.BottomSheetMediaListSmallBinding
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.others.getSerialized
@@ -244,6 +245,14 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
                 start = startD,
                 end = endD
             )
+            if (media.anime == null) {
+                MangaBaka.query.editList(
+                    media,
+                    status,
+                    progress,
+                    score?.toDouble()
+                )
+            }
         }
 
     private fun setupSaveButton(

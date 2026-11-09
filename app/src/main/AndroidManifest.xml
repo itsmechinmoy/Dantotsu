@@ -360,6 +360,23 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".connections.mangabaka.Login"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter android:label="MangaBaka Login for Dantotsu">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="mangabaka"
+                    android:scheme="dantotsu" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name=".others.webview.CookieCatcher"
             android:configChanges="orientation|screenSize|layoutDirection"
             android:excludeFromRecents="true"
@@ -524,6 +541,9 @@
                 <data android:host="*" />
                 <data android:pathPattern=".*\\.torrent" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
         <activity
             android:name="eu.kanade.tachiyomi.extension.util.ExtensionInstallActivity"

@@ -338,13 +338,50 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
 
     private fun filterChaptersByScanlator(chapters: MutableMap<String, MangaChapter>): Map<String, MangaChapter> {
         val isOffline = model.mangaReadSources?.get(media.selected!!.sourceIndex) is OfflineMangaParser
-        return if (isOffline) {
+        val filtered = if (isOffline) {
             chapters
         } else {
             chapters.filterNot { (_, chapter) ->
                 chapter.scanlator in headerAdapter.hiddenScanlators
             }
         }
+
+        val skipDuplicates = PrefManager.getVal<Boolean>(PrefName.SkipDuplicateChapters)
+        val isAllScanlators = headerAdapter.hiddenScanlators.isEmpty() || headerAdapter.hiddenScanlators.size >= headerAdapter.options.size
+        return if (skipDuplicates && isAllScanlators && headerAdapter.options.size > 1) {
+            deduplicateChapters(filtered)
+        } else {
+            filtered
+        }
+    }
+
+    private fun deduplicateChapters(chapters: Map<String, MangaChapter>): Map<String, MangaChapter> {
+        if (chapters.isEmpty()) return chapters
+        val byScanlator = chapters.values.groupBy { it.scanlator ?: "Unknown" }
+        if (byScanlator.size <= 1) return chapters
+
+        val sortedScanlators = byScanlator.entries.sortedByDescending { it.value.size }
+        val baseScanlator = sortedScanlators.first().key
+        val seenNumbers = mutableSetOf<String>()
+        val resultChapters = mutableSetOf<MangaChapter>()
+
+        for (chapter in (byScanlator[baseScanlator] ?: emptyList())) {
+            val num = MediaNameAdapter.findChapterNumber(chapter.number)?.toString() ?: chapter.number
+            seenNumbers.add(num)
+            resultChapters.add(chapter)
+        }
+
+        for ((_, scanChapters) in sortedScanlators.drop(1)) {
+            for (chapter in scanChapters) {
+                val num = MediaNameAdapter.findChapterNumber(chapter.number)?.toString() ?: chapter.number
+                if (num !in seenNumbers) {
+                    seenNumbers.add(num)
+                    resultChapters.add(chapter)
+                }
+            }
+        }
+
+        return chapters.filterValues { it in resultChapters }
     }
 
     private fun setupChapterChips(filteredChapters: Map<String, MangaChapter>) {
