@@ -11,6 +11,7 @@ import android.widget.ArrayAdapter
 import android.widget.ImageButton
 import androidx.core.content.ContextCompat.startActivity
 import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.R
 import ani.dantotsu.databinding.DialogLayoutBinding
@@ -138,31 +139,51 @@ class NovelReadAdapter(
         }
     }
 
-    private fun updateLayoutForSource(binding: ItemNovelHeaderBinding, idx: Int) {
-        val isLocal = idx in 0 until novelReadSources.names.size && (novelReadSources.names[idx] == "Local" || novelReadSources.names[idx] == "Downloaded")
-        val isLnReader = idx in 0 until novelReadSources.names.size
-                && novelReadSources[idx] is ani.dantotsu.parsers.novel.LnReaderNovelParser
-        val isDynamic = idx in 0 until novelReadSources.names.size
-                && novelReadSources[idx] is ani.dantotsu.parsers.novel.DynamicNovelParser
+    private fun isLocalSource(idx: Int): Boolean {
+        if (idx !in novelReadSources.names.indices) return false
+        val name = novelReadSources.names[idx]
+        return name == "Local" || name == "Downloaded"
+    }
 
-        val isVisible = !isLocal && !isLnReader
-        binding.searchBar.visibility = if (isVisible) View.VISIBLE else View.GONE
-        binding.divider.visibility = if (isLocal) View.GONE else View.VISIBLE
-        binding.wrongTitleButton.visibility = if (isLocal) View.GONE else View.VISIBLE
-        binding.mediaSourceTitle.visibility = if (isLocal) View.GONE else View.VISIBLE
+    private fun isLnReaderSource(idx: Int): Boolean {
+        return idx in novelReadSources.names.indices &&
+                novelReadSources[idx] is ani.dantotsu.parsers.novel.LnReaderNovelParser
+    }
+
+    private fun getDynamicNovelParser(idx: Int): ani.dantotsu.parsers.novel.DynamicNovelParser? {
+        if (idx !in novelReadSources.names.indices) return null
+        return novelReadSources[idx] as? ani.dantotsu.parsers.novel.DynamicNovelParser
+    }
+
+    private fun updateLayoutVisibility(binding: ItemNovelHeaderBinding, isLocal: Boolean, isLnReader: Boolean) {
+        val searchVisible = !isLocal && !isLnReader
+        binding.searchBar.isVisible = searchVisible
+        binding.divider.isGone = isLocal
+        binding.wrongTitleButton.isGone = isLocal
+        binding.mediaSourceTitle.isGone = isLocal
         binding.mediaSourceTitle.text = "Found : ${media.name ?: media.nameRomaji}"
         binding.mediaSourceTitle.isSelected = true
-        binding.chaptersHeaderRow.visibility = View.VISIBLE
+        binding.chaptersHeaderRow.isVisible = true
+    }
 
-        binding.mediaSourceSettings.visibility = if (isDynamic) View.VISIBLE else View.GONE
-        if (isDynamic) {
+    private fun setupDynamicParserSettings(
+        binding: ItemNovelHeaderBinding,
+        parser: ani.dantotsu.parsers.novel.DynamicNovelParser?
+    ) {
+        binding.mediaSourceSettings.isVisible = parser != null
+        if (parser != null) {
             binding.mediaSourceSettings.setOnClickListener {
-                val parser = novelReadSources[idx] as? ani.dantotsu.parsers.novel.DynamicNovelParser
-                if (parser != null) {
-                    fragment.openSettings(parser.extension)
-                }
+                fragment.openSettings(parser.extension)
             }
         }
+    }
+
+    private fun updateLayoutForSource(binding: ItemNovelHeaderBinding, idx: Int) {
+        val isLocal = isLocalSource(idx)
+        val isLnReader = isLnReaderSource(idx)
+        val dynamicParser = getDynamicNovelParser(idx)
+        updateLayoutVisibility(binding, isLocal, isLnReader)
+        setupDynamicParserSettings(binding, dynamicParser)
     }
 
     private fun setupNovelActionButtons(binding: ItemNovelHeaderBinding) {
