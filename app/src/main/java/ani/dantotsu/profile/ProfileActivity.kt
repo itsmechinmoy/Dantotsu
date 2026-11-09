@@ -54,7 +54,6 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
     private var selected: Int = 0
     lateinit var navBar: AnimatedBottomBar
 
-    @Suppress("ComplexMethod", "LongMethod")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ThemeManager(this).applyTheme()
@@ -64,8 +63,12 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
         }
         binding = ActivityProfileBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        val context = this
         screenWidth = resources.displayMetrics.widthPixels.toFloat()
+        setupNavBarTabs()
+        loadUserProfile()
+    }
+
+    private fun setupNavBarTabs() {
         navBar = binding.profileNavBar
         val feedTab = navBar.createTab(R.drawable.ic_round_filter_24, "Feed")
         val profileTab = navBar.createTab(R.drawable.ic_round_person_24, "Profile")
@@ -75,7 +78,9 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
         navBar.addTab(statsTab)
         navBar.visibility = View.GONE
         binding.profileViewPager.isUserInputEnabled = false
+    }
 
+    private fun loadUserProfile() {
         lifecycleScope.launch(Dispatchers.IO) {
             val userid = intent.getIntExtra("userId", -1)
             val username = intent.getStringExtra("username") ?: ""
@@ -90,198 +95,227 @@ class ProfileActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListene
             }
 
             withContext(Dispatchers.Main) {
-                binding.profileViewPager.adapter =
-                    ViewPagerAdapter(supportFragmentManager, lifecycle, user)
-                binding.profileViewPager.setOffscreenPageLimit(3)
-                binding.profileViewPager.setCurrentItem(selected, false)
-                navBar.visibility = View.VISIBLE
-                navBar.selectTabAt(selected)
-                navBar.setOnTabSelectListener(object : AnimatedBottomBar.OnTabSelectListener {
-                    override fun onTabSelected(
-                        lastIndex: Int,
-                        lastTab: AnimatedBottomBar.Tab?,
-                        newIndex: Int,
-                        newTab: AnimatedBottomBar.Tab
-                    ) {
-                        selected = newIndex
-                        binding.profileViewPager.setCurrentItem(selected, true)
-                    }
-                })
+                setupUserProfileViews(user, respond)
+            }
+        }
+    }
 
-                bindingProfileAppBar = ItemProfileAppBarBinding.bind(binding.root).apply {
-                    binding.profileProgressBar.visibility = View.GONE
-                    followButton.isGone =
-                        user.id == Anilist.userid || Anilist.userid == null
+    private fun setupUserProfileViews(user: Query.UserProfile, respond: Query.UserProfileResponse) {
+        setupViewPager(user)
+        bindingProfileAppBar = ItemProfileAppBarBinding.bind(binding.root).apply {
+            binding.profileProgressBar.visibility = View.GONE
+            profileAppBar.visibility = View.VISIBLE
+            setupFollowButton(this, user)
+            setupProfileMenu(this, user)
+            setupProfileHeaderImages(this, user)
+            setupProfileCounters(this, user, respond)
+        }
+    }
 
-                    fun followText(): String {
-                        return getString(
-                            when {
-                                user.isFollowing && user.isFollower -> R.string.mutual
-                                user.isFollowing -> R.string.unfollow
-                                user.isFollower -> R.string.follows_you
-                                else -> R.string.follow
-                            }
-                        )
-                    }
+    private fun setupViewPager(user: Query.UserProfile) {
+        binding.profileViewPager.adapter =
+            ViewPagerAdapter(supportFragmentManager, lifecycle, user)
+        binding.profileViewPager.setOffscreenPageLimit(3)
+        binding.profileViewPager.setCurrentItem(selected, false)
+        navBar.visibility = View.VISIBLE
+        navBar.selectTabAt(selected)
+        navBar.setOnTabSelectListener(object : AnimatedBottomBar.OnTabSelectListener {
+            override fun onTabSelected(
+                lastIndex: Int,
+                lastTab: AnimatedBottomBar.Tab?,
+                newIndex: Int,
+                newTab: AnimatedBottomBar.Tab
+            ) {
+                selected = newIndex
+                binding.profileViewPager.setCurrentItem(selected, true)
+            }
+        })
+    }
 
-                    followButton.text = followText()
+    private fun setupFollowButton(appBarBinding: ItemProfileAppBarBinding, user: Query.UserProfile) {
+        appBarBinding.followButton.isGone =
+            user.id == Anilist.userid || Anilist.userid == null
 
-                    followButton.setOnClickListener {
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            val res = Anilist.mutation.toggleFollow(user.id)
-                            if (res?.data?.toggleFollow != null) {
-                                withContext(Dispatchers.Main) {
-                                    snackString(R.string.success)
-                                    user.isFollowing = res.data.toggleFollow.isFollowing
-                                    followButton.text = followText()
-                                }
-                            }
-                        }
-                    }
-                    profileAppBar.visibility = View.VISIBLE
-                    profileMenuButton.setOnClickListener {
-                        val popup = PopupMenu(context, profileMenuButton)
-                        popup.menuInflater.inflate(R.menu.menu_profile, popup.menu)
-                        popup.setOnMenuItemClickListener { item ->
-                            when (item.itemId) {
-                                R.id.action_view_on_anilist -> {
-                                    openLinkInBrowser(getString(R.string.anilist_link, user.name))
-                                    true
-                                }
+        fun followText(): String {
+            return getString(
+                when {
+                    user.isFollowing && user.isFollower -> R.string.mutual
+                    user.isFollowing -> R.string.unfollow
+                    user.isFollower -> R.string.follows_you
+                    else -> R.string.follow
+                }
+            )
+        }
 
-                                R.id.action_share_profile -> {
-                                    val shareIntent = Intent(Intent.ACTION_SEND)
-                                    shareIntent.type = "text/plain"
-                                    shareIntent.putExtra(
-                                        Intent.EXTRA_TEXT,
-                                        getString(R.string.anilist_link, user.name)
-                                    )
-                                    startActivity(
-                                        Intent.createChooser(
-                                            shareIntent,
-                                            "Share Profile"
-                                        )
-                                    )
-                                    true
-                                }
-
-                                R.id.action_copy_user_id -> {
-                                    copyToClipboard(user.id.toString(), true)
-                                    true
-                                }
-
-                                R.id.action_block_user -> {
-                                    if (user.id == Anilist.userid) {
-                                        snackString("Cannot block yourself")
-                                        return@setOnMenuItemClickListener true
-                                    }
-                                    customAlertDialog().apply {
-                                        setTitle(R.string.warning)
-                                        setMessage("Toggle block status for ${user.name}?")
-                                        setPosButton(R.string.ok) {
-                                            lifecycleScope.launch(Dispatchers.IO) {
-                                                val success = Anilist.mutation.toggleBlock(user.id)
-                                                withContext(Dispatchers.Main) {
-                                                    snackString(if (success) "Updated block status" else "Failed to update block status")
-                                                }
-                                            }
-                                        }
-                                        setNegButton(R.string.cancel)
-                                        show()
-                                    }
-                                    true
-                                }
-
-                                else -> false
-                            }
-                        }
-                        popup.show()
-                    }
-
-                    profileUserAvatar.loadImage(user.avatar?.medium)
-                    profileUserAvatar.openImage(
-                        context.getString(R.string.avatar, user.name),
-                        user.avatar?.medium ?: ""
-                    )
-                    profileUserName.text = user.name
-                    profileUserName.setOnClickListener {
-                        copyToClipboard(profileUserName.text.toString(), true)
-                    }
-
-                    val bannerAnimations: ImageView =
-                        if (PrefManager.getVal(PrefName.BannerAnimations)) profileBannerImage else profileBannerImageNoKen
-
-                    blurImage(
-                        bannerAnimations,
-                        user.bannerImage ?: user.avatar?.medium
-                    )
-                    profileBannerImage.updateLayoutParams { height += statusBarHeight }
-                    profileBannerImageNoKen.updateLayoutParams { height += statusBarHeight }
-                    profileBannerGradient.updateLayoutParams { height += statusBarHeight }
-                    profileCloseButton.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
-                    profileMenuButton.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
-                    profileButtonContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
-
-                    profileBannerImage.openImage(
-                        context.getString(R.string.banner, user.name),
-                        user.bannerImage ?: user.avatar?.medium ?: ""
-                    )
-
-                    mMaxScrollSize = profileAppBar.totalScrollRange
-                    profileAppBar.addOnOffsetChangedListener(context)
-
-
-                    profileFollowerCount.text =
-                        (respond.data.followerPage?.pageInfo?.total ?: 0).toString()
-                    profileFollowerCountContainer.setOnClickListener {
-                        ContextCompat.startActivity(
-                            context,
-                            Intent(context, FollowActivity::class.java)
-                                .putExtra("title", getString(R.string.followers))
-                                .putExtra("userId", user.id),
-                            null
-                        )
-                    }
-                    profileFollowingCount.text =
-                        (respond.data.followingPage?.pageInfo?.total ?: 0).toString()
-                    profileFollowingCountContainer.setOnClickListener {
-                        ContextCompat.startActivity(
-                            context,
-                            Intent(context, FollowActivity::class.java)
-                                .putExtra("title", "Following")
-                                .putExtra("userId", user.id),
-                            null
-                        )
-                    }
-
-                    profileAnimeCount.text = user.statistics.anime.count.toString()
-                    profileAnimeCountContainer.setOnClickListener {
-                        ContextCompat.startActivity(
-                            context,
-                            Intent(context, ListActivity::class.java)
-                                .putExtra("anime", true)
-                                .putExtra("userId", user.id)
-                                .putExtra("username", user.name),
-                            null
-                        )
-                    }
-
-                    profileMangaCount.text = user.statistics.manga.count.toString()
-                    profileMangaCountContainer.setOnClickListener {
-                        ContextCompat.startActivity(
-                            context,
-                            Intent(context, ListActivity::class.java)
-                                .putExtra("anime", false)
-                                .putExtra("userId", user.id)
-                                .putExtra("username", user.name),
-                            null
-                        )
-                    }
-
-                    profileCloseButton.setOnClickListener {
-                        onBackPressedDispatcher.onBackPressed()
+        appBarBinding.followButton.text = followText()
+        appBarBinding.followButton.setOnClickListener {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val res = Anilist.mutation.toggleFollow(user.id)
+                if (res?.data?.toggleFollow != null) {
+                    withContext(Dispatchers.Main) {
+                        snackString(R.string.success)
+                        user.isFollowing = res.data.toggleFollow.isFollowing
+                        appBarBinding.followButton.text = followText()
                     }
                 }
+            }
+        }
+    }
+
+    private fun setupProfileMenu(appBarBinding: ItemProfileAppBarBinding, user: Query.UserProfile) {
+        val context = this
+        appBarBinding.profileMenuButton.setOnClickListener {
+            val popup = PopupMenu(context, appBarBinding.profileMenuButton)
+            popup.menuInflater.inflate(R.menu.menu_profile, popup.menu)
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_view_on_anilist -> {
+                        openLinkInBrowser(getString(R.string.anilist_link, user.name))
+                        true
+                    }
+
+                    R.id.action_share_profile -> {
+                        val shareIntent = Intent(Intent.ACTION_SEND)
+                        shareIntent.type = "text/plain"
+                        shareIntent.putExtra(
+                            Intent.EXTRA_TEXT,
+                            getString(R.string.anilist_link, user.name)
+                        )
+                        startActivity(
+                            Intent.createChooser(
+                                shareIntent,
+                                "Share Profile"
+                            )
+                        )
+                        true
+                    }
+
+                    R.id.action_copy_user_id -> {
+                        copyToClipboard(user.id.toString(), true)
+                        true
+                    }
+
+                    R.id.action_block_user -> {
+                        if (user.id == Anilist.userid) {
+                            snackString("Cannot block yourself")
+                            return@setOnMenuItemClickListener true
+                        }
+                        customAlertDialog().apply {
+                            setTitle(R.string.warning)
+                            setMessage("Toggle block status for ${user.name}?")
+                            setPosButton(R.string.ok) {
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    val success = Anilist.mutation.toggleBlock(user.id)
+                                    withContext(Dispatchers.Main) {
+                                        snackString(if (success) "Updated block status" else "Failed to update block status")
+                                    }
+                                }
+                            }
+                            setNegButton(R.string.cancel)
+                            show()
+                        }
+                        true
+                    }
+
+                    else -> false
+                }
+            }
+            popup.show()
+        }
+    }
+
+    private fun setupProfileHeaderImages(appBarBinding: ItemProfileAppBarBinding, user: Query.UserProfile) {
+        val context = this
+        appBarBinding.apply {
+            profileUserAvatar.loadImage(user.avatar?.medium)
+            profileUserAvatar.openImage(
+                context.getString(R.string.avatar, user.name),
+                user.avatar?.medium ?: ""
+            )
+            profileUserName.text = user.name
+            profileUserName.setOnClickListener {
+                copyToClipboard(profileUserName.text.toString(), true)
+            }
+
+            val bannerAnimations: ImageView =
+                if (PrefManager.getVal(PrefName.BannerAnimations)) profileBannerImage else profileBannerImageNoKen
+
+            blurImage(
+                bannerAnimations,
+                user.bannerImage ?: user.avatar?.medium
+            )
+            profileBannerImage.updateLayoutParams { height += statusBarHeight }
+            profileBannerImageNoKen.updateLayoutParams { height += statusBarHeight }
+            profileBannerGradient.updateLayoutParams { height += statusBarHeight }
+            profileCloseButton.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
+            profileMenuButton.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
+            profileButtonContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
+
+            profileBannerImage.openImage(
+                context.getString(R.string.banner, user.name),
+                user.bannerImage ?: user.avatar?.medium ?: ""
+            )
+
+            mMaxScrollSize = profileAppBar.totalScrollRange
+            profileAppBar.addOnOffsetChangedListener(context)
+            profileCloseButton.setOnClickListener {
+                onBackPressedDispatcher.onBackPressed()
+            }
+        }
+    }
+
+    private fun setupProfileCounters(
+        appBarBinding: ItemProfileAppBarBinding,
+        user: Query.UserProfile,
+        respond: Query.UserProfileResponse
+    ) {
+        val context = this
+        appBarBinding.apply {
+            profileFollowerCount.text =
+                (respond.data.followerPage?.pageInfo?.total ?: 0).toString()
+            profileFollowerCountContainer.setOnClickListener {
+                ContextCompat.startActivity(
+                    context,
+                    Intent(context, FollowActivity::class.java)
+                        .putExtra("title", getString(R.string.followers))
+                        .putExtra("userId", user.id),
+                    null
+                )
+            }
+            profileFollowingCount.text =
+                (respond.data.followingPage?.pageInfo?.total ?: 0).toString()
+            profileFollowingCountContainer.setOnClickListener {
+                ContextCompat.startActivity(
+                    context,
+                    Intent(context, FollowActivity::class.java)
+                        .putExtra("title", "Following")
+                        .putExtra("userId", user.id),
+                    null
+                )
+            }
+
+            profileAnimeCount.text = user.statistics.anime.count.toString()
+            profileAnimeCountContainer.setOnClickListener {
+                ContextCompat.startActivity(
+                    context,
+                    Intent(context, ListActivity::class.java)
+                        .putExtra("anime", true)
+                        .putExtra("userId", user.id)
+                        .putExtra("username", user.name),
+                    null
+                )
+            }
+
+            profileMangaCount.text = user.statistics.manga.count.toString()
+            profileMangaCountContainer.setOnClickListener {
+                ContextCompat.startActivity(
+                    context,
+                    Intent(context, ListActivity::class.java)
+                        .putExtra("anime", false)
+                        .putExtra("userId", user.id)
+                        .putExtra("username", user.name),
+                    null
+                )
             }
         }
     }

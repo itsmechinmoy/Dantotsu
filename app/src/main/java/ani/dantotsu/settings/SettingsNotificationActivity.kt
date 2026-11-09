@@ -40,21 +40,27 @@ class SettingsNotificationActivity : AppCompatActivity() {
     private var isImportingLists = false
     private var isImportingStatuses = false
 
+    private fun formatInterval(minutes: Long): String {
+        if (minutes <= 0) return getString(R.string.do_not_update)
+        val mins = minutes % 60
+        val hours = minutes / 60
+        val hoursStr = if (hours > 0) "$hours hrs " else ""
+        val minsStr = if (mins > 0) "$mins mins" else ""
+        return "$hoursStr$minsStr"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ThemeManager(this).applyTheme()
         initActivity(this)
-        val context = this
         binding = ActivitySettingsNotificationsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        setupNotificationsView()
+    }
+
+    private fun setupNotificationsView() {
+        val context = this
         binding.apply {
-            var curTime = PrefManager.getVal<Int>(PrefName.SubscriptionNotificationInterval)
-            val timeNames = SubscriptionNotificationWorker.checkIntervals.map {
-                val mins = it % 60
-                val hours = it / 60
-                if (it > 0) "${if (hours > 0) "$hours hrs " else ""}${if (mins > 0) "$mins mins" else ""}"
-                else getString(R.string.do_not_update)
-            }.toTypedArray()
             settingsNotificationsLayout.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 topMargin = statusBarHeight
                 bottomMargin = navBarHeight
@@ -62,20 +68,13 @@ class SettingsNotificationActivity : AppCompatActivity() {
             notificationSettingsBack.setOnClickListener {
                 onBackPressedDispatcher.onBackPressed()
             }
+
+            val timeNames = SubscriptionNotificationWorker.checkIntervals.map { formatInterval(it.toLong()) }.toTypedArray()
             val aTimeNames = AnilistNotificationWorker.checkIntervals.map { it.toInt() }
-            val aItems = aTimeNames.map {
-                val mins = it % 60
-                val hours = it / 60
-                if (it > 0) "${if (hours > 0) "$hours hrs " else ""}${if (mins > 0) "$mins mins" else ""}"
-                else getString(R.string.do_not_update)
-            }
+            val aItems = AnilistNotificationWorker.checkIntervals.map { formatInterval(it) }
             val cTimeNames = CommentNotificationWorker.checkIntervals.map { it.toInt() }
-            val cItems = cTimeNames.map {
-                val mins = it % 60
-                val hours = it / 60
-                if (it > 0) "${if (hours > 0) "$hours hrs " else ""}${if (mins > 0) "$mins mins" else ""}"
-                else getString(R.string.do_not_update)
-            }
+            val cItems = CommentNotificationWorker.checkIntervals.map { formatInterval(it) }
+
             val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
             val allSettings = ArrayList<Settings>().apply {
                 addAll(buildSubscriptionSettings(context, timeNames))

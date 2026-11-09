@@ -218,64 +218,75 @@ class DantotsuPlayerManager(
         }.build()
     }
 
+    private fun isSegmentRequest(contentType: String, url: okhttp3.HttpUrl): Boolean {
+        val isMediaContent = contentType.startsWith("video/") ||
+            contentType.startsWith("audio/") ||
+            contentType.startsWith("image/")
+        return isMediaContent || StreamTypeDetector.isSegmentUrl(url)
+    }
+
+    private fun decompressGzipIfPresent(rawBytes: ByteArray, hasGzipEncoding: Boolean): ByteArray {
+        val isGzip = (rawBytes.size >= 2 && rawBytes[0] == 0x1F.toByte() && rawBytes[1] == 0x8B.toByte()) || hasGzipEncoding
+        if (!isGzip) return rawBytes
+        return try {
+            GZIPInputStream(ByteArrayInputStream(rawBytes)).use { it.readBytes() }
+        } catch (_: Exception) {
+            rawBytes
+        }
+    }
+
+    private fun cleanHlsManifest(bytes: ByteArray): ByteArray {
+        var text = bytes.toString(Charsets.UTF_8)
+        if (text.startsWith("\uFEFF")) {
+            text = text.substring(1)
+        }
+        return text.trimStart().toByteArray(Charsets.UTF_8)
+    }
+
+    private fun rewriteLocalhostResponseBody(
+        response: okhttp3.Response,
+        body: okhttp3.ResponseBody,
+        isM3u8: Boolean,
+        hasGzipEncoding: Boolean
+    ): okhttp3.Response {
+        val rawBytes = body.bytes()
+        val decompressedBytes = decompressGzipIfPresent(rawBytes, hasGzipEncoding)
+        val startsWithHls = StreamTypeDetector.startsWithHlsMagic(decompressedBytes)
+        val isHls = startsWithHls || isM3u8
+
+        val finalBytes = if (isHls) cleanHlsManifest(decompressedBytes) else decompressedBytes
+        val mediaType = (if (isHls) {
+            "application/vnd.apple.mpegurl"
+        } else {
+            body.contentType()?.toString()
+        })?.toMediaTypeOrNull() ?: body.contentType()
+
+        val strippedHeaders = response.headers.newBuilder()
+            .removeAll("Content-Encoding")
+            .removeAll("Content-Length")
+            .build()
+
+        return response.newBuilder()
+            .headers(strippedHeaders)
+            .body(finalBytes.toResponseBody(mediaType))
+            .build()
+    }
+
     private fun processLocalhostResponse(
         chain: okhttp3.Interceptor.Chain,
         response: okhttp3.Response,
         request: okhttp3.Request
     ): okhttp3.Response {
         val contentType = response.header("Content-Type").orEmpty().lowercase()
-        val isMediaContent = contentType.startsWith("video/") ||
-            contentType.startsWith("audio/") ||
-            contentType.startsWith("image/")
-
-        val isSegment = isMediaContent || StreamTypeDetector.isSegmentUrl(request.url)
+        val isSegment = isSegmentRequest(contentType, request.url)
         val isM3u8 = !isSegment && (
             contentType.contains("mpegurl") ||
             StreamTypeDetector.isM3u8Url(request.url)
         )
         val hasGzipEncoding = response.header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true
-
         val body = response.body
         if (body != null && !isSegment && (isM3u8 || hasGzipEncoding)) {
-            val rawBytes = body.bytes()
-            val isGzip = (rawBytes.size >= 2 && rawBytes[0] == 0x1F.toByte() && rawBytes[1] == 0x8B.toByte()) || hasGzipEncoding
-            val decompressedBytes = if (isGzip) {
-                try {
-                    GZIPInputStream(ByteArrayInputStream(rawBytes)).use { it.readBytes() }
-                } catch (_: Exception) {
-                    rawBytes
-                }
-            } else {
-                rawBytes
-            }
-
-            val startsWithHls = StreamTypeDetector.startsWithHlsMagic(decompressedBytes)
-            val finalBytes = if (startsWithHls || isM3u8) {
-                var text = decompressedBytes.toString(Charsets.UTF_8)
-                if (text.startsWith("\uFEFF")) {
-                    text = text.substring(1)
-                }
-                text.trimStart().toByteArray(Charsets.UTF_8)
-            } else {
-                decompressedBytes
-            }
-
-            val mediaType = (if (startsWithHls || isM3u8) {
-                "application/vnd.apple.mpegurl"
-            } else {
-                body.contentType()?.toString()
-            })?.toMediaTypeOrNull() ?: body.contentType()
-
-            val strippedHeaders = response.headers.newBuilder()
-                .removeAll("Content-Encoding")
-                .removeAll("Content-Length")
-                .build()
-
-            val newBody = finalBytes.toResponseBody(mediaType)
-            return response.newBuilder()
-                .headers(strippedHeaders)
-                .body(newBody)
-                .build()
+            return rewriteLocalhostResponseBody(response, body, isM3u8, hasGzipEncoding)
         }
         return response
     }

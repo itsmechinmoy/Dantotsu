@@ -10,6 +10,7 @@ import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import ani.dantotsu.R
@@ -39,6 +40,25 @@ open class BaseInstalledExtensionsFragment : Fragment() {
                 if (show) extActivity.getString(R.string.extensions) else titleName ?: ""
             extActivity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer)?.isGone = show
         }
+    }
+
+    fun <T> setupExtensionsRecyclerView(
+        recyclerView: RecyclerView,
+        adapter: ListAdapter<T, *>,
+        updatePref: () -> Unit
+    ) {
+        recyclerView.layoutManager = SafeLinearLayoutManager(requireContext())
+        recyclerView.adapter = adapter
+        setupExtensionsDragAndDrop(
+            recyclerView,
+            onMoveItem = { fromPosition, toPosition ->
+                val newList = adapter.currentList.toMutableList().apply {
+                    add(toPosition, removeAt(fromPosition))
+                }
+                adapter.submitList(newList)
+            },
+            onClearView = updatePref
+        )
     }
 
     fun setupExtensionsDragAndDrop(

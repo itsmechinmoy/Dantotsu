@@ -1,6 +1,7 @@
 package ani.dantotsu.media.comments
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -87,6 +88,94 @@ class CommentItem(
         }
     }
 
+    private fun bindUserTag(viewBinding: ItemCommentsBinding) {
+        if (comment.tag == null) {
+            viewBinding.commentUserTagLayout.visibility = View.GONE
+        } else {
+            viewBinding.commentUserTagLayout.visibility = View.VISIBLE
+            viewBinding.commentUserTag.text = comment.tag.toString()
+            viewBinding.commentUserTagLayout.setOnClickListener {
+                commentsFragment.onTagClicked(comment.tag.toString())
+            }
+        }
+    }
+
+    private fun getReplyButtonText(context: Context, forceHide: Boolean = repliesVisible): String {
+        if (forceHide) return context.getString(R.string.hide_replies)
+        val replyCount = comment.replyCount ?: 1
+        return if (replyCount == 1) {
+            context.getString(R.string.view_reply)
+        } else {
+            context.getString(R.string.view_replies_count, replyCount)
+        }
+    }
+
+    private fun bindRepliesSection(viewBinding: ItemCommentsBinding, item: CommentItem) {
+        val hasReplies = (comment.replyCount ?: 0) > 0 || repliesVisible
+        viewBinding.commentTotalReplies.visibility = if (hasReplies) View.VISIBLE else View.GONE
+        viewBinding.commentRepliesDivider.visibility = if (hasReplies) View.VISIBLE else View.GONE
+        if (hasReplies) {
+            viewBinding.commentTotalReplies.text = getReplyButtonText(viewBinding.commentTotalReplies.context)
+        }
+        viewBinding.commentReply.visibility = View.VISIBLE
+        viewBinding.commentTotalReplies.setOnClickListener {
+            if (repliesVisible) {
+                repliesSection.clear()
+                removeSubCommentIds()
+                viewBinding.commentTotalReplies.text = getReplyButtonText(viewBinding.commentTotalReplies.context, forceHide = false)
+                repliesVisible = false
+            } else {
+                viewBinding.commentTotalReplies.setText(R.string.hide_replies)
+                repliesSection.clear()
+                commentsFragment.viewReplyCallback(item)
+                repliesVisible = true
+            }
+        }
+    }
+
+    private fun bindProfileNavigation(viewBinding: ItemCommentsBinding) {
+        val openProfile = {
+            ContextCompat.startActivity(
+                commentsFragment.activity,
+                Intent(commentsFragment.activity, ProfileActivity::class.java)
+                    .putExtra("userId", comment.userId.toInt()),
+                null
+            )
+        }
+        viewBinding.commentUserName.setOnClickListener { openProfile() }
+        viewBinding.commentUserAvatar.setOnClickListener { openProfile() }
+    }
+
+    private fun bindInteractionButtons(viewBinding: ItemCommentsBinding, item: CommentItem) {
+        viewBinding.commentText.setOnLongClickListener {
+            copyToClipboard(comment.content)
+            true
+        }
+        viewBinding.commentEdit.setOnClickListener {
+            editing(!isEditing)
+            commentsFragment.editCallback(item)
+        }
+        viewBinding.commentReply.setOnClickListener {
+            replying(!isReplying)
+            commentsFragment.replyTo(item, comment.username)
+            commentsFragment.replyCallback(item)
+        }
+    }
+
+    private fun bindUserDetails(viewBinding: ItemCommentsBinding, levelColor: Pair<Int, Int>) {
+        viewBinding.commentTotalVotes.text = (comment.upvotes - comment.downvotes).toString()
+        viewBinding.commentUserAvatar.openImage(
+            commentsFragment.activity.getString(R.string.avatar, comment.username),
+            comment.profilePictureUrl ?: ""
+        )
+        comment.profilePictureUrl?.let { viewBinding.commentUserAvatar.loadImage(it) }
+        viewBinding.commentUserName.text = comment.username
+        val userColor = "[${levelColor.second}]"
+        viewBinding.commentUserLevel.text = userColor
+        viewBinding.commentUserLevel.setTextColor(levelColor.first)
+        viewBinding.commentUserTime.text = formatTimestamp(comment.timestamp)
+    }
+
     override fun bind(viewBinding: ItemCommentsBinding, position: Int) {
         binding = viewBinding
         setAnimation(binding.root.context, binding.root)
@@ -100,86 +189,12 @@ class CommentItem(
             markwon.setMarkdown(commentText, comment.content)
             applyTimestampHighlighting(commentText)
             commentEdit.visibility = if (isUserComment) View.VISIBLE else View.GONE
-            if (comment.tag == null) {
-                commentUserTagLayout.visibility = View.GONE
-            } else {
-                commentUserTagLayout.visibility = View.VISIBLE
-                commentUserTag.text = comment.tag.toString()
-                commentUserTagLayout.setOnClickListener {
-                    commentsFragment.onTagClicked(comment.tag.toString())
-                }
-            }
+            bindUserTag(viewBinding)
             replying(isReplying) //sets default text
             editing(isEditing)
-            if ((comment.replyCount ?: 0) > 0 || repliesVisible) {
-                commentTotalReplies.visibility = View.VISIBLE
-                commentRepliesDivider.visibility = View.VISIBLE
-                commentTotalReplies.context.run {
-                    commentTotalReplies.text = if (repliesVisible)
-                        getString(R.string.hide_replies)
-                    else {
-                        val replyCount = comment.replyCount ?: 1
-                        if (replyCount == 1)
-                            getString(R.string.view_reply)
-                        else
-                            getString(R.string.view_replies_count, replyCount)
-                    }
-                }
-            } else {
-                commentTotalReplies.visibility = View.GONE
-                commentRepliesDivider.visibility = View.GONE
-            }
-            commentReply.visibility = View.VISIBLE
-            commentTotalReplies.setOnClickListener {
-                if (repliesVisible) {
-                    repliesSection.clear()
-                    removeSubCommentIds()
-                    commentTotalReplies.context.run {
-                        val replyCount = comment.replyCount ?: 1
-                        commentTotalReplies.text = if (replyCount == 1)
-                            getString(R.string.view_reply)
-                        else
-                            getString(R.string.view_replies_count, replyCount)
-                    }
-                    repliesVisible = false
-                } else {
-                    commentTotalReplies.setText(R.string.hide_replies)
-                    repliesSection.clear()
-                    commentsFragment.viewReplyCallback(item)
-                    repliesVisible = true
-                }
-            }
-
-            commentUserName.setOnClickListener {
-                ContextCompat.startActivity(
-                    commentsFragment.activity,
-                    Intent(commentsFragment.activity, ProfileActivity::class.java)
-                        .putExtra("userId", comment.userId.toInt()),
-                    null
-                )
-            }
-            commentUserAvatar.setOnClickListener {
-                ContextCompat.startActivity(
-                    commentsFragment.activity,
-                    Intent(commentsFragment.activity, ProfileActivity::class.java)
-                        .putExtra("userId", comment.userId.toInt()),
-                    null
-                )
-            }
-            commentText.setOnLongClickListener {
-                copyToClipboard(comment.content)
-                true
-            }
-
-            commentEdit.setOnClickListener {
-                editing(!isEditing)
-                commentsFragment.editCallback(item)
-            }
-            commentReply.setOnClickListener {
-                replying(!isReplying)
-                commentsFragment.replyTo(item, comment.username)
-                commentsFragment.replyCallback(item)
-            }
+            bindRepliesSection(viewBinding, item)
+            bindProfileNavigation(viewBinding)
+            bindInteractionButtons(viewBinding, item)
             modBadge.visibility = if (comment.isMod == true) View.VISIBLE else View.GONE
             adminBadge.visibility =
                 if (comment.isAdmin == true) View.VISIBLE else View.GONE
@@ -187,17 +202,7 @@ class CommentItem(
             //fill the icon if the user has liked the comment
             setVoteButtons(viewBinding)
             setupVoteClickListeners(this)
-            commentTotalVotes.text = (comment.upvotes - comment.downvotes).toString()
-            commentUserAvatar.openImage(
-                commentsFragment.activity.getString(R.string.avatar, comment.username),
-                comment.profilePictureUrl ?: ""
-            )
-            comment.profilePictureUrl?.let { commentUserAvatar.loadImage(it) }
-            commentUserName.text = comment.username
-            val userColor = "[${levelColor.second}]"
-            commentUserLevel.text = userColor
-            commentUserLevel.setTextColor(levelColor.first)
-            commentUserTime.text = formatTimestamp(comment.timestamp)
+            bindUserDetails(viewBinding, levelColor)
         }
     }
 

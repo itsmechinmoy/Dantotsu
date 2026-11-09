@@ -151,21 +151,9 @@ class InstalledNovelExtensionsFragment : BaseInstalledExtensionsFragment(), Sear
         _binding = FragmentNovelExtensionsBinding.inflate(inflater, container, false)
 
         extensionsRecyclerView = binding.allNovelExtensionsRecyclerView
-        extensionsRecyclerView.layoutManager = SafeLinearLayoutManager(requireContext())
-        extensionsRecyclerView.adapter = extensionsAdapter
-
-        setupExtensionsDragAndDrop(
-            extensionsRecyclerView,
-            onMoveItem = { fromPosition, toPosition ->
-                val newList = extensionsAdapter.currentList.toMutableList().apply {
-                    add(toPosition, removeAt(fromPosition))
-                }
-                extensionsAdapter.submitList(newList)
-            },
-            onClearView = {
-                extensionsAdapter.updatePref()
-            }
-        )
+        setupExtensionsRecyclerView(extensionsRecyclerView, extensionsAdapter) {
+            extensionsAdapter.updatePref()
+        }
 
 
         lifecycleScope.launch {

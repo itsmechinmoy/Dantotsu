@@ -36,6 +36,72 @@ import kotlinx.coroutines.withContext
 class SubscriptionNotificationTask : Task {
     private var currentlyPerforming = false
 
+    private suspend fun waitForSourcesInitialization(): Boolean {
+        var timeout = 15_000L
+        do {
+            delay(1000)
+            timeout -= 1000
+        } while (timeout > 0 && (!AnimeSources.isInitialized || !MangaSources.isInitialized))
+        Logger.log("SubscriptionNotificationTask: timeout: $timeout")
+        return timeout > 0 || (AnimeSources.isInitialized && MangaSources.isInitialized)
+    }
+
+    private fun showInitialProgressNotification(
+        context: Context,
+        notificationManager: NotificationManagerCompat,
+        progressNotification: NotificationCompat.Builder?,
+        subscriptionsSize: Int
+    ) {
+        if (progressNotification != null && hasNotificationPermission(context)) {
+            notificationManager.notify(
+                ID_SUBSCRIPTION_CHECK_PROGRESS,
+                progressNotification.build()
+            )
+            CoroutineScope(Dispatchers.Main).launch {
+                delay(5 * subscriptionsSize * 1000L)
+                notificationManager.cancel(ID_SUBSCRIPTION_CHECK_PROGRESS)
+            }
+        }
+    }
+
+    private fun updateUnreadSubscriptionCount(newSubscriptionCount: Int) {
+        if (newSubscriptionCount > 0) {
+            val currentSubsCount = PrefManager.getVal<Int>(PrefName.UnreadSubscriptionNotifications)
+            PrefManager.setVal(PrefName.UnreadSubscriptionNotifications, currentSubsCount + newSubscriptionCount)
+        }
+    }
+
+    private suspend fun executeSubscriptionCheck(context: Context): Boolean = withContext(Dispatchers.IO) {
+        App.context = context
+        Logger.log("SubscriptionNotificationTask: execute")
+        if (!waitForSourcesInitialization()) {
+            Logger.log("SubscriptionNotificationTask: timed out waiting for sources initialization")
+            return@withContext false
+        }
+        val subscriptions = SubscriptionHelper.getSubscriptions()
+        var i = 0
+        val index = subscriptions.map { i++; it.key to i }.toMap()
+        val notificationManager = NotificationManagerCompat.from(context)
+
+        val progressEnabled: Boolean = PrefManager.getVal(PrefName.SubscriptionCheckingNotifications)
+        val progressNotification = if (progressEnabled) getProgressNotification(context, subscriptions.size) else null
+        showInitialProgressNotification(context, notificationManager, progressNotification, subscriptions.size)
+
+        val newSubscriptionCount = processSubscriptions(
+            context,
+            subscriptions,
+            index,
+            progressNotification,
+            notificationManager
+        )
+        updateUnreadSubscriptionCount(newSubscriptionCount)
+
+        if (progressNotification != null) {
+            notificationManager.cancel(ID_SUBSCRIPTION_CHECK_PROGRESS)
+        }
+        true
+    }
+
     @SuppressLint("MissingPermission")
     override suspend fun execute(context: Context): Boolean {
         PrefManager.init(context)
@@ -43,83 +109,17 @@ class SubscriptionNotificationTask : Task {
             Logger.log("SubscriptionNotificationTask: skipped (calculator lock enabled)")
             return true
         }
-        if (!currentlyPerforming) {
-            try {
-                currentlyPerforming = true
-                return withContext(Dispatchers.IO) {
-                    App.context = context
-                    Logger.log("SubscriptionNotificationTask: execute")
-                    var timeout = 15_000L
-                    do {
-                        delay(1000)
-                        timeout -= 1000
-                    } while (timeout > 0 && (!AnimeSources.isInitialized || !MangaSources.isInitialized))
-                    Logger.log("SubscriptionNotificationTask: timeout: $timeout")
-                    if (timeout <= 0 && (!AnimeSources.isInitialized || !MangaSources.isInitialized)) {
-                        Logger.log("SubscriptionNotificationTask: timed out waiting for sources initialization")
-                        return@withContext false
-                    }
-                    val subscriptions = SubscriptionHelper.getSubscriptions()
-                    var i = 0
-                    val index = subscriptions.map { i++; it.key to i }.toMap()
-                    val notificationManager = NotificationManagerCompat.from(context)
+        if (currentlyPerforming) return false
 
-                    val progressEnabled: Boolean =
-                        PrefManager.getVal(PrefName.SubscriptionCheckingNotifications)
-                    val progressNotification = if (progressEnabled) getProgressNotification(
-                        context,
-                        subscriptions.size
-                    ) else null
-                    if (progressNotification != null && hasNotificationPermission(context)) {
-                        notificationManager.notify(
-                            ID_SUBSCRIPTION_CHECK_PROGRESS,
-                            progressNotification.build()
-                        )
-                        //Seems like if the parent coroutine scope gets cancelled, the notification stays
-                        //So adding this as a safeguard? dk if this will be useful
-                        CoroutineScope(Dispatchers.Main).launch {
-                            delay(5 * subscriptions.size * 1000L)
-                            notificationManager.cancel(ID_SUBSCRIPTION_CHECK_PROGRESS)
-                        }
-                    }
-
-                    fun progress(progress: Int, parser: String, media: String) {
-                        if (progressNotification != null && hasNotificationPermission(context))
-                            notificationManager.notify(
-                                ID_SUBSCRIPTION_CHECK_PROGRESS,
-                                progressNotification
-                                    .setProgress(subscriptions.size, progress, false)
-                                    .setContentText("$media on $parser")
-                                    .build()
-                            )
-                    }
-
-                    val newSubscriptionCount = processSubscriptions(
-                        context,
-                        subscriptions,
-                        index,
-                        progressNotification,
-                        notificationManager
-                    )
-                    if (newSubscriptionCount > 0) {
-                        val currentSubsCount = PrefManager.getVal<Int>(PrefName.UnreadSubscriptionNotifications)
-                        PrefManager.setVal(PrefName.UnreadSubscriptionNotifications, currentSubsCount + newSubscriptionCount)
-                    }
-
-                    if (progressNotification != null) notificationManager.cancel(
-                        ID_SUBSCRIPTION_CHECK_PROGRESS
-                    )
-                    true
-                }
-            } catch (e: Exception) {
-                Logger.log("SubscriptionNotificationTask: ${e.message}")
-                Logger.log(e)
-                return false
-            } finally {
-                currentlyPerforming = false
-            }
-        } else {
-            return false
+        return try {
+            currentlyPerforming = true
+            executeSubscriptionCheck(context)
+        } catch (e: Exception) {
+            Logger.log("SubscriptionNotificationTask: ${e.message}")
+            Logger.log(e)
+            false
+        } finally {
+            currentlyPerforming = false
         }
     }
 

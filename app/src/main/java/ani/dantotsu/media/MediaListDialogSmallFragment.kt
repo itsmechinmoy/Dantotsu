@@ -25,6 +25,7 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.tryWith
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -64,10 +65,29 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
     }
 
 
-    @Suppress("ComplexMethod", "LongMethod")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.mediaListContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> { bottomMargin += navBarHeight }
         val scope = viewLifecycleOwner.lifecycleScope
+        setupDeleteButton(scope)
+
+        binding.mediaListProgressBar.visibility = View.GONE
+        binding.mediaListLayout.visibility = View.VISIBLE
+        val statuses = resources.getStringArray(R.array.status)
+        val statusStrings = if (media.manga == null) {
+            resources.getStringArray(R.array.status_anime)
+        } else {
+            resources.getStringArray(R.array.status_manga)
+        }
+
+        setupStatusDropdown(statuses, statusStrings)
+        val total = setupProgressInput()
+        setupScoreInput()
+        setupIncrementDecrement(statusStrings, total)
+        val (removeList, getRemove) = setupRescueAndPrivacySwitches()
+        setupSaveButton(scope, statuses, statusStrings, removeList, getRemove)
+    }
+
+    private fun setupDeleteButton(scope: CoroutineScope) {
         binding.mediaListDelete.setOnClickListener {
             scope.launch {
                 media.deleteFromList(scope, onSuccess = {
@@ -76,28 +96,21 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
                     dismissAllowingStateLoss()
                 }, onError = { e ->
                     withContext(Dispatchers.Main) {
-                        snackString(
-                            getString(
-                                R.string.delete_fail_reason, e.message
-                            )
-                        )
+                        snackString(getString(R.string.delete_fail_reason, e.message))
                     }
                 }, onNotFound = {
                     snackString(getString(R.string.no_list_id))
                 })
             }
         }
+    }
 
-        binding.mediaListProgressBar.visibility = View.GONE
-        binding.mediaListLayout.visibility = View.VISIBLE
-        val statuses: Array<String> = resources.getStringArray(R.array.status)
-        val statusStrings =
-            if (media.manga == null) resources.getStringArray(R.array.status_anime) else resources.getStringArray(
-                R.array.status_manga
-            )
-        val userStatus =
-            if (media.userStatus != null) statusStrings[statuses.indexOf(media.userStatus).coerceAtLeast(0)] else statusStrings[0]
-
+    private fun setupStatusDropdown(statuses: Array<String>, statusStrings: Array<String>) {
+        val userStatus = if (media.userStatus != null) {
+            statusStrings[statuses.indexOf(media.userStatus).coerceAtLeast(0)]
+        } else {
+            statusStrings[0]
+        }
         binding.mediaListStatus.setText(userStatus)
         binding.mediaListStatus.setAdapter(
             ArrayAdapter(
@@ -106,35 +119,37 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
                 statusStrings
             )
         )
+    }
 
-
+    private fun setupProgressInput(): Int? {
         var total: Int? = null
         binding.mediaListProgress.setText(if (media.userProgress != null) media.userProgress.toString() else "")
-        if (media.anime != null) if (media.anime!!.totalEpisodes != null) {
-            total = media.anime!!.totalEpisodes!!;binding.mediaListProgress.filters =
-                arrayOf(
-                    InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
-                    LengthFilter(total.toString().length)
-                )
-        } else if (media.manga != null) if (media.manga!!.totalChapters != null) {
-            total = media.manga!!.totalChapters!!;binding.mediaListProgress.filters =
-                arrayOf(
-                    InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
-                    LengthFilter(total.toString().length)
-                )
+        val maxEpisodes = media.anime?.totalEpisodes
+        val maxChapters = media.manga?.totalChapters
+        if (maxEpisodes != null) {
+            total = maxEpisodes
+            binding.mediaListProgress.filters = arrayOf(
+                InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
+                LengthFilter(total.toString().length)
+            )
+        } else if (maxChapters != null) {
+            total = maxChapters
+            binding.mediaListProgress.filters = arrayOf(
+                InputFilterMinMax(0.0, total.toDouble(), binding.mediaListStatus),
+                LengthFilter(total.toString().length)
+            )
         }
         binding.mediaListProgressLayout.suffixText = " / ${total ?: '?'}"
         binding.mediaListProgressLayout.suffixTextView.updateLayoutParams {
             height = ViewGroup.LayoutParams.MATCH_PARENT
         }
         binding.mediaListProgressLayout.suffixTextView.gravity = Gravity.CENTER
+        return total
+    }
 
-
-
+    private fun setupScoreInput() {
         binding.mediaListScore.setText(
-            if (media.userScore != 0) media.userScore.div(
-                10.0
-            ).toString() else ""
+            if (media.userScore != 0) (media.userScore / 10.0).toString() else ""
         )
         binding.mediaListScore.filters =
             arrayOf(InputFilterMinMax(0.0, 10.0), LengthFilter(10.0.toString().length))
@@ -142,36 +157,31 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
             height = ViewGroup.LayoutParams.MATCH_PARENT
         }
         binding.mediaListScoreLayout.suffixTextView.gravity = Gravity.CENTER
+    }
 
-
-
+    private fun setupIncrementDecrement(statusStrings: Array<String>, total: Int?) {
+        val maxLimit = total ?: 5000
         binding.mediaListIncrement.setOnClickListener {
-            if (binding.mediaListStatus.text.toString() == statusStrings[0]) binding.mediaListStatus.setText(
-                statusStrings[1],
-                false
-            )
-            val init =
-                if (binding.mediaListProgress.text.toString() != "") binding.mediaListProgress.text.toString()
-                    .toInt() else 0
-            if (init < (total ?: 5000)) {
-                val progressText = "${init + 1}"
-                binding.mediaListProgress.setText(progressText)
+            if (binding.mediaListStatus.text.toString() == statusStrings[0]) {
+                binding.mediaListStatus.setText(statusStrings[1], false)
             }
-            if (init + 1 == (total ?: 5000)) {
+            val init = binding.mediaListProgress.text.toString().toIntOrNull() ?: 0
+            if (init < maxLimit) {
+                binding.mediaListProgress.setText("${init + 1}")
+            }
+            if (init + 1 == maxLimit) {
                 binding.mediaListStatus.setText(statusStrings[2], false)
             }
         }
-
         binding.mediaListDecrement.setOnClickListener {
-            val init =
-                if (binding.mediaListProgress.text.toString() != "") binding.mediaListProgress.text.toString()
-                    .toInt() else 0
+            val init = binding.mediaListProgress.text.toString().toIntOrNull() ?: 0
             if (init > 0) {
-                val progressText = "${init - 1}"
-                binding.mediaListProgress.setText(progressText)
+                binding.mediaListProgress.setText("${init - 1}")
             }
         }
+    }
 
+    private fun setupRescueAndPrivacySwitches(): Pair<Set<String>, () -> Boolean?> {
         val isRescueMode = PrefManager.getVal<Boolean>(PrefName.RescueMode)
         if (isRescueMode) {
             binding.mediaListPrivate.apply { (parent as? ViewGroup)?.removeView(this) }
@@ -188,54 +198,65 @@ class MediaListDialogSmallFragment : BottomSheetDialogFragment() {
         binding.mediaListShow.setOnCheckedChangeListener { _, checked ->
             remove = checked
         }
+        return Pair(removeList) { remove }
+    }
+
+    private suspend fun executeSave(statuses: Array<String>, statusStrings: Array<String>) =
+        withContext(Dispatchers.IO) {
+            val progress = _binding?.mediaListProgress?.text.toString().toIntOrNull()
+            val progressVolumes = media.userProgressVolumes
+            val score = _binding?.mediaListScore?.text.toString().toDoubleOrNull()?.times(10)?.toInt()
+            val statusText = _binding?.mediaListStatus?.text.toString()
+            val status = statuses[statusStrings.indexOf(statusText).coerceAtLeast(0)]
+            val startD = media.userStartedAt
+            val endD = media.userCompletedAt
+            val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+            if (rescueMode) {
+                val pending = PendingProgressUpdate(
+                    mediaId = media.id,
+                    idMAL = media.idMAL,
+                    isAnime = media.anime != null,
+                    progress = progress ?: 0,
+                    status = status,
+                    score = score,
+                    isPrivate = media.isListPrivate,
+                )
+                val existing: List<PendingProgressUpdate> =
+                    PrefManager.getVal(PrefName.PendingProgressUpdates, listOf())
+                val updated = existing.filterNot { it.mediaId == media.id } + pending
+                PrefManager.setVal(PrefName.PendingProgressUpdates, updated)
+            } else {
+                Anilist.mutation.editList(
+                    mediaID = media.id,
+                    progress = progress,
+                    progressVolumes = progressVolumes,
+                    score = score,
+                    status = status,
+                    private = media.isListPrivate
+                )
+            }
+            MAL.query.editList(
+                media.idMAL,
+                media.anime != null,
+                progress,
+                score,
+                status,
+                start = startD,
+                end = endD
+            )
+        }
+
+    private fun setupSaveButton(
+        scope: CoroutineScope,
+        statuses: Array<String>,
+        statusStrings: Array<String>,
+        removeList: Set<String>,
+        getRemove: () -> Boolean?
+    ) {
         binding.mediaListSave.setOnClickListener {
-            val progressText = binding.mediaListProgress.text.toString()
-            val scoreText = binding.mediaListScore.text.toString()
-            val statusText = binding.mediaListStatus.text.toString()
             scope.launch {
-                withContext(Dispatchers.IO) {
-                    val progress = _binding?.mediaListProgress?.text.toString().toIntOrNull()
-                    val progressVolumes = media.userProgressVolumes
-                    val score = _binding?.mediaListScore?.text.toString().toDoubleOrNull()?.times(10)?.toInt()
-                    val statusText = _binding?.mediaListStatus?.text.toString()
-                    val status = statuses[statusStrings.indexOf(statusText).coerceAtLeast(0)]
-                    val startD = media.userStartedAt
-                    val endD = media.userCompletedAt
-                    val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-                    if (rescueMode) {
-                        val pending = PendingProgressUpdate(
-                            mediaId = media.id,
-                            idMAL = media.idMAL,
-                            isAnime = media.anime != null,
-                            progress = progress ?: 0,
-                            status = status,
-                            score = score,
-                            isPrivate = media.isListPrivate,
-                        )
-                        val existing: List<PendingProgressUpdate> =
-                            PrefManager.getVal(PrefName.PendingProgressUpdates, listOf())
-                        val updated = existing.filterNot { it.mediaId == media.id } + pending
-                        PrefManager.setVal(PrefName.PendingProgressUpdates, updated)
-                    } else {
-                        Anilist.mutation.editList(
-                            mediaID = media.id,
-                            progress = progress,
-                            progressVolumes = progressVolumes,
-                            score = score,
-                            status = status,
-                            private = media.isListPrivate
-                        )
-                    }
-                    MAL.query.editList(
-                        media.idMAL,
-                        media.anime != null,
-                        progress,
-                        score,
-                        status,
-                        start = startD,
-                        end = endD
-                    )
-                }
+                executeSave(statuses, statusStrings)
+                val remove = getRemove()
                 if (remove == true) {
                     PrefManager.setCustomVal("removeList", removeList.plus(media.id.toString()))
                 } else if (remove == false) {

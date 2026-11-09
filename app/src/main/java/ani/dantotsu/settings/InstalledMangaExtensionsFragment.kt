@@ -103,21 +103,9 @@ class InstalledMangaExtensionsFragment : BaseInstalledExtensionsFragment(), Sear
         _binding = FragmentExtensionsBinding.inflate(inflater, container, false)
 
         extensionsRecyclerView = binding.allExtensionsRecyclerView
-        extensionsRecyclerView.layoutManager = SafeLinearLayoutManager(requireContext())
-        extensionsRecyclerView.adapter = extensionsAdapter
-
-        setupExtensionsDragAndDrop(
-            extensionsRecyclerView,
-            onMoveItem = { fromPosition, toPosition ->
-                val newList = extensionsAdapter.currentList.toMutableList().apply {
-                    add(toPosition, removeAt(fromPosition))
-                }
-                extensionsAdapter.submitList(newList)
-            },
-            onClearView = {
-                extensionsAdapter.updatePref()
-            }
-        )
+        setupExtensionsRecyclerView(extensionsRecyclerView, extensionsAdapter) {
+            extensionsAdapter.updatePref()
+        }
 
 
         lifecycleScope.launch {

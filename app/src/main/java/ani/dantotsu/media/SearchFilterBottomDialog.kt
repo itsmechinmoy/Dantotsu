@@ -99,9 +99,25 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-
         activity = requireActivity() as SearchActivity
 
+        applyRescueModeVisibility()
+
+        selectedGenres = activity.aniMangaResult.genres ?: mutableListOf()
+        exGenres = activity.aniMangaResult.excludedGenres ?: mutableListOf()
+        selectedTags = activity.aniMangaResult.tags ?: mutableListOf()
+        exTags = activity.aniMangaResult.excludedTags ?: mutableListOf()
+        setSortByFilterImage()
+
+        setupResetFilterListeners()
+        setupSortByMenu()
+        setupCountryFilterMenu()
+        setupApplyAndCancelListeners()
+        setupDropdownFilters()
+        setupChipsFilters()
+    }
+
+    private fun applyRescueModeVisibility() {
         val rescueMode: Boolean = ani.dantotsu.settings.saving.PrefManager.getVal(
             ani.dantotsu.settings.saving.PrefName.RescueMode
         )
@@ -113,13 +129,9 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
             binding.searchSeasonCont.visibility = View.GONE
             (binding.searchOnList.parent as? View)?.visibility = View.GONE
         }
+    }
 
-        selectedGenres = activity.aniMangaResult.genres ?: mutableListOf()
-        exGenres = activity.aniMangaResult.excludedGenres ?: mutableListOf()
-        selectedTags = activity.aniMangaResult.tags ?: mutableListOf()
-        exTags = activity.aniMangaResult.excludedTags ?: mutableListOf()
-        setSortByFilterImage()
-
+    private fun setupResetFilterListeners() {
         binding.resetSearchFilter.setOnClickListener {
             val rotateAnimation =
                 ObjectAnimator.ofFloat(binding.resetSearchFilter, "rotation", 180f, 540f)
@@ -165,9 +177,9 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
             }, 500)
             true
         }
+    }
 
-        setupSortByMenu()
-        setupCountryFilterMenu()
+    private fun setupApplyAndCancelListeners() {
         binding.searchFilterApply.setOnClickListener {
             val isRescueModeApply: Boolean = ani.dantotsu.settings.saving.PrefManager.getVal(
                 ani.dantotsu.settings.saving.PrefName.RescueMode
@@ -210,6 +222,9 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
         binding.searchFilterCancel.setOnClickListener {
             dismiss()
         }
+    }
+
+    private fun setupDropdownFilters() {
         val format =
             if (activity.aniMangaResult.type == "ANIME") Anilist.animeStatus else Anilist.mangaStatus
         binding.searchStatus.setText(activity.aniMangaResult.status?.replace("_", " "))
@@ -253,8 +268,9 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
             )
         )
 
-        if (activity.aniMangaResult.type == "MANGA") binding.searchSeasonCont.visibility = GONE
-        else {
+        if (activity.aniMangaResult.type == "MANGA") {
+            binding.searchSeasonCont.visibility = GONE
+        } else {
             binding.searchSeason.setText(activity.aniMangaResult.season)
             binding.searchSeason.setAdapter(
                 ArrayAdapter(
@@ -283,7 +299,9 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
                 onListOptions
             )
         )
+    }
 
+    private fun setupChipsFilters() {
         binding.searchFilterGenres.adapter = FilterChipAdapter(Anilist.genres ?: listOf()) { chip ->
             val genre = chip.text.toString()
             chip.isChecked = selectedGenres.contains(genre)
@@ -293,8 +311,9 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
                     chip.isCloseIconVisible = false
                     exGenres.remove(genre)
                     selectedGenres.add(genre)
-                } else
+                } else {
                     selectedGenres.remove(genre)
+                }
             }
             chip.setOnLongClickListener {
                 chip.isChecked = false
@@ -321,8 +340,9 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
                         chip.isCloseIconVisible = false
                         exTags.remove(tag)
                         selectedTags.add(tag)
-                    } else
+                    } else {
                         selectedTags.remove(tag)
+                    }
                 }
                 chip.setOnLongClickListener {
                     chip.isChecked = false

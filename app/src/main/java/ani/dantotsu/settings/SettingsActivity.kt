@@ -57,19 +57,31 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         ThemeManager(this).applyTheme()
         initActivity(this)
-
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val context = this
+        setupHeaderAndVersion()
+        setupBackNavigation()
+        val mainAdapter = SettingsAdapter(buildSettingsItems(this))
+        val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
+        binding.settingsRecyclerView.apply {
+            adapter = mainAdapter
+            layoutManager = LinearLayoutManager(this@SettingsActivity, LinearLayoutManager.VERTICAL, false)
+            setHasFixedSize(true)
+        }
+        setupSettingsSearch(mainAdapter, searchAdapter)
+        setupSocialButtonsAndLinks()
+        setupEasterEggAndDonationPrompt()
+    }
+
+    private fun setupHeaderAndVersion() {
         binding.apply {
             settingsVersion.apply {
                 text = getString(R.string.version_current, BuildConfig.VERSION_NAME)
-
                 setOnLongClickListener {
                     copyToClipboard(getDeviceInfo(), false)
                     toast(getString(R.string.copied_device_info))
-                    return@setOnLongClickListener true
+                    true
                 }
             }
             checkIfOutdated()
@@ -77,68 +89,70 @@ class SettingsActivity : AppCompatActivity() {
                 topMargin = statusBarHeight
                 bottomMargin = navBarHeight
             }
+        }
+    }
 
-            onBackPressedDispatcher.addCallback(context) {
-                if (settingsSearchBarText.text?.isNotBlank() == true) {
-                    settingsSearchBarText.setText("")
-                } else if (PrefManager.getCustomVal("reload", false)) {
-                    startMainActivity(context)
-                    PrefManager.setCustomVal("reload", false)
-                } else {
-                    finish()
-                }
+    private fun setupBackNavigation() {
+        onBackPressedDispatcher.addCallback(this) {
+            if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
+                binding.settingsSearchBarText.setText("")
+            } else if (PrefManager.getCustomVal("reload", false)) {
+                startMainActivity(this@SettingsActivity)
+                PrefManager.setCustomVal("reload", false)
+            } else {
+                finish()
             }
+        }
 
-            settingsBack.setOnClickListener {
-                if (settingsSearchBarText.text?.isNotBlank() == true) {
-                    settingsSearchBarText.setText("")
-                } else {
-                    onBackPressedDispatcher.onBackPressed()
-                }
+        binding.settingsBack.setOnClickListener {
+            if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
+                binding.settingsSearchBarText.setText("")
+            } else {
+                onBackPressedDispatcher.onBackPressed()
             }
+        }
+    }
 
-            val mainAdapter = SettingsAdapter(buildSettingsItems(context))
-
-            val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
-
-            settingsRecyclerView.apply {
-                adapter = mainAdapter
-                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-                setHasFixedSize(true)
-            }
-
-            settingsSearchBarText.addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                    val query = s?.toString()?.trim() ?: ""
-                    if (query.isNotEmpty()) {
-                        val results = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
-                        if (results.isNotEmpty()) {
-                            searchAdapter.updateResults(results)
-                            settingsRecyclerView.adapter = searchAdapter
-                            settingsRecyclerView.visibility = View.VISIBLE
-                            settingsEmptyLayout.visibility = View.GONE
-                        } else {
-                            settingsRecyclerView.visibility = View.GONE
-                            settingsEmptyLayout.visibility = View.VISIBLE
-                        }
-                        settingsFooterLayout.visibility = View.GONE
-                        settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_close_24)
-                        settingsSearchBar.setEndIconOnClickListener {
-                            settingsSearchBarText.setText("")
-                        }
+    private fun setupSettingsSearch(
+        mainAdapter: SettingsAdapter,
+        searchAdapter: ani.dantotsu.settings.search.SettingsSearchAdapter
+    ) {
+        val context = this
+        binding.settingsSearchBarText.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val query = s?.toString()?.trim() ?: ""
+                if (query.isNotEmpty()) {
+                    val results = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
+                    if (results.isNotEmpty()) {
+                        searchAdapter.updateResults(results)
+                        binding.settingsRecyclerView.adapter = searchAdapter
+                        binding.settingsRecyclerView.visibility = View.VISIBLE
+                        binding.settingsEmptyLayout.visibility = View.GONE
                     } else {
-                        settingsRecyclerView.adapter = mainAdapter
-                        settingsRecyclerView.visibility = View.VISIBLE
-                        settingsEmptyLayout.visibility = View.GONE
-                        settingsFooterLayout.visibility = View.VISIBLE
-                        settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_search_24)
-                        settingsSearchBar.setEndIconOnClickListener(null)
+                        binding.settingsRecyclerView.visibility = View.GONE
+                        binding.settingsEmptyLayout.visibility = View.VISIBLE
                     }
+                    binding.settingsFooterLayout.visibility = View.GONE
+                    binding.settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_close_24)
+                    binding.settingsSearchBar.setEndIconOnClickListener {
+                        binding.settingsSearchBarText.setText("")
+                    }
+                } else {
+                    binding.settingsRecyclerView.adapter = mainAdapter
+                    binding.settingsRecyclerView.visibility = View.VISIBLE
+                    binding.settingsEmptyLayout.visibility = View.GONE
+                    binding.settingsFooterLayout.visibility = View.VISIBLE
+                    binding.settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_search_24)
+                    binding.settingsSearchBar.setEndIconOnClickListener(null)
                 }
-                override fun afterTextChanged(s: android.text.Editable?) {}
-            })
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+    }
 
+    private fun setupSocialButtonsAndLinks() {
+        binding.apply {
             if (!BuildConfig.FLAVOR.contains("fdroid")) {
                 settingsLogo.setOnLongClickListener {
                     lifecycleScope.launch(Dispatchers.IO) {
@@ -149,9 +163,7 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             settingBuyMeCoffee.setOnClickListener {
-                lifecycleScope.launch {
-                    it.pop()
-                }
+                lifecycleScope.launch { it.pop() }
                 openLinkInBrowser(getString(R.string.coffee))
             }
             lifecycleScope.launch {
@@ -164,13 +176,11 @@ class SettingsActivity : AppCompatActivity() {
             loginGithub.setOnClickListener {
                 openLinkInBrowser(getString(R.string.github))
             }
-            /*
-            loginTelegram.setOnClickListener {
-                openLinkInBrowser(getString(R.string.telegram))
-            }
-            */
+        }
+    }
 
-
+    private fun setupEasterEggAndDonationPrompt() {
+        binding.apply {
             (settingsLogo.drawable as Animatable).start()
             val array = resources.getStringArray(R.array.tips)
 
@@ -179,16 +189,11 @@ class SettingsActivity : AppCompatActivity() {
                 (settingsLogo.drawable as Animatable).start()
                 if (cursedCounter % 16 == 0) {
                     val oldVal: Boolean = PrefManager.getVal(PrefName.OC)
-                    if (!oldVal) {
-                        toast(R.string.omega_cursed)
-                    } else {
-                        toast(R.string.omega_freed)
-                    }
+                    toast(if (!oldVal) R.string.omega_cursed else R.string.omega_freed)
                     PrefManager.setVal(PrefName.OC, !oldVal)
                 } else {
-                    snackString(array[(Math.random() * array.size).toInt()], context)
+                    snackString(array[(Math.random() * array.size).toInt()], this@SettingsActivity)
                 }
-
             }
 
             lifecycleScope.launch(Dispatchers.IO) {
@@ -198,14 +203,12 @@ class SettingsActivity : AppCompatActivity() {
                         CustomBottomDialog.newInstance().apply {
                             title = this@SettingsActivity.getString(R.string.enjoying_app)
                             addView(TextView(this@SettingsActivity).apply {
-                                text = context.getString(R.string.consider_donating)
+                                text = this@SettingsActivity.getString(R.string.consider_donating)
                             })
-
                             setNegativeButton(this@SettingsActivity.getString(R.string.no_moners)) {
                                 snackString(R.string.you_be_rich)
                                 dismiss()
                             }
-
                             setPositiveButton(this@SettingsActivity.getString(R.string.donate)) {
                                 settingBuyMeCoffee.performClick()
                                 dismiss()
