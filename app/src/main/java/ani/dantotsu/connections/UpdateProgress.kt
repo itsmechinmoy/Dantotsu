@@ -4,6 +4,7 @@ import ani.dantotsu.R
 import ani.dantotsu.Refresh
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.mangabaka.MangaBaka
 import ani.dantotsu.currContext
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.emptyMedia
@@ -53,6 +54,9 @@ fun updateProgress(media: Media, number: String) {
                         media.anime != null,
                         a, null, status
                     )
+                    if (media.anime == null) {
+                        MangaBaka.query.updateProgress(media, a)
+                    }
                     toast(currContext()?.getString(R.string.setting_progress, a))
                 }
                 media.userProgress = a
@@ -75,6 +79,9 @@ fun updateProgress(media: Media, number: String) {
                         a, null,
                         if (media.userStatus == "REPEATING") media.userStatus!! else "CURRENT"
                     )
+                    if (media.anime == null) {
+                        MangaBaka.query.updateProgress(media, a)
+                    }
                     toast(currContext()?.getString(R.string.setting_progress, a))
                     media.userProgress = a
                 }

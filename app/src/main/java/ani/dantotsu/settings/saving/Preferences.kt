@@ -5,6 +5,7 @@ import ani.dantotsu.connections.PendingDeletion
 import ani.dantotsu.connections.PendingProgressUpdate
 import ani.dantotsu.connections.comments.AuthResponse
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.mangabaka.MangaBakaToken
 import ani.dantotsu.media.SearchHistory
 import ani.dantotsu.notifications.comment.CommentStore
 import ani.dantotsu.notifications.subscription.SubscriptionStore
@@ -14,6 +15,10 @@ import ani.dantotsu.settings.saving.internal.Pref
 enum class PrefName(val data: Pref) {
     //General
     SharedUserID(Pref(Location.General, Boolean::class, true)),
+    SkipDuplicateChapters(Pref(Location.General, Boolean::class, true)),
+    ShowEpisodeRating(Pref(Location.General, Boolean::class, true)),
+    AutoBackupDir(Pref(Location.Irrelevant, String::class, "")),
+    PlayerBufferSize(Pref(Location.Player, Int::class, 45)),
     OfflineView(Pref(Location.General, Int::class, 0)),
     DownloadManager(Pref(Location.General, Int::class, 0)),
     MaxParallelDownloads(Pref(Location.General, Int::class, 0)),
@@ -299,6 +304,11 @@ enum class PrefName(val data: Pref) {
     MALAvatar(Pref(Location.Protected, String::class, "")),
     MALCodeChallenge(Pref(Location.Protected, String::class, "")),
     MALToken(Pref(Location.Protected, MAL.ResponseToken::class, "")),
+    MangaBakaUserName(Pref(Location.Protected, String::class, "")),
+    MangaBakaAvatar(Pref(Location.Protected, String::class, "")),
+    MangaBakaUserId(Pref(Location.Protected, String::class, "")),
+    MangaBakaCodeChallenge(Pref(Location.Protected, String::class, "")),
+    MangaBakaToken(Pref(Location.Protected, MangaBakaToken::class, "")),
     AppPassword(Pref(Location.Protected, String::class, "")),
     BiometricToken(Pref(Location.Protected, String::class, "")),
     OverridePassword(Pref(Location.Protected, Boolean::class, false)),

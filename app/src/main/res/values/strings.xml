@@ -1459,4 +1459,25 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="change_download_directory_confirm">Are you sure you want to change the download directory? Existing downloads will remain in the old directory.</string>
     <string name="purge_downloads">Purge All Downloads</string>
     <string name="purge_downloads_desc">Delete all downloaded anime, manga, and novel files to free up storage</string>
+    <string name="skip_duplicate_chapters">Skip duplicate chapters</string>
+    <string name="skip_duplicate_chapters_desc">Automatically filter redundant chapters across scanlators</string>
+    <string name="mangabaka">MangaBaka</string>
+    <string name="mangabaka_login">Log in to MangaBaka</string>
+    <string name="mangabaka_logout">Log out of MangaBaka</string>
+    <string name="mangabaka_desc">Sync reading list and progress with MangaBaka</string>
+    <string name="logging_in_mangabaka">Logging in to MangaBaka…</string>
+    <string name="shortcut_search">Search</string>
+    <string name="shortcut_search_desc">Search Anime and Manga</string>
+    <string name="shortcut_manga">Manga</string>
+    <string name="shortcut_manga_desc">Open Manga</string>
+    <string name="shortcut_anime">Anime</string>
+    <string name="shortcut_anime_desc">Open Anime</string>
+    <string name="shortcut_downloads">Downloads</string>
+    <string name="shortcut_downloads_desc">Download Queue</string>
+    <string name="auto_backup_directory">Auto-Backup Directory</string>
+    <string name="auto_backup_directory_desc">Choose a custom folder to save automatic backups</string>
+    <string name="player_buffer_size">Forward Buffer Size</string>
+    <string name="player_buffer_size_desc">Buffer %1$d seconds ahead during video playback</string>
+    <string name="show_episode_rating">Show Episode Rating</string>
+    <string name="show_episode_rating_desc">Display per-episode rating from AniZip on episode cards</string>
 </resources>
