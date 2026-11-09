@@ -227,116 +227,145 @@ class MangaReadAdapter(
         }
     }
 
+    private class MangaLayoutOptionsState(
+        var reversed: Boolean,
+        var style: Int,
+        var run: Boolean = false,
+        var refresh: Boolean = false
+    )
+
     private fun showLayoutOptionsDialog(source: Int) {
         val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
-        var refresh = false
-        var run = false
-        var reversed = media.selected!!.recyclerReversed
-        var style = media.selected!!.recyclerStyle ?: PrefManager.getVal(PrefName.MangaDefaultView)
+        val state = MangaLayoutOptionsState(
+            reversed = media.selected!!.recyclerReversed,
+            style = media.selected!!.recyclerStyle ?: PrefManager.getVal(PrefName.MangaDefaultView)
+        )
 
-        dialogBinding.apply {
-            mediaSourceTop.rotation = if (reversed) -90f else 90f
-            sortText.text = if (reversed) "Down to Up" else "Up to Down"
-            mediaSourceTop.setOnClickListener {
-                reversed = !reversed
-                mediaSourceTop.rotation = if (reversed) -90f else 90f
-                sortText.text = if (reversed) "Down to Up" else "Up to Down"
-                run = true
-            }
+        setupLayoutSortOptions(dialogBinding, state)
+        setupLayoutStyleOptions(dialogBinding, state)
+        setupLayoutWebviewOption(dialogBinding, source, state)
+        setupLayoutDownloadOptions(dialogBinding)
+        setupLayoutResetProgress(dialogBinding)
+        showLayoutMainDialog(dialogBinding, source, state)
+    }
 
-            mediaSourceGrid.visibility = View.GONE
-            var selected = when (style) {
-                0 -> mediaSourceList
-                1 -> mediaSourceCompact
-                else -> mediaSourceList
-            }
-            when (style) {
-                0 -> layoutText.setText(R.string.list)
-                1 -> layoutText.setText(R.string.compact)
-                else -> mediaSourceList
-            }
+    private fun setupLayoutSortOptions(dialogBinding: DialogLayoutBinding, state: MangaLayoutOptionsState) {
+        dialogBinding.mediaSourceTop.rotation = if (state.reversed) -90f else 90f
+        dialogBinding.sortText.text = if (state.reversed) "Down to Up" else "Up to Down"
+        dialogBinding.mediaSourceTop.setOnClickListener {
+            state.reversed = !state.reversed
+            dialogBinding.mediaSourceTop.rotation = if (state.reversed) -90f else 90f
+            dialogBinding.sortText.text = if (state.reversed) "Down to Up" else "Up to Down"
+            state.run = true
+        }
+    }
+
+    private fun setupLayoutStyleOptions(dialogBinding: DialogLayoutBinding, state: MangaLayoutOptionsState) {
+        dialogBinding.mediaSourceGrid.visibility = View.GONE
+        var selected = when (state.style) {
+            0 -> dialogBinding.mediaSourceList
+            1 -> dialogBinding.mediaSourceCompact
+            else -> dialogBinding.mediaSourceList
+        }
+        val layoutRes = if (state.style == 1) R.string.compact else R.string.list
+        dialogBinding.layoutText.setText(layoutRes)
+        selected.alpha = 1f
+
+        fun updateSelected(button: ImageButton, newStyle: Int, textRes: Int) {
+            selected.alpha = 0.33f
+            selected = button
             selected.alpha = 1f
-            fun selected(it: ImageButton) {
-                selected.alpha = 0.33f
-                selected = it
-                selected.alpha = 1f
+            state.style = newStyle
+            dialogBinding.layoutText.setText(textRes)
+            state.run = true
+        }
+
+        dialogBinding.mediaSourceList.setOnClickListener {
+            updateSelected(it as ImageButton, 0, R.string.list)
+        }
+        dialogBinding.mediaSourceCompact.setOnClickListener {
+            updateSelected(it as ImageButton, 1, R.string.compact)
+        }
+    }
+
+    private fun setupLayoutWebviewOption(
+        dialogBinding: DialogLayoutBinding,
+        source: Int,
+        state: MangaLayoutOptionsState
+    ) {
+        dialogBinding.mediaWebviewContainer.setOnClickListener {
+            if (!WebViewUtil.supportsWebView(fragment.requireContext())) {
+                toast(R.string.webview_not_installed)
             }
-            mediaSourceList.setOnClickListener {
-                selected(it as ImageButton)
-                style = 0
-                layoutText.setText(R.string.list)
-                run = true
-            }
-            mediaSourceCompact.setOnClickListener {
-                selected(it as ImageButton)
-                style = 1
-                layoutText.setText(R.string.compact)
-                run = true
-            }
-            mediaWebviewContainer.setOnClickListener {
-                if (!WebViewUtil.supportsWebView(fragment.requireContext())) {
-                    toast(R.string.webview_not_installed)
-                }
-                if (mangaReadSources.names.isNotEmpty() && source in 0 until mangaReadSources.names.size) {
-                    val sourceAHH = mangaReadSources[source] as? DynamicMangaParser
-                    val sourceHttp = sourceAHH?.extension?.sources?.firstOrNull() as? HttpSource
-                    val url = sourceHttp?.baseUrl
-                    url?.let {
-                        refresh = true
-                        val headersMap = try {
-                            sourceHttp.headers.toMultimap().mapValues { it.value.getOrNull(0) ?: "" }
-                        } catch (e: Exception) {
-                            emptyMap()
-                        }
-                        val intent = Intent(fragment.requireContext(), CookieCatcher::class.java)
-                            .putExtra("url", url)
-                            .putExtra("headers", headersMap as HashMap<String, String>)
-                        startActivity(fragment.requireContext(), intent, null)
+            if (mangaReadSources.names.isNotEmpty() && source in 0 until mangaReadSources.names.size) {
+                val sourceAHH = mangaReadSources[source] as? DynamicMangaParser
+                val sourceHttp = sourceAHH?.extension?.sources?.firstOrNull() as? HttpSource
+                val url = sourceHttp?.baseUrl
+                url?.let {
+                    state.refresh = true
+                    val headersMap = try {
+                        sourceHttp.headers.toMultimap().mapValues { entry -> entry.value.getOrNull(0) ?: "" }
+                    } catch (e: Exception) {
+                        emptyMap()
                     }
+                    val intent = Intent(fragment.requireContext(), CookieCatcher::class.java)
+                        .putExtra("url", url)
+                        .putExtra("headers", headersMap as HashMap<String, String>)
+                    startActivity(fragment.requireContext(), intent, null)
                 }
             }
+        }
+    }
 
-            if (media.format == "LOCAL") {
-                animeDownloadContainer.visibility = View.GONE
-                mediaWebviewContainer.visibility = View.GONE
-            } else {
-                mediaDownloadTop.visibility = View.VISIBLE
-                mediaDownloadTop.setOnClickListener {
-                    showMultiDownloadDialog(dialogBinding)
-                }
+    private fun setupLayoutDownloadOptions(dialogBinding: DialogLayoutBinding) {
+        if (media.format == "LOCAL") {
+            dialogBinding.animeDownloadContainer.visibility = View.GONE
+            dialogBinding.mediaWebviewContainer.visibility = View.GONE
+        } else {
+            dialogBinding.mediaDownloadTop.visibility = View.VISIBLE
+            dialogBinding.mediaDownloadTop.setOnClickListener {
+                showMultiDownloadDialog(dialogBinding)
             }
+        }
+    }
 
-            resetProgress.setOnClickListener {
-                fragment.requireContext().customAlertDialog().apply {
-                    setTitle(" Delete Progress for all chapters of ${media.nameRomaji}")
-                    setMessage("This will delete all the locally stored progress for chapters")
-                    setPosButton(R.string.ok) {
-                        clearCustomValsForMedia("${media.id}", "_Chapter")
-                        clearCustomValsForMedia("${media.id}", "_Vol")
-                        snackString("Deleted the progress of Chapters for ${media.nameRomaji}")
-                    }
-                    setNegButton(R.string.no)
-                    show()
-                }
-            }
-            resetProgressDef.text = getString(currContext()!!, R.string.clear_stored_chapter)
-
+    private fun setupLayoutResetProgress(dialogBinding: DialogLayoutBinding) {
+        dialogBinding.resetProgress.setOnClickListener {
             fragment.requireContext().customAlertDialog().apply {
-                setTitle("Options")
-                setCustomView(root)
-                setPosButton("OK") {
-                    if (run) fragment.onIconPressed(style, reversed)
-                    val value = downloadNo.text.toString().toIntOrNull()
-                    if (value != null && value > 0) {
-                        fragment.multiDownload(value)
-                    }
-                    if (refresh) fragment.loadChapters(source, true)
+                setTitle(" Delete Progress for all chapters of ${media.nameRomaji}")
+                setMessage("This will delete all the locally stored progress for chapters")
+                setPosButton(R.string.ok) {
+                    clearCustomValsForMedia("${media.id}", "_Chapter")
+                    clearCustomValsForMedia("${media.id}", "_Vol")
+                    snackString("Deleted the progress of Chapters for ${media.nameRomaji}")
                 }
-                setNegButton("Cancel") {
-                    if (refresh) fragment.loadChapters(source, true)
-                }
+                setNegButton(R.string.no)
                 show()
             }
+        }
+        dialogBinding.resetProgressDef.text = getString(currContext()!!, R.string.clear_stored_chapter)
+    }
+
+    private fun showLayoutMainDialog(
+        dialogBinding: DialogLayoutBinding,
+        source: Int,
+        state: MangaLayoutOptionsState
+    ) {
+        fragment.requireContext().customAlertDialog().apply {
+            setTitle("Options")
+            setCustomView(dialogBinding.root)
+            setPosButton("OK") {
+                if (state.run) fragment.onIconPressed(state.style, state.reversed)
+                val value = dialogBinding.downloadNo.text.toString().toIntOrNull()
+                if (value != null && value > 0) {
+                    fragment.multiDownload(value)
+                }
+                if (state.refresh) fragment.loadChapters(source, true)
+            }
+            setNegButton("Cancel") {
+                if (state.refresh) fragment.loadChapters(source, true)
+            }
+            show()
         }
     }
 

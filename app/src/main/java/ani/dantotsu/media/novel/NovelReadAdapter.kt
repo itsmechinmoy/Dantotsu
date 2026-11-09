@@ -56,7 +56,6 @@ class NovelReadAdapter(
     private val imm = fragment.requireContext()
         .getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
 
-    @Suppress("ComplexMethod", "LongMethod")
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val binding = holder.binding
         _binding = binding
@@ -71,260 +70,278 @@ class NovelReadAdapter(
         }
 
         val isLocal = media.format == "LOCAL" || media.format == "LOCAL_NOVEL"
-
         if (isLocal) {
-
-            binding.novelSourceContainer.visibility = View.GONE
-            binding.divider.visibility = View.GONE
-            binding.searchBar.visibility = View.GONE
-
-
-            binding.novelLocalHeader.visibility = View.VISIBLE
-
-            binding.novelLocalFilter.setOnClickListener {
-                showFilterDialog()
-            }
+            bindLocalHeader(binding)
         } else {
-            fun search(): Boolean {
-                val query = binding.searchBarText.text.toString()
-                val source =
-                    media.selected!!.sourceIndex.let { if (it >= novelReadSources.names.size) 0 else it }
-                fragment.source = source
-
-                binding.searchBarText.clearFocus()
-                imm.hideSoftInputFromWindow(binding.searchBarText.windowToken, 0)
-                fragment.search(query, source, true)
-                return true
-            }
-
-            val source =
-                media.selected!!.sourceIndex.let { if (it >= novelReadSources.names.size) 0 else it }
-            if (novelReadSources.names.isNotEmpty() && source in 0 until novelReadSources.names.size) {
-                binding.mediaSource.setText(novelReadSources.names[source], false)
-            }
-            val displayNames = novelReadSources.names.filter { it != "Local" }
-            binding.mediaSource.setAdapter(
-                ArrayAdapter(
-                    fragment.requireContext(),
-                    R.layout.item_dropdown,
-                    displayNames
-                )
-            )
-
-            fun updateLayoutForSource(idx: Int) {
-                val isLocal = idx in 0 until novelReadSources.names.size && (novelReadSources.names[idx] == "Local" || novelReadSources.names[idx] == "Downloaded")
-                val isLnReader = idx in 0 until novelReadSources.names.size
-                        && novelReadSources[idx] is ani.dantotsu.parsers.novel.LnReaderNovelParser
-                val isDynamic = idx in 0 until novelReadSources.names.size
-                        && novelReadSources[idx] is ani.dantotsu.parsers.novel.DynamicNovelParser
-
-                if (isLnReader) {
-                    binding.searchBar.visibility = View.GONE
-                    binding.divider.visibility = View.GONE
-                    binding.wrongTitleButton.visibility = View.VISIBLE
-                    binding.mediaSourceTitle.visibility = View.VISIBLE
-                    binding.mediaSourceTitle.text = "Found : ${media.name ?: media.nameRomaji}"
-                    binding.mediaSourceTitle.isSelected = true
-                    binding.chaptersHeaderRow.visibility = View.VISIBLE
-                } else {
-                    binding.searchBar.visibility = if (isLocal) View.GONE else View.VISIBLE
-                    binding.divider.visibility = if (isLocal) View.GONE else View.VISIBLE
-                    binding.wrongTitleButton.visibility = if (isLocal) View.GONE else View.VISIBLE
-                    binding.mediaSourceTitle.visibility = if (isLocal) View.GONE else View.VISIBLE
-                    binding.mediaSourceTitle.text = "Found : ${media.name ?: media.nameRomaji}"
-                    binding.mediaSourceTitle.isSelected = true
-                    binding.chaptersHeaderRow.visibility = View.VISIBLE
-                }
-
-                // novel ext setting
-                binding.mediaSourceSettings.visibility = if (isDynamic) View.VISIBLE else View.GONE
-                if (isDynamic) {
-                    binding.mediaSourceSettings.setOnClickListener {
-                        val parser = novelReadSources[idx] as? ani.dantotsu.parsers.novel.DynamicNovelParser
-                        if (parser != null) {
-                            fragment.openSettings(parser.extension)
-                        }
-                    }
-                }
-            }
-            updateLayoutForSource(source)
-
-            // menu
-            binding.mediaNestedButton.setOnClickListener {
-                showFilterDialog()
-            }
-
-            binding.wrongTitleButton.setOnClickListener {
-                val dialog = ani.dantotsu.media.SourceSearchDialogFragment().apply {
-                    isNovel = true
-                    media = fragment.media
-                    onSourceSelected = { selected ->
-                        val isLnReader = fragment.model.novelSources[fragment.source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
-                        if (isLnReader) {
-                            fragment.overrideNovelSource(selected, fragment.source)
-                        } else {
-                            fragment.resetChapterState()
-                            fragment.onNovelClick(selected)
-                        }
-                    }
-                }
-                dialog.show(fragment.requireActivity().supportFragmentManager, "SourceSearchDialogFragment")
-            }
-
-            binding.mediaSource.setOnItemClickListener { _, _, i, _ ->
-                val actualIndex = novelReadSources.names.indexOf(displayNames[i])
-                fragment.onSourceChange(actualIndex)
-                updateLayoutForSource(actualIndex)
-                search()
-            }
-
-            binding.searchBarText.setText(fragment.searchQuery)
-            binding.searchBarText.setOnEditorActionListener { _, actionId, _ ->
-                return@setOnEditorActionListener when (actionId) {
-                    IME_ACTION_SEARCH -> search()
-                    else -> false
-                }
-            }
-            binding.searchBar.setEndIconOnClickListener { search() }
+            bindRemoteHeader(binding)
         }
     }
 
-    @Suppress("ComplexMethod", "LongMethod")
+    private fun bindLocalHeader(binding: ItemNovelHeaderBinding) {
+        binding.novelSourceContainer.visibility = View.GONE
+        binding.divider.visibility = View.GONE
+        binding.searchBar.visibility = View.GONE
+        binding.novelLocalHeader.visibility = View.VISIBLE
+        binding.novelLocalFilter.setOnClickListener {
+            showFilterDialog()
+        }
+    }
+
+    private fun bindRemoteHeader(binding: ItemNovelHeaderBinding) {
+        val search = setupNovelSearch(binding)
+        setupNovelSourceSelection(binding, search)
+        setupNovelActionButtons(binding)
+    }
+
+    private fun setupNovelSearch(binding: ItemNovelHeaderBinding): () -> Boolean {
+        fun search(): Boolean {
+            val query = binding.searchBarText.text.toString()
+            val source = media.selected!!.sourceIndex.let { if (it >= novelReadSources.names.size) 0 else it }
+            fragment.source = source
+            binding.searchBarText.clearFocus()
+            imm.hideSoftInputFromWindow(binding.searchBarText.windowToken, 0)
+            fragment.search(query, source, true)
+            return true
+        }
+
+        binding.searchBarText.setText(fragment.searchQuery)
+        binding.searchBarText.setOnEditorActionListener { _, actionId, _ ->
+            when (actionId) {
+                IME_ACTION_SEARCH -> search()
+                else -> false
+            }
+        }
+        binding.searchBar.setEndIconOnClickListener { search() }
+        return ::search
+    }
+
+    private fun setupNovelSourceSelection(binding: ItemNovelHeaderBinding, search: () -> Boolean) {
+        val source = media.selected!!.sourceIndex.let { if (it >= novelReadSources.names.size) 0 else it }
+        if (novelReadSources.names.isNotEmpty() && source in 0 until novelReadSources.names.size) {
+            binding.mediaSource.setText(novelReadSources.names[source], false)
+        }
+        val displayNames = novelReadSources.names.filter { it != "Local" }
+        binding.mediaSource.setAdapter(
+            ArrayAdapter(
+                fragment.requireContext(),
+                R.layout.item_dropdown,
+                displayNames
+            )
+        )
+        updateLayoutForSource(binding, source)
+
+        binding.mediaSource.setOnItemClickListener { _, _, i, _ ->
+            val actualIndex = novelReadSources.names.indexOf(displayNames[i])
+            fragment.onSourceChange(actualIndex)
+            updateLayoutForSource(binding, actualIndex)
+            search()
+        }
+    }
+
+    private fun updateLayoutForSource(binding: ItemNovelHeaderBinding, idx: Int) {
+        val isLocal = idx in 0 until novelReadSources.names.size && (novelReadSources.names[idx] == "Local" || novelReadSources.names[idx] == "Downloaded")
+        val isLnReader = idx in 0 until novelReadSources.names.size
+                && novelReadSources[idx] is ani.dantotsu.parsers.novel.LnReaderNovelParser
+        val isDynamic = idx in 0 until novelReadSources.names.size
+                && novelReadSources[idx] is ani.dantotsu.parsers.novel.DynamicNovelParser
+
+        val isVisible = !isLocal && !isLnReader
+        binding.searchBar.visibility = if (isVisible) View.VISIBLE else View.GONE
+        binding.divider.visibility = if (isLocal) View.GONE else View.VISIBLE
+        binding.wrongTitleButton.visibility = if (isLocal) View.GONE else View.VISIBLE
+        binding.mediaSourceTitle.visibility = if (isLocal) View.GONE else View.VISIBLE
+        binding.mediaSourceTitle.text = "Found : ${media.name ?: media.nameRomaji}"
+        binding.mediaSourceTitle.isSelected = true
+        binding.chaptersHeaderRow.visibility = View.VISIBLE
+
+        binding.mediaSourceSettings.visibility = if (isDynamic) View.VISIBLE else View.GONE
+        if (isDynamic) {
+            binding.mediaSourceSettings.setOnClickListener {
+                val parser = novelReadSources[idx] as? ani.dantotsu.parsers.novel.DynamicNovelParser
+                if (parser != null) {
+                    fragment.openSettings(parser.extension)
+                }
+            }
+        }
+    }
+
+    private fun setupNovelActionButtons(binding: ItemNovelHeaderBinding) {
+        binding.mediaNestedButton.setOnClickListener {
+            showFilterDialog()
+        }
+
+        binding.wrongTitleButton.setOnClickListener {
+            val dialog = ani.dantotsu.media.SourceSearchDialogFragment().apply {
+                isNovel = true
+                media = fragment.media
+                onSourceSelected = { selected ->
+                    val isLnReader = fragment.model.novelSources[fragment.source] is ani.dantotsu.parsers.novel.LnReaderNovelParser
+                    if (isLnReader) {
+                        fragment.overrideNovelSource(selected, fragment.source)
+                    } else {
+                        fragment.resetChapterState()
+                        fragment.onNovelClick(selected)
+                    }
+                }
+            }
+            dialog.show(fragment.requireActivity().supportFragmentManager, "SourceSearchDialogFragment")
+        }
+    }
+
+    private class NovelFilterState(
+        var reversed: Boolean,
+        var style: Int,
+        var run: Boolean = false
+    )
+
     private fun showFilterDialog() {
         val dialogBinding = DialogLayoutBinding.inflate(fragment.layoutInflater)
-        var run = false
-        var reversed = fragment.reverse
-        var style = fragment.style
+        val state = NovelFilterState(
+            reversed = fragment.reverse,
+            style = fragment.style
+        )
 
-        dialogBinding.apply {
+        setupFilterSort(dialogBinding, state)
+        setupFilterStyle(dialogBinding, state)
+        setupFilterDownloads(dialogBinding)
+        setupFilterWebview(dialogBinding)
+        setupFilterResetProgress(dialogBinding)
+        showFilterMainDialog(dialogBinding, state)
+    }
 
-            mediaSourceTop.rotation = if (reversed) -90f else 90f
-            sortText.text = if (reversed) "Down to Up" else "Up to Down"
-            mediaSourceTop.setOnClickListener {
-                reversed = !reversed
-                mediaSourceTop.rotation = if (reversed) -90f else 90f
-                sortText.text = if (reversed) "Down to Up" else "Up to Down"
-                run = true
-            }
+    private fun setupFilterSort(dialogBinding: DialogLayoutBinding, state: NovelFilterState) {
+        dialogBinding.mediaSourceTop.rotation = if (state.reversed) -90f else 90f
+        dialogBinding.sortText.text = if (state.reversed) "Down to Up" else "Up to Down"
+        dialogBinding.mediaSourceTop.setOnClickListener {
+            state.reversed = !state.reversed
+            dialogBinding.mediaSourceTop.rotation = if (state.reversed) -90f else 90f
+            dialogBinding.sortText.text = if (state.reversed) "Down to Up" else "Up to Down"
+            state.run = true
+        }
+    }
 
+    private fun setupFilterStyle(dialogBinding: DialogLayoutBinding, state: NovelFilterState) {
+        dialogBinding.mediaSourceGrid.visibility = View.VISIBLE
+        var selected = when (state.style) {
+            0 -> dialogBinding.mediaSourceList
+            1 -> dialogBinding.mediaSourceCompact
+            else -> dialogBinding.mediaSourceGrid
+        }
+        when (state.style) {
+            0 -> dialogBinding.layoutText.setText(R.string.list)
+            1 -> dialogBinding.layoutText.setText(R.string.compact)
+            else -> dialogBinding.layoutText.text = "Cover"
+        }
+        selected.alpha = 1f
 
-            mediaSourceGrid.visibility = View.VISIBLE
-            var selected = when (style) {
-                0 -> mediaSourceList
-                1 -> mediaSourceCompact
-                2 -> mediaSourceGrid
-                else -> mediaSourceGrid
-            }
-            when (style) {
-                0 -> layoutText.setText(R.string.list)
-                1 -> layoutText.setText(R.string.compact)
-                2 -> layoutText.text = "Cover"
-                else -> layoutText.text = "Cover"
-            }
+        fun updateSelected(button: ImageButton, newStyle: Int, text: String? = null, textRes: Int? = null) {
+            selected.alpha = 0.33f
+            selected = button
             selected.alpha = 1f
-            fun selected(it: ImageButton) {
-                selected.alpha = 0.33f
-                selected = it
-                selected.alpha = 1f
+            state.style = newStyle
+            if (textRes != null) {
+                dialogBinding.layoutText.setText(textRes)
+            } else if (text != null) {
+                dialogBinding.layoutText.text = text
             }
-            mediaSourceList.setOnClickListener {
-                selected(it as ImageButton)
-                style = 0
-                layoutText.setText(R.string.list)
-                run = true
-            }
-            mediaSourceCompact.setOnClickListener {
-                selected(it as ImageButton)
-                style = 1
-                layoutText.setText(R.string.compact)
-                run = true
-            }
-            mediaSourceGrid.setOnClickListener {
-                selected(it as ImageButton)
-                style = 2
-                layoutText.text = "Cover"
-                run = true
-            }
+            state.run = true
+        }
 
+        dialogBinding.mediaSourceList.setOnClickListener {
+            updateSelected(it as ImageButton, 0, textRes = R.string.list)
+        }
+        dialogBinding.mediaSourceCompact.setOnClickListener {
+            updateSelected(it as ImageButton, 1, textRes = R.string.compact)
+        }
+        dialogBinding.mediaSourceGrid.setOnClickListener {
+            updateSelected(it as ImageButton, 2, text = "Cover")
+        }
+    }
 
-            if (fragment.media.format == "LOCAL") {
-                animeDownloadContainer.visibility = View.GONE
-            } else {
-                animeDownloadContainer.visibility = View.VISIBLE
-                mediaDownloadTop.visibility = View.VISIBLE
-                mediaDownloadTop.setOnClickListener {
-                    fragment.requireContext().customAlertDialog().apply {
-                        setTitle("Multi Chapter Downloader")
-                        setMessage("Enter the number of chapters to download")
-                        val input = View.inflate(ani.dantotsu.currContext(), R.layout.dialog_layout, null)
-                        val editText = input.findViewById<android.widget.EditText>(R.id.downloadNo)
-                        setCustomView(input)
-                        setPosButton(R.string.ok) {
-                            val value = editText.text.toString().toIntOrNull()
-                            if (value != null && value > 0) {
-                                downloadNo.setText(value.toString(), android.widget.TextView.BufferType.EDITABLE)
-                                fragment.multiDownload(value)
-                            } else {
-                                ani.dantotsu.toast("Please enter a valid number")
-                            }
-                        }
-                        setNegButton(R.string.cancel)
-                        show()
-                    }
-                }
-            }
-            val currentSource = fragment.source
-            val isLocal = currentSource in 0 until novelReadSources.names.size && (novelReadSources.names[currentSource] == "Local" || novelReadSources.names[currentSource] == "Downloaded")
-            if (isLocal) {
-                mediaWebviewContainer.visibility = View.GONE
-            } else {
-                mediaWebviewContainer.visibility = View.VISIBLE
-                mediaWebviewContainer.setOnClickListener {
-                    if (!WebViewUtil.supportsWebView(fragment.requireContext())) {
-                        ani.dantotsu.toast(R.string.webview_not_installed)
-                        return@setOnClickListener
-                    }
-                    val src = fragment.source
-                    if (novelReadSources.names.isNotEmpty() && src in 0 until novelReadSources.names.size) {
-                        val currentParser = novelReadSources[src]
-                        val url = currentParser?.hostUrl?.takeIf { it.isNotBlank() && it != "Empty" && it != "Offline" }
-                        url?.let {
-                            val intent = Intent(fragment.requireContext(), CookieCatcher::class.java)
-                                .putExtra("url", it)
-                                .putExtra("headers", hashMapOf<String, String>())
-                            fragment.requireContext().startActivity(intent)
-                        }
-                    }
-                }
-            }
-
-
-            resetProgressDef.text = "Clear stored chapter details"
-            resetProgress.setOnClickListener {
+    private fun setupFilterDownloads(dialogBinding: DialogLayoutBinding) {
+        if (fragment.media.format == "LOCAL") {
+            dialogBinding.animeDownloadContainer.visibility = View.GONE
+        } else {
+            dialogBinding.animeDownloadContainer.visibility = View.VISIBLE
+            dialogBinding.mediaDownloadTop.visibility = View.VISIBLE
+            dialogBinding.mediaDownloadTop.setOnClickListener {
                 fragment.requireContext().customAlertDialog().apply {
-                    setTitle("Delete Progress for all chapters of ${fragment.media.nameRomaji}")
-                    setMessage("This will delete all the locally stored progress for chapters")
+                    setTitle("Multi Chapter Downloader")
+                    setMessage("Enter the number of chapters to download")
+                    val input = View.inflate(ani.dantotsu.currContext(), R.layout.dialog_layout, null)
+                    val editText = input.findViewById<android.widget.EditText>(R.id.downloadNo)
+                    setCustomView(input)
                     setPosButton(R.string.ok) {
-                        val prefix = "${fragment.media.id}_"
-                        val regex = Regex("^${prefix}\\d+$")
-                        PrefManager.getAllCustomValsForMedia(prefix)
-                            .keys
-                            .filter { it.matches(regex) }
-                            .onEach { key -> PrefManager.removeCustomVal(key) }
-                        ani.dantotsu.snackString("Deleted the progress of Chapters for ${fragment.media.nameRomaji}")
+                        val value = editText.text.toString().toIntOrNull()
+                        if (value != null && value > 0) {
+                            dialogBinding.downloadNo.setText(value.toString(), android.widget.TextView.BufferType.EDITABLE)
+                            fragment.multiDownload(value)
+                        } else {
+                            ani.dantotsu.toast("Please enter a valid number")
+                        }
                     }
-                    setNegButton(R.string.no)
+                    setNegButton(R.string.cancel)
                     show()
                 }
             }
         }
+    }
 
+    private fun setupFilterWebview(dialogBinding: DialogLayoutBinding) {
+        val currentSource = fragment.source
+        val isLocal = currentSource in 0 until novelReadSources.names.size && (novelReadSources.names[currentSource] == "Local" || novelReadSources.names[currentSource] == "Downloaded")
+        if (isLocal) {
+            dialogBinding.mediaWebviewContainer.visibility = View.GONE
+        } else {
+            dialogBinding.mediaWebviewContainer.visibility = View.VISIBLE
+            dialogBinding.mediaWebviewContainer.setOnClickListener {
+                if (!WebViewUtil.supportsWebView(fragment.requireContext())) {
+                    ani.dantotsu.toast(R.string.webview_not_installed)
+                    return@setOnClickListener
+                }
+                val src = fragment.source
+                if (novelReadSources.names.isNotEmpty() && src in 0 until novelReadSources.names.size) {
+                    val currentParser = novelReadSources[src]
+                    val url = currentParser?.hostUrl?.takeIf { it.isNotBlank() && it != "Empty" && it != "Offline" }
+                    url?.let {
+                        val intent = Intent(fragment.requireContext(), CookieCatcher::class.java)
+                            .putExtra("url", it)
+                            .putExtra("headers", hashMapOf<String, String>())
+                        fragment.requireContext().startActivity(intent)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun setupFilterResetProgress(dialogBinding: DialogLayoutBinding) {
+        dialogBinding.resetProgressDef.text = "Clear stored chapter details"
+        dialogBinding.resetProgress.setOnClickListener {
+            fragment.requireContext().customAlertDialog().apply {
+                setTitle("Delete Progress for all chapters of ${fragment.media.nameRomaji}")
+                setMessage("This will delete all the locally stored progress for chapters")
+                setPosButton(R.string.ok) {
+                    val prefix = "${fragment.media.id}_"
+                    val regex = Regex("^${prefix}\\d+$")
+                    PrefManager.getAllCustomValsForMedia(prefix)
+                        .keys
+                        .filter { it.matches(regex) }
+                        .onEach { key -> PrefManager.removeCustomVal(key) }
+                    ani.dantotsu.snackString("Deleted the progress of Chapters for ${fragment.media.nameRomaji}")
+                }
+                setNegButton(R.string.no)
+                show()
+            }
+        }
+    }
+
+    private fun showFilterMainDialog(dialogBinding: DialogLayoutBinding, state: NovelFilterState) {
         fragment.requireContext().customAlertDialog().apply {
             setTitle("Options")
             setCustomView(dialogBinding.root)
             setPosButton(R.string.ok) {
-                if (run) {
-                    fragment.onLayoutChanged(style, reversed)
+                if (state.run) {
+                    fragment.onLayoutChanged(state.style, state.reversed)
                 }
             }
             setNegButton(R.string.cancel)

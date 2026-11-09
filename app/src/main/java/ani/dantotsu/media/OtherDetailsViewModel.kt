@@ -7,6 +7,7 @@ import ani.dantotsu.client
 import ani.dantotsu.Mapper
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.mal.JikanMediaData
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.tryWithSuspend
@@ -426,128 +427,147 @@ class OtherDetailsViewModel : ViewModel() {
         return Pair(watchingMalIds, watchedEpisodesMap)
     }
 
-    private suspend fun loadCalendarFromJikan(showOnlyLibrary: Boolean, showOnlyDubbed: Boolean) {
-        if (cachedAllCalendarData == null || cachedLibraryCalendarData == null) {
-            val jikan = MAL.jikan
-            val df = DateFormat.getDateInstance(DateFormat.FULL)
+    private fun estimateAiredEpisodes(
+        jikanData: JikanMediaData,
+        cal: Calendar,
+        watchedEpisodesMap: Map<Int, Int>
+    ): Int? {
+        val fromDateStr = jikanData.aired?.from ?: return null
+        return try {
+            val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+            val startDate = isoFormat.parse(fromDateStr.take(19)) ?: return null
+            val targetTime = cal.time.time
+            val diff = targetTime - startDate.time
+            if (diff < 0) return null
+            val weeks = (diff / (7L * 24 * 60 * 60 * 1000)).toInt()
+            var estimated = weeks + 1
+            if (jikanData.episodes != null && estimated > jikanData.episodes) {
+                estimated = jikanData.episodes
+            }
+            val watched = watchedEpisodesMap[jikanData.malId] ?: 0
+            if (watched > estimated) {
+                estimated = watched
+            }
+            estimated
+        } catch (_: Exception) {
+            null
+        }
+    }
 
-            val tf = DateFormat.getTimeInstance(DateFormat.SHORT)
-            val dayNames = arrayOf(
-                "sunday", "monday", "tuesday", "wednesday",
-                "thursday", "friday", "saturday"
-            )
+    private fun parseBroadcastTime(
+        jikanData: JikanMediaData,
+        cal: Calendar,
+        tf: DateFormat
+    ): Pair<String, Int> {
+        val bTime = jikanData.broadcast?.time
+        val bTz = jikanData.broadcast?.timezone
+        if (bTime.isNullOrBlank()) return Pair("", Int.MAX_VALUE)
+        if (bTz.isNullOrBlank()) return Pair(bTime, Int.MAX_VALUE)
 
-            val allMap = mutableMapOf<String, MutableList<Media>>()
-            val libraryMap = mutableMapOf<String, MutableList<Media>>()
+        return try {
+            val parser = SimpleDateFormat("HH:mm", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone(bTz)
+            }
+            val parsedTime = parser.parse(bTime) ?: return Pair("$bTime $bTz", Int.MAX_VALUE)
+            val targetCal = Calendar.getInstance(TimeZone.getTimeZone(bTz)).apply {
+                time = cal.time
+            }
+            val timeCal = Calendar.getInstance(TimeZone.getTimeZone(bTz)).apply {
+                time = parsedTime
+            }
+            targetCal.set(Calendar.HOUR_OF_DAY, timeCal.get(Calendar.HOUR_OF_DAY))
+            targetCal.set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
 
-            val (watchingMalIds, watchedEpisodesMap) = fetchWatchingMalData()
-            for (offsetDay in -1..6) {
-                val cal = Calendar.getInstance()
-                cal.add(Calendar.DAY_OF_YEAR, offsetDay)
-                val dayName = dayNames[cal.get(Calendar.DAY_OF_WEEK) - 1]
-                val dateStr = df.format(cal.time)
+            tf.timeZone = TimeZone.getDefault()
+            val timeStr = tf.format(targetCal.time)
+            val localCal = Calendar.getInstance().apply {
+                time = targetCal.time
+            }
+            val sortTime = localCal.get(Calendar.HOUR_OF_DAY) * 60 + localCal.get(Calendar.MINUTE)
+            Pair(timeStr, sortTime)
+        } catch (_: Exception) {
+            Pair("$bTime $bTz", Int.MAX_VALUE)
+        }
+    }
 
-                val allMedia = mutableListOf<Media>()
-                val seenIds = mutableSetOf<Int>()
-                var page = 1
-                var hasNext = true
-                while (hasNext) {
-                    val resp = jikan.getSchedules(
-                        filter = dayName, page = page, limit = 25
-                    ) ?: break
-                    resp.data.forEach { jikanData ->
-                        if (!seenIds.contains(jikanData.malId)) {
-                            seenIds.add(jikanData.malId)
-                            val media = Media(jikanData, isAnime = true)
-                            media.userProgress = watchedEpisodesMap[jikanData.malId]
+    private fun mapJikanItemToMedia(
+        jikanData: JikanMediaData,
+        cal: Calendar,
+        watchedEpisodesMap: Map<Int, Int>,
+        tf: DateFormat
+    ): Media {
+        val media = Media(jikanData, isAnime = true)
+        media.userProgress = watchedEpisodesMap[jikanData.malId]
+        media.anime?.nextAiringEpisode = estimateAiredEpisodes(jikanData, cal, watchedEpisodesMap)
+        val (timeStr, sortTime) = parseBroadcastTime(jikanData, cal, tf)
+        val nextEp = watchedEpisodesMap[jikanData.malId]?.let { it + 1 }
+        media.relation = if (nextEp != null) {
+            "Episode $nextEp" + if (timeStr.isNotBlank()) "\n$timeStr" else ""
+        } else {
+            timeStr.ifBlank { null }
+        }
+        media.userUpdatedAt = sortTime.toLong()
+        return media
+    }
 
-                            val fromDateStr = jikanData.aired?.from
-                            var airedEps: Int? = null
-                            if (fromDateStr != null) {
-                                try {
-                                    val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
-                                    val startDate = isoFormat.parse(fromDateStr.take(19))
-                                    if (startDate != null) {
-                                        val targetTime = cal.time.time
-                                        val diff = targetTime - startDate.time
-                                        if (diff >= 0) {
-                                            val weeks = (diff / (7L * 24 * 60 * 60 * 1000)).toInt()
-                                            var estimated = weeks + 1
-                                            if (jikanData.episodes != null && estimated > jikanData.episodes) {
-                                                estimated = jikanData.episodes
-                                            }
-
-                                            val watched = watchedEpisodesMap[jikanData.malId] ?: 0
-                                            if (watched > estimated) {
-                                                estimated = watched
-                                            }
-                                            airedEps = estimated
-                                        }
-                                    }
-                                } catch (_: Exception) {}
-                            }
-                            media.anime?.nextAiringEpisode = airedEps
-
-                            val nextEp = watchedEpisodesMap[jikanData.malId]?.let { it + 1 }
-                            
-                            var timeStr = ""
-                            var sortTime = Int.MAX_VALUE
-                            val bTime = jikanData.broadcast?.time
-                            val bTz = jikanData.broadcast?.timezone
-                            if (!bTime.isNullOrBlank() && !bTz.isNullOrBlank()) {
-                                try {
-                                    val parser = SimpleDateFormat("HH:mm", Locale.US)
-                                    parser.timeZone = TimeZone.getTimeZone(bTz)
-                                    val parsedTime = parser.parse(bTime)
-                                    if (parsedTime != null) {
-                                        val targetCal = Calendar.getInstance(TimeZone.getTimeZone(bTz))
-                                        targetCal.time = cal.time
-                                        val timeCal = Calendar.getInstance(TimeZone.getTimeZone(bTz))
-                                        timeCal.time = parsedTime
-                                        targetCal.set(Calendar.HOUR_OF_DAY, timeCal.get(Calendar.HOUR_OF_DAY))
-                                        targetCal.set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
-                                        
-                                        tf.timeZone = TimeZone.getDefault()
-                                        timeStr = tf.format(targetCal.time)
-                                        
-                                        val localCal = Calendar.getInstance()
-                                        localCal.time = targetCal.time
-                                        sortTime = localCal.get(Calendar.HOUR_OF_DAY) * 60 + localCal.get(Calendar.MINUTE)
-                                    }
-                                } catch (_: Exception) {
-                                    timeStr = "$bTime $bTz"
-                                }
-                            } else if (!bTime.isNullOrBlank()) {
-                                timeStr = bTime
-                            }
-
-                            media.relation = if (nextEp != null) {
-                                "Episode $nextEp" + if (timeStr.isNotBlank()) "\n$timeStr" else ""
-                            } else {
-                                timeStr.ifBlank { null }
-                            }
-                            media.userUpdatedAt = sortTime.toLong()
-                            allMedia.add(media)
-                        }
-                    }
-                    hasNext = resp.pagination?.hasNextPage == true
-
-                    kotlinx.coroutines.delay(350)
-                    page++
-                }
-
-                allMedia.sortBy { it.userUpdatedAt ?: Long.MAX_VALUE }
-
-                allMap[dateStr] = allMedia
-                val libList = allMedia.filter { watchingMalIds.contains(it.id) }.toMutableList()
-                if (libList.isNotEmpty()) {
-                    libraryMap[dateStr] = libList
+    private suspend fun fetchJikanScheduleForDay(
+        dayName: String,
+        cal: Calendar,
+        watchedEpisodesMap: Map<Int, Int>,
+        tf: DateFormat
+    ): List<Media> {
+        val jikan = MAL.jikan
+        val allMedia = mutableListOf<Media>()
+        val seenIds = mutableSetOf<Int>()
+        var page = 1
+        var hasNext = true
+        while (hasNext) {
+            val resp = jikan.getSchedules(filter = dayName, page = page, limit = 25) ?: break
+            resp.data.forEach { jikanData ->
+                if (seenIds.add(jikanData.malId)) {
+                    allMedia.add(mapJikanItemToMedia(jikanData, cal, watchedEpisodesMap, tf))
                 }
             }
-
-            cachedAllCalendarData = allMap
-            cachedLibraryCalendarData = libraryMap
+            hasNext = resp.pagination?.hasNextPage == true
+            kotlinx.coroutines.delay(350)
+            page++
         }
+        allMedia.sortBy { it.userUpdatedAt ?: Long.MAX_VALUE }
+        return allMedia
+    }
+
+    private suspend fun buildJikanCalendarCache() {
+        if (cachedAllCalendarData != null && cachedLibraryCalendarData != null) return
+
+        val df = DateFormat.getDateInstance(DateFormat.FULL)
+        val tf = DateFormat.getTimeInstance(DateFormat.SHORT)
+        val dayNames = arrayOf(
+            "sunday", "monday", "tuesday", "wednesday",
+            "thursday", "friday", "saturday"
+        )
+        val allMap = mutableMapOf<String, MutableList<Media>>()
+        val libraryMap = mutableMapOf<String, MutableList<Media>>()
+        val (watchingMalIds, watchedEpisodesMap) = fetchWatchingMalData()
+
+        for (offsetDay in -1..6) {
+            val cal = Calendar.getInstance()
+            cal.add(Calendar.DAY_OF_YEAR, offsetDay)
+            val dayName = dayNames[cal.get(Calendar.DAY_OF_WEEK) - 1]
+            val dateStr = df.format(cal.time)
+
+            val allMedia = fetchJikanScheduleForDay(dayName, cal, watchedEpisodesMap, tf).toMutableList()
+            allMap[dateStr] = allMedia
+            val libList = allMedia.filter { watchingMalIds.contains(it.id) }.toMutableList()
+            if (libList.isNotEmpty()) {
+                libraryMap[dateStr] = libList
+            }
+        }
+        cachedAllCalendarData = allMap
+        cachedLibraryCalendarData = libraryMap
+    }
+
+    private suspend fun loadCalendarFromJikan(showOnlyLibrary: Boolean, showOnlyDubbed: Boolean) {
+        buildJikanCalendarCache()
 
         var cacheToUse: Map<String, MutableList<Media>> = if (showOnlyLibrary) {
             cachedLibraryCalendarData ?: emptyMap()

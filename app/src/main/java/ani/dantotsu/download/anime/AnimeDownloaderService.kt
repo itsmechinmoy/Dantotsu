@@ -398,80 +398,69 @@ class AnimeDownloaderService : Service() {
             ?: throw Exception("Failed to create output file")
     }
 
-    private suspend fun kotlinx.coroutines.CoroutineScope.executeFfmpegDownload(
-        task: AnimeDownloadTask,
-        outputFile: androidx.documentfile.provider.DocumentFile,
-        baseOutputDir: androidx.documentfile.provider.DocumentFile,
-        notifi: Boolean
-    ) {
-        val percent = java.util.concurrent.atomic.AtomicInteger(0)
-        val lastPublishedPercent = java.util.concurrent.atomic.AtomicInteger(-1)
-        var ffTask = -1L
-        val path = ffExtension!!.setDownloadPath(this@AnimeDownloaderService, outputFile.uri)
-
-        if (!task.video.file.headers.containsKey("User-Agent") && !task.video.file.headers.containsKey("user-agent")) {
-            val newHeaders = task.video.file.headers.toMutableMap()
+    private fun ensureUserAgentHeader(task: AnimeDownloadTask) {
+        val headers = task.video.file.headers
+        if (!headers.containsKey("User-Agent") && !headers.containsKey("user-agent")) {
+            val newHeaders = headers.toMutableMap()
             newHeaders["User-Agent"] = defaultHeaders["User-Agent"]!!
             task.video.file.headers = newHeaders
         }
+    }
 
-        fun publishProgress(force: Boolean = false) {
-            if (task.cancelled) return
-            val p = percent.get().coerceIn(0, 99)
-            if (!force && p == lastPublishedPercent.get()) return
-            lastPublishedPercent.set(p)
-            AnimeServiceDataSingleton.progress[task.getTaskName()] = p
-            builder.setProgress(100, p, false)
-            builder.setContentText("${getTaskName(task.title, task.episode)} — $p%")
-            val sessionId = ffTask
-            val addonDownloaded = if (sessionId != -1L) ffExtension!!.getDownloadedBytes(sessionId) else -1L
-            val addonEstimated = if (sessionId != -1L) ffExtension!!.getEstimatedTotalBytes(sessionId) else -1L
-            val downloadedBytes = if (addonDownloaded > 0L) addonDownloaded else outputFile.length()
-            val estimatedTotalBytes = if (addonEstimated > 0L) addonEstimated else SizeFormatter.estimateTotalBytesByPercent(downloadedBytes, p)
-            broadcastDownloadProgress(task.episode, p, task.sourceMedia?.id, downloadedBytes, estimatedTotalBytes)
-            if (notifi) {
-                try {
-                    notificationManager.notify(NOTIFICATION_ID, builder.build())
-                } catch (_: SecurityException) {
-                }
-            }
-        }
-
+    private fun publishFfmpegProgress(
+        task: AnimeDownloadTask,
+        outputFile: androidx.documentfile.provider.DocumentFile,
+        percent: java.util.concurrent.atomic.AtomicInteger,
+        lastPublishedPercent: java.util.concurrent.atomic.AtomicInteger,
+        ffTask: Long,
+        notifi: Boolean,
+        force: Boolean = false
+    ) {
         if (task.cancelled) return
-
-        ffTask = ffExtension!!.executeFFMpeg(
-            task.video.file.url,
-            path,
-            task.video.file.headers,
-            task.subtitle,
-            task.audio,
-        ) {
-            if (task.cancelled) return@executeFFMpeg
-            if (it > 0) {
-                percent.set((it / 1000.0).toInt().coerceIn(0, 99))
-                publishProgress(force = false)
+        val p = percent.get().coerceIn(0, 99)
+        if (!force && p == lastPublishedPercent.get()) return
+        lastPublishedPercent.set(p)
+        AnimeServiceDataSingleton.progress[task.getTaskName()] = p
+        builder.setProgress(100, p, false)
+        builder.setContentText("${getTaskName(task.title, task.episode)} — $p%")
+        val sessionId = ffTask
+        val addonDownloaded = if (sessionId != -1L) ffExtension!!.getDownloadedBytes(sessionId) else -1L
+        val addonEstimated = if (sessionId != -1L) ffExtension!!.getEstimatedTotalBytes(sessionId) else -1L
+        val downloadedBytes = if (addonDownloaded > 0L) addonDownloaded else outputFile.length()
+        val estimatedTotalBytes = if (addonEstimated > 0L) addonEstimated else SizeFormatter.estimateTotalBytesByPercent(downloadedBytes, p)
+        broadcastDownloadProgress(task.episode, p, task.sourceMedia?.id, downloadedBytes, estimatedTotalBytes)
+        if (notifi) {
+            try {
+                notificationManager.notify(NOTIFICATION_ID, builder.build())
+            } catch (_: SecurityException) {
             }
         }
-        task.sessionId = ffTask
-        if (task.cancelled) {
-            ffExtension!!.cancelDownload(ffTask)
-            return
-        }
-        currentTasks.find { it.getTaskName() == task.getTaskName() }?.sessionId = ffTask
-        saveMediaInfo(task, baseOutputDir)
+    }
 
+    private suspend fun waitForFfmpegCompletion(
+        task: AnimeDownloadTask,
+        ffTask: Long,
+        notifi: Boolean
+    ): Boolean {
         while (!task.cancelled && ffExtension!!.getState(ffTask) != "COMPLETED") {
             if (ffExtension!!.getState(ffTask) == "FAILED") {
                 handleFfmpegFailed(task, ffTask, notifi)
-                return
+                return false
             }
             kotlinx.coroutines.delay(300.milliseconds)
         }
         if (task.cancelled) {
             ffExtension!!.cancelDownload(ffTask)
-            return
+            return false
         }
-        publishProgress(force = true)
+        return true
+    }
+
+    private suspend fun finalizeFfmpegDownload(
+        task: AnimeDownloadTask,
+        ffTask: Long,
+        notifi: Boolean
+    ) {
         if (ffExtension!!.getState(ffTask) == "COMPLETED") {
             if (ffExtension!!.hadError(ffTask)) {
                 handleFfmpegHadError(task, ffTask, notifi)
@@ -481,6 +470,43 @@ class AnimeDownloaderService : Service() {
         } else {
             throw Exception("Download failed")
         }
+    }
+
+    private suspend fun kotlinx.coroutines.CoroutineScope.executeFfmpegDownload(
+        task: AnimeDownloadTask,
+        outputFile: androidx.documentfile.provider.DocumentFile,
+        baseOutputDir: androidx.documentfile.provider.DocumentFile,
+        notifi: Boolean
+    ) {
+        val percent = java.util.concurrent.atomic.AtomicInteger(0)
+        val lastPublishedPercent = java.util.concurrent.atomic.AtomicInteger(-1)
+        val path = ffExtension!!.setDownloadPath(this@AnimeDownloaderService, outputFile.uri)
+        ensureUserAgentHeader(task)
+        if (task.cancelled) return
+
+        var ffTask = -1L
+        ffTask = ffExtension!!.executeFFMpeg(
+            task.video.file.url,
+            path,
+            task.video.file.headers,
+            task.subtitle,
+            task.audio,
+        ) {
+            if (task.cancelled || it <= 0) return@executeFFMpeg
+            percent.set((it / 1000.0).toInt().coerceIn(0, 99))
+            publishFfmpegProgress(task, outputFile, percent, lastPublishedPercent, ffTask, notifi, false)
+        }
+        task.sessionId = ffTask
+        if (task.cancelled) {
+            ffExtension!!.cancelDownload(ffTask)
+            return
+        }
+        currentTasks.find { it.getTaskName() == task.getTaskName() }?.sessionId = ffTask
+        saveMediaInfo(task, baseOutputDir)
+
+        if (!waitForFfmpegCompletion(task, ffTask, notifi)) return
+        publishFfmpegProgress(task, outputFile, percent, lastPublishedPercent, ffTask, notifi, true)
+        finalizeFfmpegDownload(task, ffTask, notifi)
     }
 
     private suspend fun handleFfmpegFailed(task: AnimeDownloadTask, ffTask: Long, notifi: Boolean) {
