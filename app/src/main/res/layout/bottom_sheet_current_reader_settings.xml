@@ -753,6 +753,151 @@
                         android:textSize="12sp" />
                 </com.google.android.material.chip.ChipGroup>
 
+                <!-- Color Filters -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:text="@string/color_filter"
+                    android:textColor="?attr/colorOnBackground" />
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/readerColorFilterGroup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/readerFilterDefault"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:text="@string/filter_default"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/readerFilterGrayscale"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:text="@string/filter_grayscale"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/readerFilterInverted"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:text="@string/filter_inverted"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/readerFilterSepia"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:text="@string/filter_sepia"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/readerFilterCustom"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:text="@string/filter_custom"
+                        android:textSize="12sp" />
+                </com.google.android.material.chip.ChipGroup>
+
+                <!-- Custom Slider Controls -->
+                <LinearLayout
+                    android:id="@+id/readerCustomFilterContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <!-- Brightness -->
+                    <TextView
+                        android:id="@+id/readerFilterBrightnessLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:text="@string/filter_brightness"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/readerFilterBrightnessSlider"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="-100"
+                        android:valueTo="100"
+                        android:stepSize="5"
+                        android:value="0" />
+
+                    <!-- Contrast -->
+                    <TextView
+                        android:id="@+id/readerFilterContrastLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:text="@string/filter_contrast"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/readerFilterContrastSlider"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="-100"
+                        android:valueTo="100"
+                        android:stepSize="5"
+                        android:value="0" />
+
+                    <!-- Saturation -->
+                    <TextView
+                        android:id="@+id/readerFilterSaturationLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:text="@string/filter_saturation"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/readerFilterSaturationSlider"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="0"
+                        android:valueTo="200"
+                        android:stepSize="5"
+                        android:value="100" />
+
+                    <!-- Temperature -->
+                    <TextView
+                        android:id="@+id/readerFilterTemperatureLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:text="@string/filter_temperature"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/readerFilterTemperatureSlider"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="-100"
+                        android:valueTo="100"
+                        android:stepSize="5"
+                        android:value="0" />
+                </LinearLayout>
+
                 <!-- Screen Orientation Lock -->
                 <TextView
                     android:layout_width="match_parent"

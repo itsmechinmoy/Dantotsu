@@ -1493,4 +1493,14 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="player_buffer_size_desc">Buffer %1$d seconds ahead during video playback</string>
     <string name="show_episode_rating">Show Episode Rating</string>
     <string name="show_episode_rating_desc">Display per-episode rating from AniZip on episode cards</string>
+    <string name="color_filter">Color Filters</string>
+    <string name="filter_default">Default</string>
+    <string name="filter_grayscale">Grayscale</string>
+    <string name="filter_inverted">Inverted</string>
+    <string name="filter_sepia">Sepia</string>
+    <string name="filter_custom">Custom</string>
+    <string name="filter_brightness">Brightness</string>
+    <string name="filter_contrast">Contrast</string>
+    <string name="filter_saturation">Saturation</string>
+    <string name="filter_temperature">Color Temperature (Cool / Warm)</string>
 </resources>

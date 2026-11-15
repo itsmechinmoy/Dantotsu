@@ -219,6 +219,11 @@ enum class PrefName(val data: Pref) {
     WebGpuRenderer(Pref(Location.Reader, Boolean::class, false)),
     PagePreloadAmount(Pref(Location.Reader, Int::class, 3)),
     AlwaysShowChapterTransition(Pref(Location.Reader, Boolean::class, false)),
+    ReaderColorFilterMode(Pref(Location.Reader, Int::class, 0)), // 0=None, 1=Grayscale, 2=Inverted, 3=Sepia, 4=Custom
+    ReaderFilterBrightness(Pref(Location.Reader, Float::class, 0f)),
+    ReaderFilterContrast(Pref(Location.Reader, Float::class, 0f)),
+    ReaderFilterSaturation(Pref(Location.Reader, Float::class, 1f)),
+    ReaderFilterTemperature(Pref(Location.Reader, Float::class, 0f)),
     
     // Data Saver
     DataSaverMode(Pref(Location.Reader, Int::class, 0)), // 0=NONE, 1=BANDWIDTH_HERO, 2=WSRV_NL

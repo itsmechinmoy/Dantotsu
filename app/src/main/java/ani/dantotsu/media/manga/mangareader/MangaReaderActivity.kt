@@ -1159,10 +1159,23 @@ class MangaReaderActivity : AppCompatActivity() {
         setupPagedVolumeKeys()
     }
 
+    fun applyColorFilter() {
+        val s = defaultSettings
+        MangaColorFilterManager.applyColorFilter(
+            binding.mangaReaderSwipy,
+            colorFilterMode = s.colorFilterMode,
+            brightness = s.filterBrightness,
+            contrast = s.filterContrast,
+            saturation = s.filterSaturation,
+            temperature = s.filterTemperature
+        )
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     fun applySettings() {
         saveReaderSettings("${media.id}_current_settings", defaultSettings)
         applyReaderWindowSettings()
+        applyColorFilter()
 
         val chapImages = setupChapterImagesAndAdapter()
         setupAutoScrollSettings()
