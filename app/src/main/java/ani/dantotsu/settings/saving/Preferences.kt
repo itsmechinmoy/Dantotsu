@@ -5,6 +5,7 @@ import ani.dantotsu.connections.PendingDeletion
 import ani.dantotsu.connections.PendingProgressUpdate
 import ani.dantotsu.connections.comments.AuthResponse
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.comick.ComickToken
 import ani.dantotsu.connections.mangabaka.MangaBakaToken
 import ani.dantotsu.media.SearchHistory
 import ani.dantotsu.notifications.comment.CommentStore
@@ -308,7 +309,12 @@ enum class PrefName(val data: Pref) {
     MangaBakaAvatar(Pref(Location.Protected, String::class, "")),
     MangaBakaUserId(Pref(Location.Protected, String::class, "")),
     MangaBakaCodeChallenge(Pref(Location.Protected, String::class, "")),
-    MangaBakaToken(Pref(Location.Protected, MangaBakaToken::class, "")),
+    MangaBakaToken(Pref(Location.Protected, ani.dantotsu.connections.mangabaka.MangaBakaToken::class, "")),
+    ComickUserName(Pref(Location.Protected, String::class, "")),
+    ComickAvatar(Pref(Location.Protected, String::class, "")),
+    ComickUserId(Pref(Location.Protected, String::class, "")),
+    ComickCodeChallenge(Pref(Location.Protected, String::class, "")),
+    ComickToken(Pref(Location.Protected, ani.dantotsu.connections.comick.ComickToken::class, "")),
     AppPassword(Pref(Location.Protected, String::class, "")),
     BiometricToken(Pref(Location.Protected, String::class, "")),
     OverridePassword(Pref(Location.Protected, Boolean::class, false)),

@@ -35,33 +35,56 @@ class AutoBackupWorker(appContext: Context, workerParams: WorkerParameters) :
             val exportableLocations = Location.entries.filter { it.exportable }
             val serialized = PrefManager.exportAllPrefs(exportableLocations)
 
-            val backupDir = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "Dantotsu/Backups"
-            ).apply { if (!exists()) mkdirs() }
-
+            val customUriStr = PrefManager.getVal<String>(PrefName.AutoBackupDir)
+            val customUri = if (customUriStr.isNotBlank()) android.net.Uri.parse(customUriStr) else null
             val timestampStr = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault()).format(Date())
-            val backupFile = File(backupDir, "dantotsu_autobackup_${timestampStr}.ani")
-            backupFile.writeText(serialized)
-            android.media.MediaScannerConnection.scanFile(applicationContext, arrayOf(backupFile.absolutePath), null, null)
+            val fileName = "dantotsu_autobackup_${timestampStr}.ani"
 
-            PrefManager.setVal(PrefName.LastAutoBackupTimestamp, System.currentTimeMillis())
-            Logger.log("AutoBackupWorker: Backup saved to ${backupFile.absolutePath}")
+            if (customUri != null) {
+                val docDir = androidx.documentfile.provider.DocumentFile.fromTreeUri(applicationContext, customUri)
+                if (docDir != null && docDir.canWrite()) {
+                    val file = docDir.createFile("application/x-ani", fileName)
+                    file?.uri?.let { uri ->
+                        applicationContext.contentResolver.openOutputStream(uri)?.use { out ->
+                            out.write(serialized.toByteArray(Charsets.UTF_8))
+                        }
+                    }
+                    val maxCopies = PrefManager.getVal<Int>(PrefName.AutoBackupMaxCopies).coerceAtLeast(1)
+                    val backups = docDir.listFiles().filter {
+                        it.isFile && it.name?.startsWith("dantotsu_autobackup_") == true && it.name?.endsWith(".ani") == true
+                    }.sortedBy { it.lastModified() }
+                    if (backups.size > maxCopies) {
+                        backups.take(backups.size - maxCopies).forEach { it.delete() }
+                    }
+                }
+            } else {
+                val backupDir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "Dantotsu/Backups"
+                ).apply { if (!exists()) mkdirs() }
 
-            // Pruning old auto-backups exceeding retention limit
-            val maxCopies = PrefManager.getVal<Int>(PrefName.AutoBackupMaxCopies).coerceAtLeast(1)
-            val autoBackups = backupDir.listFiles { file ->
-                file.isFile && file.name.startsWith("dantotsu_autobackup_") && file.name.endsWith(".ani")
-            }?.sortedBy { it.lastModified() } ?: emptyList()
+                val backupFile = File(backupDir, fileName)
+                backupFile.writeText(serialized)
+                android.media.MediaScannerConnection.scanFile(applicationContext, arrayOf(backupFile.absolutePath), null, null)
 
-            if (autoBackups.size > maxCopies) {
-                val toDelete = autoBackups.take(autoBackups.size - maxCopies)
-                toDelete.forEach { oldFile ->
-                    Logger.log("AutoBackupWorker: Pruning old backup ${oldFile.name}")
-                    oldFile.delete()
+                Logger.log("AutoBackupWorker: Backup saved to ${backupFile.absolutePath}")
+
+                // Pruning old auto-backups exceeding retention limit
+                val maxCopies = PrefManager.getVal<Int>(PrefName.AutoBackupMaxCopies).coerceAtLeast(1)
+                val autoBackups = backupDir.listFiles { file ->
+                    file.isFile && file.name.startsWith("dantotsu_autobackup_") && file.name.endsWith(".ani")
+                }?.sortedBy { it.lastModified() } ?: emptyList()
+
+                if (autoBackups.size > maxCopies) {
+                    val toDelete = autoBackups.take(autoBackups.size - maxCopies)
+                    toDelete.forEach { oldFile ->
+                        Logger.log("AutoBackupWorker: Pruning old backup ${oldFile.name}")
+                        oldFile.delete()
+                    }
                 }
             }
 
+            PrefManager.setVal(PrefName.LastAutoBackupTimestamp, System.currentTimeMillis())
             Result.success()
         } catch (e: Exception) {
             Logger.log("AutoBackupWorker failed: ${e.message}")

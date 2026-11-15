@@ -130,18 +130,18 @@ class MangaBakaQueries {
     }
 
     private suspend fun writeLibraryEntry(seriesId: Long, body: Map<String, Any>): Boolean {
-        val headers = getAuthHeaders()
+        val headers = getAuthHeaders() + ("Content-Type" to "application/json")
         if (headers.isEmpty()) return false
 
         val path = "${MangaBaka.apiHost}/my/library/$seriesId"
         return try {
             val putRes = runCatching {
-                client.put(path, headers = headers, data = body)
+                client.put(path, headers = headers, json = body)
             }
             if (putRes.isSuccess && putRes.getOrNull()?.code in 200..299) {
                 true
             } else {
-                val postRes = client.post(path, headers = headers, data = body)
+                val postRes = client.post(path, headers = headers, json = body)
                 postRes.code in 200..299
             }
         } catch (e: Exception) {

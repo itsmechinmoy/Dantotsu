@@ -161,10 +161,20 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
     private suspend fun fetchSeasonEpisodes(
         source: AnimeSource,
         sAnime: SAnime,
-        seasons: List<SAnime>?
+        seasons: List<SAnime>?,
+        parentTitle: String? = null,
+        depth: Int = 0
     ): List<SEpisode> {
         if (seasons.isNullOrEmpty()) {
-            return source.getEpisodeListCompat(sAnime)
+            val episodes = source.getEpisodeListCompat(sAnime)
+            if (!parentTitle.isNullOrBlank()) {
+                episodes.forEach { ep ->
+                    if (ep.scanlator.isNullOrBlank()) {
+                        ep.scanlator = parentTitle
+                    }
+                }
+            }
+            return episodes
         }
         val semaphore = Semaphore(3)
         val allEpisodes = coroutineScope {
@@ -174,15 +184,26 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
                         val seasonAnime = runCatching {
                             if (source is AnimeHttpSource) source.getAnimeDetails(season) else season
                         }.getOrDefault(season)
-                        val seasonEpisodes = runCatching {
-                            source.getEpisodeListCompat(seasonAnime)
-                        }.getOrDefault(emptyList())
-                        seasonEpisodes.forEach { ep ->
-                            if (ep.scanlator.isNullOrBlank()) {
-                                ep.scanlator = seasonAnime.title.ifBlank { null } ?: season.title
+                        val currentTitle = seasonAnime.title.ifBlank { null } ?: season.title
+                        val fullTitle = if (!parentTitle.isNullOrBlank()) "$parentTitle / $currentTitle" else currentTitle
+
+                        val subSeasons = if (depth < 5) {
+                            runCatching { source.getSeasonListCompat(seasonAnime) }.getOrNull()
+                        } else null
+
+                        if (!subSeasons.isNullOrEmpty()) {
+                            fetchSeasonEpisodes(source, seasonAnime, subSeasons, fullTitle, depth + 1)
+                        } else {
+                            val seasonEpisodes = runCatching {
+                                source.getEpisodeListCompat(seasonAnime)
+                            }.getOrDefault(emptyList())
+                            seasonEpisodes.forEach { ep ->
+                                if (ep.scanlator.isNullOrBlank()) {
+                                    ep.scanlator = fullTitle
+                                }
                             }
+                            seasonEpisodes
                         }
-                        seasonEpisodes
                     }
                 }
             }.awaitAll().flatten()

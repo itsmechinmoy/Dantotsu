@@ -377,6 +377,24 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".connections.comick.Login"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter android:label="Comick Login for Dantotsu">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="app.dantotsu" />
+                <data
+                    android:host="comick"
+                    android:scheme="dantotsu" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name=".others.webview.CookieCatcher"
             android:configChanges="orientation|screenSize|layoutDirection"
             android:excludeFromRecents="true"

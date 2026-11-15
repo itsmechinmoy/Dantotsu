@@ -328,6 +328,143 @@
             </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/settingsMangaBakaLoginContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="31dp"
+                android:layout_height="match_parent"
+                android:layout_marginEnd="16dp"
+                android:contentDescription="@string/mangabaka"
+                app:srcCompat="@drawable/ic_mangabaka"
+                app:tint="?attr/colorPrimary" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:minHeight="64dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/settingsMangaBakaUsername"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="-4dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:text="@string/username"
+                    android:textColor="?attr/colorSecondary"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/settingsMangaBakaLogin"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="-16dp"
+                    android:layout_marginTop="-16dp"
+                    android:layout_marginBottom="-16dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:padding="16dp"
+                    android:text="@string/logout"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/settingsMangaBakaAvatarContainer"
+                android:layout_width="51dp"
+                android:layout_height="51dp"
+                android:layout_marginTop="4dp"
+                android:backgroundTint="@color/nav_bg_inv"
+                app:cardCornerRadius="26dp">
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/settingsMangaBakaAvatar"
+                    android:layout_width="51dp"
+                    android:layout_height="51dp"
+                    android:scaleType="center"
+                    app:srcCompat="@drawable/ic_round_person_24"
+                    tools:ignore="ContentDescription,ImageContrastCheck" />
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/settingsComickLoginContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="31dp"
+                android:layout_height="match_parent"
+                android:layout_marginEnd="16dp"
+                android:contentDescription="@string/comick"
+                app:srcCompat="@drawable/ic_comick"
+                app:tint="?attr/colorPrimary" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:minHeight="64dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/settingsComickUsername"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="-4dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:text="@string/username"
+                    android:textColor="?attr/colorSecondary"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/settingsComickLogin"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="-16dp"
+                    android:layout_marginTop="-16dp"
+                    android:layout_marginBottom="-16dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:padding="16dp"
+                    android:text="@string/logout"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/settingsComickAvatarContainer"
+                android:layout_width="51dp"
+                android:layout_height="51dp"
+                android:layout_marginTop="4dp"
+                android:backgroundTint="@color/nav_bg_inv"
+                app:cardCornerRadius="26dp">
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/settingsComickAvatar"
+                    android:layout_width="51dp"
+                    android:layout_height="51dp"
+                    android:scaleType="center"
+                    app:srcCompat="@drawable/ic_round_person_24"
+                    tools:ignore="ContentDescription,ImageContrastCheck" />
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+
         <ani.dantotsu.FadingEdgeRecyclerView
             android:id="@+id/settingsRecyclerView"
             android:layout_width="match_parent"

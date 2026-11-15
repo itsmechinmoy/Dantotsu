@@ -1273,27 +1273,31 @@ class MangaReaderActivity : AppCompatActivity() {
 
     private fun determinePressPosition(x: Int, y: Int, screenWidth: Int): PressPos {
         val isRtl = defaultSettings.direction == RIGHT_TO_LEFT
-        return if (screenWidth / 5 in x + 1..<y) {
-            if (isRtl) PressPos.RIGHT else PressPos.LEFT
-        } else if (x > screenWidth - screenWidth / 5 && y > screenWidth / 5) {
-            if (isRtl) PressPos.LEFT else PressPos.RIGHT
-        } else {
-            PressPos.CENTER
+        val leftBoundary = screenWidth * 0.28f
+        val rightBoundary = screenWidth * 0.72f
+        return when {
+            x < leftBoundary -> if (isRtl) PressPos.RIGHT else PressPos.LEFT
+            x > rightBoundary -> if (isRtl) PressPos.LEFT else PressPos.RIGHT
+            else -> PressPos.CENTER
         }
     }
 
     private fun navigatePaged(pressLocation: PressPos): Boolean {
-        if (pressLocation == PressPos.LEFT && binding.mangaReaderPager.currentItem > 0) {
-            if (imageAdapter?.isZoomed() == true) {
-                imageAdapter?.setZoom(1f)
+        if (pressLocation == PressPos.LEFT) {
+            if (binding.mangaReaderPager.currentItem > 0) {
+                if (imageAdapter?.isZoomed() == true) {
+                    imageAdapter?.setZoom(1f)
+                }
+                binding.mangaReaderPager.currentItem -= 1
             }
-            binding.mangaReaderPager.currentItem -= 1
             return true
-        } else if (pressLocation == PressPos.RIGHT && binding.mangaReaderPager.currentItem < maxChapterPage - 1) {
-            if (imageAdapter?.isZoomed() == true) {
-                imageAdapter?.setZoom(1f)
+        } else if (pressLocation == PressPos.RIGHT) {
+            if (binding.mangaReaderPager.currentItem < maxChapterPage - 1) {
+                if (imageAdapter?.isZoomed() == true) {
+                    imageAdapter?.setZoom(1f)
+                }
+                binding.mangaReaderPager.currentItem += 1
             }
-            binding.mangaReaderPager.currentItem += 1
             return true
         }
         return false

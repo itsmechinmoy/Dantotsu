@@ -1466,6 +1466,12 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="mangabaka_logout">Log out of MangaBaka</string>
     <string name="mangabaka_desc">Sync reading list and progress with MangaBaka</string>
     <string name="logging_in_mangabaka">Logging in to MangaBaka…</string>
+    <string name="comick">Comick</string>
+    <string name="comick_login">Log in to Comick</string>
+    <string name="comick_logout">Log out of Comick</string>
+    <string name="comick_desc">Sync reading list and progress with Comick</string>
+    <string name="logging_in_comick">Logging in to Comick…</string>
+    <string name="comick_link">https://comick.dev/user/%1$s</string>
     <string name="shortcut_search">Search</string>
     <string name="shortcut_search_desc">Search Anime and Manga</string>
     <string name="shortcut_manga">Manga</string>
@@ -1476,6 +1482,13 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="shortcut_downloads_desc">Download Queue</string>
     <string name="auto_backup_directory">Auto-Backup Directory</string>
     <string name="auto_backup_directory_desc">Choose a custom folder to save automatic backups</string>
+    <string name="auto_backup_dir_default">Downloads/Dantotsu/Backups (Default)</string>
+    <string name="mangabaka_login_uri_not_found">MangaBaka Login : Uri not Found</string>
+    <string name="mangabaka_login_code_challenge_not_found">MangaBaka Login : codeChallenge not found</string>
+    <string name="mangabaka_login_code_not_present">MangaBaka Login : Code not present in redirected URI</string>
+    <string name="comick_login_uri_not_found">Comick Login : Uri not Found</string>
+    <string name="comick_login_code_challenge_not_found">Comick Login : codeChallenge not found</string>
+    <string name="comick_login_code_not_present">Comick Login : Code not present in redirected URI</string>
     <string name="player_buffer_size">Forward Buffer Size</string>
     <string name="player_buffer_size_desc">Buffer %1$d seconds ahead during video playback</string>
     <string name="show_episode_rating">Show Episode Rating</string>

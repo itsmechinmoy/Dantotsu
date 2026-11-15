@@ -15,8 +15,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
+import ani.dantotsu.connections.comick.Comick
 import ani.dantotsu.connections.discord.Discord
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.mangabaka.MangaBaka
 import ani.dantotsu.databinding.ActivitySettingsAccountsBinding
 import ani.dantotsu.initActivity
 import ani.dantotsu.loadImage
@@ -284,6 +286,48 @@ class SettingsAccountActivity : AppCompatActivity() {
                     settingsDiscordLogin.setOnClickListener {
                         Discord.warning(context)
                             .show(supportFragmentManager, "dialog")
+                    }
+                }
+
+                if (MangaBaka.token != null) {
+                    settingsMangaBakaLogin.setText(R.string.logout)
+                    settingsMangaBakaLogin.setOnClickListener {
+                        MangaBaka.removeSavedToken()
+                        restartMainActivity.isEnabled = true
+                        reload()
+                    }
+                    settingsMangaBakaUsername.visibility = View.VISIBLE
+                    settingsMangaBakaUsername.text = MangaBaka.username
+                    settingsMangaBakaAvatar.loadImage(MangaBaka.avatar)
+                } else {
+                    settingsMangaBakaAvatar.setImageResource(R.drawable.ic_round_person_24)
+                    settingsMangaBakaUsername.visibility = View.GONE
+                    settingsMangaBakaLogin.setText(R.string.login)
+                    settingsMangaBakaLogin.setOnClickListener {
+                        MangaBaka.loginIntent(context)
+                    }
+                }
+
+                if (Comick.token != null) {
+                    settingsComickLogin.setText(R.string.logout)
+                    settingsComickLogin.setOnClickListener {
+                        Comick.removeSavedToken()
+                        restartMainActivity.isEnabled = true
+                        reload()
+                    }
+                    settingsComickUsername.visibility = View.VISIBLE
+                    settingsComickUsername.text = Comick.username
+                    settingsComickAvatar.loadImage(Comick.avatar)
+                    settingsComickAvatar.setOnClickListener {
+                        it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        openLinkInBrowser(getString(R.string.comick_link, Comick.username))
+                    }
+                } else {
+                    settingsComickAvatar.setImageResource(R.drawable.ic_round_person_24)
+                    settingsComickUsername.visibility = View.GONE
+                    settingsComickLogin.setText(R.string.login)
+                    settingsComickLogin.setOnClickListener {
+                        Comick.loginIntent(context)
                     }
                 }
             }

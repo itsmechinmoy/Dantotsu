@@ -23,13 +23,13 @@ class Login : AppCompatActivity() {
         ThemeManager(this).applyTheme()
         try {
             val data: Uri = intent?.data
-                ?: throw Exception(getString(R.string.login_uri_not_found))
+                ?: throw Exception(getString(R.string.mangabaka_login_uri_not_found))
             val codeVerifier = PrefManager.getVal(PrefName.MangaBakaCodeChallenge, null as String?)
-                ?: throw Exception(getString(R.string.login_code_challenge_not_found))
+                ?: throw Exception(getString(R.string.mangabaka_login_code_challenge_not_found))
             val code = data.getQueryParameter("code")
-                ?: throw Exception(getString(R.string.login_code_not_present))
+                ?: throw Exception(getString(R.string.mangabaka_login_code_not_present))
 
-            snackString(getString(R.string.logging_in))
+            snackString(getString(R.string.logging_in_mangabaka))
             lifecycleScope.launch(Dispatchers.IO) {
                 tryWithSuspend(true) {
                     val res = client.post(
