@@ -1,6 +1,7 @@
 package ani.dantotsu.settings.data
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
@@ -10,6 +11,7 @@ import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.text.format.Formatter
 import android.view.ViewGroup
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.updateLayoutParams
@@ -50,6 +52,7 @@ import java.util.Locale
 class SettingsDataActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsDataBinding
     private lateinit var launcher: LauncherWrapper
+    private lateinit var autoBackupDirLauncher: ActivityResultLauncher<Uri?>
     private var cacheSize: Long = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,6 +73,19 @@ class SettingsDataActivity : AppCompatActivity() {
 
         val contract = ActivityResultContracts.OpenDocumentTree()
         launcher = LauncherWrapper(this, contract)
+
+        autoBackupDirLauncher =
+            registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+                if (uri != null) {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                    PrefManager.setVal(PrefName.AutoBackupDir, uri.toString())
+                    binding.dataSettingsRecyclerView.adapter?.notifyDataSetChanged()
+                    toast(getString(R.string.success))
+                }
+            }
 
         val openDocumentLauncher =
             registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -296,6 +312,24 @@ class SettingsDataActivity : AppCompatActivity() {
                         setPosButton(R.string.ok)
                         show()
                     }
+                }
+            ),
+
+            // Auto Backup Directory
+            Settings(
+                type = 1,
+                name = getString(R.string.auto_backup_directory),
+                desc = run {
+                    val uriStr = PrefManager.getVal<String>(PrefName.AutoBackupDir)
+                    if (uriStr.isNotBlank()) {
+                        Uri.parse(uriStr).path ?: uriStr
+                    } else {
+                        getString(R.string.auto_backup_dir_default)
+                    }
+                },
+                icon = R.drawable.ic_round_folder_24,
+                onClick = {
+                    autoBackupDirLauncher.launch(null)
                 }
             ),
 

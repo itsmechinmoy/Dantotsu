@@ -5,6 +5,8 @@ import ani.dantotsu.connections.PendingDeletion
 import ani.dantotsu.connections.PendingProgressUpdate
 import ani.dantotsu.connections.comments.AuthResponse
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.comick.ComickToken
+import ani.dantotsu.connections.mangabaka.MangaBakaToken
 import ani.dantotsu.media.SearchHistory
 import ani.dantotsu.notifications.comment.CommentStore
 import ani.dantotsu.notifications.subscription.SubscriptionStore
@@ -14,6 +16,10 @@ import ani.dantotsu.settings.saving.internal.Pref
 enum class PrefName(val data: Pref) {
     //General
     SharedUserID(Pref(Location.General, Boolean::class, true)),
+    SkipDuplicateChapters(Pref(Location.General, Boolean::class, true)),
+    ShowEpisodeRating(Pref(Location.General, Boolean::class, true)),
+    AutoBackupDir(Pref(Location.Irrelevant, String::class, "")),
+    PlayerBufferSize(Pref(Location.Player, Int::class, 45)),
     OfflineView(Pref(Location.General, Int::class, 0)),
     DownloadManager(Pref(Location.General, Int::class, 0)),
     MaxParallelDownloads(Pref(Location.General, Int::class, 0)),
@@ -213,6 +219,11 @@ enum class PrefName(val data: Pref) {
     WebGpuRenderer(Pref(Location.Reader, Boolean::class, false)),
     PagePreloadAmount(Pref(Location.Reader, Int::class, 3)),
     AlwaysShowChapterTransition(Pref(Location.Reader, Boolean::class, false)),
+    ReaderColorFilterMode(Pref(Location.Reader, Int::class, 0)), // 0=None, 1=Grayscale, 2=Inverted, 3=Sepia, 4=Custom
+    ReaderFilterBrightness(Pref(Location.Reader, Float::class, 0f)),
+    ReaderFilterContrast(Pref(Location.Reader, Float::class, 0f)),
+    ReaderFilterSaturation(Pref(Location.Reader, Float::class, 1f)),
+    ReaderFilterTemperature(Pref(Location.Reader, Float::class, 0f)),
     
     // Data Saver
     DataSaverMode(Pref(Location.Reader, Int::class, 0)), // 0=NONE, 1=BANDWIDTH_HERO, 2=WSRV_NL
@@ -299,6 +310,16 @@ enum class PrefName(val data: Pref) {
     MALAvatar(Pref(Location.Protected, String::class, "")),
     MALCodeChallenge(Pref(Location.Protected, String::class, "")),
     MALToken(Pref(Location.Protected, MAL.ResponseToken::class, "")),
+    MangaBakaUserName(Pref(Location.Protected, String::class, "")),
+    MangaBakaAvatar(Pref(Location.Protected, String::class, "")),
+    MangaBakaUserId(Pref(Location.Protected, String::class, "")),
+    MangaBakaCodeChallenge(Pref(Location.Protected, String::class, "")),
+    MangaBakaToken(Pref(Location.Protected, ani.dantotsu.connections.mangabaka.MangaBakaToken::class, "")),
+    ComickUserName(Pref(Location.Protected, String::class, "")),
+    ComickAvatar(Pref(Location.Protected, String::class, "")),
+    ComickUserId(Pref(Location.Protected, String::class, "")),
+    ComickCodeChallenge(Pref(Location.Protected, String::class, "")),
+    ComickToken(Pref(Location.Protected, ani.dantotsu.connections.comick.ComickToken::class, "")),
     AppPassword(Pref(Location.Protected, String::class, "")),
     BiometricToken(Pref(Location.Protected, String::class, "")),
     OverridePassword(Pref(Location.Protected, Boolean::class, false)),

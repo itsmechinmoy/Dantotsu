@@ -46,7 +46,7 @@ class PreferencePackager {
                     // Ignore errors packing sources
                 }
             }
-            val gson = Gson()
+            val gson = com.google.gson.GsonBuilder().setPrettyPrinting().create()
             return gson.toJson(prefsMap)
         }
 

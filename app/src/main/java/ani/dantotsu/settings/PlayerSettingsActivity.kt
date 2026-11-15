@@ -138,6 +138,23 @@ class PlayerSettingsActivity :
             }
         }
 
+        val bufferSizes = arrayOf(10, 15, 20, 30, 45, 60)
+        val bufferSizeLabels = bufferSizes.map { "${it}s" }.toTypedArray()
+        binding.playerBufferSizeMode.setOnClickListener {
+            val current = PrefManager.getVal<Int>(PrefName.PlayerBufferSize).coerceIn(10, 60)
+            val selectedIdx = bufferSizes.indexOf(current).coerceAtLeast(0)
+            customAlertDialog().apply {
+                setTitle(getString(R.string.player_buffer_size))
+                singleChoiceItems(
+                    bufferSizeLabels,
+                    selectedIdx,
+                ) { which ->
+                    PrefManager.setVal(PrefName.PlayerBufferSize, bufferSizes[which])
+                }
+                show()
+            }
+        }
+
         // Online Subtitles
         binding.playerSettingsOnlineSubtitles.isChecked = PrefManager.getVal(PrefName.OnlineSubtitlesEnabled)
         binding.playerSettingsOnlineSubtitles.setOnCheckedChangeListener { _, isChecked ->

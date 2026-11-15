@@ -1,9 +1,19 @@
 package eu.kanade.tachiyomi.extension.api
 
 import android.annotation.SuppressLint
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.protobuf.ProtoNumber
 
 @SuppressLint("UnsafeOptInUsageError")
@@ -196,3 +206,40 @@ data class NetworkLegacyExtension(
         val baseUrl: String,
     )
 }
+
+object LongOrStringSerializer : KSerializer<Long> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LongOrString", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: Long) = encoder.encodeLong(value)
+    override fun deserialize(decoder: Decoder): Long {
+        val jsonDecoder = decoder as? JsonDecoder ?: return try {
+            decoder.decodeLong()
+        } catch (_: Throwable) {
+            decoder.decodeString().toLongOrNull() ?: 0L
+        }
+        val element = jsonDecoder.decodeJsonElement()
+        return if (element is JsonPrimitive) {
+            element.longOrNull ?: element.content.toLongOrNull() ?: 0L
+        } else {
+            0L
+        }
+    }
+}
+
+object IntOrStringSerializer : KSerializer<Int> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("IntOrString", PrimitiveKind.INT)
+    override fun serialize(encoder: Encoder, value: Int) = encoder.encodeInt(value)
+    override fun deserialize(decoder: Decoder): Int {
+        val jsonDecoder = decoder as? JsonDecoder ?: return try {
+            decoder.decodeInt()
+        } catch (_: Throwable) {
+            decoder.decodeString().toIntOrNull() ?: 0
+        }
+        val element = jsonDecoder.decodeJsonElement()
+        return if (element is JsonPrimitive) {
+            element.intOrNull ?: element.content.toIntOrNull() ?: 0
+        } else {
+            0
+        }
+    }
+}
+

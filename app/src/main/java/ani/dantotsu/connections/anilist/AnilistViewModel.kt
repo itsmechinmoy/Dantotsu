@@ -8,8 +8,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
 import ani.dantotsu.BuildConfig
 import ani.dantotsu.R
+import ani.dantotsu.connections.comick.Comick
 import ani.dantotsu.connections.discord.Discord
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.mangabaka.MangaBaka
 import ani.dantotsu.connections.mal.MalAnimeNode
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.Character
@@ -342,6 +344,8 @@ class AnilistHomeViewModel : ViewModel() {
         Anilist.getSavedToken()
         MAL.getSavedToken()
         Discord.getSavedToken()
+        MangaBaka.getSavedToken()
+        Comick.getSavedToken()
         if (!BuildConfig.FLAVOR.contains("fdroid")) {
             if (PrefManager.getVal(PrefName.CheckUpdate))
                 context.lifecycleScope.launch(Dispatchers.IO) {

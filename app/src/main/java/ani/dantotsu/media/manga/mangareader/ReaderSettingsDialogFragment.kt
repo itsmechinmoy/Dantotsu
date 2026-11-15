@@ -304,6 +304,67 @@ class ReaderSettingsDialogFragment : BottomSheetDialogFragment() {
             activity.applyBackgroundColor(3)
         }
 
+        // --- Color Filter Chips ---
+        when (settings.colorFilterMode) {
+            MangaColorFilterManager.MODE_GRAYSCALE -> binding.readerFilterGrayscale.isChecked = true
+            MangaColorFilterManager.MODE_INVERTED -> binding.readerFilterInverted.isChecked = true
+            MangaColorFilterManager.MODE_SEPIA -> binding.readerFilterSepia.isChecked = true
+            MangaColorFilterManager.MODE_CUSTOM -> binding.readerFilterCustom.isChecked = true
+            else -> binding.readerFilterDefault.isChecked = true
+        }
+
+        binding.readerCustomFilterContainer.visibility =
+            if (settings.colorFilterMode == MangaColorFilterManager.MODE_CUSTOM) View.VISIBLE else View.GONE
+
+        fun onFilterModeChanged(mode: Int) {
+            settings.colorFilterMode = mode
+            PrefManager.setVal(PrefName.ReaderColorFilterMode, mode)
+            binding.readerCustomFilterContainer.visibility =
+                if (mode == MangaColorFilterManager.MODE_CUSTOM) View.VISIBLE else View.GONE
+            activity.applyColorFilter()
+        }
+
+        binding.readerFilterDefault.setOnClickListener { onFilterModeChanged(MangaColorFilterManager.MODE_DEFAULT) }
+        binding.readerFilterGrayscale.setOnClickListener { onFilterModeChanged(MangaColorFilterManager.MODE_GRAYSCALE) }
+        binding.readerFilterInverted.setOnClickListener { onFilterModeChanged(MangaColorFilterManager.MODE_INVERTED) }
+        binding.readerFilterSepia.setOnClickListener { onFilterModeChanged(MangaColorFilterManager.MODE_SEPIA) }
+        binding.readerFilterCustom.setOnClickListener { onFilterModeChanged(MangaColorFilterManager.MODE_CUSTOM) }
+
+        // Sliders
+        binding.readerFilterBrightnessSlider.value = (settings.filterBrightness * 100f).coerceIn(-100f, 100f)
+        binding.readerFilterContrastSlider.value = (settings.filterContrast * 100f).coerceIn(-100f, 100f)
+        binding.readerFilterSaturationSlider.value = (settings.filterSaturation * 100f).coerceIn(0f, 200f)
+        binding.readerFilterTemperatureSlider.value = (settings.filterTemperature * 100f).coerceIn(-100f, 100f)
+
+        binding.readerFilterBrightnessSlider.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                settings.filterBrightness = value / 100f
+                PrefManager.setVal(PrefName.ReaderFilterBrightness, settings.filterBrightness)
+                activity.applyColorFilter()
+            }
+        }
+        binding.readerFilterContrastSlider.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                settings.filterContrast = value / 100f
+                PrefManager.setVal(PrefName.ReaderFilterContrast, settings.filterContrast)
+                activity.applyColorFilter()
+            }
+        }
+        binding.readerFilterSaturationSlider.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                settings.filterSaturation = value / 100f
+                PrefManager.setVal(PrefName.ReaderFilterSaturation, settings.filterSaturation)
+                activity.applyColorFilter()
+            }
+        }
+        binding.readerFilterTemperatureSlider.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                settings.filterTemperature = value / 100f
+                PrefManager.setVal(PrefName.ReaderFilterTemperature, settings.filterTemperature)
+                activity.applyColorFilter()
+            }
+        }
+
         // Orientation Lock Chips (0: Free, 1: Portrait, 2: Landscape)
         when (settings.defaultRotation) {
             0 -> binding.readerRotationFree.isChecked = true

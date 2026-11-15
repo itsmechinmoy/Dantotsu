@@ -104,6 +104,16 @@ class SettingsAnimeActivity : AppCompatActivity() {
                     ),
                     Settings(
                         type = 2,
+                        name = getString(R.string.show_episode_rating),
+                        desc = getString(R.string.show_episode_rating_desc),
+                        icon = R.drawable.ic_round_star_24,
+                        isChecked = PrefManager.getVal(PrefName.ShowEpisodeRating),
+                        switch = { isChecked, _ ->
+                            PrefManager.setVal(PrefName.ShowEpisodeRating, isChecked)
+                        }
+                    ),
+                    Settings(
+                        type = 2,
                         name = getString(R.string.prefer_dub),
                         desc = getString(R.string.prefer_dub_desc),
                         icon = R.drawable.ic_round_audiotrack_24,

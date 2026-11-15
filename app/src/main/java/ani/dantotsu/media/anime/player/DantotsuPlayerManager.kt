@@ -431,11 +431,13 @@ class DantotsuPlayerManager(
         val uri = currentMediaItem?.localConfiguration?.uri
         val isTorrentStream = StreamTypeDetector.isTorrentStream(uri)
         val targetBufferBytes = if (isTorrentStream) 48 * 1024 * 1024 else androidx.media3.common.C.LENGTH_UNSET
-        val maxBufferMs = if (isTorrentStream) 60_000 else DEFAULT_MAX_BUFFER_MS
+        val configuredBufferMs = PrefManager.getVal<Int>(PrefName.PlayerBufferSize).coerceIn(10, 60) * 1000
+        val maxBufferMs = if (isTorrentStream) 60_000.coerceAtLeast(configuredBufferMs) else configuredBufferMs
+        val minBufferMs = (maxBufferMs / 2).coerceAtLeast(DEFAULT_MIN_BUFFER_MS)
         val loadControl = DefaultLoadControl.Builder()
             .setBackBuffer(BACK_BUFFER_DURATION_MS, false)
             .setBufferDurationsMs(
-                DEFAULT_MIN_BUFFER_MS,
+                minBufferMs,
                 maxBufferMs,
                 BUFFER_FOR_PLAYBACK_MS,
                 BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS

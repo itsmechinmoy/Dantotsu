@@ -837,6 +837,47 @@ class PlayerSubtitleManager(
         applyOnlineSubtitleUrl(subtitle.url, subtitle.id.ifBlank { subtitle.url }, subtitle.lang, displayName, provider)
     }
 
+    fun applyOtherServerSubtitle(subtitle: Subtitle, serverName: String, uniqueKey: String) {
+        activity.lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val client = Injekt.get<NetworkHelper>().client
+                val reqBuilder = Request.Builder().url(subtitle.file.url)
+                subtitle.file.headers.forEach { (k, v) ->
+                    reqBuilder.addHeader(k, v)
+                }
+                client.newCall(reqBuilder.build()).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        withContext(Dispatchers.Main) {
+                            snackString("Failed to download subtitle from $serverName: HTTP ${response.code}", activity)
+                        }
+                        return@launch
+                    }
+                    val subtitleContent = response.body?.string()
+                    if (subtitleContent.isNullOrEmpty()) {
+                        withContext(Dispatchers.Main) {
+                            snackString("Subtitle file is empty", activity)
+                        }
+                        return@launch
+                    }
+                    val detectedFormat = detectSubtitleFormat(subtitleContent)
+                    val cleanedContent = if (detectedFormat == "ASS") stripAssPositioning(subtitleContent) else subtitleContent
+                    val mimeType = formatToMime(detectedFormat)
+                    val extension = formatToExtension(detectedFormat)
+                    val subtitleFile = File(activity.cacheDir, "server_sub_${uniqueKey.hashCode()}.$extension")
+                    subtitleFile.writeText(cleanedContent)
+                    withContext(Dispatchers.Main) {
+                        val displayName = "${subtitle.language} [$serverName]"
+                        applySubtitleFromFile(subtitleFile, subtitle.language, mimeType, displayName, uniqueKey, serverName)
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    snackString("Failed to load subtitle: ${e.message}", activity)
+                }
+            }
+        }
+    }
+
     fun applyWyzieSubtitle(subtitle: WyzieSub) {
         val display = subtitle.displayLabel.ifBlank { subtitle.language }
         applyOnlineSubtitleUrl(subtitle.url, subtitle.url, subtitle.language, display, "Wyzie")

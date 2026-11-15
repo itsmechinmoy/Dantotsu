@@ -521,6 +521,18 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
         val hasAnySubtitles = items.size > 1
         binding.noServerSubsBanner.isVisible = !hasAnySubtitles
         binding.serverSubtitlesRecycler.adapter = SubtitleAdapter(items, TabType.SERVER)
+
+        if (!episode.allStreams) {
+            val sourceIndex = media.selected?.sourceIndex ?: 0
+            lifecycleScope.launch(Dispatchers.IO) {
+                model.loadEpisodeVideos(episode, sourceIndex, post = false)
+                withContext(Dispatchers.Main) {
+                    if (_binding != null && isAdded && currentTab == 0) {
+                        loadSubtitlesTab(episodeId)
+                    }
+                }
+            }
+        }
     }
 
     private fun loadLocalTab(episodeId: String) {
@@ -1061,7 +1073,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
                 ctx.exoActivity?.playerManager?.exoPlayer?.let { p ->
                     p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
                 }
-                ctx.exoActivity?.reApplyLocalSubtitle(item.subtitle.file.url)
+                ctx.exoActivity?.subtitleManager?.applyOtherServerSubtitle(item.subtitle, item.serverName, uniqueKey)
                 updateActiveSubtitleBadge()
                 dismiss()
             }

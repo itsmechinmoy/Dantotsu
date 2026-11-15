@@ -19,6 +19,7 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.setAnimation
 import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.customAlertDialog
 import ani.dantotsu.util.SizeFormatter
 import com.bumptech.glide.Glide
@@ -176,7 +177,8 @@ class EpisodeAdapter(
             binding.itemEpisodeFillerView.visibility = View.GONE
         }
 
-        if (ep.rating != null) {
+        val showRating = PrefManager.getVal<Boolean>(PrefName.ShowEpisodeRating)
+        if (showRating && ep.rating != null) {
             binding.itemEpisodeRating.visibility = View.VISIBLE
             binding.itemEpisodeRating.text = "★ ${ep.rating}"
         } else {
@@ -215,7 +217,8 @@ class EpisodeAdapter(
         binding.itemEpisodeNumber.text = ep.number
         binding.itemEpisodeTitle.text = title
 
-        if (ep.rating != null) {
+        val showRating = PrefManager.getVal<Boolean>(PrefName.ShowEpisodeRating)
+        if (showRating && ep.rating != null) {
             binding.itemEpisodeRating.visibility = View.VISIBLE
             binding.itemEpisodeRating.text = "★ ${ep.rating}"
         } else {

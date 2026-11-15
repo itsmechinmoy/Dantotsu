@@ -794,14 +794,19 @@ class MediaDetailsViewModel : ViewModel() {
         val link = ep.link ?: return
         if (!ep.allStreams || ep.extractors.isNullOrEmpty()) {
             val existingExtractors = ep.extractors?.toMutableList() ?: mutableListOf()
-            val list = mutableListOf<VideoExtractor>()
+            val list = existingExtractors.toMutableList()
             ep.extractors = list
             watchSources?.get(i)?.apply {
                 if (!post && !allowsPreloading) return@apply
                 ep.sEpisode?.let {
                     loadByVideoServers(link, ep.extra, it) { extractor ->
                         if (extractor.videos.isNotEmpty()) {
-                            list.add(extractor)
+                            val existingIdx = list.indexOfFirst { it.server.name == extractor.server.name }
+                            if (existingIdx != -1) {
+                                list[existingIdx] = extractor
+                            } else {
+                                list.add(extractor)
+                            }
                             ep.extractorCallback?.invoke(extractor)
                         }
                     }

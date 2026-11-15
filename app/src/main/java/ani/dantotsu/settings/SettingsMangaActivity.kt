@@ -114,6 +114,16 @@ class SettingsMangaActivity : AppCompatActivity() {
                     ),
                     Settings(
                         type = 2,
+                        name = getString(R.string.skip_duplicate_chapters),
+                        desc = getString(R.string.skip_duplicate_chapters_desc),
+                        icon = R.drawable.view_list_24,
+                        isChecked = PrefManager.getVal(PrefName.SkipDuplicateChapters),
+                        switch = { isChecked, _ ->
+                            PrefManager.setVal(PrefName.SkipDuplicateChapters, isChecked)
+                        }
+                    ),
+                    Settings(
+                        type = 2,
                         name = getString(R.string.smart_download_manga),
                         desc = getString(R.string.smart_download_manga_desc),
                         icon = R.drawable.ic_download_24,

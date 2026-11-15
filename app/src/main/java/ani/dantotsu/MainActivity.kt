@@ -46,6 +46,8 @@ import ani.dantotsu.home.LoginFragment
 import ani.dantotsu.home.MangaFragment
 import ani.dantotsu.home.NoInternet
 import ani.dantotsu.media.MediaDetailsActivity
+import ani.dantotsu.media.SearchActivity
+import ani.dantotsu.settings.DownloadQueueActivity
 import ani.dantotsu.notifications.TaskScheduler
 import ani.dantotsu.others.CustomBottomDialog
 import ani.dantotsu.others.calc.CalcActivity
@@ -263,6 +265,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun determineInitialTab(fragment: String?): Int {
+        val shortcutTab = intent.getIntExtra("shortcut_tab", -1).takeIf { it != -1 }
+            ?: intent.getStringExtra("shortcut_tab")?.toIntOrNull()
+        if (shortcutTab != null && shortcutTab in 0..2) return shortcutTab
         return if (intent.getBooleanExtra("goToHome", false)) {
             1
         } else if (fragment != null) {
@@ -322,6 +327,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleStartupExtras(): Boolean {
         val extras = intent.extras ?: return false
+        val shortcutAction = extras.getString("shortcut_action")
+        if (shortcutAction != null) {
+            intent.removeExtra("shortcut_action")
+            when (shortcutAction) {
+                "search" -> startActivity(Intent(this, SearchActivity::class.java))
+                "downloads" -> startActivity(Intent(this, DownloadQueueActivity::class.java))
+            }
+        }
         val fragmentToLoad = extras.getString("FRAGMENT_TO_LOAD")
         val mediaId = extras.getInt("mediaId", -1)
         val commentId = extras.getInt("commentId", -1)
@@ -669,6 +682,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleIncomingExtras(targetIntent: Intent) {
         targetIntent.extras?.let { extras ->
+            val shortcutAction = extras.getString("shortcut_action")
+            if (shortcutAction != null) {
+                targetIntent.removeExtra("shortcut_action")
+                when (shortcutAction) {
+                    "search" -> startActivity(Intent(this, SearchActivity::class.java))
+                    "downloads" -> startActivity(Intent(this, DownloadQueueActivity::class.java))
+                }
+            }
+            val shortcutTab = extras.getInt("shortcut_tab", -1).takeIf { it != -1 }
+                ?: extras.getString("shortcut_tab")?.toIntOrNull()
+            if (shortcutTab != null && shortcutTab in 0..2) {
+                targetIntent.removeExtra("shortcut_tab")
+                selectedOption = shortcutTab
+                binding.includedNavbar.navbar.selectTabAt(shortcutTab)
+                binding.viewpager.setCurrentItem(shortcutTab, false)
+            }
             val fragmentToLoad = extras.getString("FRAGMENT_TO_LOAD")
             val mediaId = extras.getInt("mediaId", -1)
             val commentId = extras.getInt("commentId", -1)
