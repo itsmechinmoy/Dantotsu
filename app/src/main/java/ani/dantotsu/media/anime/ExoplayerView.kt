@@ -817,6 +817,12 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
             changingServer = false
             progressManager.startTracking()
             aniSkipManager.startTracking()
+            if (!ep.allStreams) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val sourceIndex = media.selected?.sourceIndex ?: 0
+                    model.loadEpisodeVideos(ep, sourceIndex, post = false)
+                }
+            }
         }
     }
 

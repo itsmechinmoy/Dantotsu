@@ -401,10 +401,7 @@ class MangaReaderActivity : AppCompatActivity() {
         chaptersTitleArr = arrayListOf()
         chapters.forEach {
             val ch = it.value
-            val hasTitle = !ch.title.isNullOrEmpty() && ch.title != "null"
-            val prefix = if (hasTitle) "" else "Chapter "
-            val suffix = if (hasTitle) " : " + ch.title else ""
-            chaptersTitleArr.add("$prefix${ch.number}$suffix")
+            chaptersTitleArr.add(formatChapterTitle(ch.number, ch.title))
         }
 
         showProgressDialog = if (PrefManager.getVal(PrefName.AskIndividualReader)) {
@@ -1748,6 +1745,30 @@ class MangaReaderActivity : AppCompatActivity() {
         autoScrollHelper.speed = speed
     }
 
+    fun formatChapterTitle(number: String, title: String?): String {
+        val num = number.trim()
+        val t = title?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
+
+        if (t == null) {
+            return if (num.startsWith("Chapter", ignoreCase = true)) num else "Chapter $num"
+        }
+
+        if (num.equals(t, ignoreCase = true)) {
+            return if (num.startsWith("Chapter", ignoreCase = true)) num else "Chapter $num"
+        }
+
+        if (num.contains(t, ignoreCase = true)) {
+            return if (num.startsWith("Chapter", ignoreCase = true)) num else "Chapter $num"
+        }
+
+        if (t.startsWith(num, ignoreCase = true) || t.startsWith("Chapter", ignoreCase = true)) {
+            return t
+        }
+
+        val prefix = if (num.startsWith("Chapter", ignoreCase = true)) num else "Chapter $num"
+        return "$prefix : $t"
+    }
+
     fun getChapterDisplayTitle(chap: MangaChapter?): String {
         if (chap == null) return ""
         val index = chaptersArr.indexOf(chap.uniqueNumber())
@@ -1755,12 +1776,7 @@ class MangaReaderActivity : AppCompatActivity() {
             val title = chaptersTitleArr.getOrNull(index)
             if (!title.isNullOrEmpty()) return title
         }
-        val t = chap.title
-        return if (!t.isNullOrEmpty() && t != "null") {
-            "Chapter ${chap.number} : $t"
-        } else {
-            "Chapter ${chap.number}"
-        }
+        return formatChapterTitle(chap.number, chap.title)
     }
 
     fun getFinishedChapterTitle(): String {
