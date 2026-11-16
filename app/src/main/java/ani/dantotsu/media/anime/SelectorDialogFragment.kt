@@ -551,9 +551,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         runBlocking {
             try {
                 withContext(Dispatchers.IO) {
-                    torrentManager.activeTorrentHash?.let {
-                        torrentManager.removeTorrent(it)
-                    }
+                    // keep the active torrent: it may still be playing
                     val index = if (url.contains("index=")) {
                         url.substringAfter("index=").toIntOrNull() ?: 0
                     } else 0
@@ -831,12 +829,14 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             torrentManager.activeTorrentHash = torrentHash
             torrentManager.prebuffer(torrentHash, index)
         } else if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
-            torrentManager.activeTorrentHash?.let {
-                torrentManager.removeTorrent(it)
-            }
+            val previousHash = torrentManager.activeTorrentHash
             val currentTorrent = torrentManager.addTorrent(
                 url, video.quality.toString(), "", "", false
             )
+            // next episode of a batch is the same torrent; removing it drops every peer
+            if (previousHash != null && !previousHash.equals(currentTorrent.hash, ignoreCase = true)) {
+                torrentManager.removeTorrent(previousHash)
+            }
             torrentManager.activeTorrentHash = currentTorrent.hash
             torrentManager.prebuffer(currentTorrent.hash!!, index)
             video.file.url = torrentManager.getLink(currentTorrent, index)
