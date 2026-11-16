@@ -528,13 +528,12 @@
                             tools:ignore="TextContrastCheck" />
                     </LinearLayout>
 
-                    <ProgressBar
+                    <ani.dantotsu.others.SkeletonView
                         android:id="@+id/homeWatchingProgressBar"
-                        style="?android:attr/progressBarStyle"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:layout_margin="90dp" />
+                        android:tag="covers" />
 
                     <ani.dantotsu.FadingEdgeRecyclerView
                         android:id="@+id/homeWatchingRecyclerView"
@@ -621,13 +620,12 @@
 
                     </LinearLayout>
 
-                    <ProgressBar
+                    <ani.dantotsu.others.SkeletonView
                         android:id="@+id/homeFavAnimeProgressBar"
-                        style="?android:attr/progressBarStyle"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:layout_margin="90dp" />
+                        android:tag="covers" />
 
                     <ani.dantotsu.FadingEdgeRecyclerView
                         android:id="@+id/homeFavAnimeRecyclerView"
@@ -717,13 +715,12 @@
                             tools:ignore="TextContrastCheck" />
                     </LinearLayout>
 
-                    <ProgressBar
+                    <ani.dantotsu.others.SkeletonView
                         android:id="@+id/homePlannedAnimeProgressBar"
-                        style="?android:attr/progressBarStyle"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:layout_margin="90dp" />
+                        android:tag="covers" />
 
                     <ani.dantotsu.FadingEdgeRecyclerView
                         android:id="@+id/homePlannedAnimeRecyclerView"
@@ -813,13 +810,12 @@
                             tools:ignore="TextContrastCheck" />
                     </LinearLayout>
 
-                    <ProgressBar
+                    <ani.dantotsu.others.SkeletonView
                         android:id="@+id/homeReadingProgressBar"
-                        style="?android:attr/progressBarStyle"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:layout_margin="90dp" />
+                        android:tag="covers" />
 
                     <ani.dantotsu.FadingEdgeRecyclerView
                         android:id="@+id/homeReadingRecyclerView"
@@ -905,13 +901,12 @@
 
                     </LinearLayout>
 
-                    <ProgressBar
+                    <ani.dantotsu.others.SkeletonView
                         android:id="@+id/homeFavMangaProgressBar"
-                        style="?android:attr/progressBarStyle"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:layout_margin="90dp" />
+                        android:tag="covers" />
 
                     <ani.dantotsu.FadingEdgeRecyclerView
                         android:id="@+id/homeFavMangaRecyclerView"
@@ -1002,13 +997,12 @@
                             tools:ignore="TextContrastCheck" />
                     </LinearLayout>
 
-                    <ProgressBar
+                    <ani.dantotsu.others.SkeletonView
                         android:id="@+id/homePlannedMangaProgressBar"
-                        style="?android:attr/progressBarStyle"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:layout_margin="90dp" />
+                        android:tag="covers" />
 
                     <ani.dantotsu.FadingEdgeRecyclerView
                         android:id="@+id/homePlannedMangaRecyclerView"
@@ -1092,13 +1086,12 @@
                             android:textAlignment="center" />
                     </LinearLayout>
 
-                    <ProgressBar
+                    <ani.dantotsu.others.SkeletonView
                         android:id="@+id/homeMissingSequelsProgressBar"
-                        style="?android:attr/progressBarStyle"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:layout_margin="90dp" />
+                        android:tag="covers" />
 
                     <ani.dantotsu.FadingEdgeRecyclerView
                         android:id="@+id/homeMissingSequelsRecyclerView"
@@ -1183,13 +1176,12 @@
 
                     </LinearLayout>
 
-                    <ProgressBar
+                    <ani.dantotsu.others.SkeletonView
                         android:id="@+id/homeRecommendedProgressBar"
-                        style="?android:attr/progressBarStyle"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:layout_margin="90dp" />
+                        android:tag="covers" />
 
                     <ani.dantotsu.FadingEdgeRecyclerView
                         android:id="@+id/homeRecommendedRecyclerView"

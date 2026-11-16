@@ -281,27 +281,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun getSkeletonMediaList(count: Int = 7): ArrayList<Media> {
-        val list = ArrayList<Media>()
-        for (i in 0 until count) {
-            list.add(
-                Media(
-                    anime = ani.dantotsu.media.anime.Anime(),
-                    manga = null,
-                    id = -100 - i,
-                    name = "—",
-                    nameRomaji = "—",
-                    userPreferredName = "—",
-                    cover = null,
-                    isAdult = false,
-                    meanScore = 0,
-                    userProgress = 0
-                )
-            )
-        }
-        return list
-    }
-
     private fun updateRecyclerAdapter(recyclerView: RecyclerView, it: ArrayList<Media>) {
         val currentAdapter = recyclerView.adapter as? MediaAdaptor
         if (currentAdapter != null && currentAdapter.type == 0 && currentAdapter.mediaList === it && recyclerView.tag == "loaded") {
@@ -330,13 +309,12 @@ class HomeFragment : Fragment() {
         string: String
     ) {
         container.visibility = View.VISIBLE
-        progress.visibility = View.GONE
+        progress.visibility = View.VISIBLE
         empty.visibility = View.GONE
         title.visibility = View.VISIBLE
         more.visibility = View.VISIBLE
-        recyclerView.visibility = View.VISIBLE
+        recyclerView.visibility = View.GONE
 
-        recyclerView.adapter = MediaAdaptor(0, getSkeletonMediaList(), requireActivity())
         recyclerView.layoutManager = LinearLayoutManager(
             requireContext(),
             LinearLayoutManager.HORIZONTAL,
@@ -345,8 +323,10 @@ class HomeFragment : Fragment() {
 
         mode.observe(viewLifecycleOwner) { it ->
             if (it != null) {
+                progress.visibility = View.GONE
                 if (it.isNotEmpty()) {
                     empty.visibility = View.GONE
+                    recyclerView.visibility = View.VISIBLE
                     updateRecyclerAdapter(recyclerView, it)
                     more.setOnClickListener { i ->
                         MediaListViewActivity.passedMedia = it

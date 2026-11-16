@@ -287,7 +287,11 @@ object RPCManager {
             when (mode) {
                 "anilist" -> Discord.small_Image_AniList to "AniList"
                 "mal" -> Discord.small_Image_MAL to "MyAnimeList"
-                else -> Discord.small_Image to "Dantotsu"
+                else -> {
+                    val isPaused = data.state?.contains("Paused", ignoreCase = true) == true
+                    val activity = DiscordPresenceMapper.activityOf(data.type, isManga, isPaused)
+                    DiscordPresenceMapper.smallImage(activity).let { it.url to it.text }
+                }
             }
         } else {
             null to null
