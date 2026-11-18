@@ -53,6 +53,7 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefManager.asLiveBool
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
+import ani.dantotsu.startMainActivity
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.tryWithSuspend
 import ani.dantotsu.util.Logger
@@ -562,12 +563,7 @@ class HomeFragment : Fragment() {
             setNeutralButton(R.string.rescue_mode_enable) {
                 PrefManager.setVal(PrefName.RescueMode, true)
                 Anilist.anilistDisabledSignal = false
-                val intent = Intent(ctx, MainActivity::class.java)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-                startActivity(intent)
-                activity?.overridePendingTransition(0, 0)
-                activity?.finish()
-                activity?.overridePendingTransition(0, 0)
+                activity?.let { startMainActivity(it) }
             }
             setNegButton(R.string.cancel) {
                 Anilist.anilistDisabledSignal = false
