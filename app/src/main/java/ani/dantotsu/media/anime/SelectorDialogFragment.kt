@@ -1242,19 +1242,29 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 binding.urlSize.text = getString(R.string.mb_size, "$prefix$formattedSize")
             }
             val isPref = video.preferred || extractor.isPreferred
-            binding.urlNote.visibility = View.VISIBLE
-            binding.urlNote.text = if (isPref) "${video.format.name} • Preferred" else video.format.name
+            // CONTAINER is the plain-file default, not worth a line on every card
+            val note = listOfNotNull(
+                video.format.name.takeIf { video.format != VideoType.CONTAINER },
+                "Preferred".takeIf { isPref }
+            ).joinToString(" • ")
+            binding.urlNote.isVisible = note.isNotEmpty()
+            binding.urlNote.text = note
             val hoster = video.hoster ?: extractor.server.hoster
             val cleanServerName = if (hoster != null && extractor.server.name.startsWith("$hoster - ")) {
                 extractor.server.name.removePrefix("$hoster - ")
             } else {
                 extractor.server.name
             }
-            binding.urlQuality.text = if (hoster != null && cleanServerName.isNotBlank() && cleanServerName != hoster) {
+            val label = if (hoster != null && cleanServerName.isNotBlank() && cleanServerName != hoster) {
                 "$hoster • $cleanServerName"
             } else {
                 extractor.server.name
             }
+            // multi-line names (release, stats, languages) read better below a short bold first line
+            val lines = label.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            binding.urlQuality.text = lines.firstOrNull() ?: label
+            binding.urlDetails.text = lines.drop(1).joinToString("\n")
+            binding.urlDetails.isVisible = lines.size > 1
         }
 
         override fun getItemCount(): Int = extractor.videos.size
