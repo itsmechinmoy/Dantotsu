@@ -19,6 +19,10 @@ class TorrentServerManager(private val context: Context) {
     private val sessionManager by lazy { SessionManager() }
     private var httpServer: TorrentHttpServer? = null
     var activeTorrentHash: String? = null
+
+    /** Last time anything started, added or buffered; a closing player only stops an unused session. */
+    @Volatile
+    private var lastUsed = 0L
     var serverPort: Int = 8090
         private set
 
@@ -43,6 +47,7 @@ class TorrentServerManager(private val context: Context) {
     }
 
     fun start() {
+        markUsed()
         if (sessionManager.isRunning) return
         Logger.log("Starting built-in TorrentServerManager with qBittorrent optimizations...")
         try {
@@ -99,6 +104,17 @@ class TorrentServerManager(private val context: Context) {
 
     fun isRunning(): Boolean = sessionManager.isRunning
 
+    private fun markUsed() {
+        lastUsed = android.os.SystemClock.elapsedRealtime()
+    }
+
+    /** True if the session was started or used after [elapsedRealtime]. */
+    fun usedSince(elapsedRealtime: Long): Boolean = lastUsed > elapsedRealtime
+
+    fun hasTorrent(torrentHash: String): Boolean = runCatching {
+        sessionManager.isRunning && sessionManager.find(Sha1Hash.parseHex(torrentHash))?.isValid == true
+    }.getOrDefault(false)
+
     fun isAvailable(andEnabled: Boolean = true): Boolean {
         if (android.os.Build.VERSION.SDK_INT < 28) return false
         return true
@@ -135,6 +151,7 @@ class TorrentServerManager(private val context: Context) {
             throw Exception("Battery low and not charging")
         }
         start() // Ensure running
+        markUsed()
 
         val cacheDir = getTorrentCacheDir()
         var handle: TorrentHandle? = null
@@ -213,6 +230,7 @@ class TorrentServerManager(private val context: Context) {
      * before ExoPlayer begins playback, preventing buffering freezes.
      */
     fun prebuffer(torrentHash: String, fileIndex: Int): Boolean {
+        markUsed()
         try {
             val sha1 = Sha1Hash.parseHex(torrentHash)
             val handle = sessionManager.find(sha1) ?: return false

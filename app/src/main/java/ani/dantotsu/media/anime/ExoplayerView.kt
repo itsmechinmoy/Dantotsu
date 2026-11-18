@@ -2059,13 +2059,16 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         orientationListener?.disable()
         orientationListener = null
-        lifecycleScope.launch(Dispatchers.IO) {
+        // lifecycleScope is cancelled by now, so this cleanup could be skipped at random
+        val closedAt = android.os.SystemClock.elapsedRealtime()
+        tachiyomi.core.util.lang.launchIO {
             try {
                 extractor?.onVideoStopped(video)
             } catch (_: Exception) {}
             try {
                 val torrentManager = uy.kohesive.injekt.Injekt.get<ani.dantotsu.torrent.TorrentServerManager>()
-                if (torrentManager.isRunning()) {
+                // a picker may already have started the next episode on this session
+                if (torrentManager.isRunning() && !torrentManager.usedSince(closedAt)) {
                     torrentManager.pauseActiveTorrent()
                     torrentManager.pruneCache()
                     torrentManager.stop()

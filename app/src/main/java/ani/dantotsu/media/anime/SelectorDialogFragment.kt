@@ -794,7 +794,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     ?: (if (url.contains("index=")) url.substringAfter("index=").substringBefore("&").toIntOrNull() else null)
                     ?: 0
 
-                prepareTorrentBuffer(torrentManager, torrentHash, url, video, index)
+                prepareTorrentBuffer(torrentManager, torrentHash, ep.extra?.get("torrentUrl"), url, video, index)
 
                 if (launch == true) {
                     Intent(activity, ExoplayerView::class.java).apply {
@@ -821,13 +821,21 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     private suspend fun prepareTorrentBuffer(
         torrentManager: TorrentServerManager,
         torrentHash: String?,
+        sourceUrl: String?,
         url: String,
         video: Video,
         index: Int
     ) {
         if (torrentHash != null) {
+            // closing the player stops the session, so the listed episode's torrent may be gone
+            if (!torrentManager.hasTorrent(torrentHash)) {
+                val source = sourceUrl ?: throw IllegalStateException("Torrent is no longer loaded, reload the source")
+                torrentManager.addTorrent(source, video.quality.toString(), "", "", false)
+            }
             torrentManager.activeTorrentHash = torrentHash
             torrentManager.prebuffer(torrentHash, index)
+            // the server may be on another port after a restart
+            video.file.url = torrentManager.getLink(torrentHash, index)
         } else if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
             val previousHash = torrentManager.activeTorrentHash
             val currentTorrent = torrentManager.addTorrent(

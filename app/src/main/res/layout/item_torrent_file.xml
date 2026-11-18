@@ -22,8 +22,9 @@
         android:padding="10dp">
 
         <androidx.cardview.widget.CardView
-            android:layout_width="38dp"
+            android:layout_width="wrap_content"
             android:layout_height="38dp"
+            android:minWidth="38dp"
             app:cardBackgroundColor="?attr/colorPrimary"
             app:cardCornerRadius="10dp"
             app:cardElevation="0dp">
@@ -33,6 +34,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
+                android:paddingHorizontal="6dp"
                 android:fontFamily="@font/poppins_bold"
                 android:textColor="?attr/colorOnPrimary"
                 android:textSize="13sp"
@@ -51,7 +53,7 @@
                 android:id="@+id/fileNameText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="middle"
+                android:ellipsize="end"
                 android:fontFamily="@font/poppins_bold"
                 android:maxLines="2"
                 android:textColor="?android:attr/textColorPrimary"
