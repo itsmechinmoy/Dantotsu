@@ -37,6 +37,7 @@ desugar-jdk-libs = "2.1.5"
 leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanary" }
 leakcanary-plumber = { module = "com.squareup.leakcanary:plumber-android", version.ref = "leakcanary" }
 ffmpeg-kit = { module = "com.antonkarpenko:ffmpeg-kit-https", version.ref = "ffmpeg-kit" }
+junit = { module = "junit:junit", version = "4.13.2" }
 
 
 # Firebase

@@ -494,6 +494,8 @@
     <string name="discord_dantotsu_button">Display dantotsu in the second button</string>
     <string name="discord_anilist_button">Display your AniList profile instead</string>
     <string name="discord_rich_presence">Discord Rich Presence</string>
+    <string name="discord_app_required">Needs the Discord app</string>
+    <string name="get_discord">Get Discord</string>
     <string name="stream_on_dantotsu">Stream on Dantotsu</string>
     <string name="view_my_anilist">View My AniList</string>
     <string name="view_my_mal">View My MAL</string>
@@ -792,10 +794,7 @@
     <string name="invalid_url">Invalid URL</string>
     <string name="no_anilist_id_found">No Anilist ID found</string>
     <string name="error_loading_image">Error loading image</string>
-    <string name="discord_logout_success">Successfully Logged Out</string>
-    <string name="discord_try_again">Try logging-in again</string>
     <string name="error_loading_discord_user_data">Error loading Discord User Data</string>
-    <string name="discord_warning"><![CDATA[By logging in, your discord will now show what you are watching & reading on Dantotsu\n\nIf you are on invisible mode, logging in will make you online, when you open Dantotsu.\n\nThis does break the Discord TOS. \nAlthough Discord has never banned anyone for using Custom Rich Presence(what Dantotsu uses), You have still been warned.\n\nDantotsu is not responsible for anything that happens to your account.]]></string>
     <string name="warning">Warning</string>
     <string name="view_anime" translatable="false">View Anime</string>
     <string name="view_manga" translatable="false">View Manga</string>

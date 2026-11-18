@@ -257,7 +257,6 @@ enum class PrefName(val data: Pref) {
     PendingProgressUpdates(Pref(Location.Irrelevant, List::class, listOf<PendingProgressUpdate>())),
     PendingDeletions(Pref(Location.Irrelevant, List::class, listOf<PendingDeletion>())),
     OfflineMode(Pref(Location.Irrelevant, Boolean::class, false)),
-    DiscordStatus(Pref(Location.Irrelevant, String::class, "online")),
     DiscordRPCModeAnime(Pref(Location.Irrelevant, String::class, "dantotsu")),
     DiscordRPCModeManga(Pref(Location.Irrelevant, String::class, "dantotsu")),
     DiscordRPCShowIconAnime(Pref(Location.Irrelevant, Boolean::class, true)),

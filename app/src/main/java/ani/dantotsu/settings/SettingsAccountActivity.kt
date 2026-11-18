@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.AnimationUtils
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -16,7 +15,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.comick.Comick
-import ani.dantotsu.connections.discord.Discord
+import ani.dantotsu.connections.discord.RPCManager
 import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.connections.mangabaka.MangaBaka
 import ani.dantotsu.databinding.ActivitySettingsAccountsBinding
@@ -84,7 +83,7 @@ class SettingsAccountActivity : AppCompatActivity() {
                     switch = { isChecked, _ ->
                         PrefManager.setVal(PrefName.rpcEnabled, isChecked)
                     },
-                    isVisible = Discord.token != null
+                    isVisible = RPCManager.isAvailable(context)
                 ),
                 Settings(
                     type = 1,
@@ -209,83 +208,23 @@ class SettingsAccountActivity : AppCompatActivity() {
                     settingsMALUsername.visibility = View.GONE
                 }
 
-                if (Discord.token != null) {
-                    val id = PrefManager.getVal(PrefName.DiscordId, null as String?)
-                    val avatar = PrefManager.getVal(PrefName.DiscordAvatar, null as String?)
-                    val username = PrefManager.getVal(PrefName.DiscordUserName, null as String?)
-                    if (id != null && avatar != null) {
-                        settingsDiscordAvatar.loadImage("https://cdn.discordapp.com/avatars/$id/$avatar.png")
-                        settingsDiscordAvatar.setOnClickListener {
-                            it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            val discordLink = getString(R.string.discord_link, id)
-                            openLinkInBrowser(discordLink)
-                        }
-                    }
-                    settingsDiscordUsername.visibility = View.VISIBLE
-                    settingsDiscordUsername.text =
-                        username ?: Discord.token?.replace(Regex("."), "*")
-                    settingsDiscordLogin.setText(R.string.logout)
-                    settingsDiscordLogin.setOnClickListener {
-                        Discord.removeSavedToken(context)
-                        restartMainActivity.isEnabled = true
-                        reload()
-                    }
-
+                settingsDiscordAvatarContainer.visibility = View.GONE
+                settingsDiscordUsername.visibility = View.VISIBLE
+                if (RPCManager.isAvailable(context)) {
+                    settingsDiscordUsername.setText(R.string.discord_rich_presence)
+                    settingsDiscordLogin.visibility = View.GONE
                     settingsPresenceSwitcher.visibility = View.VISIBLE
-                    var initialStatus = when (PrefManager.getVal<String>(PrefName.DiscordStatus)) {
-                        "online" -> R.drawable.discord_status_online
-                        "idle" -> R.drawable.discord_status_idle
-                        "dnd" -> R.drawable.discord_status_dnd
-                        "invisible" -> R.drawable.discord_status_invisible
-                        else -> R.drawable.discord_status_online
-                    }
-                    settingsPresenceSwitcher.setImageResource(initialStatus)
-
-                    val zoomInAnimation =
-                        AnimationUtils.loadAnimation(context, R.anim.bounce_zoom)
+                    settingsPresenceSwitcher.setImageResource(R.drawable.ic_round_settings_24)
                     settingsPresenceSwitcher.setOnClickListener {
-                        var status = "online"
-                        initialStatus = when (initialStatus) {
-                            R.drawable.discord_status_online -> {
-                                status = "idle"
-                                R.drawable.discord_status_idle
-                            }
-
-                            R.drawable.discord_status_idle -> {
-                                status = "dnd"
-                                R.drawable.discord_status_dnd
-                            }
-
-                            R.drawable.discord_status_dnd -> {
-                                status = "invisible"
-                                R.drawable.discord_status_invisible
-                            }
-
-                            R.drawable.discord_status_invisible -> {
-                                status = "online"
-                                R.drawable.discord_status_online
-                            }
-
-                            else -> R.drawable.discord_status_online
-                        }
-
-                        PrefManager.setVal(PrefName.DiscordStatus, status)
-                        settingsPresenceSwitcher.setImageResource(initialStatus)
-                        settingsPresenceSwitcher.startAnimation(zoomInAnimation)
-                    }
-                    settingsPresenceSwitcher.setOnLongClickListener {
-                        it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         DiscordDialogFragment().show(supportFragmentManager, "dialog")
-                        true
                     }
                 } else {
+                    settingsDiscordUsername.setText(R.string.discord_app_required)
                     settingsPresenceSwitcher.visibility = View.GONE
-                    settingsDiscordAvatar.setImageResource(R.drawable.ic_round_person_24)
-                    settingsDiscordUsername.visibility = View.GONE
-                    settingsDiscordLogin.setText(R.string.login)
+                    settingsDiscordLogin.visibility = View.VISIBLE
+                    settingsDiscordLogin.setText(R.string.get_discord)
                     settingsDiscordLogin.setOnClickListener {
-                        Discord.warning(context)
-                            .show(supportFragmentManager, "dialog")
+                        openLinkInBrowser("https://play.google.com/store/apps/details?id=com.discord")
                     }
                 }
 

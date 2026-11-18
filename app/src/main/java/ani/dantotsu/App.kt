@@ -150,11 +150,7 @@ class App : Application(), GraphProvider<AppGraph> {
     private fun setupCrashlyticsMetadata(crashlytics: CrashlyticsInterface) {
         (PrefManager.getVal(PrefName.SharedUserID) as Boolean).let {
             if (!it) return@let
-            val dUsername = PrefManager.getVal(PrefName.DiscordUserName, null as String?)
             val aUsername = PrefManager.getVal(PrefName.AnilistUserName, null as String?)
-            if (dUsername != null) {
-                crashlytics.setCustomKey("dUsername", dUsername)
-            }
             if (aUsername != null) {
                 crashlytics.setCustomKey("aUsername", aUsername)
             }
@@ -233,7 +229,7 @@ class App : Application(), GraphProvider<AppGraph> {
 
     fun updateDiscordPresence(activity: Activity) {
         val rpcEnabled = PrefManager.getVal(PrefName.rpcEnabled, true)
-        if (!rpcEnabled || Discord.token == null) {
+        if (!rpcEnabled) {
             return
         }
 

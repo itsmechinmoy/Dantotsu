@@ -37,10 +37,10 @@ class PlayerDiscordManager(
             return
         }
 
-        if (isOnline(context) && !offline && Discord.token != null && !incognito && rpcEnabled) {
+        if (isOnline(context) && !offline && !incognito && rpcEnabled) {
             activity.lifecycleScope.launch {
                 val rpcData = buildDiscordRpcData(context, media, episode, player, isPlaying)
-                RPCManager.setPresence(context, rpcData)
+                RPCManager.setPresence(context, rpcData, activity)
             }
         }
     }
@@ -89,6 +89,6 @@ class PlayerDiscordManager(
     }
 
     fun clear() {
-        RPCManager.clearPresence(activity)
+        RPCManager.clearPresence(activity, activity)
     }
 }

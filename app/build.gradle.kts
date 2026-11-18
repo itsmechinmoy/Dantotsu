@@ -162,6 +162,8 @@ dependencies {
     // ffmpeg-kit for NativeVideoDownloader
     implementation(libs.ffmpeg.kit)
 
+    testImplementation(libs.junit)
+
     // Media3 & decoders
     implementation(libs.bundles.media3)
     implementation(libs.bundles.subtitles)

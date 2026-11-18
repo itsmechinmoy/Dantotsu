@@ -343,7 +343,7 @@ class AnilistHomeViewModel : ViewModel() {
     suspend fun loadMain(context: FragmentActivity) {
         Anilist.getSavedToken()
         MAL.getSavedToken()
-        Discord.getSavedToken()
+        Discord.removeLegacyLogin(context)
         MangaBaka.getSavedToken()
         Comick.getSavedToken()
         if (!BuildConfig.FLAVOR.contains("fdroid")) {

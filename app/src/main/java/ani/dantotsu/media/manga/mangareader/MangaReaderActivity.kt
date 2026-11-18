@@ -218,7 +218,7 @@ class MangaReaderActivity : AppCompatActivity() {
         mangaCache.clear()
         goneHandler.removeCallbacksAndMessages(null)
         pageSliderHandler.removeCallbacksAndMessages(null)
-        RPCManager.clearPresence(this)
+        RPCManager.clearPresence(this, this)
         ani.dantotsu.widgets.continue_widget.ContinueWidget.updateReadingState(this, null, null, null, isExiting = true)
         if (::binding.isInitialized) {
             try {
@@ -608,7 +608,7 @@ class MangaReaderActivity : AppCompatActivity() {
         val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled)
         if (RPCManager.shouldSuppressForAdultMedia(media.isAdult)) {
             RPCManager.clearPresence(context)
-        } else if (isOnline(context) && !offline && Discord.token != null && !incognito && rpcenabled) {
+        } else if (isOnline(context) && !offline && !incognito && rpcenabled) {
             lifecycleScope.launch {
                 val buttons = mutableListOf<RPC.Link>()
                 buttons.add(RPC.Link("View Manga", "https://anilist.co/manga/${media.id}/"))
@@ -630,7 +630,7 @@ class MangaReaderActivity : AppCompatActivity() {
                     },
                     buttons = buttons
                 )
-                RPCManager.setPresence(context, rpcData)
+                RPCManager.setPresence(context, rpcData, context)
             }
         }
     }
