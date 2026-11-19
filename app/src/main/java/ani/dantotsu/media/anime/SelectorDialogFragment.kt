@@ -91,6 +91,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     private var launch: Boolean? = null
     private var isDownloadMenu: Boolean? = null
     private var episodes: ArrayList<String>? = null
+    // a torrent start runs for seconds with the list still showing; a second tap would start it twice
+    private var torrentStarting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -783,6 +785,13 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         val torrentManager = Injekt.get<TorrentServerManager>()
         if (!torrentManager.isAvailable()) return false
 
+        if (torrentStarting) return true
+        torrentStarting = true
+        _binding?.let {
+            it.selectorRecyclerView.alpha = 0.5f
+            it.selectorProgressBar.visibility = View.VISIBLE
+        }
+
         val activity = activity ?: currActivity()
         launchIO {
             try {
@@ -796,23 +805,29 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
                 prepareTorrentBuffer(torrentManager, torrentHash, ep.extra?.get("torrentUrl"), url, video, index)
 
-                if (launch == true) {
-                    Intent(activity, ExoplayerView::class.java).apply {
-                        ExoplayerView.media = media
-                        ExoplayerView.initialized = true
-                        startActivity(this)
+                withContext(Dispatchers.Main) {
+                    // closed while buffering: don't open the player behind the user's back
+                    if (!isAdded) return@withContext
+                    if (launch == true) {
+                        Intent(activity, ExoplayerView::class.java).apply {
+                            ExoplayerView.media = media
+                            ExoplayerView.initialized = true
+                            startActivity(this)
+                        }
+                    } else {
+                        val epKey = media.anime?.selectedEpisode
+                        val targetEp = media.anime?.episodes?.getEpisode(epKey) ?: ep
+                        model.setEpisode(targetEp, "startExo no launch")
                     }
-                } else {
-                    val epKey = media.anime?.selectedEpisode
-                    val targetEp = media.anime?.episodes?.getEpisode(epKey) ?: ep
-                    model.setEpisode(targetEp, "startExo no launch")
+                    dismissAllowingStateLoss()
                 }
-                dismissAllowingStateLoss()
             } catch (e: Exception) {
                 Injekt.get<CrashlyticsInterface>().logException(e)
                 Logger.log(e)
                 toast("Error starting video: ${e.message}")
-                dismissAllowingStateLoss()
+                withContext(Dispatchers.Main) { if (isAdded) dismissAllowingStateLoss() }
+            } finally {
+                torrentStarting = false
             }
         }
         return true
