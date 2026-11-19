@@ -13,6 +13,9 @@
     <string name="theme_mode_auto">Follow system</string>
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_dark">Dark</string>
+    <string name="max_parallel_downloads">Max Parallel Downloads</string>
+    <string name="max_parallel_downloads_desc">Concurrent download tasks (0 = Sequential, 1-10 = Concurrent). Note: High concurrency may trigger source rate limits.</string>
+    <string name="max_parallel_downloads_off">0 (Off / Sequential)</string>
     <string name="collapsed">Collapsed</string>
     <string name="expanded">Expanded</string>
     <string name="settings_fewer">Show fewer</string>

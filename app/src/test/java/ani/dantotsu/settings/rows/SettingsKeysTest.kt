@@ -19,6 +19,19 @@ class SettingsKeysTest {
     private fun g(key: PrefName, location: Location, type: KClass<*>, default: Any) = key to Pref(location, type, default)
 
     private val GOLDEN: List<Pair<PrefName, Pref>> = listOf(
+        g(PrefName.AdultOnly, Location.General, Boolean::class, false),
+        g(PrefName.AppPassword, Location.Protected, String::class, ""),
+        g(PrefName.BiometricToken, Location.Protected, String::class, ""),
+        g(PrefName.ContinueMedia, Location.General, Boolean::class, true),
+        g(PrefName.DefaultStartUpTab, Location.UI, Int::class, 1),
+        g(PrefName.DohProvider, Location.General, Int::class, 0),
+        g(PrefName.DownloadManager, Location.General, Int::class, 0),
+        g(PrefName.DownloadWifiOnly, Location.General, Boolean::class, false),
+        g(PrefName.HidePrivate, Location.General, Boolean::class, false),
+        g(PrefName.MaxParallelDownloads, Location.General, Int::class, 0),
+        g(PrefName.OverridePassword, Location.Protected, Boolean::class, false),
+        g(PrefName.RecentlyListOnly, Location.General, Boolean::class, false),
+        g(PrefName.SearchSources, Location.General, Boolean::class, false),
         g(PrefName.CustomThemeInt, Location.UI, Int::class, Color.parseColor("#6200EE")),
         g(PrefName.DarkMode, Location.UI, Int::class, 0),
         g(PrefName.UseCustomTheme, Location.UI, Boolean::class, false),
@@ -68,6 +81,7 @@ class SettingsKeysTest {
     )
 
     private val WRITTEN: Map<String, List<String>> = mapOf(
+        "common" to listOf("AdultOnly", "AppPassword", "BiometricToken", "ContinueMedia", "DefaultStartUpTab", "DohProvider", "DownloadManager", "DownloadWifiOnly", "HidePrivate", "MaxParallelDownloads", "OverridePassword", "RecentlyListOnly", "SearchSources"),
         "theme" to listOf("CustomThemeInt", "DarkMode", "Theme", "UseCustomTheme", "UseMaterialYou", "UseOLED", "UseSourceTheme", "UseSystemFont"),
         "notifications" to listOf("AnilistFilteredTypes", "AnilistNotificationInterval", "CommentNotificationInterval", "SubscriptionCheckingNotifications", "SubscriptionNotificationInterval", "SubscriptionPromptAtEnd", "UseAlarmManager"),
         "extensions" to listOf("DefaultUserAgent", "EnableSocks5Proxy", "NSFWExtension", "SkipExtensionIcons", "AnimeExtensionRepos", "MangaExtensionRepos", "NovelExtensionRepos"),
