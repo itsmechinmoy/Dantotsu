@@ -6,6 +6,7 @@
     <string name="decrease">Decrease</string>
     <string name="share_log">Share log</string>
     <string name="speed_kbps">%1$d KB/s</string>
+    <string name="extension_installer">Extension Installer</string>
     <string name="collapsed">Collapsed</string>
     <string name="expanded">Expanded</string>
     <string name="settings_fewer">Show fewer</string>

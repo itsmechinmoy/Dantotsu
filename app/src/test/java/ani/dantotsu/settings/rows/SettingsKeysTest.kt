@@ -18,6 +18,13 @@ class SettingsKeysTest {
     private fun g(key: PrefName, location: Location, type: KClass<*>, default: Any) = key to Pref(location, type, default)
 
     private val GOLDEN: List<Pair<PrefName, Pref>> = listOf(
+        g(PrefName.DefaultUserAgent, Location.General, String::class, "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36"),
+        g(PrefName.EnableSocks5Proxy, Location.General, Boolean::class, false),
+        g(PrefName.NSFWExtension, Location.General, Boolean::class, true),
+        g(PrefName.SkipExtensionIcons, Location.UI, Boolean::class, false),
+        g(PrefName.AnimeExtensionRepos, Location.General, Set::class, setOf<String>()),
+        g(PrefName.MangaExtensionRepos, Location.General, Set::class, setOf<String>()),
+        g(PrefName.NovelExtensionRepos, Location.General, Set::class, setOf<String>()),
         g(PrefName.TorrentBatterySaving, Location.Player, Boolean::class, false),
         g(PrefName.TorrentDisableUtp, Location.Player, Boolean::class, false),
         g(PrefName.TorrentEncryption, Location.Player, Boolean::class, false),
@@ -45,6 +52,7 @@ class SettingsKeysTest {
     )
 
     private val WRITTEN: Map<String, List<String>> = mapOf(
+        "extensions" to listOf("DefaultUserAgent", "EnableSocks5Proxy", "NSFWExtension", "SkipExtensionIcons", "AnimeExtensionRepos", "MangaExtensionRepos", "NovelExtensionRepos"),
         "torrent" to listOf("TorrentBatterySaving", "TorrentDisableUtp", "TorrentEncryption", "TorrentWifiOnly", "TorrentDownloadSpeedLimit", "TorrentMaxConnections", "TorrentPort", "TorrentUploadSpeedLimit"),
         "manga" to listOf("IncludeMangaList", "MangaDefaultView", "SkipDuplicateChapters", "SmartDownloadManga"),
         "anime" to listOf("AnimeDefaultView", "AutoSelectServer", "IncludeAnimeList", "SettingsPreferDub", "ShowEpisodeRating", "ShowYtButton", "SmartDownloadAnime", "PreferredDownloadResolutions"),
