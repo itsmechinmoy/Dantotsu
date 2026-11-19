@@ -9,6 +9,7 @@ object SettingsScreens {
         ani.dantotsu.settings.MangaScreen,
         ani.dantotsu.settings.ExtensionsScreen,
         ani.dantotsu.settings.TorrentScreen,
+        ani.dantotsu.settings.NotificationScreen,
         ani.dantotsu.settings.AboutScreen,
     )
 }

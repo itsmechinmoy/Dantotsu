@@ -7,6 +7,8 @@
     <string name="share_log">Share log</string>
     <string name="speed_kbps">%1$d KB/s</string>
     <string name="extension_installer">Extension Installer</string>
+    <string name="anilist_notifications_interval">AniList notifications update frequency</string>
+    <string name="comment_notifications_interval">Comment notifications update frequency</string>
     <string name="collapsed">Collapsed</string>
     <string name="expanded">Expanded</string>
     <string name="settings_fewer">Show fewer</string>
