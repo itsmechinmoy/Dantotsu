@@ -420,14 +420,15 @@ private fun repeatOnHold(button: View, action: () -> Unit) {
 internal fun markSegment(button: MaterialButton, icon: Int?, checked: Boolean) {
     val size = (18 * button.resources.displayMetrics.density).roundToInt()
     when {
-        checked -> {
-            button.setIconResource(R.drawable.ic_chip_check)
-            button.iconSize = size
-            button.iconPadding = if (icon == null) (8 * button.resources.displayMetrics.density).roundToInt() else 0
-        }
+        // An icon-only segment keeps its icon when selected; the fill marks the choice.
         icon != null -> {
             button.setIconResource(icon)
             button.iconPadding = 0
+        }
+        checked -> {
+            button.setIconResource(R.drawable.ic_chip_check)
+            button.iconSize = size
+            button.iconPadding = (8 * button.resources.displayMetrics.density).roundToInt()
         }
         else -> button.icon = null
     }
