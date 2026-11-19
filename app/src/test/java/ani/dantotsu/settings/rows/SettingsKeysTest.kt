@@ -19,6 +19,8 @@ class SettingsKeysTest {
     private fun g(key: PrefName, location: Location, type: KClass<*>, default: Any) = key to Pref(location, type, default)
 
     private val GOLDEN: List<Pair<PrefName, Pref>> = listOf(
+        g(PrefName.CommentsEnabled, Location.General, Int::class, 0),
+        g(PrefName.rpcEnabled, Location.Irrelevant, Boolean::class, true),
         g(PrefName.AutoBackupDir, Location.Irrelevant, String::class, ""),
         g(PrefName.AutoBackupInterval, Location.General, Int::class, 0),
         g(PrefName.AutoBackupMaxCopies, Location.General, Int::class, 3),
@@ -86,6 +88,7 @@ class SettingsKeysTest {
     )
 
     private val WRITTEN: Map<String, List<String>> = mapOf(
+        "accounts" to listOf("CommentsEnabled", "rpcEnabled"),
         "data" to listOf("AutoBackupDir", "AutoBackupInterval", "AutoBackupMaxCopies"),
         "common" to listOf("AdultOnly", "AppPassword", "BiometricToken", "ContinueMedia", "DefaultStartUpTab", "DohProvider", "DownloadManager", "DownloadWifiOnly", "HidePrivate", "MaxParallelDownloads", "OverridePassword", "RecentlyListOnly", "SearchSources"),
         "theme" to listOf("CustomThemeInt", "DarkMode", "Theme", "UseCustomTheme", "UseMaterialYou", "UseOLED", "UseSourceTheme", "UseSystemFont"),

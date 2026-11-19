@@ -21,6 +21,10 @@
     <string name="collapsed">Collapsed</string>
     <string name="expanded">Expanded</string>
     <string name="settings_fewer">Show fewer</string>
+    <string name="accounts_cards">Linked accounts</string>
+    <string name="accounts_keywords">login, logout, account, AniList, MyAnimeList, MAL, Discord</string>
+    <string name="add_custom_list">Add list</string>
+    <string name="edit_bio_desc">Your AniList profile bio and About Me</string>
     <plurals name="settings_more">
         <item quantity="one">Show %d more</item>
         <item quantity="other">Show %d more</item>
