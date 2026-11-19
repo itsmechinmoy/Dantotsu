@@ -137,6 +137,11 @@ android {
         }
     }
 
+    testOptions {
+        // Settings row tests load PrefName, whose defaults call android.graphics.Color.
+        unitTests.isReturnDefaultValues = true
+    }
+
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17

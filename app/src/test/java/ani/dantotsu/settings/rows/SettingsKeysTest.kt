@@ -18,9 +18,14 @@ class SettingsKeysTest {
     private fun g(key: PrefName, location: Location, type: KClass<*>, default: Any) = key to Pref(location, type, default)
 
     private val GOLDEN: List<Pair<PrefName, Pref>> = listOf(
+        g(PrefName.CheckUpdate, Location.General, Boolean::class, true),
+        g(PrefName.LogToFile, Location.Irrelevant, Boolean::class, false),
+        g(PrefName.SharedUserID, Location.General, Boolean::class, true),
+        g(PrefName.TrackMemoryLeaks, Location.Irrelevant, Boolean::class, false),
     )
 
     private val WRITTEN: Map<String, List<String>> = mapOf(
+        "about" to listOf("CheckUpdate", "LogToFile", "SharedUserID", "TrackMemoryLeaks"),
     )
 
     private val screens = SettingsScreens.all
