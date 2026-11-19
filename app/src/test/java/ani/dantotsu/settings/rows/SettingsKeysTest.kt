@@ -1,6 +1,5 @@
 package ani.dantotsu.settings.rows
 
-import android.graphics.Color
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.settings.saving.internal.Location
 import ani.dantotsu.settings.saving.internal.Pref
@@ -39,7 +38,7 @@ class SettingsKeysTest {
         g(PrefName.OverridePassword, Location.Protected, Boolean::class, false),
         g(PrefName.RecentlyListOnly, Location.General, Boolean::class, false),
         g(PrefName.SearchSources, Location.General, Boolean::class, false),
-        g(PrefName.CustomThemeInt, Location.UI, Int::class, Color.parseColor("#6200EE")),
+        g(PrefName.CustomThemeInt, Location.UI, Int::class, 0xFF6200EE.toInt()), // was Color.parseColor("#6200EE")
         g(PrefName.DarkMode, Location.UI, Int::class, 0),
         g(PrefName.UseCustomTheme, Location.UI, Boolean::class, false),
         g(PrefName.UseMaterialYou, Location.UI, Boolean::class, false),

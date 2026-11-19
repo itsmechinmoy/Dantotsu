@@ -91,7 +91,7 @@ enum class PrefName(val data: Pref) {
     UseOLED(Pref(Location.UI, Boolean::class, false)),
     UseSystemFont(Pref(Location.UI, Boolean::class, false)),
     UseCustomTheme(Pref(Location.UI, Boolean::class, false)),
-    CustomThemeInt(Pref(Location.UI, Int::class, Color.parseColor("#6200EE"))),
+    CustomThemeInt(Pref(Location.UI, Int::class, 0xFF6200EE.toInt())), // #6200EE; a literal keeps PrefName loadable in plain JVM tests
     UseSourceTheme(Pref(Location.UI, Boolean::class, false)),
     UseMaterialYou(Pref(Location.UI, Boolean::class, false)),
     Theme(Pref(Location.UI, String::class, "PURPLE")),
