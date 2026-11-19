@@ -20,7 +20,7 @@ class SettingsKeysTest {
 
     private val GOLDEN: List<Pair<PrefName, Pref>> = listOf(
         g(PrefName.CommentsEnabled, Location.General, Int::class, 0),
-        g(PrefName.rpcEnabled, Location.Irrelevant, Boolean::class, true),
+        g(PrefName.rpcEnabled, Location.Irrelevant, Boolean::class, false),
         g(PrefName.AutoBackupDir, Location.Irrelevant, String::class, ""),
         g(PrefName.AutoBackupInterval, Location.General, Int::class, 0),
         g(PrefName.AutoBackupMaxCopies, Location.General, Int::class, 3),
