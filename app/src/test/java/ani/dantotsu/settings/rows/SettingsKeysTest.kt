@@ -19,6 +19,11 @@ class SettingsKeysTest {
     private fun g(key: PrefName, location: Location, type: KClass<*>, default: Any) = key to Pref(location, type, default)
 
     private val GOLDEN: List<Pair<PrefName, Pref>> = listOf(
+        g(PrefName.AutoBackupDir, Location.Irrelevant, String::class, ""),
+        g(PrefName.AutoBackupInterval, Location.General, Int::class, 0),
+        g(PrefName.AutoBackupMaxCopies, Location.General, Int::class, 3),
+        g(PrefName.LastAutoBackupTimestamp, Location.General, Long::class, 0L),
+        g(PrefName.DownloadsDir, Location.Irrelevant, String::class, ""),
         g(PrefName.AdultOnly, Location.General, Boolean::class, false),
         g(PrefName.AppPassword, Location.Protected, String::class, ""),
         g(PrefName.BiometricToken, Location.Protected, String::class, ""),
@@ -81,6 +86,7 @@ class SettingsKeysTest {
     )
 
     private val WRITTEN: Map<String, List<String>> = mapOf(
+        "data" to listOf("AutoBackupDir", "AutoBackupInterval", "AutoBackupMaxCopies"),
         "common" to listOf("AdultOnly", "AppPassword", "BiometricToken", "ContinueMedia", "DefaultStartUpTab", "DohProvider", "DownloadManager", "DownloadWifiOnly", "HidePrivate", "MaxParallelDownloads", "OverridePassword", "RecentlyListOnly", "SearchSources"),
         "theme" to listOf("CustomThemeInt", "DarkMode", "Theme", "UseCustomTheme", "UseMaterialYou", "UseOLED", "UseSourceTheme", "UseSystemFont"),
         "notifications" to listOf("AnilistFilteredTypes", "AnilistNotificationInterval", "CommentNotificationInterval", "SubscriptionCheckingNotifications", "SubscriptionNotificationInterval", "SubscriptionPromptAtEnd", "UseAlarmManager"),

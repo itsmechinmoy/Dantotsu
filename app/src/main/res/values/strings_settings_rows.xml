@@ -16,6 +16,8 @@
     <string name="max_parallel_downloads">Max Parallel Downloads</string>
     <string name="max_parallel_downloads_desc">Concurrent download tasks (0 = Sequential, 1-10 = Concurrent). Note: High concurrency may trigger source rate limits.</string>
     <string name="max_parallel_downloads_off">0 (Off / Sequential)</string>
+    <string name="storage_downloads_path">Downloads: %1$s</string>
+    <string name="backups_to_retain_count">%1$d backups</string>
     <string name="collapsed">Collapsed</string>
     <string name="expanded">Expanded</string>
     <string name="settings_fewer">Show fewer</string>
