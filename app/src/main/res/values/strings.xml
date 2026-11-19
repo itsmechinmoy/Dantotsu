@@ -794,7 +794,6 @@
     <string name="invalid_url">Invalid URL</string>
     <string name="no_anilist_id_found">No Anilist ID found</string>
     <string name="error_loading_image">Error loading image</string>
-    <string name="error_loading_discord_user_data">Error loading Discord User Data</string>
     <string name="warning">Warning</string>
     <string name="view_anime" translatable="false">View Anime</string>
     <string name="view_manga" translatable="false">View Manga</string>

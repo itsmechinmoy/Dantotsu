@@ -18,6 +18,13 @@ object Discord {
     fun removeLegacyLogin(context: Context) {
         val hadToken = !PrefManager.getVal(PrefName.DiscordToken, null as String?).isNullOrEmpty()
         val dir = File(context.filesDir, "discord")
+        LegacyLoginMigration.run(object : LegacyLoginMigration.Store {
+            override val hadLegacyLogin = hadToken
+            override var migrated: Boolean
+                get() = PrefManager.getVal(PrefName.DiscordLoginMigrated)
+                set(value) = PrefManager.setVal(PrefName.DiscordLoginMigrated, value)
+            override fun enablePresence() = PrefManager.setVal(PrefName.rpcEnabled, true)
+        })
         if (!hadToken && !dir.exists()) return
         listOf(PrefName.DiscordToken, PrefName.DiscordId, PrefName.DiscordUserName, PrefName.DiscordAvatar)
             .forEach { PrefManager.removeVal(it) }
