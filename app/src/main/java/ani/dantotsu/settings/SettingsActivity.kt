@@ -31,7 +31,13 @@ import ani.dantotsu.others.AppUpdater
 import ani.dantotsu.others.CustomBottomDialog
 import ani.dantotsu.pop
 import ani.dantotsu.setSafeOnClickListener
+import ani.dantotsu.settings.rows.RowAdapter
+import ani.dantotsu.settings.rows.ScreenItem
+import ani.dantotsu.settings.rows.SettingsHost
+import ani.dantotsu.settings.rows.SettingsIndex
+import ani.dantotsu.settings.rows.actionRow
 import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.screens.SettingsScreens
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.startMainActivity
@@ -49,7 +55,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.random.Random
 
 
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : AppCompatActivity(), SettingsHost {
+    override val activity: AppCompatActivity get() = this
+
+    /** The home list has no state of its own to re-read. */
+    override fun refresh() {}
+
     lateinit var binding: ActivitySettingsBinding
     private var cursedCounter = 0
 
@@ -62,7 +73,9 @@ class SettingsActivity : AppCompatActivity() {
 
         setupHeaderAndVersion()
         setupBackNavigation()
-        val mainAdapter = SettingsAdapter(buildSettingsItems(this))
+        // One row per settings group, in a single card.
+        val mainAdapter = RowAdapter(this)
+        mainAdapter.submitList(homeRows().map { ScreenItem.RowItem(it) })
         val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
         binding.settingsRecyclerView.apply {
             adapter = mainAdapter
@@ -114,7 +127,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun setupSettingsSearch(
-        mainAdapter: SettingsAdapter,
+        mainAdapter: RowAdapter,
         searchAdapter: ani.dantotsu.settings.search.SettingsSearchAdapter
     ) {
         val context = this
@@ -123,7 +136,7 @@ class SettingsActivity : AppCompatActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 val query = s?.toString()?.trim() ?: ""
                 if (query.isNotEmpty()) {
-                    val results = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
+                    val results = searchSettings(context, query)
                     if (results.isNotEmpty()) {
                         searchAdapter.updateResults(results)
                         binding.settingsRecyclerView.adapter = searchAdapter
@@ -277,121 +290,46 @@ class SettingsActivity : AppCompatActivity() {
         ThemeManager(this).applyTheme()
         super.onResume()
     }
-    private fun buildSettingsItems(context: Context): ArrayList<Settings> {
-        return arrayListOf(
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.accounts),
-                        desc = getString(R.string.accounts_desc),
-                        icon = R.drawable.ic_round_person_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAccountActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.theme),
-                        desc = getString(R.string.theme_desc),
-                        icon = R.drawable.ic_palette,
-                        onClick = {
-                            startActivity(Intent(context, SettingsThemeActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.common),
-                        desc = getString(R.string.common_desc),
-                        icon = R.drawable.ic_lightbulb_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsCommonActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.label_data_storage),
-                        desc = getString(R.string.label_data_storage_desc),
-                        icon = R.drawable.ic_round_folder_24,
-                        onClick = {
-                            startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.anime),
-                        desc = getString(R.string.anime_desc),
-                        icon = R.drawable.ic_round_movie_filter_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAnimeActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.manga),
-                        desc = getString(R.string.manga_desc),
-                        icon = R.drawable.ic_round_import_contacts_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsMangaActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.extensions),
-                        desc = getString(R.string.extensions_desc),
-                        icon = R.drawable.ic_extension,
-                        onClick = {
-                            startActivity(Intent(context, SettingsExtensionsActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    /*
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.addons),
-                        desc = getString(R.string.addons_desc),
-                        icon = R.drawable.ic_round_restaurant_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAddonActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    */
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.torrent_settings),
-                        desc = getString(R.string.torrent_settings_desc),
-                        icon = R.drawable.ic_round_dns_24,
-                        onClick = {
-                            startActivity(Intent(context, TorrentSettingsActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.notifications),
-                        desc = getString(R.string.notifications_desc),
-                        icon = R.drawable.ic_round_notifications_none_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsNotificationActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.about),
-                        desc = getString(R.string.about_desc),
-                        icon = R.drawable.ic_round_info_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAboutActivity::class.java))
-                        },
-                        isActivity = true
-                    )
-                )
+    /** Groups on the settings home, in order; each opens its screen. */
+    private fun homeRows() = listOf(
+        home("accounts", R.string.accounts, R.string.accounts_desc, R.drawable.ic_round_person_24, SettingsAccountActivity::class.java),
+        home("theme", R.string.theme, R.string.theme_desc, R.drawable.ic_palette, SettingsThemeActivity::class.java),
+        home("common", R.string.common, R.string.common_desc, R.drawable.ic_lightbulb_24, SettingsCommonActivity::class.java),
+        home("data", R.string.label_data_storage, R.string.label_data_storage_desc, R.drawable.ic_round_folder_24,
+            ani.dantotsu.settings.data.SettingsDataActivity::class.java),
+        home("anime", R.string.anime, R.string.anime_desc, R.drawable.ic_round_movie_filter_24, SettingsAnimeActivity::class.java),
+        home("manga", R.string.manga, R.string.manga_desc, R.drawable.ic_round_import_contacts_24, SettingsMangaActivity::class.java),
+        home("extensions", R.string.extensions, R.string.extensions_desc, R.drawable.ic_extension, SettingsExtensionsActivity::class.java),
+        home("torrent", R.string.torrent_settings, R.string.torrent_settings_desc, R.drawable.ic_round_dns_24, TorrentSettingsActivity::class.java),
+        home("notifications", R.string.notifications, R.string.notifications_desc, R.drawable.ic_round_notifications_none_24,
+            SettingsNotificationActivity::class.java),
+        home("about", R.string.about, R.string.about_desc, R.drawable.ic_round_info_24, SettingsAboutActivity::class.java),
+    )
+
+    private fun home(id: String, title: Int, summary: Int, icon: Int, target: Class<out android.app.Activity>) =
+        actionRow("home_$id", title, summary, icon, opensScreen = true) { host, _ ->
+            host.activity.startActivity(Intent(host.activity, target))
+        }
+
+    /**
+     * Rows of the screens built from rows, then the hand-kept registry for groups that
+     * are not on rows yet.
+     */
+    private fun searchSettings(context: Context, query: String): List<ani.dantotsu.settings.search.SearchableSetting> {
+        val onRows = SettingsScreens.all.map { it.activity }.toSet()
+        val fromRows = SettingsIndex.search(context, query).map {
+            ani.dantotsu.settings.search.SearchableSetting(
+                title = it.title,
+                desc = it.summary,
+                icon = it.icon,
+                breadcrumbs = it.breadcrumbs,
+                targetActivity = it.entry.screen.activity,
+                rowId = it.entry.row.id,
+            )
+        }
+        val fromRegistry = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
+            .filter { it.targetActivity !in onRows }
+        return fromRows + fromRegistry
     }
 
 }

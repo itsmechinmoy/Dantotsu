@@ -81,6 +81,7 @@ class SettingsSearchAdapter(
     private fun launchSetting(context: Context, item: SearchableSetting) {
         val intent = Intent(context, item.targetActivity).apply {
             putExtra(EXTRA_HIGHLIGHT_KEY, item.highlightKey)
+            item.rowId?.let { putExtra(ani.dantotsu.settings.rows.SettingsScreenActivity.EXTRA_ROW, it) }
         }
         context.startActivity(intent)
     }

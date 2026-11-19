@@ -10,5 +10,7 @@ data class SearchableSetting(
     val breadcrumbs: String = "",
     val targetActivity: Class<out Activity>,
     val highlightKey: String? = null,
-    val isVisible: Boolean = true
+    val isVisible: Boolean = true,
+    /** Row to scroll to and flash on a screen built from rows. */
+    val rowId: String? = null,
 )
