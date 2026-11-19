@@ -1,60 +1,70 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Storage usage card at the top of Data & storage (a custom settings row). -->
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Data & storage: device storage use and the downloads folder. First row of the storage
+     section card (background, corners and margins set by SettingsCards); padding and the
+     icon column match item_setting_row. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="24dp"
-    android:layout_marginEnd="24dp"
-    android:layout_marginBottom="16dp"
-    app:cardBackgroundColor="@color/nav_bg_inv"
-    app:cardCornerRadius="16dp"
-    app:cardElevation="0dp"
-    app:strokeWidth="0dp">
+    android:baselineAligned="false"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="14dp">
+
+    <ImageView
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="16dp"
+        android:importantForAccessibility="no"
+        app:srcCompat="@drawable/ic_round_sd_card_24"
+        app:tint="?attr/colorPrimary" />
 
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp">
+        android:layout_weight="1"
+        android:orientation="vertical">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fontFamily="@font/poppins_bold"
+            android:fontFamily="@font/poppins_semi_bold"
             android:text="@string/storage_usage"
-            android:textSize="18sp" />
-
-        <com.google.android.material.progressindicator.LinearProgressIndicator
-            android:id="@+id/storageProgressBar"
-            android:layout_width="match_parent"
-            android:layout_height="12dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="8dp"
-            app:indicatorColor="?attr/colorPrimary"
-            app:trackColor="?attr/colorSurfaceVariant"
-            app:trackCornerRadius="6dp"
-            app:trackThickness="12dp" />
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="16sp" />
 
         <TextView
             android:id="@+id/storageAvailableText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fontFamily="@font/poppins_semi_bold"
-            android:textColor="?attr/colorSecondary"
+            android:layout_marginTop="2dp"
+            android:fontFamily="@font/poppins"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="14sp"
             tools:text="14.2 GB free of 64.0 GB" />
+
+        <!-- Track in the screen background colour so it shows on the card fill; no stop dot. -->
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/storageProgressBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            app:indicatorColor="?attr/colorPrimary"
+            app:trackColor="?android:attr/colorBackground"
+            app:trackCornerRadius="4dp"
+            app:trackStopIndicatorSize="0dp"
+            app:trackThickness="8dp" />
 
         <TextView
             android:id="@+id/storageDirectoryText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:fontFamily="@font/poppins"
-            android:textColor="?attr/colorSecondary"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="12sp"
             tools:text="Downloads: /storage/emulated/0/Download/Dantotsu" />
-
     </LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+</LinearLayout>
