@@ -7,6 +7,7 @@ object SettingsScreens {
     val all: List<SettingsScreen> get() = listOf(
         ani.dantotsu.settings.AnimeScreen,
         ani.dantotsu.settings.MangaScreen,
+        ani.dantotsu.settings.TorrentScreen,
         ani.dantotsu.settings.AboutScreen,
     )
 }

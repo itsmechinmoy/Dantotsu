@@ -18,6 +18,14 @@ class SettingsKeysTest {
     private fun g(key: PrefName, location: Location, type: KClass<*>, default: Any) = key to Pref(location, type, default)
 
     private val GOLDEN: List<Pair<PrefName, Pref>> = listOf(
+        g(PrefName.TorrentBatterySaving, Location.Player, Boolean::class, false),
+        g(PrefName.TorrentDisableUtp, Location.Player, Boolean::class, false),
+        g(PrefName.TorrentEncryption, Location.Player, Boolean::class, false),
+        g(PrefName.TorrentWifiOnly, Location.Player, Boolean::class, false),
+        g(PrefName.TorrentDownloadSpeedLimit, Location.Player, Int::class, 0),
+        g(PrefName.TorrentMaxConnections, Location.Player, Int::class, 108),
+        g(PrefName.TorrentPort, Location.Player, Int::class, 0),
+        g(PrefName.TorrentUploadSpeedLimit, Location.Player, Int::class, 0),
         g(PrefName.IncludeMangaList, Location.General, Boolean::class, true),
         g(PrefName.MangaDefaultView, Location.UI, Int::class, 0),
         g(PrefName.SkipDuplicateChapters, Location.General, Boolean::class, true),
@@ -37,6 +45,7 @@ class SettingsKeysTest {
     )
 
     private val WRITTEN: Map<String, List<String>> = mapOf(
+        "torrent" to listOf("TorrentBatterySaving", "TorrentDisableUtp", "TorrentEncryption", "TorrentWifiOnly", "TorrentDownloadSpeedLimit", "TorrentMaxConnections", "TorrentPort", "TorrentUploadSpeedLimit"),
         "manga" to listOf("IncludeMangaList", "MangaDefaultView", "SkipDuplicateChapters", "SmartDownloadManga"),
         "anime" to listOf("AnimeDefaultView", "AutoSelectServer", "IncludeAnimeList", "SettingsPreferDub", "ShowEpisodeRating", "ShowYtButton", "SmartDownloadAnime", "PreferredDownloadResolutions"),
         "about" to listOf("CheckUpdate", "LogToFile", "SharedUserID", "TrackMemoryLeaks"),
