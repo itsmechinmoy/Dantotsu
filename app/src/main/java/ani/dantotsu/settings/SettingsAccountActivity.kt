@@ -65,6 +65,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
             fun reload() {
                 if (Anilist.token != null) {
                     settingsAnilistLogin.setText(R.string.logout)
+                    settingsAnilistLogin.contentDescription = getString(R.string.log_out_of, getString(R.string.anilist))
                     settingsAnilistLogin.setOnClickListener {
                         Anilist.removeSavedToken()
                         restartMainActivity.isEnabled = true
@@ -111,6 +112,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
 
                     if (MAL.token != null) {
                         settingsMALLogin.setText(R.string.logout)
+                        settingsMALLogin.contentDescription = getString(R.string.log_out_of, getString(R.string.myanimelist))
                         settingsMALLogin.setOnClickListener {
                             MAL.removeSavedToken()
                             restartMainActivity.isEnabled = true
@@ -127,6 +129,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
                         settingsMALAvatar.setImageResource(R.drawable.ic_round_person_24)
                         settingsMALUsername.visibility = View.GONE
                         settingsMALLogin.setText(R.string.login)
+                        settingsMALLogin.contentDescription = getString(R.string.log_in_to, getString(R.string.myanimelist))
                         settingsMALLogin.setOnClickListener {
                             MAL.loginIntent(context)
                         }
@@ -138,6 +141,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
                     settingsAnilistBanner.visibility = View.GONE
                     settingsAnilistScrim.visibility = View.GONE
                     settingsAnilistLogin.setText(R.string.login)
+                    settingsAnilistLogin.contentDescription = getString(R.string.log_in_to, getString(R.string.anilist))
                     settingsAnilistLogin.setOnClickListener {
                         Anilist.loginIntent(context)
                     }
@@ -168,6 +172,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
 
                 if (MangaBaka.token != null) {
                     settingsMangaBakaLogin.setText(R.string.logout)
+                    settingsMangaBakaLogin.contentDescription = getString(R.string.log_out_of, getString(R.string.mangabaka))
                     settingsMangaBakaLogin.setOnClickListener {
                         MangaBaka.removeSavedToken()
                         restartMainActivity.isEnabled = true
@@ -180,6 +185,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
                     settingsMangaBakaAvatar.setImageResource(R.drawable.ic_round_person_24)
                     settingsMangaBakaUsername.visibility = View.GONE
                     settingsMangaBakaLogin.setText(R.string.login)
+                    settingsMangaBakaLogin.contentDescription = getString(R.string.log_in_to, getString(R.string.mangabaka))
                     settingsMangaBakaLogin.setOnClickListener {
                         MangaBaka.loginIntent(context)
                     }
@@ -187,6 +193,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
 
                 if (Comick.token != null) {
                     settingsComickLogin.setText(R.string.logout)
+                    settingsComickLogin.contentDescription = getString(R.string.log_out_of, getString(R.string.comick))
                     settingsComickLogin.setOnClickListener {
                         Comick.removeSavedToken()
                         restartMainActivity.isEnabled = true
@@ -203,6 +210,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
                     settingsComickAvatar.setImageResource(R.drawable.ic_round_person_24)
                     settingsComickUsername.visibility = View.GONE
                     settingsComickLogin.setText(R.string.login)
+                    settingsComickLogin.contentDescription = getString(R.string.log_in_to, getString(R.string.comick))
                     settingsComickLogin.setOnClickListener {
                         Comick.loginIntent(context)
                     }
