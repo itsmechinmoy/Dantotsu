@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Last row of a section that has advanced rows: "Show 3 more" / "Show fewer". Drawn as
+     part of the section card (SettingsCards); the advanced rows open directly above it.
+     The chevron sits in the icon column and turns 180° when they are open
+     (RowAdapter.bindMore). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/moreToggle"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:minHeight="48dp"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp">
+
+    <ImageView
+        android:id="@+id/moreChevron"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="16dp"
+        android:importantForAccessibility="no"
+        app:srcCompat="@drawable/ic_round_expand_more_24"
+        app:tint="?attr/colorPrimary" />
+
+    <TextView
+        android:id="@+id/moreText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:importantForAccessibility="no"
+        android:textColor="?attr/colorPrimary"
+        android:textSize="14sp" />
+</LinearLayout>

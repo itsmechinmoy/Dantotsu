@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings for the settings row system. -->
+<resources>
+    <string name="back">Back</string>
+    <string name="increase">Increase</string>
+    <string name="decrease">Decrease</string>
+    <string name="collapsed">Collapsed</string>
+    <string name="expanded">Expanded</string>
+    <string name="settings_fewer">Show fewer</string>
+    <plurals name="settings_more">
+        <item quantity="one">Show %d more</item>
+        <item quantity="other">Show %d more</item>
+    </plurals>
+</resources>

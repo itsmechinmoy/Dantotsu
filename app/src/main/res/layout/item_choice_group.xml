@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Group header inside ChoiceSheet; same look as a settings section header. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="32dp"
+    android:paddingTop="20dp"
+    android:paddingEnd="32dp"
+    android:paddingBottom="8dp">
+
+    <TextView
+        android:id="@+id/groupTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:accessibilityHeading="true"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:textColor="?attr/colorPrimary"
+        android:textSize="14sp"
+        tools:ignore="UnusedAttribute"
+        tools:text="Sharpen" />
+
+    <TextView
+        android:id="@+id/groupDetail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/poppins"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textSize="13sp"
+        android:visibility="gone"
+        tools:text="Also removes noise." />
+</LinearLayout>
