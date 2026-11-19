@@ -1,5 +1,6 @@
 package ani.dantotsu.settings.rows
 
+import android.graphics.Color
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.settings.saving.internal.Location
 import ani.dantotsu.settings.saving.internal.Pref
@@ -18,6 +19,14 @@ class SettingsKeysTest {
     private fun g(key: PrefName, location: Location, type: KClass<*>, default: Any) = key to Pref(location, type, default)
 
     private val GOLDEN: List<Pair<PrefName, Pref>> = listOf(
+        g(PrefName.CustomThemeInt, Location.UI, Int::class, Color.parseColor("#6200EE")),
+        g(PrefName.DarkMode, Location.UI, Int::class, 0),
+        g(PrefName.UseCustomTheme, Location.UI, Boolean::class, false),
+        g(PrefName.UseMaterialYou, Location.UI, Boolean::class, false),
+        g(PrefName.UseOLED, Location.UI, Boolean::class, false),
+        g(PrefName.UseSourceTheme, Location.UI, Boolean::class, false),
+        g(PrefName.UseSystemFont, Location.UI, Boolean::class, false),
+        g(PrefName.Theme, Location.UI, String::class, "PURPLE"),
         g(PrefName.AnilistFilteredTypes, Location.General, Set::class, setOf<String>()),
         g(PrefName.AnilistNotificationInterval, Location.General, Int::class, 3),
         g(PrefName.CommentNotificationInterval, Location.General, Int::class, 0),
@@ -59,6 +68,7 @@ class SettingsKeysTest {
     )
 
     private val WRITTEN: Map<String, List<String>> = mapOf(
+        "theme" to listOf("CustomThemeInt", "DarkMode", "Theme", "UseCustomTheme", "UseMaterialYou", "UseOLED", "UseSourceTheme", "UseSystemFont"),
         "notifications" to listOf("AnilistFilteredTypes", "AnilistNotificationInterval", "CommentNotificationInterval", "SubscriptionCheckingNotifications", "SubscriptionNotificationInterval", "SubscriptionPromptAtEnd", "UseAlarmManager"),
         "extensions" to listOf("DefaultUserAgent", "EnableSocks5Proxy", "NSFWExtension", "SkipExtensionIcons", "AnimeExtensionRepos", "MangaExtensionRepos", "NovelExtensionRepos"),
         "torrent" to listOf("TorrentBatterySaving", "TorrentDisableUtp", "TorrentEncryption", "TorrentWifiOnly", "TorrentDownloadSpeedLimit", "TorrentMaxConnections", "TorrentPort", "TorrentUploadSpeedLimit"),
