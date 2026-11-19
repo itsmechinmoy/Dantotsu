@@ -18,6 +18,10 @@ class SettingsKeysTest {
     private fun g(key: PrefName, location: Location, type: KClass<*>, default: Any) = key to Pref(location, type, default)
 
     private val GOLDEN: List<Pair<PrefName, Pref>> = listOf(
+        g(PrefName.IncludeMangaList, Location.General, Boolean::class, true),
+        g(PrefName.MangaDefaultView, Location.UI, Int::class, 0),
+        g(PrefName.SkipDuplicateChapters, Location.General, Boolean::class, true),
+        g(PrefName.SmartDownloadManga, Location.General, Boolean::class, false),
         g(PrefName.PreferredDownloadResolutions, Location.General, List::class, listOf("1080p", "720p", "480p", "360p", "240p", "144p")),
         g(PrefName.AnimeDefaultView, Location.UI, Int::class, 0),
         g(PrefName.AutoSelectServer, Location.Player, Boolean::class, false),
@@ -33,6 +37,7 @@ class SettingsKeysTest {
     )
 
     private val WRITTEN: Map<String, List<String>> = mapOf(
+        "manga" to listOf("IncludeMangaList", "MangaDefaultView", "SkipDuplicateChapters", "SmartDownloadManga"),
         "anime" to listOf("AnimeDefaultView", "AutoSelectServer", "IncludeAnimeList", "SettingsPreferDub", "ShowEpisodeRating", "ShowYtButton", "SmartDownloadAnime", "PreferredDownloadResolutions"),
         "about" to listOf("CheckUpdate", "LogToFile", "SharedUserID", "TrackMemoryLeaks"),
     )
