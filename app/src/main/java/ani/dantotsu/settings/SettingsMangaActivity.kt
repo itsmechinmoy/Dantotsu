@@ -35,6 +35,7 @@ object MangaScreen : SettingsScreen("manga", R.string.manga, R.drawable.ic_round
                 )),
             actionRow("reader_settings", R.string.reader_settings, R.string.reader_settings_desc,
                 R.drawable.ic_round_reader_settings, opensScreen = true,
+                keywords = listOf(R.string.true_colors, R.string.crop_borders),
                 onClick = { host, _ -> host.activity.startActivity(Intent(host.activity, ReaderSettingsActivity::class.java)) }),
             actionRow("purge_manga_downloads", R.string.purge_manga_downloads, R.string.purge_manga_downloads_desc,
                 R.drawable.ic_round_delete_24,

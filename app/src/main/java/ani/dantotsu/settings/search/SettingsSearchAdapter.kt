@@ -15,10 +15,6 @@ class SettingsSearchAdapter(
     private val onItemClick: ((SearchableSetting) -> Unit)? = null
 ) : RecyclerView.Adapter<SettingsSearchAdapter.SearchResultViewHolder>() {
 
-    companion object {
-        const val EXTRA_HIGHLIGHT_KEY = "extra_highlight_key"
-    }
-
     inner class SearchResultViewHolder(val binding: ItemSettingsSearchResultBinding) :
         RecyclerView.ViewHolder(binding.root)
 
@@ -80,8 +76,7 @@ class SettingsSearchAdapter(
 
     private fun launchSetting(context: Context, item: SearchableSetting) {
         val intent = Intent(context, item.targetActivity).apply {
-            putExtra(EXTRA_HIGHLIGHT_KEY, item.highlightKey)
-            item.rowId?.let { putExtra(ani.dantotsu.settings.rows.SettingsScreenActivity.EXTRA_ROW, it) }
+            putExtra(ani.dantotsu.settings.rows.SettingsScreenActivity.EXTRA_ROW, item.rowId)
         }
         context.startActivity(intent)
     }

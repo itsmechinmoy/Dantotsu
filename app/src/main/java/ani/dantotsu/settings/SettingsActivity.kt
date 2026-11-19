@@ -311,13 +311,9 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
             host.activity.startActivity(Intent(host.activity, target))
         }
 
-    /**
-     * Rows of the screens built from rows, then the hand-kept registry for groups that
-     * are not on rows yet.
-     */
-    private fun searchSettings(context: Context, query: String): List<ani.dantotsu.settings.search.SearchableSetting> {
-        val onRows = SettingsScreens.all.map { it.activity }.toSet()
-        val fromRows = SettingsIndex.search(context, query).map {
+    /** Hits come from the rows of every screen in [SettingsScreens.all]. */
+    private fun searchSettings(context: Context, query: String): List<ani.dantotsu.settings.search.SearchableSetting> =
+        SettingsIndex.search(context, query).map {
             ani.dantotsu.settings.search.SearchableSetting(
                 title = it.title,
                 desc = it.summary,
@@ -327,9 +323,5 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
                 rowId = it.entry.row.id,
             )
         }
-        val fromRegistry = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
-            .filter { it.targetActivity !in onRows }
-        return fromRows + fromRegistry
-    }
 
 }

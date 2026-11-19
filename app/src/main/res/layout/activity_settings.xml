@@ -129,7 +129,7 @@
                 android:nestedScrollingEnabled="false"
                 android:requiresFadingEdge="vertical"
                 tools:itemCount="5"
-                tools:listitem="@layout/item_settings" />
+                tools:listitem="@layout/item_setting_row" />
 
             <LinearLayout
                 android:id="@+id/settingsEmptyLayout"

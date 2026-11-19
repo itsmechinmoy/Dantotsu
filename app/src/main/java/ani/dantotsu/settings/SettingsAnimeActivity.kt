@@ -36,6 +36,7 @@ object AnimeScreen : SettingsScreen("anime", R.string.anime, R.drawable.ic_round
                 )),
             actionRow("player_settings", R.string.player_settings, R.string.player_settings_desc,
                 R.drawable.ic_round_video_settings_24, opensScreen = true,
+                keywords = listOf(R.string.default_speed, R.string.cursed_speeds),
                 onClick = { host, _ -> host.activity.startActivity(Intent(host.activity, PlayerSettingsActivity::class.java)) }),
             actionRow("purge_anime_downloads", R.string.purge_anime_downloads, R.string.purge_anime_downloads_desc,
                 R.drawable.ic_round_delete_24,

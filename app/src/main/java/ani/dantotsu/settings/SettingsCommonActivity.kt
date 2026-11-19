@@ -348,6 +348,10 @@ object CommonScreen : SettingsScreen("common", R.string.common, R.drawable.ic_li
                 labels = { DNS }, onChange = { host, _ -> host.activity.restartApp() }),
             actionRow("ui_settings", R.string.ui_settings, R.string.ui_settings_desc,
                 R.drawable.ic_round_auto_awesome_24, opensScreen = true,
+                // search reaches the interface settings through this row
+                keywords = listOf(R.string.immersive_mode, R.string.hide_notification_dot,
+                    R.string.home_layout_show, R.string.small_view, R.string.carousel_clearlogo,
+                    R.string.banner_animations, R.string.layout_animations),
                 onClick = { host, _ ->
                     host.activity.startActivity(android.content.Intent(host.activity, UserInterfaceSettingsActivity::class.java))
                 }),
