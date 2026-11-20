@@ -54,6 +54,13 @@ class PreferencePackager {
          * @return true if successful, false if error
          */
         fun unpack(decryptedJson: String): Boolean {
+            // nothing is written unless the whole backup is readable
+            val check = BackupCheck.of(decryptedJson)
+            if (check is BackupCheck.Invalid) {
+                ani.dantotsu.util.Logger.log("Settings restore rejected: ${check.reason}")
+                ani.dantotsu.toast(ani.dantotsu.R.string.error_importing_settings)
+                return false
+            }
             val gson = Gson()
             val type = object :
                 TypeToken<Map<String, Map<String, Map<String, Any>>>>() {}.type  //oh god...
