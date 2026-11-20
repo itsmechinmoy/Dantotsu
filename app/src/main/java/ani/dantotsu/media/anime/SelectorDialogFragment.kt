@@ -803,11 +803,18 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                     ?: (if (url.contains("index=")) url.substringAfter("index=").substringBefore("&").toIntOrNull() else null)
                     ?: 0
 
-                prepareTorrentBuffer(torrentManager, torrentHash, ep.extra?.get("torrentUrl"), url, video, index)
+                val previousHash = torrentManager.activeTorrentHash
+                val startedHash = prepareTorrentBuffer(torrentManager, torrentHash, ep.extra?.get("torrentUrl"), url, video, index)
 
                 withContext(Dispatchers.Main) {
-                    // closed while buffering: don't open the player behind the user's back
-                    if (!isAdded) return@withContext
+                    // closed while buffering: don't open the player behind the user's back,
+                    // and stop downloading a torrent nothing is going to play
+                    if (!isAdded) {
+                        if (startedHash != null && !startedHash.equals(previousHash, ignoreCase = true)) {
+                            launchIO { torrentManager.removeTorrent(startedHash) }
+                        }
+                        return@withContext
+                    }
                     if (launch == true) {
                         Intent(activity, ExoplayerView::class.java).apply {
                             ExoplayerView.media = media
@@ -840,7 +847,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         url: String,
         video: Video,
         index: Int
-    ) {
+    ): String? {
         if (torrentHash != null) {
             // closing the player stops the session, so the listed episode's torrent may be gone
             if (!torrentManager.hasTorrent(torrentHash)) {
@@ -848,9 +855,10 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 torrentManager.addTorrent(source, video.quality.toString(), "", "", false)
             }
             torrentManager.activeTorrentHash = torrentHash
-            torrentManager.prebuffer(torrentHash, index)
+            check(torrentManager.prebuffer(torrentHash, index)) { NO_TORRENT_DATA }
             // the server may be on another port after a restart
             video.file.url = torrentManager.getLink(torrentHash, index)
+            return torrentHash
         } else if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
             val previousHash = torrentManager.activeTorrentHash
             val currentTorrent = torrentManager.addTorrent(
@@ -861,9 +869,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 torrentManager.removeTorrent(previousHash)
             }
             torrentManager.activeTorrentHash = currentTorrent.hash
-            torrentManager.prebuffer(currentTorrent.hash!!, index)
+            check(torrentManager.prebuffer(currentTorrent.hash!!, index)) { NO_TORRENT_DATA }
             video.file.url = torrentManager.getLink(currentTorrent, index)
+            return currentTorrent.hash
         }
+        return null
     }
 
     private fun launchExternalMagnetPlayer(ep: Episode, video: Video) {
@@ -1327,6 +1337,9 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     }
 
     companion object {
+        // metadata never arrived (no peers) or the episode's file isn't in the torrent
+        private const val NO_TORRENT_DATA = "couldn't load this torrent, try another release"
+
         fun newInstance(
             server: String? = null,
             la: Boolean = true,

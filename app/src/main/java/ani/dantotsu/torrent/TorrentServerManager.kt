@@ -46,6 +46,9 @@ class TorrentServerManager(private val context: Context) {
             "dht.libtorrent.org:25401,dht.transmissionbt.com:6881,router.bittorrent.com:6881,router.utorrent.com:6881,router.bt.ouinet.work:6881"
     }
 
+    // the service and the picker both start the server; without the lock both pass the check
+    // and start the session and a second http server on another port
+    @Synchronized
     fun start() {
         markUsed()
         if (sessionManager.isRunning) return
