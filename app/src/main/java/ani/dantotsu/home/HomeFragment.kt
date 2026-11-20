@@ -563,7 +563,8 @@ class HomeFragment : Fragment() {
             setNeutralButton(R.string.rescue_mode_enable) {
                 PrefManager.setVal(PrefName.RescueMode, true)
                 Anilist.anilistDisabledSignal = false
-                activity?.let { startMainActivity(it) }
+                (activity as? MainActivity)?.serviceChanged()
+                    ?: activity?.let { startMainActivity(it) }
             }
             setNegButton(R.string.cancel) {
                 Anilist.anilistDisabledSignal = false

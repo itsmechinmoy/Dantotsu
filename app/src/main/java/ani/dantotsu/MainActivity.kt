@@ -88,6 +88,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var incognitoLiveData: SharedPreferenceBooleanLiveData
     private val scope = lifecycleScope
     private var load = false
+    private var tabsStale = false
 
 
     @kotlin.OptIn(DelicateCoroutinesApi::class)
@@ -208,7 +209,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.rescueModeIcon.setOnClickListener {
             PrefManager.setVal(PrefName.RescueMode, false)
-            startMainActivity(this)
+            serviceChanged()
         }
         incognitoNotification(this)
     }
@@ -487,6 +488,34 @@ class MainActivity : AppCompatActivity() {
     override fun onRestart() {
         super.onRestart()
         window.navigationBarColor = ContextCompat.getColor(this, android.R.color.transparent)
+    }
+
+    override fun onStart() {
+        // after super: fragments can only be swapped once the activity has started again
+        super.onStart()
+        if (tabsStale) reloadTabs()
+    }
+
+    /** The tracking service changed (AniList / MyAnimeList): rebuild the tabs in place instead of restarting. */
+    fun serviceChanged() {
+        tabsStale = true
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) reloadTabs()
+    }
+
+    private fun reloadTabs() {
+        tabsStale = false
+        if (!::binding.isInitialized || binding.viewpager.adapter == null) return
+        val pager = binding.viewpager
+        val current = pager.currentItem
+        pager.adapter = null
+        val tabs = supportFragmentManager.fragments.filter { it.tag?.matches(Regex("f\\d+")) == true }
+        if (tabs.isNotEmpty()) {
+            supportFragmentManager.beginTransaction().apply { tabs.forEach { remove(it) } }.commitNow()
+        }
+        // the tabs keep their lists in activity-scoped models; drop them so the new tabs load again
+        viewModelStore.clear()
+        pager.adapter = ViewPagerAdapter(supportFragmentManager, lifecycle)
+        pager.setCurrentItem(current, false)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
