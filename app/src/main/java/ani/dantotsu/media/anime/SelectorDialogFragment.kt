@@ -47,6 +47,11 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.media.SubtitleDownloader
+import ani.dantotsu.media.anime.selector.SourceMetaIcon
+import ani.dantotsu.media.anime.selector.SourcePresentationKind
+import ani.dantotsu.media.anime.selector.SourceRowSummarizer
+import ani.dantotsu.media.anime.selector.SourceRowViewModel
+import ani.dantotsu.media.anime.selector.SourceRowViewModelCache
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.others.Download.download
 import ani.dantotsu.parsers.Subtitle
@@ -999,6 +1004,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
     private inner class VideoAdapter(private val extractor: VideoExtractor,private val onEpisodeDownloadHandler: EpisodeDownloadHandler?) :
         RecyclerView.Adapter<VideoAdapter.UrlViewHolder>() {
+        private val rowCache = SourceRowViewModelCache()
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UrlViewHolder {
             return UrlViewHolder(
@@ -1285,11 +1291,45 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             } else {
                 extractor.server.name
             }
+            if (bindReleaseRow(binding, video)) return
             // multi-line names (release, stats, languages) read better below a short bold first line
             val lines = label.lines().map { it.trim() }.filter { it.isNotEmpty() }
             binding.urlQuality.text = lines.firstOrNull() ?: label
             binding.urlDetails.text = lines.drop(1).joinToString("\n")
             binding.urlDetails.isVisible = lines.size > 1
+        }
+
+        /**
+         * Torrent-style rows (release name plus emoji-tagged seeders / size / source lines)
+         * shown as parsed fields: release group (or the clean title) on top, then the clean
+         * title, the tags (quality, languages, audio, codec) and seeders · size · source.
+         * Returns false for plain stream rows, which keep the label as sent.
+         */
+        private fun bindReleaseRow(binding: ItemUrlBinding, video: Video): Boolean {
+            val name = extractor.server.name
+            val row = runCatching {
+                rowCache.getOrBuild(SourceRowViewModelCache.rowKey(name, video.format.name, video.file.url)) {
+                    SourceRowSummarizer.build(
+                        displayLabel = name,
+                        qualityText = name,
+                        format = video.format,
+                        url = video.file.url,
+                    )
+                }
+            }.getOrNull() ?: return false
+            if (row.presentation != SourcePresentationKind.RELEASE) return false
+            val header = row.header?.takeIf { it.isNotBlank() } ?: return false
+            binding.urlQuality.text = header
+            binding.urlDetails.text = releaseDetailLines(row, header).joinToString("\n")
+            binding.urlDetails.isVisible = binding.urlDetails.text.isNotEmpty()
+            return true
+        }
+
+        private fun releaseDetailLines(row: SourceRowViewModel, header: String): List<String> {
+            val title = row.cleanSubtitle?.takeIf { it.isNotBlank() } ?: row.subtitle
+            val tags = row.pills.joinToString(" · ") { it.text }
+            val meta = row.meta.filter { it.icon != SourceMetaIcon.TRACK }.joinToString(" · ") { it.text }
+            return listOfNotNull(title?.takeIf { it != header }, tags, meta).filter { it.isNotBlank() }
         }
 
         override fun getItemCount(): Int = extractor.videos.size
