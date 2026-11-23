@@ -59,7 +59,7 @@ object NotificationScreen : SettingsScreen(
         TaskScheduler.create(host.activity, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(host.activity)
 
     override fun sections() = listOf(
-        Section(0, listOf(
+        Section(R.string.subscriptions, listOf(
             choiceRow(PrefName.SubscriptionNotificationInterval, R.string.subscriptions_checking_time,
                 R.drawable.ic_round_notifications_none_24, summary = R.string.subscriptions_info,
                 labels = { c -> SubscriptionNotificationWorker.checkIntervals.map { formatInterval(c, it) } },
@@ -76,22 +76,26 @@ object NotificationScreen : SettingsScreen(
             actionRow("import_statuses", R.string.import_anilist_statuses_to_subscriptions,
                 R.string.import_anilist_statuses_to_subscriptions_desc, R.drawable.ic_round_playlist_add_24,
                 onClick = { host, _ -> importAnilistStatuses(host) }),
-            actionRow(PrefName.AnilistFilteredTypes.name, R.string.anilist_notification_filters,
-                R.string.anilist_notification_filters_desc, R.drawable.ic_anilist,
-                keys = listOf(PrefName.AnilistFilteredTypes), onClick = { host, _ -> editFilters(host) }),
-            choiceRow(PrefName.AnilistNotificationInterval, R.string.anilist_notifications_interval,
-                R.drawable.ic_round_notifications_none_24, summary = R.string.anilist_notifications_checking_time_desc,
-                labels = { c -> AnilistNotificationWorker.checkIntervals.map { formatInterval(c, it) } },
-                onChange = { host, _ -> reschedule(host) }),
-            choiceRow(PrefName.CommentNotificationInterval, R.string.comment_notifications_interval,
-                R.drawable.ic_round_notifications_none_24, summary = R.string.comment_notification_checking_time_desc,
-                labels = { c -> CommentNotificationWorker.checkIntervals.map { formatInterval(c, it) } },
-                onChange = { host, _ -> reschedule(host) }),
             switchRow(PrefName.SubscriptionCheckingNotifications, R.string.notification_for_checking_subscriptions,
                 R.string.notification_for_checking_subscriptions_desc, R.drawable.ic_round_smart_button_24)
                 .withLongClick { openSettings(it.activity, null) },
             switchRow(PrefName.SubscriptionPromptAtEnd, R.string.subscription_prompt_at_end,
                 R.string.subscription_prompt_at_end_desc, R.drawable.ic_round_smart_button_24),
+        )),
+        Section(R.string.settings_section_anilist_comments, listOf(
+            choiceRow(PrefName.AnilistNotificationInterval, R.string.anilist_notifications_interval,
+                R.drawable.ic_round_notifications_none_24, summary = R.string.anilist_notifications_checking_time_desc,
+                labels = { c -> AnilistNotificationWorker.checkIntervals.map { formatInterval(c, it) } },
+                onChange = { host, _ -> reschedule(host) }),
+            actionRow(PrefName.AnilistFilteredTypes.name, R.string.anilist_notification_filters,
+                R.string.anilist_notification_filters_desc, R.drawable.ic_anilist,
+                keys = listOf(PrefName.AnilistFilteredTypes), onClick = { host, _ -> editFilters(host) }),
+            choiceRow(PrefName.CommentNotificationInterval, R.string.comment_notifications_interval,
+                R.drawable.ic_round_notifications_none_24, summary = R.string.comment_notification_checking_time_desc,
+                labels = { c -> CommentNotificationWorker.checkIntervals.map { formatInterval(c, it) } },
+                onChange = { host, _ -> reschedule(host) }),
+        )),
+        Section(R.string.settings_section_reliability, listOf(
             Row(
                 id = PrefName.UseAlarmManager.name, title = R.string.use_alarm_manager_reliable,
                 summary = R.string.use_alarm_manager_reliable_desc, icon = R.drawable.ic_anilist,

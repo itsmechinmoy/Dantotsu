@@ -233,7 +233,9 @@ object AccountsScreen : SettingsScreen("accounts", R.string.accounts, R.drawable
                 keywords = listOf(R.string.accounts_keywords)) { host, view ->
                 (host.activity as SettingsAccountActivity).bindAccounts(ItemSettingsAccountsBinding.bind(view))
             },
-            // Signed out, the rows below were hidden with the whole list; they still are.
+        )),
+        // Signed out, every row in this section is hidden, so ScreenItems drops the heading too.
+        Section(R.string.settings_section_preferences, listOf(
             switchRow(PrefName.rpcEnabled, R.string.enable_rpc, R.string.enable_rpc_desc, R.drawable.interests_24,
                 visible = { loggedIn() && currContext()?.let { RPCManager.isAvailable(it) } == true }),
             actionRow("anilist_settings", R.string.anilist_settings, R.string.alsettings_desc, R.drawable.ic_anilist,

@@ -27,17 +27,36 @@ object AnimeScreen : SettingsScreen("anime", R.string.anime, R.drawable.ic_round
     override val activity get() = SettingsAnimeActivity::class.java
 
     override fun sections() = listOf(
-        Section(0, listOf(
+        Section(R.string.settings_section_playback, listOf(
+            actionRow("player_settings", R.string.player_settings, R.string.player_settings_desc,
+                R.drawable.ic_round_video_settings_24, opensScreen = true,
+                keywords = listOf(R.string.default_speed, R.string.cursed_speeds),
+                onClick = { host, _ -> host.activity.startActivity(Intent(host.activity, PlayerSettingsActivity::class.java)) }),
+            switchRow(PrefName.AutoSelectServer, R.string.auto_select_server_title, R.string.auto_select_server_desc,
+                R.drawable.ic_round_auto_awesome_24),
+            switchRow(PrefName.SettingsPreferDub, R.string.prefer_dub, R.string.prefer_dub_desc,
+                R.drawable.ic_round_audiotrack_24),
+        )),
+        Section(R.string.tab_display, listOf(
             segmentedRow(PrefName.AnimeDefaultView, R.string.default_ep_view, R.drawable.ic_round_view_list_24,
                 options = listOf(
                     Segment(R.drawable.ic_round_view_list_24, R.string.list),
                     Segment(R.drawable.ic_round_grid_view_24, R.string.grid),
                     Segment(R.drawable.ic_round_view_comfy_24, R.string.compact),
                 )),
-            actionRow("player_settings", R.string.player_settings, R.string.player_settings_desc,
-                R.drawable.ic_round_video_settings_24, opensScreen = true,
-                keywords = listOf(R.string.default_speed, R.string.cursed_speeds),
-                onClick = { host, _ -> host.activity.startActivity(Intent(host.activity, PlayerSettingsActivity::class.java)) }),
+            switchRow(PrefName.ShowEpisodeRating, R.string.show_episode_rating, R.string.show_episode_rating_desc,
+                R.drawable.ic_round_star_24),
+            switchRow(PrefName.ShowYtButton, R.string.show_yt, R.string.show_yt_desc, R.drawable.ic_round_play_circle_24),
+            switchRow(PrefName.IncludeAnimeList, R.string.include_list, R.string.include_list_anime_desc,
+                R.drawable.view_list_24, onChange = { host, _ -> host.activity.restartApp() }),
+        )),
+        Section(R.string.downloads, listOf(
+            actionRow(PrefName.PreferredDownloadResolutions.name, R.string.preferred_download_resolutions,
+                icon = R.drawable.ic_round_high_quality_24, keys = listOf(PrefName.PreferredDownloadResolutions),
+                current = { PrefManager.getVal<List<String>>(PrefName.PreferredDownloadResolutions).joinToString(", ") },
+                onClick = { host, _ -> ResolutionPriorityDialog.show(host.activity, null) { host.refresh() } }),
+            switchRow(PrefName.SmartDownloadAnime, R.string.smart_download_anime, R.string.smart_download_anime_desc,
+                R.drawable.ic_download_24),
             actionRow("purge_anime_downloads", R.string.purge_anime_downloads, R.string.purge_anime_downloads_desc,
                 R.drawable.ic_round_delete_24,
                 onClick = { host, _ ->
@@ -51,21 +70,6 @@ object AnimeScreen : SettingsScreen("anime", R.string.anime, R.drawable.ic_round
                         show()
                     }
                 }),
-            actionRow(PrefName.PreferredDownloadResolutions.name, R.string.preferred_download_resolutions,
-                icon = R.drawable.ic_round_high_quality_24, keys = listOf(PrefName.PreferredDownloadResolutions),
-                current = { PrefManager.getVal<List<String>>(PrefName.PreferredDownloadResolutions).joinToString(", ") },
-                onClick = { host, _ -> ResolutionPriorityDialog.show(host.activity, null) { host.refresh() } }),
-            switchRow(PrefName.AutoSelectServer, R.string.auto_select_server_title, R.string.auto_select_server_desc,
-                R.drawable.ic_round_auto_awesome_24),
-            switchRow(PrefName.SmartDownloadAnime, R.string.smart_download_anime, R.string.smart_download_anime_desc,
-                R.drawable.ic_download_24),
-            switchRow(PrefName.ShowEpisodeRating, R.string.show_episode_rating, R.string.show_episode_rating_desc,
-                R.drawable.ic_round_star_24),
-            switchRow(PrefName.SettingsPreferDub, R.string.prefer_dub, R.string.prefer_dub_desc,
-                R.drawable.ic_round_audiotrack_24),
-            switchRow(PrefName.ShowYtButton, R.string.show_yt, R.string.show_yt_desc, R.drawable.ic_round_play_circle_24),
-            switchRow(PrefName.IncludeAnimeList, R.string.include_list, R.string.include_list_anime_desc,
-                R.drawable.view_list_24, onChange = { host, _ -> host.activity.restartApp() }),
         )),
     )
 }

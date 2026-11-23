@@ -37,16 +37,15 @@ object ExtensionsScreen : SettingsScreen("extensions", R.string.extensions, R.dr
     private fun installer() = Injekt.get<BasePreferences>().extensionInstaller()
 
     override fun sections() = listOf(
-        Section(0, listOf(
+        Section(R.string.settings_section_repositories, listOf(
             repoRow(MediaType.ANIME, PrefName.AnimeExtensionRepos, R.string.anime_add_repository,
                 R.string.anime_add_repository_desc),
             repoRow(MediaType.MANGA, PrefName.MangaExtensionRepos, R.string.manga_add_repository,
                 R.string.manga_add_repository_desc),
             repoRow(MediaType.NOVEL, PrefName.NovelExtensionRepos, R.string.novel_add_repository,
                 R.string.novel_add_repository_desc),
-            actionRow("extension_test", R.string.extension_test, R.string.extension_test_desc,
-                R.drawable.ic_round_search_sources_24, opensScreen = true,
-                onClick = { host, _ -> host.activity.startActivity(Intent(host.activity, ParserTestActivity::class.java)) }),
+        )),
+        Section(R.string.settings_section_network, listOf(
             actionRow(PrefName.DefaultUserAgent.name, R.string.user_agent, R.string.user_agent_desc,
                 R.drawable.ic_round_video_settings_24, keys = listOf(PrefName.DefaultUserAgent),
                 onClick = { host, _ -> editUserAgent(host) }),
@@ -54,6 +53,8 @@ object ExtensionsScreen : SettingsScreen("extensions", R.string.extensions, R.dr
                 R.drawable.swap_horizontal_circle_24, onChange = { host, _ -> host.activity.restartApp() }),
             actionRow("proxy_setup", R.string.proxy_setup, R.string.proxy_setup_desc, R.drawable.lan_24,
                 onClick = { host, _ -> ProxyDialogFragment().show(host.activity.supportFragmentManager, "dialog") }),
+        )),
+        Section(R.string.general, listOf(
             Row(
                 id = "extension_installer", title = R.string.extension_installer,
                 icon = R.drawable.ic_round_new_releases_24,
@@ -70,6 +71,9 @@ object ExtensionsScreen : SettingsScreen("extensions", R.string.extensions, R.dr
                 R.string.skip_loading_extension_icons_desc, R.drawable.ic_round_no_icon_24),
             switchRow(PrefName.NSFWExtension, R.string.NSFWExtention, R.string.NSFWExtention_desc,
                 R.drawable.ic_round_nsfw_24),
+            actionRow("extension_test", R.string.extension_test, R.string.extension_test_desc,
+                R.drawable.ic_round_search_sources_24, opensScreen = true,
+                onClick = { host, _ -> host.activity.startActivity(Intent(host.activity, ParserTestActivity::class.java)) }),
         )),
     )
 

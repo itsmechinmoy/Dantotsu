@@ -32,7 +32,8 @@ import ani.dantotsu.others.CustomBottomDialog
 import ani.dantotsu.pop
 import ani.dantotsu.setSafeOnClickListener
 import ani.dantotsu.settings.rows.RowAdapter
-import ani.dantotsu.settings.rows.ScreenItem
+import ani.dantotsu.settings.rows.ScreenItems
+import ani.dantotsu.settings.rows.Section
 import ani.dantotsu.settings.rows.SettingsHost
 import ani.dantotsu.settings.rows.SettingsIndex
 import ani.dantotsu.settings.rows.actionRow
@@ -73,9 +74,9 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
 
         setupHeaderAndVersion()
         setupBackNavigation()
-        // One row per settings group, in a single card.
+        // Settings groups, split into Account, Content and App sections.
         val mainAdapter = RowAdapter(this)
-        mainAdapter.submitList(homeRows().map { ScreenItem.RowItem(it) })
+        mainAdapter.submitList(ScreenItems.build(homeSections(), emptySet()))
         val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
         binding.settingsRecyclerView.apply {
             adapter = mainAdapter
@@ -290,20 +291,26 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
         ThemeManager(this).applyTheme()
         super.onResume()
     }
-    /** Groups on the settings home, in order; each opens its screen. */
-    private fun homeRows() = listOf(
-        home("accounts", R.string.accounts, R.string.accounts_desc, R.drawable.ic_round_person_24, SettingsAccountActivity::class.java),
-        home("theme", R.string.theme, R.string.theme_desc, R.drawable.ic_palette, SettingsThemeActivity::class.java),
-        home("common", R.string.common, R.string.common_desc, R.drawable.ic_lightbulb_24, SettingsCommonActivity::class.java),
-        home("data", R.string.label_data_storage, R.string.label_data_storage_desc, R.drawable.ic_round_folder_24,
-            ani.dantotsu.settings.data.SettingsDataActivity::class.java),
-        home("anime", R.string.anime, R.string.anime_desc, R.drawable.ic_round_movie_filter_24, SettingsAnimeActivity::class.java),
-        home("manga", R.string.manga, R.string.manga_desc, R.drawable.ic_round_import_contacts_24, SettingsMangaActivity::class.java),
-        home("extensions", R.string.extensions, R.string.extensions_desc, R.drawable.ic_extension, SettingsExtensionsActivity::class.java),
-        home("torrent", R.string.torrent_settings, R.string.torrent_settings_desc, R.drawable.ic_round_dns_24, TorrentSettingsActivity::class.java),
-        home("notifications", R.string.notifications, R.string.notifications_desc, R.drawable.ic_round_notifications_none_24,
-            SettingsNotificationActivity::class.java),
-        home("about", R.string.about, R.string.about_desc, R.drawable.ic_round_info_24, SettingsAboutActivity::class.java),
+    /** Groups on the settings home, in order; each opens its screen. Keep [SettingsScreens.all] in step. */
+    private fun homeSections() = listOf(
+        Section(R.string.settings_section_account, listOf(
+            home("accounts", R.string.accounts, R.string.accounts_desc, R.drawable.ic_round_person_24, SettingsAccountActivity::class.java),
+            home("notifications", R.string.notifications, R.string.notifications_desc, R.drawable.ic_round_notifications_none_24,
+                SettingsNotificationActivity::class.java),
+        )),
+        Section(R.string.settings_section_content, listOf(
+            home("anime", R.string.anime, R.string.anime_desc, R.drawable.ic_round_movie_filter_24, SettingsAnimeActivity::class.java),
+            home("manga", R.string.manga, R.string.manga_desc, R.drawable.ic_round_import_contacts_24, SettingsMangaActivity::class.java),
+            home("extensions", R.string.extensions, R.string.extensions_desc, R.drawable.ic_extension, SettingsExtensionsActivity::class.java),
+            home("torrent", R.string.torrent_settings, R.string.torrent_settings_desc, R.drawable.ic_round_dns_24, TorrentSettingsActivity::class.java),
+        )),
+        Section(R.string.app, listOf(
+            home("theme", R.string.theme, R.string.theme_desc, R.drawable.ic_palette, SettingsThemeActivity::class.java),
+            home("common", R.string.common, R.string.common_desc, R.drawable.ic_lightbulb_24, SettingsCommonActivity::class.java),
+            home("data", R.string.label_data_storage, R.string.label_data_storage_desc, R.drawable.ic_round_folder_24,
+                ani.dantotsu.settings.data.SettingsDataActivity::class.java),
+            home("about", R.string.about, R.string.about_desc, R.drawable.ic_round_info_24, SettingsAboutActivity::class.java),
+        )),
     )
 
     private fun home(id: String, title: Int, summary: Int, icon: Int, target: Class<out android.app.Activity>) =

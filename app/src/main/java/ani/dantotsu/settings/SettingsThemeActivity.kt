@@ -87,7 +87,7 @@ object ThemeScreen : SettingsScreen("theme", R.string.theme, R.drawable.ic_palet
     }
 
     override fun sections() = listOf(
-        Section(0, listOf(
+        Section(R.string.settings_section_appearance, listOf(
             segmentedRow(PrefName.DarkMode, R.string.theme_mode, R.drawable.ic_round_brightness_auto_24,
                 options = listOf(
                     Segment(R.drawable.ic_round_brightness_auto_24, R.string.theme_mode_auto),
@@ -117,6 +117,8 @@ object ThemeScreen : SettingsScreen("theme", R.string.theme, R.drawable.ic_palet
                 R.drawable.ic_round_brightness_4_24, onChange = { host, _ -> reload(host) }),
             switchRow(PrefName.UseSystemFont, R.string.use_system_font, R.string.use_system_font_desc,
                 R.drawable.ic_round_font_size_24, onChange = { host, _ -> reload(host) }),
+        )),
+        Section(R.string.settings_section_dynamic_colors, listOf(
             switchRow(PrefName.UseMaterialYou, R.string.use_material_you, R.string.use_material_you_desc,
                 R.drawable.ic_round_new_releases_24, visible = sdkS,
                 onChange = { host, on ->

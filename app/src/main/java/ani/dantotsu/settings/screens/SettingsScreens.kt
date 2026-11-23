@@ -6,14 +6,14 @@ import ani.dantotsu.settings.rows.SettingsScreen
 object SettingsScreens {
     val all: List<SettingsScreen> get() = listOf(
         ani.dantotsu.settings.AccountsScreen,
-        ani.dantotsu.settings.ThemeScreen,
-        ani.dantotsu.settings.CommonScreen,
-        ani.dantotsu.settings.data.DataScreen,
+        ani.dantotsu.settings.NotificationScreen,
         ani.dantotsu.settings.AnimeScreen,
         ani.dantotsu.settings.MangaScreen,
         ani.dantotsu.settings.ExtensionsScreen,
         ani.dantotsu.settings.TorrentScreen,
-        ani.dantotsu.settings.NotificationScreen,
+        ani.dantotsu.settings.ThemeScreen,
+        ani.dantotsu.settings.CommonScreen,
+        ani.dantotsu.settings.data.DataScreen,
         ani.dantotsu.settings.AboutScreen,
     )
 }

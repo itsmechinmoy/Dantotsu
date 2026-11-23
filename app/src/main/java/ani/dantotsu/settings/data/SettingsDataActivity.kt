@@ -256,7 +256,7 @@ object DataScreen : SettingsScreen(
     )
 
     override fun sections() = listOf(
-        Section(0, listOf(
+        Section(R.string.settings_section_storage, listOf(
             customRow("storage_usage", R.string.storage_usage, R.layout.item_settings_storage, inSection = true) { host, view ->
                 data(host).bindStorage(ItemSettingsStorageBinding.bind(view))
             },
@@ -275,6 +275,8 @@ object DataScreen : SettingsScreen(
                         show()
                     }
                 }),
+        )),
+        Section(R.string.button_backup, listOf(
             choiceRow(PrefName.AutoBackupInterval, R.string.auto_backup_interval, R.drawable.ic_round_auto_awesome_24,
                 labels = ::intervals,
                 onChange = { host, which -> AutoBackupWorker.schedule(host.activity, which) }),
@@ -324,6 +326,8 @@ object DataScreen : SettingsScreen(
                     StoragePermissions.downloadsPermission(host.activity)
                     data(host).openDocumentLauncher.launch(arrayOf("*/*"))
                 }),
+        )),
+        Section(R.string.downloads, listOf(
             actionRow("change_download_directory", R.string.change_download_directory,
                 R.string.change_download_directory_desc, R.drawable.ic_round_folder_24,
                 keys = listOf(PrefName.DownloadsDir),

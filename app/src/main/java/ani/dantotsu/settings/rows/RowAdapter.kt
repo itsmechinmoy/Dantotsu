@@ -359,9 +359,9 @@ class RowAdapter(
     private object Diff : DiffUtil.ItemCallback<ScreenItem>() {
         override fun areItemsTheSame(old: ScreenItem, new: ScreenItem) = old.key == new.key
         override fun areContentsTheSame(old: ScreenItem, new: ScreenItem) = when {
-            // Rows read their value on bind, so always rebind them on refresh.
-            old is ScreenItem.RowItem || new is ScreenItem.RowItem -> false
-            else -> old == new
+            // Rows read their value on bind, and card corners (including More) depend on neighbours.
+            old is ScreenItem.Header && new is ScreenItem.Header -> old == new
+            else -> false
         }
     }
 

@@ -1501,4 +1501,23 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="filter_contrast">Contrast</string>
     <string name="filter_saturation">Saturation</string>
     <string name="filter_temperature">Color Temperature (Cool / Warm)</string>
+
+    <!-- Settings section headings -->
+    <string name="settings_section_account">Account</string>
+    <string name="settings_section_content">Content</string>
+    <string name="settings_section_preferences">Preferences</string>
+    <string name="settings_section_anilist_comments">AniList and comments</string>
+    <string name="settings_section_reliability">Reliability</string>
+    <string name="settings_section_playback">Playback</string>
+    <string name="settings_section_reading">Reading</string>
+    <string name="settings_section_repositories">Repositories</string>
+    <string name="settings_section_network">Network</string>
+    <string name="settings_section_speed_limits">Speed and limits</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_dynamic_colors">Dynamic colors</string>
+    <string name="settings_section_privacy_security">Privacy and security</string>
+    <string name="settings_section_data_backup">Data and backup</string>
+    <string name="settings_section_storage">Storage</string>
+    <string name="settings_section_diagnostics">Diagnostics</string>
+    <string name="settings_section_legal">Legal</string>
 </resources>

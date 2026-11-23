@@ -336,7 +336,7 @@ object CommonScreen : SettingsScreen("common", R.string.common, R.drawable.ic_li
     private fun common(host: SettingsHost) = host.activity as SettingsCommonActivity
 
     override fun sections() = listOf(
-        Section(0, listOf(
+        Section(R.string.general, listOf(
             segmentedRow(PrefName.DefaultStartUpTab, R.string.startUpTab, R.drawable.ic_round_home_24,
                 options = listOf(
                     Segment(R.drawable.ic_round_movie_filter_24, R.string.anime),
@@ -344,8 +344,6 @@ object CommonScreen : SettingsScreen("common", R.string.common, R.drawable.ic_li
                     Segment(R.drawable.ic_round_import_contacts_24, R.string.manga),
                 ),
                 onChange = { host, _ -> initActivity(host.activity) }),
-            choiceRow(PrefName.DohProvider, R.string.selected_dns, R.drawable.ic_round_dns_24,
-                labels = { DNS }, onChange = { host, _ -> host.activity.restartApp() }),
             actionRow("ui_settings", R.string.ui_settings, R.string.ui_settings_desc,
                 R.drawable.ic_round_auto_awesome_24, opensScreen = true,
                 // search reaches the interface settings through this row
@@ -355,6 +353,16 @@ object CommonScreen : SettingsScreen("common", R.string.common, R.drawable.ic_li
                 onClick = { host, _ ->
                     host.activity.startActivity(android.content.Intent(host.activity, UserInterfaceSettingsActivity::class.java))
                 }),
+            choiceRow(PrefName.DohProvider, R.string.selected_dns, R.drawable.ic_round_dns_24,
+                labels = { DNS }, onChange = { host, _ -> host.activity.restartApp() }),
+            switchRow(PrefName.ContinueMedia, R.string.always_continue_content, R.string.always_continue_content_desc,
+                R.drawable.ic_round_delete_24),
+            switchRow(PrefName.SearchSources, R.string.search_source_list, R.string.search_source_list_desc,
+                R.drawable.ic_round_search_sources_24),
+            switchRow(PrefName.RecentlyListOnly, R.string.recentlyListOnly, R.string.recentlyListOnly_desc,
+                R.drawable.ic_round_new_releases_24),
+        )),
+        Section(R.string.downloads, listOf(
             choiceRow(PrefName.DownloadManager, R.string.download_manager_select, R.drawable.ic_download_24,
                 summary = R.string.download_manager_select_desc, labels = { MANAGERS }),
             choiceRow(PrefName.MaxParallelDownloads, R.string.max_parallel_downloads, R.drawable.ic_download_24,
@@ -362,9 +370,23 @@ object CommonScreen : SettingsScreen("common", R.string.common, R.drawable.ic_li
                 labels = { c -> listOf(c.getString(R.string.max_parallel_downloads_off)) + (1..10).map { it.toString() } }),
             switchRow(PrefName.DownloadWifiOnly, R.string.download_wifi_only, R.string.download_wifi_only_desc,
                 R.drawable.lan_24),
+            actionRow("change_download_location", R.string.change_download_location,
+                R.string.change_download_location_desc, R.drawable.ic_round_source_24,
+                onClick = { host, _ -> common(host).showChangeDownloadLocationDialog() }),
+            actionRow("rebuild_download_index", R.string.rebuild_download_index, R.string.rebuild_download_index_desc,
+                R.drawable.ic_download_24, onClick = { host, _ -> common(host).showRebuildDownloadIndexDialog() }),
+        )),
+        Section(R.string.settings_section_privacy_security, listOf(
             actionRow("app_lock", R.string.app_lock, R.string.app_lock_desc, R.drawable.ic_round_lock_open_24,
                 keys = listOf(PrefName.AppPassword, PrefName.BiometricToken, PrefName.OverridePassword),
                 onClick = { host, _ -> common(host).showAppLockDialog() }),
+            switchRow(PrefName.HidePrivate, R.string.hide_private, R.string.hide_private_desc,
+                R.drawable.ic_round_remove_red_eye_24, onChange = { host, _ -> host.activity.restartApp() }),
+            switchRow(PrefName.AdultOnly, R.string.adult_only_content, R.string.adult_only_content_desc,
+                R.drawable.ic_round_nsfw_24, visible = { Anilist.adult },
+                onChange = { host, _ -> host.activity.restartApp() }),
+        )),
+        Section(R.string.settings_section_data_backup, listOf(
             actionRow("data_storage", R.string.label_data_storage, R.string.label_data_storage_desc,
                 R.drawable.ic_round_folder_24, opensScreen = true,
                 onClick = { host, _ ->
@@ -373,22 +395,6 @@ object CommonScreen : SettingsScreen("common", R.string.common, R.drawable.ic_li
                 }),
             actionRow("backup_restore", R.string.backup_restore, R.string.backup_restore_desc, R.drawable.backup_restore,
                 onClick = { host, _ -> common(host).showBackupRestoreDialog() }),
-            actionRow("change_download_location", R.string.change_download_location,
-                R.string.change_download_location_desc, R.drawable.ic_round_source_24,
-                onClick = { host, _ -> common(host).showChangeDownloadLocationDialog() }),
-            actionRow("rebuild_download_index", R.string.rebuild_download_index, R.string.rebuild_download_index_desc,
-                R.drawable.ic_download_24, onClick = { host, _ -> common(host).showRebuildDownloadIndexDialog() }),
-            switchRow(PrefName.ContinueMedia, R.string.always_continue_content, R.string.always_continue_content_desc,
-                R.drawable.ic_round_delete_24),
-            switchRow(PrefName.HidePrivate, R.string.hide_private, R.string.hide_private_desc,
-                R.drawable.ic_round_remove_red_eye_24, onChange = { host, _ -> host.activity.restartApp() }),
-            switchRow(PrefName.SearchSources, R.string.search_source_list, R.string.search_source_list_desc,
-                R.drawable.ic_round_search_sources_24),
-            switchRow(PrefName.RecentlyListOnly, R.string.recentlyListOnly, R.string.recentlyListOnly_desc,
-                R.drawable.ic_round_new_releases_24),
-            switchRow(PrefName.AdultOnly, R.string.adult_only_content, R.string.adult_only_content_desc,
-                R.drawable.ic_round_nsfw_24, visible = { Anilist.adult },
-                onChange = { host, _ -> host.activity.restartApp() }),
         )),
     )
 }

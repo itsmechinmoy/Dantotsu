@@ -31,11 +31,17 @@ object AboutScreen : SettingsScreen("about", R.string.about, R.drawable.ic_round
     private val notFdroid = { !BuildConfig.FLAVOR.contains("fdroid") }
 
     override fun sections() = listOf(
-        Section(0, listOf(
+        Section(R.string.info, listOf(
             actionRow("faq", R.string.faq, R.string.faq_desc, R.drawable.ic_round_help_24, opensScreen = true,
                 onClick = { host, _ -> host.activity.startActivity(Intent(host.activity, FAQActivity::class.java)) }),
             switchRow(PrefName.CheckUpdate, R.string.check_app_updates, R.string.check_app_updates_desc,
                 R.drawable.ic_round_new_releases_24, visible = notFdroid),
+            actionRow("devs", R.string.devs, R.string.devs_desc, R.drawable.ic_round_accessible_forward_24,
+                onClick = { host, _ -> DevelopersDialogFragment().show(host.activity.supportFragmentManager, "dialog") }),
+            actionRow("forks", R.string.forks, R.string.forks_desc, R.drawable.ic_round_restaurant_24,
+                onClick = { host, _ -> ForksDialogFragment().show(host.activity.supportFragmentManager, "dialog") }),
+        )),
+        Section(R.string.settings_section_diagnostics, listOf(
             switchRow(PrefName.SharedUserID, R.string.share_username_in_crash_reports,
                 R.string.share_username_in_crash_reports_desc, R.drawable.ic_round_search_24, visible = notFdroid),
             switchRow(PrefName.LogToFile, R.string.log_to_file, R.string.logging_warning,
@@ -47,10 +53,8 @@ object AboutScreen : SettingsScreen("about", R.string.about, R.drawable.ic_round
                 }),
             switchRow(PrefName.TrackMemoryLeaks, R.string.track_memory_leaks, R.string.track_memory_leaks_desc,
                 R.drawable.ic_round_history_24),
-            actionRow("devs", R.string.devs, R.string.devs_desc, R.drawable.ic_round_accessible_forward_24,
-                onClick = { host, _ -> DevelopersDialogFragment().show(host.activity.supportFragmentManager, "dialog") }),
-            actionRow("forks", R.string.forks, R.string.forks_desc, R.drawable.ic_round_restaurant_24,
-                onClick = { host, _ -> ForksDialogFragment().show(host.activity.supportFragmentManager, "dialog") }),
+        )),
+        Section(R.string.settings_section_legal, listOf(
             actionRow("disclaimer", R.string.disclaimer, R.string.disclaimer_desc, R.drawable.ic_round_info_24,
                 onClick = { host, _ -> showDisclaimer(host) }),
             actionRow("privacy_policy", R.string.privacy_policy, R.string.privacy_policy_desc, R.drawable.ic_incognito_24,

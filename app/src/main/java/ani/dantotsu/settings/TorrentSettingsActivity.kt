@@ -26,17 +26,19 @@ object TorrentScreen : SettingsScreen("torrent", R.string.torrent_settings, R.dr
     }
 
     override fun sections() = listOf(
-        Section(0, listOf(
+        Section(R.string.general, listOf(
             actionRow("play_magnet", R.string.play_magnet_or_torrent, R.string.play_magnet_or_torrent_desc,
                 R.drawable.ic_round_play_arrow_24,
                 onClick = { host, _ ->
                     ani.dantotsu.torrent.DirectTorrentBottomSheet()
                         .show(host.activity.supportFragmentManager, "DirectTorrentBottomSheet")
                 }),
-            switchRow(PrefName.TorrentEncryption, R.string.torrent_encryption, R.string.torrent_encryption_desc,
-                R.drawable.ic_shield),
             switchRow(PrefName.TorrentWifiOnly, R.string.torrent_wifi_only, R.string.torrent_wifi_only_desc,
                 R.drawable.lan_24),
+            switchRow(PrefName.TorrentBatterySaving, R.string.torrent_battery_saving,
+                R.string.torrent_battery_saving_desc, R.drawable.ic_lightbulb_24),
+        )),
+        Section(R.string.settings_section_speed_limits, listOf(
             numberRow(PrefName.TorrentDownloadSpeedLimit, R.string.torrent_download_speed, R.drawable.ic_download_24) {
                 speed(it, PrefName.TorrentDownloadSpeedLimit)
             },
@@ -46,8 +48,10 @@ object TorrentScreen : SettingsScreen("torrent", R.string.torrent_settings, R.dr
             numberRow(PrefName.TorrentMaxConnections, R.string.torrent_max_connections, R.drawable.ic_round_dns_24) {
                 PrefManager.getVal<Int>(PrefName.TorrentMaxConnections).toString()
             },
-            switchRow(PrefName.TorrentBatterySaving, R.string.torrent_battery_saving,
-                R.string.torrent_battery_saving_desc, R.drawable.ic_lightbulb_24),
+        )),
+        Section(R.string.settings_section_network, listOf(
+            switchRow(PrefName.TorrentEncryption, R.string.torrent_encryption, R.string.torrent_encryption_desc,
+                R.drawable.ic_shield),
             numberRow(PrefName.TorrentPort, R.string.torrent_port, R.drawable.network_node_24) { c ->
                 val port = PrefManager.getVal<Int>(PrefName.TorrentPort)
                 if (port > 0) port.toString() else c.getString(R.string.disabled)
