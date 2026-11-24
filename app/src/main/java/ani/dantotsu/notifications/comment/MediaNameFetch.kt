@@ -1,6 +1,5 @@
 package ani.dantotsu.notifications.comment
 
-import ani.dantotsu.client
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -10,10 +9,6 @@ import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 
 class MediaNameFetch {
     companion object {
@@ -75,37 +70,20 @@ class MediaNameFetch {
 
             if (idsToFetch.isNotEmpty()) {
                 try {
-                    val url = "https://graphql.anilist.co/"
                     val token = Anilist.token ?: PrefManager.getVal(PrefName.AnilistToken, null as String?)
-                    val headers = mutableMapOf(
-                        "Content-Type" to "application/json; charset=utf-8",
-                        "Accept" to "application/json",
-                        "Referer" to "https://anilist.co/",
-                        "Origin" to "https://anilist.co"
-                    )
-                    if (!token.isNullOrEmpty()) {
-                        headers["Authorization"] = "Bearer $token"
-                    }
 
                     withContext(Dispatchers.IO) {
                         for (chunk in idsToFetch.chunked(50)) {
-                            val jsonPayload = buildString {
-                                append("{\"query\":")
-                                append(Json.encodeToString(GRAPHQL_QUERY))
-                                append(",\"variables\":{\"ids\":[")
-                                append(chunk.joinToString(","))
-                                append("]}}")
-                            }
-                            val requestBody = jsonPayload.toRequestBody("application/json; charset=utf-8".toMediaType())
-
-                            val response = client.post(
-                                url,
-                                headers = headers,
-                                requestBody = requestBody
+                            val variables = """{"ids":[${chunk.joinToString(",")}]}"""
+                            val rawText = Anilist.executeRawQuery(
+                                query = GRAPHQL_QUERY,
+                                variables = variables,
+                                force = true,
+                                useToken = !token.isNullOrEmpty(),
                             )
 
-                            if (response.code == 200) {
-                                val mediaResponse = parseMediaResponseWithGson(response.text)
+                            if (rawText != null) {
+                                val mediaResponse = parseMediaResponseWithGson(rawText)
                                 mediaResponse.data?.page?.media?.forEach { mediaItem ->
                                     val id = mediaItem.id ?: return@forEach
                                     val title = mediaItem.title?.userPreferred
@@ -119,7 +97,7 @@ class MediaNameFetch {
                                     cacheMedia(id, title, cover, color)
                                 }
                             } else {
-                                Logger.log("MediaNameFetch response code: ${response.code}")
+                                Logger.log("MediaNameFetch returned null")
                             }
                         }
                     }

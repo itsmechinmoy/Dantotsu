@@ -575,6 +575,9 @@
     <string name="loading_image_failed">Loading Image Failed</string>
     <string name="copied_device_info">Copied device info</string>
     <string name="anilist_down">Seems like Anilist is down, maybe try using a VPN or you can wait for it to come back.</string>
+    <string name="anilist_rate_limit_waiting">AniList is busy — retrying in %1$ds…</string>
+    <string name="anilist_rate_limit_waiting_short">AniList is busy — retrying shortly…</string>
+    <string name="anilist_rate_limit_exhausted">AniList rate limit reached — showing saved data</string>
     <string name="rescue_mode">Rescue Mode (MAL)</string>
     <string name="rescue_mode_prompt_title">AniList Unavailable</string>
     <string name="rescue_mode_prompt_message">AniList seems to be disabled or unavailable. Would you like to enable Rescue Mode and use MAL/Jikan as a fallback? Your progress will be cached and synced back to AniList when it comes back online.</string>

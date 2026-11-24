@@ -312,7 +312,7 @@ class MainActivity : AppCompatActivity() {
                 }
             })
             if (mainViewPager.currentItem != selectedOption) {
-                mainViewPager.post { mainViewPager.setCurrentItem(selectedOption, false) }
+                mainViewPager.setCurrentItem(selectedOption, false)
             }
             binding.includedNavbar.navbarContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 bottomMargin = navBarHeight
