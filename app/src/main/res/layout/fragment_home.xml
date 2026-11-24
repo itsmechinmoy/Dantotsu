@@ -426,12 +426,11 @@
                 android:minHeight="120dp"
                 android:layout_marginVertical="8dp"
                 android:visibility="gone">
-                <ProgressBar
+                <ani.dantotsu.others.SkeletonView
                     android:id="@+id/homeUserStatusProgressBar"
-                    style="?android:attr/progressBarStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center" />
+                    android:tag="circles"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
 
                 <ani.dantotsu.FadingEdgeRecyclerView
                     android:id="@+id/homeUserStatusRecyclerView"

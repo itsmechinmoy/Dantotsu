@@ -14,7 +14,9 @@ import ani.dantotsu.getThemeColor
 import kotlin.math.ceil
 
 /**
- * Loading placeholder: a row of cover tiles with a sweeping highlight (android:tag="covers").
+ * Loading placeholder with a sweeping highlight. android:tag picks the shape:
+ *  - "covers": a row of cover tiles with a title bar under each
+ *  - "circles": a row of round avatars with a name bar under each (stories)
  */
 class SkeletonView @JvmOverloads constructor(
     context: Context,
@@ -36,7 +38,7 @@ class SkeletonView @JvmOverloads constructor(
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
-    private fun wantedDp() = COVER_ROW_DP
+    private fun wantedDp() = if (tag == CIRCLES) CIRCLE_ROW_DP else COVER_ROW_DP
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         setMeasuredDimension(
@@ -60,7 +62,7 @@ class SkeletonView @JvmOverloads constructor(
             shift.setTranslate((-BAND + phase * (1f + 2 * BAND)) * width, 0f)
             it.setLocalMatrix(shift)
         }
-        drawCovers(canvas)
+        if (tag == CIRCLES) drawCircles(canvas) else drawCovers(canvas)
         if (shown) postInvalidateOnAnimation()
     }
 
@@ -75,6 +77,17 @@ class SkeletonView @JvmOverloads constructor(
             val left = 24 * dp + i * (tileWidth + gap)
             canvas.drawRoundRect(left, top, left + tileWidth, top + tileHeight, 16 * dp, 16 * dp, blockPaint)
             pill(canvas, left, top + tileHeight + 12 * dp, left + tileWidth * 0.8f, bar)
+        }
+    }
+
+    private fun drawCircles(canvas: Canvas) {
+        val size = 64 * dp
+        val gap = 20 * dp
+        blockPaint.alpha = 255
+        for (i in 0 until ceil(width / (size + gap)).toInt()) {
+            val left = 24 * dp + i * (size + gap)
+            canvas.drawRoundRect(left, 4 * dp, left + size, 4 * dp + size, size / 2, size / 2, blockPaint)
+            pill(canvas, left + 6 * dp, size + 14 * dp, left + size - 6 * dp, 10 * dp)
         }
     }
 
@@ -94,5 +107,7 @@ class SkeletonView @JvmOverloads constructor(
         const val COVER_W_DP = 102
         const val COVER_H_DP = 154
         const val COVER_ROW_DP = 228
+        const val CIRCLES = "circles"
+        const val CIRCLE_ROW_DP = 96
     }
 }
