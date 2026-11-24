@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.databinding.ItemSettingsSearchResultBinding
 import ani.dantotsu.setAnimation
+import ani.dantotsu.settings.rows.SettingsCards
 
 class SettingsSearchAdapter(
     private var results: List<SearchableSetting>,
@@ -33,6 +34,7 @@ class SettingsSearchAdapter(
         val context = binding.root.context
 
         setAnimation(context, binding.root)
+        SettingsCards.apply(binding.root, position == 0, position == results.lastIndex)
 
         binding.searchResultTitle.text = item.title
 
