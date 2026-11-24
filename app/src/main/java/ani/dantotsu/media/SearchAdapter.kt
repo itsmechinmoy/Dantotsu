@@ -132,6 +132,9 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
             if (binding.searchBarText.text.toString().equals("hentai", true)) {
                 openLinkInBrowser("https://www.youtube.com/watch?v=GgJrEOo0QoA")
             }
+            if (binding.searchBarText.text.toString().equals("ciapciap", true)) {
+                openLinkInBrowser("https://www.tiktok.com/@hejsiematuedi")
+            }
             activity.search()
         }
 
