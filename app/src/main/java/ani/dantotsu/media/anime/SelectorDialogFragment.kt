@@ -47,6 +47,7 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.media.SubtitleDownloader
+import ani.dantotsu.media.anime.selector.ReleaseFamily
 import ani.dantotsu.media.anime.selector.SourceMetaIcon
 import ani.dantotsu.media.anime.selector.SourcePresentationKind
 import ani.dantotsu.media.anime.selector.SourceRowSummarizer
@@ -604,7 +605,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         val serverName = selected ?: return
         binding.selectorListContainer.visibility = View.GONE
         binding.selectorAutoListContainer.visibility = View.VISIBLE
-        binding.selectorAutoText.text = serverName
+        binding.selectorAutoText.text = ReleaseFamily.label(serverName) ?: serverName
         binding.selectorCancel.setOnClickListener {
             media?.selected?.server = null
             media?.let { m -> m.selected?.let { sel -> model.saveSelected(m.id, sel) } }
@@ -651,6 +652,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             ep.extractors?.firstOrNull()
         } else {
             ep.extractors?.find { it.server.name == serverName }
+                ?: ep.extractors?.let { list -> ReleaseFamily.pick(serverName, list) { it.server.name } }
                 ?: ep.extractors?.find { it.isPreferred }
                 ?: ep.extractors?.firstOrNull()
         }
