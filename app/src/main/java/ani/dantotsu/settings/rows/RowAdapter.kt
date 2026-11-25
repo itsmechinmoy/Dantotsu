@@ -1,5 +1,8 @@
 package ani.dantotsu.settings.rows
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ObjectAnimator
 import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
@@ -29,6 +32,12 @@ class RowAdapter(
 
     /** Row id to flash once when it is first bound (search result). */
     var highlightId: String? = null
+
+    /** Row id whose flash is running, so a rebind of that row doesn't cut it short. */
+    private var flashingId: String? = null
+
+    /** Running search flashes by row view. */
+    private val flashes = java.util.WeakHashMap<View, Animator>()
 
     private class Holder(view: View) : RecyclerView.ViewHolder(view)
 
@@ -62,10 +71,11 @@ class RowAdapter(
             is ScreenItem.RowItem -> {
                 val row = item.row
                 val kind = row.kind
-                // A recycled view may still be mid-flash (search highlight); clear it.
-                holder.itemView.animate().cancel()
-                holder.itemView.alpha = 1f
-                holder.itemView.isPressed = false
+                // A view bound to another row may still be mid-flash (search highlight); stop it. A
+                // rebind of the flashing row itself (the refresh in onResume) keeps it running.
+                // Never touch itemView.animate() here: the item animator owns that animator and its
+                // listener, and cancelling it during layout breaks RecyclerView's child bookkeeping.
+                if (row.id != flashingId) flashes.remove(holder.itemView)?.cancel()
                 if (kind is Kind.Custom) {
                     kind.bind(host, holder.itemView)
                     if (kind.inSection) {
@@ -80,7 +90,7 @@ class RowAdapter(
                 }
                 if (row.id == highlightId) {
                     highlightId = null
-                    flash(holder.itemView)
+                    flash(holder.itemView, row.id)
                 }
             }
         }
@@ -348,12 +358,26 @@ class RowAdapter(
     }
 
     /** Dims the row and fades it back, once. Always ends at full alpha, not pressed. */
-    private fun flash(view: View) {
-        view.alpha = 0.3f
+    private fun flash(view: View, id: String) {
+        flashes.remove(view)?.cancel()
+        flashingId = id
         view.isPressed = true
-        view.animate().alpha(1f).setDuration(600)
-            .withEndAction { view.alpha = 1f; view.isPressed = false }
-            .start()
+        // Its own animator, not view.animate(), which RecyclerView's item animator shares.
+        val anim = ObjectAnimator.ofFloat(view, View.ALPHA, 0.3f, 1f).setDuration(600)
+        anim.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                view.alpha = 1f
+                view.isPressed = false
+                if (flashes[view] === animation) flashes.remove(view)
+                if (flashingId == id) flashingId = null
+            }
+        })
+        flashes[view] = anim
+        anim.start()
+    }
+
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        flashes.remove(holder.itemView)?.cancel()
     }
 
     private object Diff : DiffUtil.ItemCallback<ScreenItem>() {
