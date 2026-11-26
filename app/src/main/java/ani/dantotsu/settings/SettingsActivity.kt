@@ -108,25 +108,29 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
 
     private fun setupBackNavigation() {
         watchSearchKeyboard()
-        onBackPressedDispatcher.addCallback(this) {
-            if (closeSearchKeyboard()) return@addCallback
-            if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
-                binding.settingsSearchBarText.setText("")
-            } else if (PrefManager.getCustomVal("reload", false)) {
-                startMainActivity(this@SettingsActivity)
-                PrefManager.setCustomVal("reload", false)
-            } else {
-                finish()
-            }
-        }
+        backCallback = onBackPressedDispatcher.addCallback(this) { backFromSearch() }
+        binding.settingsBack.setOnClickListener { backFromSearch() }
+    }
 
-        binding.settingsBack.setOnClickListener {
-            if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
-                binding.settingsSearchBarText.setText("")
-            } else {
-                onBackPressedDispatcher.onBackPressed()
-            }
+    private fun backFromSearch() {
+        if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
+            binding.settingsSearchBarText.setText("")
+        } else if (PrefManager.getCustomVal("reload", false)) {
+            startMainActivity(this)
+            PrefManager.setCustomVal("reload", false)
+        } else {
+            finish()
         }
+    }
+
+    // Off while the keyboard is up, so the keyboard takes the first back itself.
+    private var backCallback: androidx.activity.OnBackPressedCallback? = null
+
+    private fun keyboardUp() = androidx.core.view.ViewCompat.getRootWindowInsets(binding.settingsSearchBarText)
+        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+
+    private fun updateBackCallback() {
+        backCallback?.isEnabled = !keyboardUp()
     }
 
     private fun setupSettingsSearch(
@@ -137,6 +141,7 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
         binding.settingsSearchBarText.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updateBackCallback()
                 val query = s?.toString()?.trim() ?: ""
                 if (query.isNotEmpty()) {
                     val results = searchSettings(context, query)
@@ -291,7 +296,9 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
     override fun onResume() {
         ThemeManager(this).applyTheme()
         super.onResume()
+        updateBackCallback()
     }
+
     /** Groups on the settings home, in order; each opens its screen. Keep [SettingsScreens.all] in step. */
     private fun homeSections() = listOf(
         Section(R.string.settings_section_account, listOf(
@@ -334,62 +341,59 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
 
 
     /**
-     * A touch anywhere outside the search bar (empty space, a result, the start of a scroll)
-     * closes the keyboard. The touch itself still goes through.
+     * A tap or a scroll outside the search bar closes the keyboard. Nothing happens on touch
+     * down: a back swipe from the edge also starts with one, and the system cancels it.
      */
+    private var dismissOnUp = false
+    private var downX = 0f
+    private var downY = 0f
+    private val touchSlop by lazy { android.view.ViewConfiguration.get(this).scaledTouchSlop }
+
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
-        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN && this::binding.isInitialized) {
-            val field = binding.settingsSearchBarText
-            if (field.hasFocus()) {
+        if (this::binding.isInitialized) when (ev.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                val field = binding.settingsSearchBarText
                 val bar = (field.parent as? android.view.View) ?: field
                 val r = android.graphics.Rect()
                 bar.getGlobalVisibleRect(r)
-                if (!r.contains(ev.rawX.toInt(), ev.rawY.toInt())) closeSearchKeyboard()
+                dismissOnUp = field.hasFocus() && !r.contains(ev.rawX.toInt(), ev.rawY.toInt())
+                downX = ev.rawX
+                downY = ev.rawY
             }
+            android.view.MotionEvent.ACTION_MOVE -> if (dismissOnUp) {
+                val dy = kotlin.math.abs(ev.rawY - downY)
+                if (dy > touchSlop && dy > kotlin.math.abs(ev.rawX - downX)) {
+                    dismissOnUp = false
+                    hideSearchKeyboard()
+                }
+            }
+            android.view.MotionEvent.ACTION_UP -> if (dismissOnUp) {
+                dismissOnUp = false
+                hideSearchKeyboard()
+            }
+            android.view.MotionEvent.ACTION_CANCEL -> dismissOnUp = false
         }
         return super.dispatchTouchEvent(ev)
     }
 
-    /**
-     * Back while typing only closes the keyboard; the next back clears the search. A back
-     * swipe hides the keyboard before this callback runs, so a back that arrives just after
-     * the keyboard went away ([keyboardClosedAt]) still counts as closing it.
-     */
-    private fun closeSearchKeyboard(): Boolean {
+    private fun hideSearchKeyboard() {
         val field = binding.settingsSearchBarText
-        val imeVisible = androidx.core.view.ViewCompat.getRootWindowInsets(field)
-            ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
-        val justClosed = android.os.SystemClock.uptimeMillis() - keyboardClosedAt < 800L
-        keyboardClosedAt = 0L
-        if (!imeVisible && !justClosed && !field.hasFocus()) return false
         (getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
             .hideSoftInputFromWindow(field.windowToken, 0)
         field.clearFocus()
-        return true
     }
 
-    private var keyboardClosedAt = 0L
-
+    // Tracks the keyboard so back goes to it first, then clears the search, then leaves.
+    // Insets, not the keyboard animation: with animations off there is no animation.
     private fun watchSearchKeyboard() {
         val field = binding.settingsSearchBarText
-        androidx.core.view.ViewCompat.setWindowInsetsAnimationCallback(
-            field,
-            object : androidx.core.view.WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
-                override fun onProgress(
-                    insets: androidx.core.view.WindowInsetsCompat,
-                    running: MutableList<androidx.core.view.WindowInsetsAnimationCompat>
-                ) = insets
-
-                override fun onEnd(animation: androidx.core.view.WindowInsetsAnimationCompat) {
-                    val imeVisible = androidx.core.view.ViewCompat.getRootWindowInsets(field)
-                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
-                    if (!imeVisible && field.hasFocus()) {
-                        keyboardClosedAt = android.os.SystemClock.uptimeMillis()
-                        field.clearFocus()
-                    }
-                }
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(field) { _, insets ->
+            if (!insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) && field.hasFocus()) {
+                field.clearFocus()
             }
-        )
+            field.post { updateBackCallback() }
+            insets
+        }
     }
 
 }

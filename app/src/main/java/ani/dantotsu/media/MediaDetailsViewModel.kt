@@ -803,13 +803,16 @@ class MediaDetailsViewModel : ViewModel() {
                 ep.sEpisode?.let {
                     loadByVideoServers(link, ep.extra, it) { extractor ->
                         if (extractor.videos.isNotEmpty()) {
-                            val existingIdx = list.indexOfFirst { it.server.name == extractor.server.name }
-                            if (existingIdx != -1) {
-                                list[existingIdx] = extractor
-                            } else {
-                                list.add(extractor)
+                            // servers arrive from parallel loads; unguarded writes dropped some
+                            synchronized(list) {
+                                val existingIdx = list.indexOfFirst { it.server.name == extractor.server.name }
+                                if (existingIdx != -1) {
+                                    list[existingIdx] = extractor
+                                } else {
+                                    list.add(extractor)
+                                }
+                                ep.extractors = list.toMutableList()
                             }
-                            ep.extractors = list.toMutableList()
                             ep.extractorCallback?.invoke(extractor)
                         }
                     }
