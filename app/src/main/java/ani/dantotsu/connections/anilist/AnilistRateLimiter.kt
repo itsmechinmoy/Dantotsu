@@ -251,7 +251,7 @@ class AnilistRateLimiter(
         val waitSec = (waitMs + 999L) / 1000L
         val tooLongForCaller = waitMs > maxRetryWaitMs ||
             (isMutation && waitMs > maxMutationWaitMs) ||
-            (totalWaitedMs + waitMs > maxTotalWaitMs)
+            totalWaitedMs + waitMs > maxTotalWaitMs
         if (tooLongForCaller) {
             if (waitMs <= 600_000L) {
                 _state.value = AnilistRateLimitState(
@@ -361,7 +361,7 @@ class AnilistRateLimiter(
         val canRetry = !isMutation &&
             attempt < maxRetriesForReads &&
             waitMs <= maxRetryWaitMs &&
-            (totalWaitedMs + waitMs <= maxTotalWaitMs)
+            totalWaitedMs + waitMs <= maxTotalWaitMs
 
         if (!canRetry) {
             _state.value = AnilistRateLimitState(
@@ -390,7 +390,7 @@ class AnilistRateLimiter(
         val waitSec = (longPacingSleepMs + 999L) / 1000L
         if (longPacingSleepMs > maxRetryWaitMs ||
             (isMutation && longPacingSleepMs > maxMutationWaitMs) ||
-            (totalWaitedMs + longPacingSleepMs > maxTotalWaitMs)
+            totalWaitedMs + longPacingSleepMs > maxTotalWaitMs
         ) {
             throw AnilistRateLimitException(
                 waitSeconds = waitSec,

@@ -57,7 +57,7 @@ class SkeletonView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         // clock-driven so it still moves with animations disabled
-        val phase = (SystemClock.uptimeMillis() % SWEEP_MS) / SWEEP_MS.toFloat()
+        val phase = SystemClock.uptimeMillis() % SWEEP_MS / SWEEP_MS.toFloat()
         shader?.let {
             shift.setTranslate((-BAND + phase * (1f + 2 * BAND)) * width, 0f)
             it.setLocalMatrix(shift)

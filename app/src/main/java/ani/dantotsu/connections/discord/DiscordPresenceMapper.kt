@@ -9,7 +9,7 @@ object DiscordPresenceMapper {
 
     data class SmallImage(val url: String, val text: String)
 
-    // TODO: CDN URLs of the app's Discord art assets
+    // Optional: CDN URLs of the app's Discord art assets
     //  (https://cdn.discordapp.com/app-assets/<application id>/<asset id>.png).
     //  Empty falls back to Discord.small_Image.
     const val WATCHING_SMALL_IMAGE_URL = ""

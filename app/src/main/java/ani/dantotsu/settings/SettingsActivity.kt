@@ -353,7 +353,7 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
         if (this::binding.isInitialized) when (ev.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
                 val field = binding.settingsSearchBarText
-                val bar = (field.parent as? android.view.View) ?: field
+                val bar = field.parent as? android.view.View ?: field
                 val r = android.graphics.Rect()
                 bar.getGlobalVisibleRect(r)
                 dismissOnUp = field.hasFocus() && !r.contains(ev.rawX.toInt(), ev.rawY.toInt())

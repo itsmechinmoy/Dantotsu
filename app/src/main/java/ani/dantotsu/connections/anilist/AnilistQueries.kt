@@ -1452,7 +1452,7 @@ fun userMediaDetails(media: Media): Media {
                         }
                     }
                 }
-                listener.invoke(genre to (chosenThumb.ifEmpty { cachedMap[genre]?.thumbnail ?: "" }))
+                listener.invoke(genre to chosenThumb.ifEmpty { cachedMap[genre]?.thumbnail ?: "" })
             }
         }
         if (dirty) {
@@ -1894,7 +1894,7 @@ fun userMediaDetails(media: Media): Media {
     }
 
     private fun recentAnimeUpdates(page: Int): String {
-        val bucketedTime = (System.currentTimeMillis() / 1000L / 300L) * 300L
+        val bucketedTime = System.currentTimeMillis() / 1000L / 300L * 300L
         return buildString {
             append("""Page(page:$page,perPage:50){$standardPageInformation airingSchedules(airingAt_greater:0 airingAt_lesser:${bucketedTime - 10000} sort:TIME_DESC){episode airingAt media{id idMal status chapters episodes nextAiringEpisode{episode} isAdult type meanScore isFavourite format bannerImage countryOfOrigin coverImage{large} title{english romaji userPreferred} description genres tags { name isMediaSpoiler } mediaListEntry{progress private score(format:POINT_100) status}}}}""")
         }

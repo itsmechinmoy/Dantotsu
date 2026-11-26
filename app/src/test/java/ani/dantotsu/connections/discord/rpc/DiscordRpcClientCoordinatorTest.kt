@@ -58,7 +58,11 @@ class DiscordRpcClientCoordinatorTest {
             val t = Task(block); pending.add(t); return t
         }
         override fun cancel(task: DiscordRpcScheduler.Task) { if (pending.remove(task)) cancelled++ }
-        fun runNext(): Boolean { if (pending.isEmpty()) return false; pending.removeAt(0).block(); return true }
+        fun runNext(): Boolean {
+            if (pending.isEmpty()) return false
+            pending.removeAt(0).block()
+            return true
+        }
         fun runAll() { while (pending.isNotEmpty()) runNext() }
         fun pendingCount() = pending.size
     }
