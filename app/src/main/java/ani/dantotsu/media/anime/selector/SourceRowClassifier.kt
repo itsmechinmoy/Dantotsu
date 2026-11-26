@@ -967,66 +967,38 @@ object SourceRowClassifier {
         val tokens = prefix.split(REGEX_WS_RUN)
             .map { it.trim() }
             .filter { it.isNotEmpty() }
-        if (tokens.isEmpty()) return true
-        if (tokens.size > 2) return false
-
-        // Determine which token slots are "quality" and which are
-        // "tracker". The tracker slot must be corroborated by the parsed
-        // tracker when one is available.
-        val firstIsQuality = isQualityPrefixToken(tokens[0])
-        val firstIsTrackerShape = isTrackerLikeToken(tokens[0])
-        val secondIsQuality = tokens.size == 2 &&
-            isQualityPrefixToken(tokens[1])
-        val secondIsTrackerShape = tokens.size == 2 &&
-            isTrackerLikeToken(tokens[1])
-        // A technical second token (HDR / codec / bit-depth / ...) is
-        // metadata already shown elsewhere, not a tracker or title word
-        // (`1080p HDR [Grpsali]` must accept Grpsali). Bounded by the
-        // same deny-list that rejects technical brackets as groups.
-        val secondIsTechnical = tokens.size == 2 &&
-            KNOWN_NON_GROUP_BRACKETS.any { it.equals(tokens[1], ignoreCase = true) }
-
-        // Without a parsed tracker, the prefix may be empty, a
-        // single quality token, or quality + one technical token.
-        // No arbitrary title word may be treated as
-        // a tracker in that case. We accept single-quality prefixes
-        // without corroboration.
-        if (parsedTracker == null) {
-            if (tokens.size == 1 && firstIsQuality) return true
-            if (tokens.size == 2 && firstIsQuality && secondIsQuality) {
-                // "1080p 720p" is nonsensical; reject.
-                return false
-            }
-            if (tokens.size == 2 && firstIsQuality && secondIsTechnical) {
-                return true
-            }
-            // Reject any non-quality token in the prefix when there is
-            // no tracker corroboration.
-            return false
+        return when (tokens.size) {
+            0 -> true
+            1 -> isSingleGroupPrefix(tokens[0], parsedTracker)
+            2 -> isPairGroupPrefix(tokens[0], tokens[1], parsedTracker)
+            else -> false
         }
+    }
 
-        // With a parsed tracker, the prefix must have exactly one
-        // tracker-shaped token, and it must equal the parsed tracker
-        // (case-preserved).
-        if (tokens.size == 2) {
-            // "<quality> <tracker>": quality then tracker.
-            if (firstIsQuality && secondIsTrackerShape &&
-                tokens[1] == parsedTracker) return true
-            // "<tracker> <quality>": tracker then quality.
-            if (firstIsTrackerShape && tokens[0] == parsedTracker &&
-                secondIsQuality) return true
-            // "<quality> <technical>": technical metadata, no tracker.
-            if (firstIsQuality && secondIsTechnical) return true
-            return false
-        }
-        // Single-token prefix must be either the tracker itself or a
-        // known quality token (which would be unusual but is allowed).
-        if (tokens.size == 1) {
-            if (tokens[0] == parsedTracker) return true
-            if (firstIsQuality) return true
-            return false
-        }
-        return false
+    /**
+     * One prefix token: a quality token, or the parsed tracker itself. With
+     * no parsed tracker, no title word may pass as one.
+     */
+    private fun isSingleGroupPrefix(token: String, parsedTracker: String?): Boolean =
+        isQualityPrefixToken(token) || (parsedTracker != null && token == parsedTracker)
+
+    /**
+     * Two prefix tokens. A technical second token (HDR / codec / bit-depth)
+     * is metadata shown elsewhere (`1080p HDR [Grpsali]` accepts Grpsali),
+     * bounded by the deny-list that rejects technical brackets as groups.
+     * A tracker slot must equal the parsed tracker (case-preserved).
+     */
+    private fun isPairGroupPrefix(first: String, second: String, parsedTracker: String?): Boolean {
+        val firstIsQuality = isQualityPrefixToken(first)
+        val secondIsQuality = isQualityPrefixToken(second)
+        val secondIsTechnical = KNOWN_NON_GROUP_BRACKETS.any { it.equals(second, ignoreCase = true) }
+        // Without a tracker: "1080p 720p" is nonsense, "1080p HDR" is fine.
+        if (parsedTracker == null) return firstIsQuality && !secondIsQuality && secondIsTechnical
+        // "<quality> <tracker>"
+        val qualityThenTracker = firstIsQuality && isTrackerLikeToken(second) && second == parsedTracker
+        // "<tracker> <quality>"
+        val trackerThenQuality = isTrackerLikeToken(first) && first == parsedTracker && secondIsQuality
+        return qualityThenTracker || trackerThenQuality || (firstIsQuality && secondIsTechnical)
     }
 
     /**
@@ -1333,29 +1305,38 @@ object SourceRowClassifier {
      * (French-scene MULTI = FR+JP audio.
      */
     private fun detectAudioTrackKind(releaseName: String, allowBareMulti: Boolean = true): String? {
-        if (REGEX_DUAL_WORD.containsMatchIn(releaseName)) return "Dual"
-        if (REGEX_DUAL_AUDIO_SEP.containsMatchIn(releaseName)) return "Dual"
-        // The language line says "Dubbed / Multi Audio" for
-        // multi-audio releases: that is dual audio, not a dub-only file.
-        if (REGEX_MULTI_AUDIO.containsMatchIn(releaseName)) return "Dual"
-        if (REGEX_LANG_PAIR_DUAL.containsMatchIn(releaseName)) return "Dual"
-        if (REGEX_LANG_PAIR_WORDS_DUAL.containsMatchIn(releaseName)) return "Dual"
-        if (REGEX_DUBBED_WORD.containsMatchIn(releaseName)) return "Dub"
-        if (REGEX_ENG_DUB.containsMatchIn(releaseName)) return "Dub"
-        if (REGEX_FUNI_DUB.containsMatchIn(releaseName)) return "Dub"
-        if (REGEX_ENGLISH_AUDIO_DUB.containsMatchIn(releaseName)) return "Dub"
-        if (REGEX_FRENCH_DUB.containsMatchIn(releaseName)) return "Dub"
-        if (REGEX_CASTELLANO_DUB.containsMatchIn(releaseName)) return "Dub"
-        if (REGEX_LATINO_DUB.containsMatchIn(releaseName)) return "Dub"
-        if (REGEX_DUBLADO_DUB.containsMatchIn(releaseName)) return "Dub"
-        if (REGEX_MULTIDUB.containsMatchIn(releaseName)) return "Dual"
-        if (REGEX_SLASHED_AUDIO_DUAL.containsMatchIn(releaseName)) return "Dual"
+        audioKindRules.firstOrNull { it.first.containsMatchIn(releaseName) }?.let { return it.second }
         if (allowBareMulti && REGEX_BARE_MULTI.containsMatchIn(releaseName)) return "Dual"
-        if (REGEX_ESPANOL.containsMatchIn(releaseName) &&
-            REGEX_DUB_CONTEXT_WORD.containsMatchIn(releaseName)) return "Dub"
-        if (REGEX_FULL_LANGUAGE.containsMatchIn(releaseName) &&
-            REGEX_DUB_CONTEXT_WORD.containsMatchIn(releaseName)) return "Dub"
+        // Espanol / a full language name count as a dub only next to a dub word.
+        val spanishOrLanguage = REGEX_ESPANOL.containsMatchIn(releaseName) ||
+            REGEX_FULL_LANGUAGE.containsMatchIn(releaseName)
+        if (spanishOrLanguage && REGEX_DUB_CONTEXT_WORD.containsMatchIn(releaseName)) return "Dub"
         return null
+    }
+
+    /**
+     * Audio-mode rules in priority order. "Dubbed / Multi Audio" on the
+     * language line is a multi-audio release, so dual, not dub-only. Lazy
+     * because the regexes are declared further down this object.
+     */
+    private val audioKindRules: List<Pair<Regex, String>> by lazy {
+        listOf(
+            REGEX_DUAL_WORD to "Dual",
+            REGEX_DUAL_AUDIO_SEP to "Dual",
+            REGEX_MULTI_AUDIO to "Dual",
+            REGEX_LANG_PAIR_DUAL to "Dual",
+            REGEX_LANG_PAIR_WORDS_DUAL to "Dual",
+            REGEX_DUBBED_WORD to "Dub",
+            REGEX_ENG_DUB to "Dub",
+            REGEX_FUNI_DUB to "Dub",
+            REGEX_ENGLISH_AUDIO_DUB to "Dub",
+            REGEX_FRENCH_DUB to "Dub",
+            REGEX_CASTELLANO_DUB to "Dub",
+            REGEX_LATINO_DUB to "Dub",
+            REGEX_DUBLADO_DUB to "Dub",
+            REGEX_MULTIDUB to "Dual",
+            REGEX_SLASHED_AUDIO_DUAL to "Dual",
+        )
     }
 
     private val REGEX_BARE_MULTI = Regex("""(?i)\bmulti\b""")
@@ -1452,36 +1433,12 @@ object SourceRowClassifier {
         // MA` / `DTS-HD HRA` with channels preserved; joined `HDMA`
         // keeps the family with stereo `2.0` collapsed and 5.1/7.1
         // preserved (`DTS-HDMA.2.0` -> `DTS-HD MA`).
-        val dtsNorm = eacNorm.replace(
-            REGEX_DTS_HD_SPACED,
-        ) { m ->
-            val ch = m.groupValues[3]
-            "DTS-HD ${m.groupValues[1].uppercase()}${if (ch.isEmpty() || ch == "2.0") "" else " $ch"}"
-        }.replace(
-            REGEX_DTS_HDMA_JOINED,
-        ) { m ->
-            val ch = m.groupValues[1]
-            if (ch.isEmpty() || ch == "2.0") "DTS-HD MA" else "DTS-HD MA $ch"
-        }
+        val dtsNorm = normaliseDtsHd(eacNorm)
         // Explicit Dolby families (v2.2 Fix C): full-phrase match on
         // the spaced form; stereo already collapsed above, multichannel
         // (5.1/6.1/7.1) preserved. `Dolby Vision` never reaches here
         // (no audio alternative matches it).
-        val upSpaced = dtsNorm.uppercase()
-        val dolbyFamily: String? = when {
-            upSpaced.startsWith("DOLBY DIGITAL PLUS") -> "DDP"
-            upSpaced.startsWith("DOLBY DIGITAL") -> "DD"
-            upSpaced.startsWith("DOLBY TRUEHD") -> "TRUEHD"
-            else -> null
-        }
-        if (dolbyFamily != null) {
-            val ch = REGEX_DOLBY_CH_TAIL.find(upSpaced.trim())?.groupValues?.get(1)
-            return when (dolbyFamily) {
-                "DDP" -> if (ch != null) "E-AC-3 / DDP $ch.1" else "E-AC-3 / DDP"
-                "DD" -> if (ch != null) "DD $ch.1" else "DD"
-                else -> if (ch != null) "TrueHD $ch.1" else "TrueHD"
-            }
-        }
+        dolbyFamilyFormat(dtsNorm.uppercase())?.let { return it }
         // Spaceless, trailing-dot-tolerant compare key so `AC 3`,
         // `AC351.` and `DDP 5` all hit their canonical branches.
         // Smashed multichannel (`DD61`, `EAC361`) is re-dotted first so
@@ -1518,6 +1475,29 @@ object SourceRowClassifier {
             "ATMOS" -> "Atmos"
             else -> dtsNorm.uppercase()
         }
+    }
+
+    /** "DTS-HD MA"/"DTS-HD HRA" tails; stereo "2.0" drops, 5.1/7.1 stay. */
+    private fun normaliseDtsHd(text: String): String = text
+        .replace(REGEX_DTS_HD_SPACED) { m ->
+            val ch = m.groupValues[3]
+            "DTS-HD ${m.groupValues[1].uppercase()}${if (ch.isEmpty() || ch == "2.0") "" else " $ch"}"
+        }
+        .replace(REGEX_DTS_HDMA_JOINED) { m ->
+            val ch = m.groupValues[1]
+            if (ch.isEmpty() || ch == "2.0") "DTS-HD MA" else "DTS-HD MA $ch"
+        }
+
+    /** Spelled-out Dolby families ("Dolby Digital Plus 5.1"), else null. */
+    private fun dolbyFamilyFormat(upSpaced: String): String? {
+        val family = when {
+            upSpaced.startsWith("DOLBY DIGITAL PLUS") -> "E-AC-3 / DDP"
+            upSpaced.startsWith("DOLBY DIGITAL") -> "DD"
+            upSpaced.startsWith("DOLBY TRUEHD") -> "TrueHD"
+            else -> return null
+        }
+        val ch = REGEX_DOLBY_CH_TAIL.find(upSpaced.trim())?.groupValues?.get(1)
+        return if (ch != null) "$family $ch.1" else family
     }
 
     private fun extractCodec(qualityText: String, releaseName: String): String? {
@@ -2036,428 +2016,304 @@ object SourceRowClassifier {
         subtitleLanguages: List<String> = emptyList(),
         sourceClass: String? = null,
     ): String {
+        val spec = CleanSpec(
+            releaseGroup = releaseGroup,
+            resolution = resolution,
+            codec = codec,
+            bitDepth = bitDepth,
+            sourceService = sourceService,
+            hdrVariant = hdrVariant,
+            audioSummary = audioSummary,
+            batch = batch,
+            audioFormat = audioFormat,
+            subtitleSummary = subtitleSummary,
+            subtitleLanguages = subtitleLanguages,
+            sourceClass = sourceClass,
+        )
+        // Up to 8 passes; a pass is a pure function of the text, so a pass
+        // that changes nothing is a fixed point and the rest are skipped.
         var cleaned = releaseName
-        // Remove a single matching technical token per pass; stop when
-        // nothing more is removed in a full pass.
-        val removableBrackets = mutableSetOf<String>()
-        codec?.let { removableBrackets.add(it) }
-        bitDepth?.let { removableBrackets.add(it) }
-        resolution?.let { removableBrackets.add(it) }
-        // HDR variant forms (e.g. variant "HDR10+" also removes
-        // "[HDR10PLUS]"; variant "Dolby Vision" also removes "[DV]").
-        hdrVariant?.let { variant ->
-            removableBrackets.add(variant)
-            when (variant) {
-                "HDR10+" -> {
-                    removableBrackets.add("HDR10PLUS")
-                    removableBrackets.add("HDR10 PLUS")
-                }
-                "Dolby Vision" -> {
-                    removableBrackets.add("DOLBY VISION")
-                    removableBrackets.add("DOLBYVISION")
-                    removableBrackets.add("DV")
-                }
-                "HDR10" -> {
-                    removableBrackets.add("HDR10")
-                }
-                "HDR" -> {
-                    removableBrackets.add("HDR")
-                }
-            }
+        for (pass in 0 until 8) {
+            val next = cleanPass(cleaned, spec)
+            if (next == cleaned) break
+            cleaned = next
         }
-        // Bracketed audio-mode duplicates (e.g. "[Dual Audio]") when an
-        // audio summary was parsed; bare language codes are protected.
-        audioSummary?.let { summary ->
-            val upper = summary.uppercase()
-            val bareCode = upper.length in 2..4 && upper.all { it.isLetter() }
-            if (!bareCode) removableBrackets.add(summary)
+        return finishCleanTitle(cleaned, hdrVariant)
+    }
+
+    /** Everything one clean pass needs, built once per [cleanDisplayTitle] call. */
+    private class CleanSpec(
+        val releaseGroup: String?,
+        val resolution: String?,
+        val codec: String?,
+        val bitDepth: String?,
+        val sourceService: String?,
+        val hdrVariant: String?,
+        val audioSummary: String?,
+        val batch: Boolean,
+        val audioFormat: String?,
+        val subtitleSummary: String?,
+        val subtitleLanguages: List<String>,
+        val sourceClass: String?,
+    ) {
+        val hasSubs = subtitleSummary != null || subtitleLanguages.isNotEmpty()
+        val bracketPatterns: List<Regex> = removableBrackets(this).map(::bracketTokenPattern)
+        val delimitedValues: Set<String> = delimitedValues(this)
+        val groupPattern = releaseGroup?.let {
+            Regex("""(?:^|\s)\[\Q$it\E]\s*""", RegexOption.IGNORE_CASE)
         }
-        // Batch markers when a batch was confidently parsed.
-        if (batch) {
-            removableBrackets.add("BATCH")
-            removableBrackets.add("COMPLETE")
+        val leadingGroupPattern = releaseGroup?.let {
+            Regex("""^\[\Q$it\E]\s+""", RegexOption.IGNORE_CASE)
         }
-        // Use the source-service ALIAS KEY (NF, AMZN, CR) when matching
-        // the raw title, because that is the form sources actually
-        // emit in the title. The expanded form ("Netflix") is what the
-        // caller passes in for display purposes.
-        sourceService?.let { service ->
-            val alias = SOURCE_SERVICE_ALIASES.entries.firstOrNull { it.value == service }?.key
-            if (alias != null) removableBrackets.add(alias)
-        }
-        // Precompile the bracket-token patterns ONCE per clean call
-        //: the token set is loop-invariant, so
-        // rebuilding every convergence pass only recompiled identical
-        // patterns. Same patterns, same order — same behavior.
-        val removableBracketPatterns = removableBrackets.map { token ->
-            // Match bracketed token either as-is (e.g. "[10-bit]") or
-            // with the hyphen stripped (e.g. "[10bit]").
-            val noHyphen = token.replace("-", "")
-            val noSpace = token.replace(REGEX_WS_RUN, "")
+        val suffixGroupPattern = releaseGroup?.let {
+            // also before trailing notes: "x264-Grpdere-Raws (VOSTFR, ...)"
             Regex(
-                """\[(?:\Q$token\E|\Q$noHyphen\E|\Q$noSpace\E)\]""",
+                """[\s._\-]+""" + Regex.escape(it) +
+                    """(?=\s*(?:[\[(][^\[\]()]*[\])]\s*)*${'$'})""",
                 RegexOption.IGNORE_CASE,
             )
         }
-        // Try up to 8 passes to converge.
-        repeat(8) {
-            var changed = false
-            for (pattern in removableBracketPatterns) {
-                if (pattern.containsMatchIn(cleaned)) {
-                    cleaned = pattern.replace(cleaned, "")
-                    changed = true
-                }
-            }
-            // Checksum/CRC brackets (e.g. "[AAA94036]").
-            if (REGEX_CHECKSUM_BRACKET.containsMatchIn(cleaned)) {
-                cleaned = REGEX_CHECKSUM_BRACKET.replace(cleaned, "")
-                changed = true
-            }
-            // Container extension at the end.
-            val strippedExt = REGEX_STRIP_MEDIA_EXTENSION.replace(cleaned, "")
-            if (strippedExt != cleaned) {
-                cleaned = strippedExt
-                changed = true
-            }
-            // Parenthesized resolution (e.g. "(1080p)") and HDR markers
-            // (e.g. "(HDR)") when an HDR variant was parsed.
-            if (CLEAN_PAREN_RES.containsMatchIn(cleaned)) {
-                cleaned = CLEAN_PAREN_RES.replace(cleaned, "")
-                changed = true
-            }
-            if (hdrVariant != null) {
-                if (CLEAN_PAREN_HDR.containsMatchIn(cleaned)) {
-                    cleaned = CLEAN_PAREN_HDR.replace(cleaned, "")
-                    changed = true
-                }
-            }
-            // Batch phrases in brackets when a batch was parsed.
-            if (batch) {
-                if (CLEAN_BATCH_BRACKET.containsMatchIn(cleaned)) {
-                    cleaned = CLEAN_BATCH_BRACKET.replace(cleaned, "")
-                    changed = true
-                }
-            }
-            // Remove a leading "[GROUP] " if it matches the release group
-            // (the group is shown in the header so don't repeat it).
-            if (releaseGroup != null) {
-                val groupPattern = Regex(
-                    """(?:^|\s)\[\Q$releaseGroup\E]\s*""",
-                    RegexOption.IGNORE_CASE,
-                )
-                if (groupPattern.containsMatchIn(cleaned)) {
-                    cleaned = groupPattern.replace(cleaned, " ")
-                    changed = true
-                }
-            }
-            // Remove leading technical tokens like "1080p", "4k" or
-            // "HDR" before the title (the Grpsali duplication: a leading
-            // HDR already shown as a chip must not repeat in the title).
-            if (CLEAN_LEADING_TECH.containsMatchIn(cleaned)) {
-                cleaned = CLEAN_LEADING_TECH.replace(cleaned, "")
-                changed = true
-            }
-            // Remove a leading "[GROUP] " if not already removed (alternative
-            // bracket placement).
-            if (releaseGroup != null) {
-                val altPattern = Regex(
-                    """^\[\Q$releaseGroup\E]\s+""",
-                    RegexOption.IGNORE_CASE,
-                )
-                if (altPattern.containsMatchIn(cleaned)) {
-                    cleaned = altPattern.replace(cleaned, "")
-                    changed = true
-                }
-            }
-            // Remove source-service aliases (NF / AMZN / CR) that appear
-            // unbracketed in the title. The raw name is preserved in
-            // details; the compact title is UI-only.
-            if (sourceService != null) {
-                // The pattern uses the ALIAS KEY (NF / AMZN / CR) since
-                // that's what sources actually emit. sourceService is
-                // the expanded form (Netflix / Amazon / Crunchyroll).
-                val alias = SOURCE_SERVICE_ALIASES.entries.firstOrNull {
-                    it.value == sourceService
-                }?.key ?: sourceService
-                val ssPattern = Regex(
-                    """(^|$CLEAN_DELIM_CLASS)\Q$alias\E(${'$'}|$CLEAN_DELIM_CLASS)""",
-                    RegexOption.IGNORE_CASE,
-                )
-                if (ssPattern.containsMatchIn(cleaned)) {
-                    cleaned = ssPattern.replace(cleaned, ::keptBoundaries)
-                    changed = true
-                }
-            }
-            // ---- aggressive delimited stripping ------------------
-            // Resolution (+`4K` alias), codec raw spellings, bit-depth
-            // separator forms, HDR variants: parsed pill duplicates in
-            // any separator style.
-            val delimitedValues = mutableSetOf<String>()
-            resolution?.let {
-                delimitedValues.add(it)
-                if (it.equals("2160p", ignoreCase = true)) delimitedValues.add("4K")
-            }
-            // Codec spellings: the parsed value plus raw alternates AND
-            // the whole known universe (`H.264` in an HEVC row is still
-            // codec metadata, never title content). Each spelling also
-            // strips a glued alpha scene suffix (`x264-PQW`); the
-            // suffix is letters-only so `S01E01`/`10bit` can never be
-            // eaten (`HEVC-S01E01` is impossible input anyway, but the
-            // shape guard makes it structurally safe).
-            codec?.let {
-                val spellings = (listOf(it) + codecRawSpellings(it) +
-                    ALL_CODEC_SPELLINGS).distinct()
-                for (spelling in spellings) {
-                    for (variant in tokenSeparatorVariants(spelling)) {
-                        val compound = Regex.escape(variant) +
-                            """(?:-(?:[A-Za-z]{2,6}))?"""
-                        val stripped = stripDelimitedBody(cleaned, compound)
-                        if (stripped != cleaned) {
-                            cleaned = stripped
-                            changed = true
-                        }
-                    }
-                }
-            }
-            bitDepth?.let { delimitedValues.addAll(tokenSeparatorVariants(it)) }
-            hdrVariant?.let { variant ->
-                delimitedValues.add(variant)
-                when (variant) {
-                    "HDR10+" -> delimitedValues.addAll(
-                        listOf("HDR10PLUS", "HDR10 PLUS", "HDR10-PLUS", "HDR10_PLUS"))
-                    "Dolby Vision" -> delimitedValues.addAll(
-                        listOf("DOLBY VISION", "DOLBYVISION", "DV"))
-                    "HDR10" -> delimitedValues.add("HDR10")
-                    "HDR" -> delimitedValues.add("HDR")
-                }
-                delimitedValues.addAll(tokenSeparatorVariants(variant))
-            }
-            for (token in delimitedValues) {
-                for (variant in tokenSeparatorVariants(token)) {
-                    val stripped = stripDelimitedToken(cleaned, variant)
-                    if (stripped != cleaned) {
-                        cleaned = stripped
-                        changed = true
-                    }
-                }
-            }
-            // Audio-format raw spellings with optional channel tails
-            // (`FLAC`, `TrueHD 7.1`, `AAC 2.0`, `DDP5.1`). Gated on ANY
-            // parsed format but stripping the whole known universe:
-            // format tokens are never title content, and multi-format
-            // rows (`TrueHD … FLAC`) must strip every one.
-            if (audioFormat != null) {
-                for (spelling in ALL_AUDIO_FORMAT_SPELLINGS) {
-                    val stripped = stripAudioFormatToken(cleaned, spelling)
-                    if (stripped != cleaned) {
-                        cleaned = stripped
-                        changed = true
-                    }
-                }
-                // Generic audio-channel markers (`[Audio 5.1]`,
-                // `Audio 2.0`, bracketed bare `[Audio]`). Unbracketed
-                // bare `Audio` without a tail is left alone.
-                if (CLEAN_AUDIO_MARKER.containsMatchIn(cleaned)) {
-                    cleaned = CLEAN_AUDIO_MARKER.replace(cleaned, " ")
-                    changed = true
-                }
-            }
-            // Audio-mode duplicates when Dual/Dub audio was parsed.
-            // Phrases strip anywhere; bare singles never in
-            // first-token position (a leading Dual/Dub may be the
-            // title's own first word).
-            val isDualAudio = audioSummary.equals("Dual", ignoreCase = true)
-            val isDubAudio = audioSummary.equals("Dub", ignoreCase = true)
-            if (isDualAudio) {
-                for (phrase in listOf("DUAL AUDIO", "MULTI AUDIO")) {
-                    for (variant in tokenSeparatorVariants(phrase)) {
-                        val stripped = stripDelimitedToken(cleaned, variant)
-                        if (stripped != cleaned) {
-                            cleaned = stripped
-                            changed = true
-                        }
-                    }
-                }
-                for (bare in listOf("MULTIDUB", "DUAL")) {
-                    val stripped = stripDelimitedTokenNonLeading(cleaned, bare)
-                    if (stripped != cleaned) {
-                        cleaned = stripped
-                        changed = true
-                    }
-                }
-                // Bare MULTI is audio only when no subtitle signal
-                // claims the title (mirrors the parser gate).
-                if (subtitleSummary == null && subtitleLanguages.isEmpty()) {
-                    val stripped = stripDelimitedTokenNonLeading(cleaned, "MULTI")
-                    if (stripped != cleaned) {
-                        cleaned = stripped
-                        changed = true
-                    }
-                }
-            }
-            if (isDubAudio) {
-                for (bare in listOf("DUBBED", "DUB")) {
-                    val stripped = stripDelimitedTokenNonLeading(cleaned, bare)
-                    if (stripped != cleaned) {
-                        cleaned = stripped
-                        changed = true
-                    }
-                }
-            }
-            // Subtitle markers when subs were parsed (flags, codes, or
-            // bare markers): marker words anywhere — digits may lead
-            // for episode-glued tags (`E01VOSTFR`) — plus `ENG+JPN`
-            // clusters and bracketed language codes.
-            val hasSubs = subtitleSummary != null || subtitleLanguages.isNotEmpty()
-            if (hasSubs) {
-                for (word in SUBTITLE_MARKER_WORDS) {
-                    for (variant in tokenSeparatorVariants(word)) {
-                        val stripped = stripDelimitedSubWord(cleaned, variant)
-                        if (stripped != cleaned) {
-                            cleaned = stripped
-                            changed = true
-                        }
-                    }
-                }
-                if (CLEAN_LANG_CLUSTER.containsMatchIn(cleaned)) {
-                    cleaned = CLEAN_LANG_CLUSTER.replace(cleaned, ::keptBoundaries)
-                    changed = true
-                }
-                for (lang in subtitleLanguages) {
-                    if (lang.isBlank()) continue
-                    val langBracket = Regex(
-                        """\[\s*""" + Regex.escape(lang.trim()) + """\s*]""",
-                        RegexOption.IGNORE_CASE,
-                    )
-                    if (langBracket.containsMatchIn(cleaned)) {
-                        cleaned = langBracket.replace(cleaned, " ")
-                        changed = true
-                    }
-                }
-            }
-            // Unbracketed `Batch` + complete-pack phrases when a batch
-            // was parsed. Bare `Complete` alone never strips (it can be
-            // a title word); only the full pack phrase does.
-            if (batch) {
-                val strippedBatch = stripDelimitedToken(cleaned, "Batch")
-                if (strippedBatch != cleaned) {
-                    cleaned = strippedBatch
-                    changed = true
-                }
-                if (CLEAN_PACK_PHRASE.containsMatchIn(cleaned)) {
-                    cleaned = CLEAN_PACK_PHRASE.replace(cleaned, ::keptBoundaries)
-                    changed = true
-                }
-            }
-            // Source-class compounds (`BluRay`, `REMUX`, `WEB-DL`) when
-            // a class was parsed, in any separator style. Runs BEFORE
-            // the bare-`WEB` rule below so `WEB-DL` strips whole
-            // instead of leaving a `DL` residue.
-            sourceClass?.let {
-                for (token in SOURCE_CLASS_STRIP_TOKENS) {
-                    for (variant in tokenSeparatorVariants(token)) {
-                        val stripped = stripDelimitedToken(cleaned, variant)
-                        if (stripped != cleaned) {
-                            cleaned = stripped
-                            changed = true
-                        }
-                    }
-                }
-            }
-            // `WxH` resolution form (`1920x1080`) when a resolution was
-            // parsed. The digit counts exclude episode shapes.
-            if (resolution != null) {
-                if (CLEAN_WXH.containsMatchIn(cleaned)) {
-                    cleaned = CLEAN_WXH.replace(cleaned, ::keptBoundaries)
-                    changed = true
-                }
-                // Bare `WEB` only with resolution context (it can be a
-                // title word).
-                val bareWeb = stripDelimitedToken(cleaned, "WEB")
-                if (bareWeb != cleaned) {
-                    cleaned = bareWeb
-                    changed = true
-                }
-                // Trailing group-shape bracket (`[Gira-Fansub]`) when NO
-                // group was parsed: the parser only considers the first
-                // bracket per line, so a trailing fansub tag can be left
-                // unknown. Shape-restricted (1-2 word/hyphen tokens) and
-                // excluding episode/season/version shapes, checksums and
-                // known language codes — never invents, only de-dups a
-                // trailing tag the header cannot show (null group falls
-                // back to the clean title, so the tag would otherwise
-                // repeat as its own header).
-                if (releaseGroup == null) {
-                    val tagMatch = CLEAN_TRAILING_TAG.find(cleaned)
-                    if (tagMatch != null) {
-                        val tag = tagMatch.groupValues[1]
-                        // The episode regex is bare-token shaped (no
-                        // brackets), so match the tag itself.
-                        val isEpisodeShape =
-                            REGEX_SEASON_EPISODE_BRACKET.matches(tag)
-                        val isVersion = CLEAN_VERSION_TAG.matches(tag)
-                        val tagUpper = tag.uppercase()
-                        val isLangCode = KNOWN_LANG_CODES.any {
-                            it.equals(tagUpper, ignoreCase = true)
-                        }
-                        if (!isEpisodeShape && !isVersion && !isLangCode &&
-                            !REGEX_CHECKSUM_BRACKET.containsMatchIn("[" + tag + "]")
-                        ) {
-                            cleaned = CLEAN_TRAILING_TAG.replace(cleaned, " ")
-                            changed = true
-                        }
-                    }
-                }
-            }
-            // Framerate parentheticals (`(23.976FPS)`) are never title
-            // content; bracketed `[Chapter]` likewise. Bracketed
-            // subtitle-file formats strip only when subs were parsed.
-            if (CLEAN_FPS_PAREN.containsMatchIn(cleaned)) {
-                cleaned = CLEAN_FPS_PAREN.replace(cleaned, " ")
-                changed = true
-            }
-            if (CLEAN_CHAPTER_BRACKET.containsMatchIn(cleaned)) {
-                cleaned = CLEAN_CHAPTER_BRACKET.replace(cleaned, " ")
-                changed = true
-            }
-            if (hasSubs) {
-                for (fmt in SUBTITLE_FORMAT_BRACKETS) {
-                    val fmtBracket = Regex(
-                        """\[\s*""" + Regex.escape(fmt) + """\s*]""",
-                        RegexOption.IGNORE_CASE,
-                    )
-                    if (fmtBracket.containsMatchIn(cleaned)) {
-                        cleaned = fmtBracket.replace(cleaned, " ")
-                        changed = true
-                    }
-                }
-            }
-            // Trailing `-GROUP` matching the header group (suffix
-            // groups are shown in the header, not repeated).
-            if (releaseGroup != null) {
-                // also before trailing notes: "x264-Grpdere-Raws (VOSTFR, ...)"
-                val suffixGroup = Regex(
-                    """[\s._\-]+""" + Regex.escape(releaseGroup) +
-                        """(?=\s*(?:[\[(][^\[\]()]*[\])]\s*)*${'$'})""",
-                    RegexOption.IGNORE_CASE,
-                )
-                val strippedSuffix = suffixGroup.replace(cleaned, "")
-                if (strippedSuffix != cleaned) {
-                    cleaned = strippedSuffix
-                    changed = true
-                }
-            }
-            if (!changed) return@repeat
+        // The ALIAS KEY (NF / AMZN / CR) is what sources emit; sourceService
+        // is the expanded form (Netflix / Amazon / Crunchyroll).
+        val sourceServicePattern = sourceService?.let { service ->
+            val alias = SOURCE_SERVICE_ALIASES.entries.firstOrNull { it.value == service }?.key ?: service
+            Regex(
+                """(^|$CLEAN_DELIM_CLASS)\Q$alias\E(${'$'}|$CLEAN_DELIM_CLASS)""",
+                RegexOption.IGNORE_CASE,
+            )
         }
-        // Final cleanup: empty brackets/parens left by removals, then
-        // dots re-spaced — decimals (`5.1`, `v2.0`) and sentence dots
-        // (`with Subtitles.`, `.hack`) stay; dotted separators
-        // (`Kaijuu.8.Gou`) and digit-led residue (`E05. `) become
-        // spaces — then underscores, dash runs, and stray edge
-        // separators (including a trailing digit-dot like `V3.`).
-        // A glued trailing letter-dot (`.hack`, `Subtitles.`) is title
-        // content and stays; only spaced dots trim.
-        cleaned = cleaned
+    }
+
+    /** Extra spellings of an HDR variant ("HDR10+" also matches "HDR10PLUS"). */
+    private fun hdrAliases(variant: String, delimited: Boolean): List<String> = when (variant) {
+        "HDR10+" -> if (delimited) {
+            listOf("HDR10PLUS", "HDR10 PLUS", "HDR10-PLUS", "HDR10_PLUS")
+        } else {
+            listOf("HDR10PLUS", "HDR10 PLUS")
+        }
+        "Dolby Vision" -> listOf("DOLBY VISION", "DOLBYVISION", "DV")
+        "HDR10" -> listOf("HDR10")
+        "HDR" -> listOf("HDR")
+        else -> emptyList()
+    }
+
+    /** Technical tokens whose bracketed form ("[HEVC]") is removed. */
+    private fun removableBrackets(s: CleanSpec): Set<String> {
+        val tokens = linkedSetOf<String>()
+        listOfNotNull(s.codec, s.bitDepth, s.resolution).forEach { tokens.add(it) }
+        s.hdrVariant?.let { variant ->
+            tokens.add(variant)
+            tokens.addAll(hdrAliases(variant, delimited = false))
+        }
+        // Bracketed audio-mode duplicates (e.g. "[Dual Audio]"); bare
+        // language codes are protected.
+        s.audioSummary?.let { summary ->
+            val upper = summary.uppercase()
+            val bareCode = upper.length in 2..4 && upper.all { it.isLetter() }
+            if (!bareCode) tokens.add(summary)
+        }
+        if (s.batch) {
+            tokens.add("BATCH")
+            tokens.add("COMPLETE")
+        }
+        // The source-service ALIAS KEY (NF, AMZN, CR) is the form in titles.
+        s.sourceService?.let { service ->
+            SOURCE_SERVICE_ALIASES.entries.firstOrNull { it.value == service }?.key?.let { tokens.add(it) }
+        }
+        return tokens
+    }
+
+    /** A bracketed token as-is, without hyphens ("[10bit]") or without spaces. */
+    private fun bracketTokenPattern(token: String): Regex {
+        val noHyphen = token.replace("-", "")
+        val noSpace = token.replace(REGEX_WS_RUN, "")
+        return Regex(
+            """\[(?:\Q$token\E|\Q$noHyphen\E|\Q$noSpace\E)\]""",
+            RegexOption.IGNORE_CASE,
+        )
+    }
+
+    /** Parsed pill values stripped in any separator style. */
+    private fun delimitedValues(s: CleanSpec): Set<String> {
+        val values = linkedSetOf<String>()
+        s.resolution?.let {
+            values.add(it)
+            if (it.equals("2160p", ignoreCase = true)) values.add("4K")
+        }
+        s.bitDepth?.let { values.addAll(tokenSeparatorVariants(it)) }
+        s.hdrVariant?.let { variant ->
+            values.add(variant)
+            values.addAll(hdrAliases(variant, delimited = true))
+            values.addAll(tokenSeparatorVariants(variant))
+        }
+        return values
+    }
+
+    /** One clean pass: each step strips one kind of duplicate or tag. */
+    private fun cleanPass(text: String, s: CleanSpec): String {
+        var t = stripBracketTokens(text, s)
+        t = stripGroupAndLeadingTech(t, s)
+        t = s.sourceServicePattern?.replace(t, ::keptBoundaries) ?: t
+        t = stripCodecSpellings(t, s)
+        t = stripDelimitedValues(t, s)
+        t = stripAudioFormats(t, s)
+        t = stripAudioModes(t, s)
+        t = stripSubtitleMarkers(t, s)
+        t = stripBatchPhrases(t, s)
+        t = stripSourceClass(t, s)
+        t = stripResolutionExtras(t, s)
+        t = stripFpsChapterAndSubFormats(t, s)
+        return s.suffixGroupPattern?.replace(t, "") ?: t
+    }
+
+    private fun stripBracketTokens(text: String, s: CleanSpec): String {
+        var t = text
+        for (pattern in s.bracketPatterns) t = pattern.replace(t, "")
+        // Checksum/CRC brackets ("[AAA94036]"), then a container extension.
+        t = REGEX_CHECKSUM_BRACKET.replace(t, "")
+        t = REGEX_STRIP_MEDIA_EXTENSION.replace(t, "")
+        // Parenthesized resolution ("(1080p)") and HDR markers ("(HDR)").
+        t = CLEAN_PAREN_RES.replace(t, "")
+        if (s.hdrVariant != null) t = CLEAN_PAREN_HDR.replace(t, "")
+        if (s.batch) t = CLEAN_BATCH_BRACKET.replace(t, "")
+        return t
+    }
+
+    /** "[GROUP]" shown in the header, and leading "1080p"/"4k"/"HDR" tokens. */
+    private fun stripGroupAndLeadingTech(text: String, s: CleanSpec): String {
+        var t = s.groupPattern?.replace(text, " ") ?: text
+        t = CLEAN_LEADING_TECH.replace(t, "")
+        return s.leadingGroupPattern?.replace(t, "") ?: t
+    }
+
+    /**
+     * Codec spellings: the parsed value, its raw alternates and every known
+     * spelling, each with an optional glued letters-only scene suffix
+     * ("x264-PQW"), so "S01E01"/"10bit" can never be eaten.
+     */
+    private fun stripCodecSpellings(text: String, s: CleanSpec): String {
+        val codec = s.codec ?: return text
+        var t = text
+        val spellings = (listOf(codec) + codecRawSpellings(codec) + ALL_CODEC_SPELLINGS).distinct()
+        for (spelling in spellings) {
+            for (variant in tokenSeparatorVariants(spelling)) {
+                t = stripDelimitedBody(t, Regex.escape(variant) + """(?:-(?:[A-Za-z]{2,6}))?""")
+            }
+        }
+        return t
+    }
+
+    private fun stripDelimitedValues(text: String, s: CleanSpec): String {
+        var t = text
+        for (token in s.delimitedValues) {
+            for (variant in tokenSeparatorVariants(token)) t = stripDelimitedToken(t, variant)
+        }
+        return t
+    }
+
+    /**
+     * Audio-format spellings with optional channel tails ("TrueHD 7.1",
+     * "AAC 2.0") and generic "[Audio 5.1]" markers, once any format parsed.
+     */
+    private fun stripAudioFormats(text: String, s: CleanSpec): String {
+        if (s.audioFormat == null) return text
+        var t = text
+        for (spelling in ALL_AUDIO_FORMAT_SPELLINGS) t = stripAudioFormatToken(t, spelling)
+        return CLEAN_AUDIO_MARKER.replace(t, " ")
+    }
+
+    /**
+     * Dual/Dub duplicates: phrases strip anywhere; bare words never in first
+     * position (a leading Dual/Dub may be the title's own first word).
+     */
+    private fun stripAudioModes(text: String, s: CleanSpec): String {
+        var t = text
+        if (s.audioSummary.equals("Dual", ignoreCase = true)) {
+            for (phrase in listOf("DUAL AUDIO", "MULTI AUDIO")) {
+                for (variant in tokenSeparatorVariants(phrase)) t = stripDelimitedToken(t, variant)
+            }
+            for (bare in listOf("MULTIDUB", "DUAL")) t = stripDelimitedTokenNonLeading(t, bare)
+            // Bare MULTI is audio only when no subtitle signal claims it.
+            if (!s.hasSubs) t = stripDelimitedTokenNonLeading(t, "MULTI")
+        }
+        if (s.audioSummary.equals("Dub", ignoreCase = true)) {
+            for (bare in listOf("DUBBED", "DUB")) t = stripDelimitedTokenNonLeading(t, bare)
+        }
+        return t
+    }
+
+    /** Subtitle marker words, "ENG+JPN" clusters and bracketed language codes. */
+    private fun stripSubtitleMarkers(text: String, s: CleanSpec): String {
+        if (!s.hasSubs) return text
+        var t = text
+        for (word in SUBTITLE_MARKER_WORDS) {
+            for (variant in tokenSeparatorVariants(word)) t = stripDelimitedSubWord(t, variant)
+        }
+        t = CLEAN_LANG_CLUSTER.replace(t, ::keptBoundaries)
+        for (lang in s.subtitleLanguages) {
+            if (lang.isBlank()) continue
+            t = Regex("""\[\s*""" + Regex.escape(lang.trim()) + """\s*]""", RegexOption.IGNORE_CASE)
+                .replace(t, " ")
+        }
+        return t
+    }
+
+    /** Unbracketed "Batch" and full pack phrases; a bare "Complete" stays. */
+    private fun stripBatchPhrases(text: String, s: CleanSpec): String {
+        if (!s.batch) return text
+        val t = stripDelimitedToken(text, "Batch")
+        return CLEAN_PACK_PHRASE.replace(t, ::keptBoundaries)
+    }
+
+    /** "BluRay", "REMUX", "WEB-DL" before the bare "WEB" rule, so "WEB-DL" goes whole. */
+    private fun stripSourceClass(text: String, s: CleanSpec): String {
+        if (s.sourceClass == null) return text
+        var t = text
+        for (token in SOURCE_CLASS_STRIP_TOKENS) {
+            for (variant in tokenSeparatorVariants(token)) t = stripDelimitedToken(t, variant)
+        }
+        return t
+    }
+
+    /** "1920x1080", bare "WEB", and an unparsed trailing group tag, with a resolution only. */
+    private fun stripResolutionExtras(text: String, s: CleanSpec): String {
+        if (s.resolution == null) return text
+        var t = CLEAN_WXH.replace(text, ::keptBoundaries)
+        t = stripDelimitedToken(t, "WEB")
+        return if (s.releaseGroup == null) stripUnparsedTrailingTag(t) else t
+    }
+
+    /**
+     * A trailing group-shape bracket ("[Gira-Fansub]") when no group was
+     * parsed. Episode, season, version, checksum and language shapes stay.
+     */
+    private fun stripUnparsedTrailingTag(text: String): String {
+        val tag = CLEAN_TRAILING_TAG.find(text)?.groupValues?.get(1) ?: return text
+        val keep = REGEX_SEASON_EPISODE_BRACKET.matches(tag) ||
+            CLEAN_VERSION_TAG.matches(tag) ||
+            KNOWN_LANG_CODES.any { it.equals(tag.uppercase(), ignoreCase = true) } ||
+            REGEX_CHECKSUM_BRACKET.containsMatchIn("[$tag]")
+        return if (keep) text else CLEAN_TRAILING_TAG.replace(text, " ")
+    }
+
+    /** "(23.976FPS)", "[Chapter]", and subtitle-file brackets when subs parsed. */
+    private fun stripFpsChapterAndSubFormats(text: String, s: CleanSpec): String {
+        var t = CLEAN_FPS_PAREN.replace(text, " ")
+        t = CLEAN_CHAPTER_BRACKET.replace(t, " ")
+        if (!s.hasSubs) return t
+        for (fmt in SUBTITLE_FORMAT_BRACKETS) {
+            t = Regex("""\[\s*""" + Regex.escape(fmt) + """\s*]""", RegexOption.IGNORE_CASE).replace(t, " ")
+        }
+        return t
+    }
+
+    /**
+     * Final cleanup: empty brackets, dots re-spaced (decimals and glued
+     * letter-dots stay), underscores, dash runs, stray edge separators, then
+     * leftover tag words, HDR spellings and French/multi language notes.
+     */
+    private fun finishCleanTitle(cleaned: String, hdrVariant: String?): String {
+        val tidy = cleaned
             .replace(CLEAN_EMPTY_BRACKET, "")
             .replace(CLEAN_EMPTY_PAREN, "")
             .replace(CLEAN_DOT_SEP, " ")
@@ -2469,11 +2325,8 @@ object SourceRowClassifier {
             .replace(CLEAN_EDGE_TRAIL, "")
             .replace(CLEAN_DIGIT_DOT_TRAIL, "")
             .replace(CLEAN_DOT_TRAIL, "")
-        var out = stripReleaseTagWords(cleaned.trim())
-        // Any HDR/DV spelling left over once an HDR variant is shown as a
-        // pill (e.g. "DV HDR" where only DV became the variant, "HDR10P").
+        var out = stripReleaseTagWords(tidy.trim())
         if (hdrVariant != null) out = out.replace(CLEAN_HDR_ANY_TOKEN, " ")
-        // language tags of French/multi releases; the flag chips show the languages
         out = out.replace(CLEAN_LANG_NOTE_TOKEN, " ")
         return ReleaseTitleNormalizer.normalize(out)
     }

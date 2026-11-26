@@ -466,77 +466,84 @@ class TorrentServerManager(private val context: Context) {
         markUsed()
 
         val cacheDir = getTorrentCacheDir()
-        var handle: TorrentHandle? = null
-
-        if (url.startsWith("magnet:", ignoreCase = true)) {
-            val infoHash = parseMagnetHash(url)
-            val sha1 = Sha1Hash.parseHex(infoHash)
-            val cachedTi = loadCachedTorrentInfo(infoHash)
-            if (cachedTi != null) {
-                handle = addFromTorrentInfo(cachedTi, infoHash, cacheDir)
-                if (handle != null && handle.isValid) {
-                    attachMagnetTrackers(handle, url)
-                }
-            } else {
-                handle = sessionManager.find(sha1)?.takeIf { it.isValid }
-                val createdHere = handle == null
-                if (handle == null) {
-                    val enhancedUrl = enhanceMagnetUrl(url)
-                    sessionManager.download(enhancedUrl, cacheDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
-                    handle = sessionManager.find(sha1)
-                }
-
-                // Wait for metadata (up to 60 seconds)
-                var waitTime = 0
-                while ((handle == null || handle.torrentFile() == null) && waitTime < 600) {
-                    if (!sessionManager.isRunning) break
-                    Thread.sleep(100)
-                    handle = sessionManager.find(sha1)
-                    waitTime++
-                }
-                if (handle != null && handle.torrentFile() != null) {
-                    if (createdHere) {
-                        val numFiles = handle.torrentFile()!!.numFiles()
-                        val priorities = Priority.array(Priority.IGNORE, numFiles)
-                        handle.prioritizeFiles(priorities)
-                    }
-                    saveMetadataIfMissing(handle, infoHash)
-                    saveSessionState()
-                }
-            }
-        } else if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
-            val tempFile = downloadTorrentFile(url)
-            if (tempFile != null) {
-                try {
-                    val ti = TorrentInfo(tempFile)
-                    val infoHash = ti.infoHash().toHex().uppercase(Locale.US)
-                    handle = addFromTorrentInfo(ti, infoHash, cacheDir)
-                } finally {
-                    runCatching { tempFile.delete() }
-                }
-            }
-        } else {
-            val path = url.removePrefix("file://")
-            val file = File(path)
-            if (file.exists()) {
-                val ti = TorrentInfo(file)
-                val infoHash = ti.infoHash().toHex().uppercase(Locale.US)
-                handle = addFromTorrentInfo(ti, infoHash, cacheDir)
-            }
-        }
-
-        if (handle == null) {
-            throw Exception("Failed to add torrent: $url")
-        }
+        val handle = when {
+            url.startsWith("magnet:", ignoreCase = true) -> addMagnet(url, cacheDir)
+            url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true) ->
+                addTorrentFromUrl(url, cacheDir)
+            else -> addTorrentFromFile(url, cacheDir)
+        } ?: throw Exception("Failed to add torrent: $url")
 
         // Explicitly resume to ensure downloading starts
         handle.resume()
+        return describeTorrent(handle, url, title)
+    }
 
+    /** A magnet from cached metadata when there is some, else from the swarm. */
+    private fun addMagnet(url: String, cacheDir: File): TorrentHandle? {
+        val infoHash = parseMagnetHash(url)
+        val cachedTi = loadCachedTorrentInfo(infoHash) ?: return addMagnetFromSwarm(url, infoHash, cacheDir)
+        val handle = addFromTorrentInfo(cachedTi, infoHash, cacheDir)
+        if (handle != null && handle.isValid) attachMagnetTrackers(handle, url)
+        return handle
+    }
+
+    /**
+     * Adds the magnet unless it is already loaded and waits up to 60 s for
+     * its metadata. A torrent added here starts with every file ignored;
+     * the stream prioritizes the file it plays.
+     */
+    private fun addMagnetFromSwarm(url: String, infoHash: String, cacheDir: File): TorrentHandle? {
+        val sha1 = Sha1Hash.parseHex(infoHash)
+        var handle = sessionManager.find(sha1)?.takeIf { it.isValid }
+        val createdHere = handle == null
+        if (handle == null) {
+            sessionManager.download(enhanceMagnetUrl(url), cacheDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
+            handle = sessionManager.find(sha1)
+        }
+        handle = awaitMagnetMetadata(sha1, handle)
+        val torrentInfo = handle?.torrentFile() ?: return handle
+        if (createdHere) {
+            handle.prioritizeFiles(Priority.array(Priority.IGNORE, torrentInfo.numFiles()))
+        }
+        saveMetadataIfMissing(handle, infoHash)
+        saveSessionState()
+        return handle
+    }
+
+    /** Polls every 100 ms, up to 60 s, until [sha1] has metadata or the session stops. */
+    private fun awaitMagnetMetadata(sha1: Sha1Hash, initial: TorrentHandle?): TorrentHandle? {
+        var handle = initial
+        var waitTime = 0
+        while ((handle == null || handle.torrentFile() == null) && waitTime < 600) {
+            if (!sessionManager.isRunning) break
+            Thread.sleep(100)
+            handle = sessionManager.find(sha1)
+            waitTime++
+        }
+        return handle
+    }
+
+    private fun addTorrentFromUrl(url: String, cacheDir: File): TorrentHandle? {
+        val tempFile = downloadTorrentFile(url) ?: return null
+        return try {
+            val ti = TorrentInfo(tempFile)
+            addFromTorrentInfo(ti, ti.infoHash().toHex().uppercase(Locale.US), cacheDir)
+        } finally {
+            runCatching { tempFile.delete() }
+        }
+    }
+
+    private fun addTorrentFromFile(url: String, cacheDir: File): TorrentHandle? {
+        val file = File(url.removePrefix("file://"))
+        if (!file.exists()) return null
+        val ti = TorrentInfo(file)
+        return addFromTorrentInfo(ti, ti.infoHash().toHex().uppercase(Locale.US), cacheDir)
+    }
+
+    /** Remembers where [handle] came from and lists its files. */
+    private fun describeTorrent(handle: TorrentHandle, url: String, title: String): Torrent {
         val infoHash = handle.infoHash().toHex()
         sources[infoHash.uppercase(Locale.US)] = url
-        val name = handle.getName() ?: title
-        val size = handle.torrentFile()?.totalSize() ?: 0L
-
         val fileStats = handle.torrentFile()?.files()?.let { fileStorage ->
             List(fileStorage.numFiles()) { i ->
                 FileStat(
@@ -546,12 +553,11 @@ class TorrentServerManager(private val context: Context) {
                 )
             }
         } ?: emptyList()
-
         return Torrent(
             title = title,
-            name = name,
+            name = handle.getName() ?: title,
             hash = infoHash,
-            torrent_size = size,
+            torrent_size = handle.torrentFile()?.totalSize() ?: 0L,
             file_stats = fileStats
         )
     }
@@ -615,67 +621,80 @@ class TorrentServerManager(private val context: Context) {
     fun prebuffer(torrentHash: String, fileIndex: Int): Boolean {
         markUsed()
         try {
-            val sha1 = Sha1Hash.parseHex(torrentHash)
-            var handle = sessionManager.find(sha1)
-            var waitHandle = 0
-            while ((handle == null || !handle.isValid) && waitHandle < 60) {
-                if (!sessionManager.isRunning) return false
-                Thread.sleep(50)
-                handle = sessionManager.find(sha1)
-                waitHandle++
-            }
-            if (handle == null || !handle.isValid) return false
-
-            // Wait for metadata if not loaded yet
-            var waitTime = 0
-            while (handle.torrentFile() == null && waitTime < 300) {
-                if (!sessionManager.isRunning || !handle.isValid) return false
-                Thread.sleep(100)
-                waitTime++
-            }
-
-            val torrentInfo = handle.torrentFile() ?: return false
+            val handle = awaitValidHandle(Sha1Hash.parseHex(torrentHash)) ?: return false
+            val torrentInfo = awaitTorrentInfo(handle) ?: return false
             if (saveMetadataIfMissing(handle, torrentHash)) {
                 saveSessionState()
             }
             val fileStorage = torrentInfo.files()
-
             if (fileIndex < 0 || fileIndex >= fileStorage.numFiles()) return false
             val priorities = Priority.array(Priority.IGNORE, fileStorage.numFiles())
             priorities[fileIndex] = Priority.TOP_PRIORITY
             handle.prioritizeFiles(priorities)
 
-            val fileOffset = fileStorage.fileOffset(fileIndex)
-            val fileSize = fileStorage.fileSize(fileIndex)
-            val pieceLength = torrentInfo.pieceLength().toLong()
-            val numPiecesTotal = torrentInfo.numPieces()
-
-            val firstPiece = (fileOffset / pieceLength).toInt()
-            val lastPiece = if (fileSize > 0) ((fileOffset + fileSize - 1) / pieceLength).toInt() else firstPiece
-
-            // Calculate 1% of total file size in pieces (min 2, max 16 pieces, matching qBittorrent formula)
-            val numPiecesOnePercent = if (fileSize > 0 && pieceLength > 0) {
-                (fileSize * 0.01 / pieceLength).toInt().coerceIn(2, 16)
-            } else 2
-
-            Logger.log("TorrentServerManager: Pre-buffering $numPiecesOnePercent head pieces and $numPiecesOnePercent tail pieces for file $fileIndex")
-
-            prioritizeHeadAndTailPieces(handle, firstPiece, lastPiece, numPiecesTotal, numPiecesOnePercent)
-
-                        // 3. Quick check for initial readiness without freezing the player launch
-            var waitCount = 0
-            while (!handle.havePiece(firstPiece) && waitCount < 80) {
-                if (!sessionManager.isRunning || !handle.isValid) break
-                Thread.sleep(100)
-                waitCount++
-            }
-            val success = handle.havePiece(firstPiece)
+            val firstPiece = prioritizeFileEnds(handle, torrentInfo, fileIndex)
+            // Quick check for initial readiness without freezing the player launch
+            val success = awaitPiece(handle, firstPiece)
             Logger.log("TorrentServerManager: Pre-buffering initial piece check = $success (ready for instant playback)")
             return true
         } catch (e: Exception) {
             e.printStackTrace()
             return false
         }
+    }
+
+    /** Polls every 50 ms, up to 3 s, for a valid handle; null if none or the session stops. */
+    private fun awaitValidHandle(sha1: Sha1Hash): TorrentHandle? {
+        var handle = sessionManager.find(sha1)
+        var waitHandle = 0
+        while ((handle == null || !handle.isValid) && waitHandle < 60) {
+            if (!sessionManager.isRunning) return null
+            Thread.sleep(50)
+            handle = sessionManager.find(sha1)
+            waitHandle++
+        }
+        return handle?.takeIf { it.isValid }
+    }
+
+    /** Polls every 100 ms, up to 30 s, for metadata; null if the handle or session goes away. */
+    private fun awaitTorrentInfo(handle: TorrentHandle): TorrentInfo? {
+        var waitTime = 0
+        while (handle.torrentFile() == null && waitTime < 300) {
+            if (!sessionManager.isRunning || !handle.isValid) return null
+            Thread.sleep(100)
+            waitTime++
+        }
+        return handle.torrentFile()
+    }
+
+    /**
+     * qBittorrent's 1% head + 1% tail (2 to 16 pieces each), so the container
+     * header and moov atom / Matroska Cues come first. Returns the first piece.
+     */
+    private fun prioritizeFileEnds(handle: TorrentHandle, torrentInfo: TorrentInfo, fileIndex: Int): Int {
+        val fileStorage = torrentInfo.files()
+        val fileOffset = fileStorage.fileOffset(fileIndex)
+        val fileSize = fileStorage.fileSize(fileIndex)
+        val pieceLength = torrentInfo.pieceLength().toLong()
+        val firstPiece = (fileOffset / pieceLength).toInt()
+        val lastPiece = if (fileSize > 0) ((fileOffset + fileSize - 1) / pieceLength).toInt() else firstPiece
+        val numPiecesOnePercent = if (fileSize > 0 && pieceLength > 0) {
+            (fileSize * 0.01 / pieceLength).toInt().coerceIn(2, 16)
+        } else 2
+        Logger.log("TorrentServerManager: Pre-buffering $numPiecesOnePercent head pieces and $numPiecesOnePercent tail pieces for file $fileIndex")
+        prioritizeHeadAndTailPieces(handle, firstPiece, lastPiece, torrentInfo.numPieces(), numPiecesOnePercent)
+        return firstPiece
+    }
+
+    /** Waits up to 8 s for [piece]; true if it is there. */
+    private fun awaitPiece(handle: TorrentHandle, piece: Int): Boolean {
+        var waitCount = 0
+        while (!handle.havePiece(piece) && waitCount < 80) {
+            if (!sessionManager.isRunning || !handle.isValid) break
+            Thread.sleep(100)
+            waitCount++
+        }
+        return handle.havePiece(piece)
     }
 
     fun getLink(torrent: Torrent, fileIndex: Int): String {

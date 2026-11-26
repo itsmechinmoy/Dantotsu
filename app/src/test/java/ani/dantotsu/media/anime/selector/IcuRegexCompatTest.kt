@@ -24,44 +24,57 @@ class IcuRegexCompatTest {
             val c = p[i]
             when {
                 c == '\\' -> {
-                    // \p{L} / \P{Lu}: a property name, not a quantifier
-                    if (i + 2 < p.length && (p[i + 1] == 'p' || p[i + 1] == 'P') && p[i + 2] == '{') {
-                        val end = p.indexOf('}', i + 3)
-                        i = if (end < 0) p.length else end + 1
-                        continue
-                    }
-                    if (i + 1 < p.length && p[i + 1] == 'Q') {
-                        val end = p.indexOf("\\E", i + 2)
-                        i = if (end < 0) p.length else end + 2
-                        continue
-                    }
-                    i += 2
+                    i = skipEscape(p, i)
                     continue
                 }
-                classDepth > 0 && c == '[' -> classDepth++
-                classDepth > 0 && c == ']' -> classDepth--
-                classDepth > 0 -> Unit
+                classDepth > 0 -> classDepth += classDepthChange(c)
                 c == '[' -> {
                     classDepth = 1
-                    // a ']' right after '[' or '[^' is a literal member
-                    var j = i + 1
-                    if (j < p.length && p[j] == '^') j++
-                    if (j < p.length && p[j] == ']') j++
-                    i = j
+                    i = skipClassOpen(p, i)
                     continue
                 }
-                c == '{' -> {
-                    val end = p.indexOf('}', i)
-                    if (end > 0 && Regex("""\d+(,\d*)?""").matches(p.substring(i + 1, end))) {
-                        i = end + 1
-                        continue
-                    }
+                c == '{' -> quantifierEnd(p, i)?.let {
+                    i = it
+                    continue
                 }
                 c == '}' -> return i
             }
             i++
         }
         return -1
+    }
+
+    /** Index after an escape: `\p{L}` / `\P{Lu}` names, `\Q...\E` quotes, or one escaped char. */
+    private fun skipEscape(p: String, i: Int): Int {
+        if (i + 2 < p.length && (p[i + 1] == 'p' || p[i + 1] == 'P') && p[i + 2] == '{') {
+            val end = p.indexOf('}', i + 3)
+            return if (end < 0) p.length else end + 1
+        }
+        if (i + 1 < p.length && p[i + 1] == 'Q') {
+            val end = p.indexOf("\\E", i + 2)
+            return if (end < 0) p.length else end + 2
+        }
+        return i + 2
+    }
+
+    private fun classDepthChange(c: Char): Int = when (c) {
+        '[' -> 1
+        ']' -> -1
+        else -> 0
+    }
+
+    /** Index after `[`; a `]` right after `[` or `[^` is a literal member. */
+    private fun skipClassOpen(p: String, i: Int): Int {
+        var j = i + 1
+        if (j < p.length && p[j] == '^') j++
+        if (j < p.length && p[j] == ']') j++
+        return j
+    }
+
+    /** Index after a `{n}` / `{n,m}` quantifier starting at [i], else null. */
+    private fun quantifierEnd(p: String, i: Int): Int? {
+        val end = p.indexOf('}', i)
+        return if (end > 0 && Regex("""\d+(,\d*)?""").matches(p.substring(i + 1, end))) end + 1 else null
     }
 
     @Test

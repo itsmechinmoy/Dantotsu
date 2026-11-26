@@ -66,28 +66,31 @@ sealed interface BackupCheck {
         /** The json value must match the declared type, or unpack would write null after clearing. */
         private fun shapeError(typeName: String, value: JsonElement?): String? {
             if (value == null || value is JsonNull) return "null value"
-            val primitive = value as? JsonPrimitive
+            if (typeName == "java.util.HashSet") {
+                return if (value !is JsonArray || value.any { it !is JsonPrimitive || !it.isString }) "not a string set" else null
+            }
+            return primitiveShapeError(typeName, value as? JsonPrimitive)
+        }
+
+        /** Strings must be quoted; booleans and numbers must not be. */
+        private fun primitiveShapeError(typeName: String, primitive: JsonPrimitive?): String? {
+            if (typeName == "kotlin.String") {
+                return if (primitive == null || !primitive.isString) "not a string" else null
+            }
+            val bare = primitive?.takeIf { !it.isString }
             return when (typeName) {
-                "kotlin.Boolean" ->
-                    if (primitive == null || primitive.isString || primitive.booleanOrNull == null) "not a boolean" else null
-                "kotlin.String" ->
-                    if (primitive == null || !primitive.isString) "not a string" else null
-                "kotlin.Int" ->
-                    if (primitive == null || primitive.isString || primitive.intOrNull == null) "not an int" else null
-                "kotlin.Long" ->
-                    if (primitive == null || primitive.isString || primitive.longOrNull == null) "not a long" else null
-                "kotlin.Float" -> {
-                    val parsed = if (primitive == null || primitive.isString) null else primitive.floatOrNull
-                    when {
-                        parsed == null -> "not a float"
-                        !parsed.isFinite() -> "non-finite float"
-                        else -> null
-                    }
-                }
-                "java.util.HashSet" ->
-                    if (value !is JsonArray || value.any { it !is JsonPrimitive || !it.isString }) "not a string set" else null
+                "kotlin.Boolean" -> if (bare?.booleanOrNull == null) "not a boolean" else null
+                "kotlin.Int" -> if (bare?.intOrNull == null) "not an int" else null
+                "kotlin.Long" -> if (bare?.longOrNull == null) "not a long" else null
+                "kotlin.Float" -> floatShapeError(bare?.floatOrNull)
                 else -> "unsupported type"
             }
+        }
+
+        private fun floatShapeError(parsed: Float?): String? = when {
+            parsed == null -> "not a float"
+            !parsed.isFinite() -> "non-finite float"
+            else -> null
         }
     }
 }

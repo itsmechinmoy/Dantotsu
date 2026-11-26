@@ -238,7 +238,6 @@ object ChoiceSheet {
         private fun bindOption(o: ItemChoiceOptionBinding, item: Item.Option, position: Int) {
             val option = item.option
             val on = state[item.index]
-            val view = o.root
             o.optionLabel.text = option.label
             o.optionDetail.text = option.detail
             o.optionDetail.isVisible = !option.detail.isNullOrBlank()
@@ -246,46 +245,15 @@ object ChoiceSheet {
             o.optionCheck.isVisible = multi
             o.optionRadio.isChecked = on
             o.optionCheck.isChecked = on
-
-            // The chosen option takes the secondary container, so it reads at a glance and
-            // not only by the small radio. Corners follow the neighbours like settings rows.
-            val selectedFill = if (on && !multi) {
-                MaterialColors.getColor(view, com.google.android.material.R.attr.colorSecondaryContainer)
-            } else null
-            val onFill = if (on && !multi) {
-                MaterialColors.getColor(view, com.google.android.material.R.attr.colorOnSecondaryContainer)
-            } else MaterialColors.getColor(view, com.google.android.material.R.attr.colorOnSurface)
-            o.optionLabel.setTextColor(onFill)
-            SettingsCards.apply(
-                view,
-                first = items.getOrNull(position - 1) !is Item.Option,
-                last = items.getOrNull(position + 1) !is Item.Option,
-                fillColor = selectedFill,
-            )
-
-            view.isEnabled = option.enabled
-            val alpha = if (option.enabled) 1f else DISABLED_ALPHA
-            o.optionLabel.alpha = alpha
-            o.optionDetail.alpha = alpha
-            o.optionRadio.alpha = alpha
-            o.optionCheck.alpha = alpha
-            view.setOnClickListener {
+            styleOption(o, on, position, option.enabled)
+            o.root.isEnabled = option.enabled
+            o.root.setOnClickListener {
                 if (!option.enabled) return@setOnClickListener
-                if (multi) {
-                    state[item.index] = !state[item.index]
-                    notifyItemChanged(position)
-                } else {
-                    val old = state.indexOfFirst { it }
-                    state.fill(false)
-                    state[item.index] = true
-                    if (old >= 0) items.indexOfFirst { it is Item.Option && it.index == old }
-                        .takeIf { it >= 0 }?.let(::notifyItemChanged)
-                    notifyItemChanged(position)
-                }
-                view.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_CLICKED)
+                toggleOption(item, position)
+                o.root.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_CLICKED)
                 onToggle(item.index)
             }
-            ViewCompat.setAccessibilityDelegate(view, object : AccessibilityDelegateCompat() {
+            ViewCompat.setAccessibilityDelegate(o.root, object : AccessibilityDelegateCompat() {
                 override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
                     super.onInitializeAccessibilityNodeInfo(host, info)
                     info.className = if (multi) android.widget.CheckBox::class.java.name
@@ -295,6 +263,50 @@ object ChoiceSheet {
                     info.isEnabled = option.enabled
                 }
             })
+        }
+
+        /**
+         * The chosen option takes the secondary container, so it reads at a glance and
+         * not only by the small radio. Corners follow the neighbours like settings rows.
+         */
+        private fun styleOption(o: ItemChoiceOptionBinding, on: Boolean, position: Int, enabled: Boolean) {
+            val view = o.root
+            val chosen = on && !multi
+            val selectedFill = if (chosen) {
+                MaterialColors.getColor(view, com.google.android.material.R.attr.colorSecondaryContainer)
+            } else null
+            val onFill = MaterialColors.getColor(
+                view,
+                if (chosen) com.google.android.material.R.attr.colorOnSecondaryContainer
+                else com.google.android.material.R.attr.colorOnSurface,
+            )
+            o.optionLabel.setTextColor(onFill)
+            SettingsCards.apply(
+                view,
+                first = items.getOrNull(position - 1) !is Item.Option,
+                last = items.getOrNull(position + 1) !is Item.Option,
+                fillColor = selectedFill,
+            )
+            val alpha = if (enabled) 1f else DISABLED_ALPHA
+            o.optionLabel.alpha = alpha
+            o.optionDetail.alpha = alpha
+            o.optionRadio.alpha = alpha
+            o.optionCheck.alpha = alpha
+        }
+
+        /** Multi flips one option; single moves the choice and redraws the old one. */
+        private fun toggleOption(item: Item.Option, position: Int) {
+            if (multi) {
+                state[item.index] = !state[item.index]
+                notifyItemChanged(position)
+                return
+            }
+            val old = state.indexOfFirst { it }
+            state.fill(false)
+            state[item.index] = true
+            if (old >= 0) items.indexOfFirst { it is Item.Option && it.index == old }
+                .takeIf { it >= 0 }?.let(::notifyItemChanged)
+            notifyItemChanged(position)
         }
     }
 

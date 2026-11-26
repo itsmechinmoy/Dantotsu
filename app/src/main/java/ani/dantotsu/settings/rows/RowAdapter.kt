@@ -142,9 +142,24 @@ class RowAdapter(
     private fun bindRow(b: ItemSettingRowBinding, row: Row) {
         // The host activity, so value lambdas can reach screen state.
         val context: Context = host.activity
-        val kind = row.kind
         val enabled = row.enabled()
+        bindRowText(b, context, row)
+        resetRowParts(b)
+        when (val kind = row.kind) {
+            is Kind.Switch -> bindSwitch(b, kind)
+            is Kind.Choice -> b.root.setOnClickListener { openChoice(b, context, row, kind) }
+            is Kind.Slider -> bindSlider(b, context, row, kind)
+            is Kind.Stepper -> bindStepper(b, context, kind, enabled)
+            is Kind.Segmented -> bindSegmented(b, context, row, kind, enabled)
+            is Kind.Action -> bindAction(b, kind)
+            is Kind.Custom -> Unit
+        }
+        bindRowExtras(b, row)
+        setEnabled(b, enabled)
+    }
 
+    /** Title, icon (or its empty slot) and summary. */
+    private fun bindRowText(b: ItemSettingRowBinding, context: Context, row: Row) {
         b.rowTitle.text = row.titleText(context)
         if (row.icon != null) {
             b.rowIcon.setImageResource(row.icon)
@@ -156,8 +171,10 @@ class RowAdapter(
         (b.rowSlider.layoutParams as ViewGroup.MarginLayoutParams).marginStart =
             if (iconSlot) (28 * b.root.resources.displayMetrics.density).toInt() else 0
         setSummary(b, context, row)
+    }
 
-        // Reset every optional part; each kind turns on what it uses.
+    /** Resets every optional part; each kind turns on what it uses. */
+    private fun resetRowParts(b: ItemSettingRowBinding) {
         b.rowSwitch.isVisible = false
         b.rowChevron.isVisible = false
         b.rowValue.isVisible = false
@@ -170,7 +187,139 @@ class RowAdapter(
         b.root.setOnClickListener(null)
         b.root.isClickable = false
         ViewCompat.setAccessibilityDelegate(b.root, null)
+    }
 
+    private fun bindSwitch(b: ItemSettingRowBinding, kind: Kind.Switch) {
+        b.rowSwitch.isVisible = true
+        b.rowSwitch.isChecked = kind.get()
+        b.root.setOnClickListener {
+            val now = !b.rowSwitch.isChecked
+            b.rowSwitch.isChecked = now
+            kind.set(host, now)
+            b.root.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_VIEW_CLICKED)
+        }
+        ViewCompat.setAccessibilityDelegate(b.root, object : AccessibilityDelegateCompat() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = android.widget.Switch::class.java.name
+                info.isCheckable = true
+                info.isChecked = b.rowSwitch.isChecked
+            }
+        })
+    }
+
+    private fun openChoice(b: ItemSettingRowBinding, context: Context, row: Row, kind: Kind.Choice) {
+        val labels = kind.labels(context)
+        val details = kind.details?.invoke(context)
+        ChoiceSheet.single(
+            context, row.titleText(context),
+            labels.mapIndexed { i, label -> ChoiceOption(label, details?.getOrNull(i)) },
+            kind.get(),
+        ) { which ->
+            kind.set(host, which)
+            setSummary(b, context, row)
+        }
+    }
+
+    private fun bindSlider(b: ItemSettingRowBinding, context: Context, row: Row, kind: Kind.Slider) {
+        b.rowSlider.isVisible = true
+        b.rowValue.isVisible = true
+        b.rowSlider.valueFrom = kind.from
+        b.rowSlider.valueTo = kind.to
+        b.rowSlider.stepSize = kind.step
+        val value = snap(kind.get(), kind.from, kind.to, kind.step)
+        b.rowSlider.value = value
+        b.rowValue.text = kind.format(context, value)
+        b.rowSlider.contentDescription = row.titleText(context)
+        // A drag saves once, on release (some sliders restart the app); keyboard
+        // and accessibility steps save at once.
+        var dragging = false
+        b.rowSlider.clearOnSliderTouchListeners()
+        b.rowSlider.addOnSliderTouchListener(object : com.google.android.material.slider.Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: com.google.android.material.slider.Slider) {
+                dragging = true
+            }
+            override fun onStopTrackingTouch(slider: com.google.android.material.slider.Slider) {
+                dragging = false
+                if (slider.value != kind.get()) kind.set(host, slider.value)
+            }
+        })
+        b.rowSlider.addOnChangeListener { _, v, fromUser ->
+            b.rowValue.text = kind.format(context, v)
+            if (fromUser && !dragging) kind.set(host, v)
+        }
+    }
+
+    private fun bindStepper(b: ItemSettingRowBinding, context: Context, kind: Kind.Stepper, enabled: Boolean) {
+        b.rowMinus.isVisible = true
+        b.rowPlus.isVisible = true
+        b.rowValue.isVisible = true
+        fun show() {
+            val v = kind.get()
+            b.rowValue.text = kind.format(context, v)
+            b.rowMinus.isEnabled = enabled && v > kind.from
+            b.rowPlus.isEnabled = enabled && v < kind.to
+            b.rowMinus.alpha = if (b.rowMinus.isEnabled) 1f else DISABLED_ALPHA
+            b.rowPlus.alpha = if (b.rowPlus.isEnabled) 1f else DISABLED_ALPHA
+        }
+        fun step(by: Float) {
+            val next = snap(kind.get() + by, kind.from, kind.to, kind.step)
+            kind.set(host, next)
+            show()
+        }
+        repeatOnHold(b.rowMinus) { step(-kind.step) }
+        repeatOnHold(b.rowPlus) { step(kind.step) }
+        show()
+    }
+
+    private fun bindSegmented(
+        b: ItemSettingRowBinding,
+        context: Context,
+        row: Row,
+        kind: Kind.Segmented,
+        enabled: Boolean,
+    ) {
+        b.rowSegments.isVisible = true
+        b.rowSegments.removeAllViews()
+        kind.options.forEachIndexed { i, option ->
+            val button = MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                id = View.generateViewId()
+                if (option.icon != null) {
+                    setIconResource(option.icon)
+                    iconPadding = 0
+                    iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+                    contentDescription = option.text(context)
+                } else {
+                    text = option.text(context)
+                    isAllCaps = false
+                }
+                isEnabled = enabled
+                isCheckable = true
+                minWidth = 0
+                minimumWidth = 0
+                val pad = (12 * context.resources.displayMetrics.density).roundToInt()
+                setPadding(pad, paddingTop, pad, paddingBottom)
+                tag = i
+            }
+            // Equal segments across the row, as in the Material 3 segmented button.
+            b.rowSegments.addView(button, android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (i == kind.get()) b.rowSegments.check(button.id)
+            markSegment(button, option.icon, button.isChecked)
+        }
+        b.rowSegments.addOnButtonCheckedListener { group, checkedId, isChecked ->
+            val checkedButton = group.findViewById<MaterialButton>(checkedId)
+            val option = (checkedButton?.tag as? Int)?.let { kind.options.getOrNull(it) }
+            if (checkedButton != null && option != null) markSegment(checkedButton, option.icon, isChecked)
+            if (!isChecked) return@addOnButtonCheckedListener
+            val index = group.findViewById<View>(checkedId)?.tag as? Int ?: return@addOnButtonCheckedListener
+            if (index != kind.get()) {
+                kind.set(host, index)
+                setSummary(b, context, row)
+            }
+        }
+    }
+
+    private fun bindAction(b: ItemSettingRowBinding, kind: Kind.Action) {
         val rowView = object : RowView {
             override fun setValue(text: CharSequence?) {
                 b.rowSummary.text = text
@@ -178,140 +327,12 @@ class RowAdapter(
             }
             override val extra: ViewGroup get() = b.rowExtra
         }
+        b.rowChevron.isVisible = kind.opensScreen
+        kind.onClick?.let { click -> b.root.setOnClickListener { click(host, rowView) } }
+    }
 
-        when (kind) {
-            is Kind.Switch -> {
-                b.rowSwitch.isVisible = true
-                b.rowSwitch.isChecked = kind.get()
-                b.root.setOnClickListener {
-                    val now = !b.rowSwitch.isChecked
-                    b.rowSwitch.isChecked = now
-                    kind.set(host, now)
-                    b.root.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_VIEW_CLICKED)
-                }
-                ViewCompat.setAccessibilityDelegate(b.root, object : AccessibilityDelegateCompat() {
-                    override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
-                        super.onInitializeAccessibilityNodeInfo(host, info)
-                        info.className = android.widget.Switch::class.java.name
-                        info.isCheckable = true
-                        info.isChecked = b.rowSwitch.isChecked
-                    }
-                })
-            }
-
-            is Kind.Choice -> b.root.setOnClickListener {
-                val labels = kind.labels(context)
-                val details = kind.details?.invoke(context)
-                ChoiceSheet.single(
-                    context, row.titleText(context),
-                    labels.mapIndexed { i, label -> ChoiceOption(label, details?.getOrNull(i)) },
-                    kind.get(),
-                ) { which ->
-                    kind.set(host, which)
-                    setSummary(b, context, row)
-                }
-            }
-
-            is Kind.Slider -> {
-                b.rowSlider.isVisible = true
-                b.rowValue.isVisible = true
-                b.rowSlider.valueFrom = kind.from
-                b.rowSlider.valueTo = kind.to
-                b.rowSlider.stepSize = kind.step
-                val value = snap(kind.get(), kind.from, kind.to, kind.step)
-                b.rowSlider.value = value
-                b.rowValue.text = kind.format(context, value)
-                b.rowSlider.contentDescription = row.titleText(context)
-                // A drag saves once, on release (some sliders restart the app); keyboard
-                // and accessibility steps save at once.
-                var dragging = false
-                b.rowSlider.clearOnSliderTouchListeners()
-                b.rowSlider.addOnSliderTouchListener(object : com.google.android.material.slider.Slider.OnSliderTouchListener {
-                    override fun onStartTrackingTouch(slider: com.google.android.material.slider.Slider) {
-                        dragging = true
-                    }
-                    override fun onStopTrackingTouch(slider: com.google.android.material.slider.Slider) {
-                        dragging = false
-                        if (slider.value != kind.get()) kind.set(host, slider.value)
-                    }
-                })
-                b.rowSlider.addOnChangeListener { _, v, fromUser ->
-                    b.rowValue.text = kind.format(context, v)
-                    if (fromUser && !dragging) kind.set(host, v)
-                }
-            }
-
-            is Kind.Stepper -> {
-                b.rowMinus.isVisible = true
-                b.rowPlus.isVisible = true
-                b.rowValue.isVisible = true
-                fun show() {
-                    val v = kind.get()
-                    b.rowValue.text = kind.format(context, v)
-                    b.rowMinus.isEnabled = enabled && v > kind.from
-                    b.rowPlus.isEnabled = enabled && v < kind.to
-                    b.rowMinus.alpha = if (b.rowMinus.isEnabled) 1f else DISABLED_ALPHA
-                    b.rowPlus.alpha = if (b.rowPlus.isEnabled) 1f else DISABLED_ALPHA
-                }
-                fun step(by: Float) {
-                    val next = snap(kind.get() + by, kind.from, kind.to, kind.step)
-                    kind.set(host, next)
-                    show()
-                }
-                repeatOnHold(b.rowMinus) { step(-kind.step) }
-                repeatOnHold(b.rowPlus) { step(kind.step) }
-                show()
-            }
-
-            is Kind.Segmented -> {
-                b.rowSegments.isVisible = true
-                b.rowSegments.removeAllViews()
-                kind.options.forEachIndexed { i, option ->
-                    val button = MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                        id = View.generateViewId()
-                        if (option.icon != null) {
-                            setIconResource(option.icon)
-                            iconPadding = 0
-                            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-                            contentDescription = option.text(context)
-                        } else {
-                            text = option.text(context)
-                            isAllCaps = false
-                        }
-                        isEnabled = enabled
-                        isCheckable = true
-                        minWidth = 0
-                        minimumWidth = 0
-                        val pad = (12 * context.resources.displayMetrics.density).roundToInt()
-                        setPadding(pad, paddingTop, pad, paddingBottom)
-                        tag = i
-                    }
-                    // Equal segments across the row, as in the Material 3 segmented button.
-                    b.rowSegments.addView(button, android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                    if (i == kind.get()) b.rowSegments.check(button.id)
-                    markSegment(button, option.icon, button.isChecked)
-                }
-                b.rowSegments.addOnButtonCheckedListener { group, checkedId, isChecked ->
-                    val checkedButton = group.findViewById<MaterialButton>(checkedId)
-                    val option = (checkedButton?.tag as? Int)?.let { kind.options.getOrNull(it) }
-                    if (checkedButton != null && option != null) markSegment(checkedButton, option.icon, isChecked)
-                    if (!isChecked) return@addOnButtonCheckedListener
-                    val index = group.findViewById<View>(checkedId)?.tag as? Int ?: return@addOnButtonCheckedListener
-                    if (index != kind.get()) {
-                        kind.set(host, index)
-                        setSummary(b, context, row)
-                    }
-                }
-            }
-
-            is Kind.Action -> {
-                b.rowChevron.isVisible = kind.opensScreen
-                kind.onClick?.let { click -> b.root.setOnClickListener { click(host, rowView) } }
-            }
-
-            is Kind.Custom -> Unit
-        }
-
+    /** Long-click, the extra view under the row and the trailing view. */
+    private fun bindRowExtras(b: ItemSettingRowBinding, row: Row) {
         val longClick = row.onLongClick
         if (longClick != null) {
             b.root.setOnLongClickListener { longClick(host); true }
@@ -329,8 +350,6 @@ class RowAdapter(
         b.rowTrailing.removeAllViews()
         b.rowTrailing.isVisible = trailing != null
         trailing?.invoke(host, b.rowTrailing)
-
-        setEnabled(b, enabled)
     }
 
     private fun setSummary(b: ItemSettingRowBinding, context: Context, row: Row) {

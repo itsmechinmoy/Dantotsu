@@ -484,61 +484,18 @@ object Anilist {
         lastError = null
         if (token == null && !force) return null
         val isMutation = isGraphqlMutation(query)
-        val requestKey = buildRequestKey(query, variables, useToken)
-        val cacheKey = cacheSpec?.let { buildCacheKey(query, variables, useToken, it) }
-
-        if (!isMutation && cacheSpec != null && cacheKey != null && !bypassCache) {
+        // Mutations are never cached.
+        val cacheKey = cacheSpec?.takeIf { !isMutation }?.let { buildCacheKey(query, variables, useToken, it) }
+        if (cacheSpec != null && cacheKey != null && !bypassCache) {
             val cached = responseCache.get(cacheKey, cacheSpec.category, checkDisk = cacheSpec.persistToDisk)
-            if (cached is CacheLookup.Fresh) {
-                return cached.value
-            }
+            if (cached is CacheLookup.Fresh) return cached.value
         }
-
-        suspend fun fetchOverNetwork(): String {
-            if (show) Logger.log("Anilist Query: $query")
-            val headers = buildGraphQLHeaders(useToken)
-            val response = rateLimiter.execute(isMutation = isMutation) {
-                val requestBody = buildGraphQLRequestBody(query, variables)
-                val res = client.post(
-                    "https://graphql.anilist.co/",
-                    headers,
-                    requestBody = requestBody,
-                    cacheTime = 0
-                )
-                AnilistHttpResponse(
-                    code = res.code,
-                    text = res.text,
-                    retryAfterSeconds = res.headers["Retry-After"]?.toIntOrNull(),
-                    rateLimitRemaining = res.headers["X-RateLimit-Remaining"]?.toIntOrNull(),
-                    rateLimitResetRaw = res.headers["X-RateLimit-Reset"]?.toLongOrNull(),
-                    rateLimitLimit = res.headers["X-RateLimit-Limit"]?.toIntOrNull(),
-                )
-            }
-            Logger.log("Remaining requests: ${response.rateLimitRemaining ?: -1}")
-
-            if (response.code == 403 || response.code == 400 || response.code == 401) {
-                handle403Or400Error(response.text, response.code, show)
-            }
-
-            if (!response.text.startsWith("{")) {
-                anilistDisabledSignal = true
-                val downMsg = (currContext()?.getString(R.string.anilist_down) ?: "AniList is down") + " (error: ${response.code})"
-                lastError = downMsg
-                throw Exception(downMsg)
-            }
-
-            anilistDisabledSignal = false
-            if (!isMutation && cacheSpec != null && cacheKey != null) {
-                responseCache.put(cacheKey, response.text, cacheSpec)
-            }
-            return response.text
-        }
-
+        val request = AnilistRawRequest(query, variables, useToken, show, isMutation, cacheSpec, cacheKey)
         return try {
             if (isMutation) {
-                fetchOverNetwork()
+                fetchOverNetwork(request)
             } else {
-                coalescer.execute(requestKey) { fetchOverNetwork() }
+                coalescer.execute(buildRequestKey(query, variables, useToken)) { fetchOverNetwork(request) }
             }
         } catch (e: CancellationException) {
             throw e
@@ -549,6 +506,52 @@ object Anilist {
             handleQueryException(e, show)
             null
         }
+    }
+
+    /** One GraphQL call as [executeRawQuery] sends it. */
+    private class AnilistRawRequest(
+        val query: String,
+        val variables: String,
+        val useToken: Boolean,
+        val show: Boolean,
+        val isMutation: Boolean,
+        val cacheSpec: AnilistCacheSpec?,
+        val cacheKey: String?,
+    )
+
+    /** Sends [r] through the rate limiter, checks the answer and caches it. */
+    private suspend fun fetchOverNetwork(r: AnilistRawRequest): String {
+        if (r.show) Logger.log("Anilist Query: ${r.query}")
+        val headers = buildGraphQLHeaders(r.useToken)
+        val response = rateLimiter.execute(isMutation = r.isMutation) {
+            val res = client.post(
+                "https://graphql.anilist.co/",
+                headers,
+                requestBody = buildGraphQLRequestBody(r.query, r.variables),
+                cacheTime = 0
+            )
+            AnilistHttpResponse(
+                code = res.code,
+                text = res.text,
+                retryAfterSeconds = res.headers["Retry-After"]?.toIntOrNull(),
+                rateLimitRemaining = res.headers["X-RateLimit-Remaining"]?.toIntOrNull(),
+                rateLimitResetRaw = res.headers["X-RateLimit-Reset"]?.toLongOrNull(),
+                rateLimitLimit = res.headers["X-RateLimit-Limit"]?.toIntOrNull(),
+            )
+        }
+        Logger.log("Remaining requests: ${response.rateLimitRemaining ?: -1}")
+        if (response.code == 403 || response.code == 400 || response.code == 401) {
+            handle403Or400Error(response.text, response.code, r.show)
+        }
+        if (!response.text.startsWith("{")) {
+            anilistDisabledSignal = true
+            val downMsg = (currContext()?.getString(R.string.anilist_down) ?: "AniList is down") + " (error: ${response.code})"
+            lastError = downMsg
+            throw Exception(downMsg)
+        }
+        anilistDisabledSignal = false
+        if (r.cacheSpec != null && r.cacheKey != null) responseCache.put(r.cacheKey, response.text, r.cacheSpec)
+        return response.text
     }
 
     suspend inline fun <reified T : Any> executeQuery(
