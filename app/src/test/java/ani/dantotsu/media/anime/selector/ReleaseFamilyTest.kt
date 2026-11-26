@@ -6,7 +6,7 @@ import org.junit.Test
 
 class ReleaseFamilyTest {
 
-    private fun title(release: String, seeders: Int, tracker: String = "Nyaa") =
+    private fun title(release: String, seeders: Int, tracker: String = "Tracker") =
         "$release\n👤 $seeders 💾 1.37 GB ⚙️ $tracker"
 
     private val ep1Erai = title("[Erai-raws] Kusuriya no Hitorigoto 3rd Season - 01v2 [1080p CR WEB-DL AVC AAC][MultiSub]", 171)
