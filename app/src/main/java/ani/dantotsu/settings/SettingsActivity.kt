@@ -108,6 +108,7 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
 
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this) {
+            if (closeSearchKeyboard()) return@addCallback
             if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
                 binding.settingsSearchBarText.setText("")
             } else if (PrefManager.getCustomVal("reload", false)) {
@@ -329,5 +330,38 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
                 rowId = it.entry.row.id,
             )
         }
+
+
+    /**
+     * A touch anywhere outside the search bar (empty space, a result, the start of a scroll)
+     * closes the keyboard. The touch itself still goes through.
+     */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN && this::binding.isInitialized) {
+            val field = binding.settingsSearchBarText
+            if (field.hasFocus()) {
+                val bar = (field.parent as? android.view.View) ?: field
+                val r = android.graphics.Rect()
+                bar.getGlobalVisibleRect(r)
+                if (!r.contains(ev.rawX.toInt(), ev.rawY.toInt())) closeSearchKeyboard()
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    /**
+     * Back while the keyboard is up only closes the keyboard; the next back clears the
+     * search. Without this the first back gesture after typing wiped the results.
+     */
+    private fun closeSearchKeyboard(): Boolean {
+        val field = binding.settingsSearchBarText
+        val imeVisible = androidx.core.view.ViewCompat.getRootWindowInsets(field)
+            ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+        if (!imeVisible) return false
+        (getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+            .hideSoftInputFromWindow(field.windowToken, 0)
+        field.clearFocus()
+        return true
+    }
 
 }

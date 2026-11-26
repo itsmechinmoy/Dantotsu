@@ -652,15 +652,18 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         initializeVideoServerSelector(ep)
     }
 
-    private fun findMatchedExtractor(ep: Episode, sourceIndex: Int, serverName: String): VideoExtractor? =
-        if (model.watchSources?.isDownloadedSource(sourceIndex) == true) {
-            ep.extractors?.firstOrNull()
+    private fun findMatchedExtractor(ep: Episode, sourceIndex: Int, serverName: String): VideoExtractor? {
+        // one snapshot: a preload on IO may still be adding servers to ep.extractors
+        val list = ep.extractors?.toList() ?: return null
+        return if (model.watchSources?.isDownloadedSource(sourceIndex) == true) {
+            list.firstOrNull()
         } else {
-            ep.extractors?.find { it.server.name == serverName }
-                ?: ep.extractors?.let { list -> ReleaseFamily.pick(serverName, list) { it.server.name } }
-                ?: ep.extractors?.find { it.isPreferred }
-                ?: ep.extractors?.firstOrNull()
+            list.find { it.server.name == serverName }
+                ?: ReleaseFamily.pick(serverName, list) { it.server.name }
+                ?: list.find { it.isPreferred }
+                ?: list.firstOrNull()
         }
+    }
 
     private fun loadMatchedExtractorAndPlay(ep: Episode, actualKey: String, serverName: String) {
         val m = media ?: return
