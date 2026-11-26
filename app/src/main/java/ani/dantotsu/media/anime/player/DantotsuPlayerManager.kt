@@ -117,7 +117,7 @@ class DantotsuPlayerManager(
         val isLocalhostMp4 = StreamTypeDetector.isLocalMp4(videoUri)
 
         val headers = createVideoHeaders(video, isLocalhost)
-        val httpClient = createPlayerHttpClient()
+        val httpClient = createPlayerHttpClient(isLocalhostTorrent)
         val httpDataSourceFactory = MediaDataSourceFactory.resolveHttpFactory(
             context = activity,
             headers = headers,
@@ -185,10 +185,11 @@ class DantotsuPlayerManager(
         return headers
     }
 
-    private fun createPlayerHttpClient(): okhttp3.OkHttpClient {
+    private fun createPlayerHttpClient(isLocalhostTorrent: Boolean): okhttp3.OkHttpClient {
+        val readTimeoutSeconds = if (isLocalhostTorrent) 60L else 20L
         return client.newBuilder().apply {
             connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-            readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            readTimeout(readTimeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)
             writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             addNetworkInterceptor { chain ->
                 val request = chain.request()

@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.R
 import ani.dantotsu.addons.download.DownloadAddonManager
+import ani.dantotsu.torrent.TorrentLinks
 import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.copyToClipboard
@@ -69,6 +70,7 @@ import ani.dantotsu.tryWith
 import ani.dantotsu.util.Logger
 import ani.dantotsu.util.customAlertDialog
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -76,7 +78,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import tachiyomi.core.util.lang.launchIO
 import uy.kohesive.injekt.Injekt
@@ -97,8 +98,6 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     private var launch: Boolean? = null
     private var isDownloadMenu: Boolean? = null
     private var episodes: ArrayList<String>? = null
-    // a torrent start runs for seconds with the list still showing; a second tap would start it twice
-    private var torrentStarting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -379,7 +378,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         return success
     }
 
-    private fun startEpisodeDownload(
+    private suspend fun startEpisodeDownload(
         episodeName: String,
         selectedServerName: String,
         selectedSubtitles: MutableList<String>,
@@ -408,7 +407,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         }
     }
 
-    private fun downloadUsingSingleServer(
+    private suspend fun downloadUsingSingleServer(
         extractor: VideoExtractor,
         currentEp: Episode,
         selectedSubtitles: MutableList<String>,
@@ -419,11 +418,13 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         if (PrefManager.getVal<Int>(PrefName.DownloadManager) != 0) {
             val act = activity ?: currActivity()
             if (act != null) {
-                download(
-                    act,
-                    currentEp,
-                    media!!.userPreferredName
-                )
+                withContext(Dispatchers.Main) {
+                    download(
+                        act,
+                        currentEp,
+                        media!!.userPreferredName
+                    )
+                }
             }
             return true
         }
@@ -455,7 +456,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         }
     }
 
-    private fun executeAddonDownload(
+    private suspend fun executeAddonDownload(
         extractor: VideoExtractor,
         currentEp: Episode,
         selectedSubtitles: MutableList<String>,
@@ -463,7 +464,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     ): Boolean {
         val downloadAddonManager: DownloadAddonManager = Injekt.get()
         if (!downloadAddonManager.isAvailable()) {
-            showDownloadAddonNotInstalledDialog()
+            withContext(Dispatchers.Main) { showDownloadAddonNotInstalledDialog() }
             return false
         }
         val subtitlesToDownload = collectSubtitlesToDownload(extractor, currentEp, selectedSubtitles)
@@ -473,32 +474,36 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             if (currentEp.selectedVideo in extractor.videos.indices) extractor.videos[currentEp.selectedVideo] else extractor.videos[0]
         } else null
 
-        val act = activity ?: currActivity()
-        selectedVideo?.file?.url?.let { url ->
-            if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
-                if (!prepareTorrentForDownload(url, selectedVideo)) {
-                    return false
-                }
+        val videoToDownload = selectedVideo?.let { video ->
+            val url = video.file.url
+            if (url.startsWith("magnet:", ignoreCase = true) || url.endsWith(".torrent", ignoreCase = true)) {
+                prepareTorrentForDownload(url, video) ?: return false
+            } else {
+                video
             }
         }
-        if (selectedVideo != null && act != null) {
-            Helper.startAnimeDownloadService(
-                act,
-                media!!.mainName(),
-                currentEp.number,
-                selectedVideo,
-                subtitlesToDownload,
-                audioTracksToDownload,
-                media,
-                currentEp.thumb?.url ?: media!!.banner ?: media!!.cover
-            )
-            val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_STARTED).apply {
-                putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, currentEp.number)
-                putExtra("mediaId", media?.id)
+
+        withContext(Dispatchers.Main) {
+            val act = activity ?: currActivity()
+            if (videoToDownload != null && act != null) {
+                Helper.startAnimeDownloadService(
+                    act,
+                    media!!.mainName(),
+                    currentEp.number,
+                    videoToDownload,
+                    subtitlesToDownload,
+                    audioTracksToDownload,
+                    media,
+                    currentEp.thumb?.url ?: media!!.banner ?: media!!.cover
+                )
+                val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_STARTED).apply {
+                    putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, currentEp.number)
+                    putExtra("mediaId", media?.id)
+                }
+                act.sendBroadcast(intent)
+            } else if (videoToDownload == null) {
+                snackString(R.string.no_video_selected)
             }
-            act.sendBroadcast(intent)
-        } else if (selectedVideo == null) {
-            snackString(R.string.no_video_selected)
         }
         return true
     }
@@ -550,39 +555,39 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         return audioTracksToDownload
     }
 
-    private fun prepareTorrentForDownload(url: String, selectedVideo: Video): Boolean {
+    private suspend fun prepareTorrentForDownload(url: String, selectedVideo: Video): Video? {
         val torrentManager = Injekt.get<TorrentServerManager>()
         if (!torrentManager.isAvailable()) {
-            toast(R.string.torrent_addon_not_available)
-            return false
+            withContext(Dispatchers.Main) { toast(R.string.torrent_addon_not_available) }
+            return null
         }
-        runBlocking {
-            try {
-                withContext(Dispatchers.IO) {
-                    // keep the active torrent: it may still be playing
-                    val index = if (url.contains("index=")) {
-                        url.substringAfter("index=").toIntOrNull() ?: 0
-                    } else 0
-                    Logger.log("Sending: $url, ${selectedVideo.quality}, $index")
-                    val currentTorrent = torrentManager.addTorrent(
-                        url,
-                        selectedVideo.quality.toString(),
-                        "",
-                        "",
-                        false
-                    )
-                    torrentManager.activeTorrentHash = currentTorrent.hash
-                    torrentManager.prebuffer(currentTorrent.hash!!, index)
-                    selectedVideo.file.url = torrentManager.getLink(currentTorrent, index)
-                    Logger.log("Received: ${selectedVideo.file.url}")
-                }
-            } catch (e: Exception) {
-                Injekt.get<CrashlyticsInterface>().logException(e)
-                Logger.log(e)
-                toast("Error starting video: ${e.message}")
+        return try {
+            withContext(Dispatchers.IO) {
+                ani.dantotsu.addons.torrent.TorrentServerService.start()
+                // keep the active torrent: it may still be playing
+                val index = TorrentLinks.fileIndex(url)
+                Logger.log("Sending: $url, ${selectedVideo.quality}, $index")
+                val currentTorrent = torrentManager.addTorrent(
+                    url,
+                    selectedVideo.quality.toString(),
+                    "",
+                    "",
+                    false
+                )
+                torrentManager.activeTorrentHash = currentTorrent.hash
+                torrentManager.prebuffer(currentTorrent.hash!!, index)
+                val link = torrentManager.getLink(currentTorrent, index)
+                Logger.log("Received: $link")
+                selectedVideo.copy(file = selectedVideo.file.copy(url = link))
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Injekt.get<CrashlyticsInterface>().logException(e)
+            Logger.log(e)
+            withContext(Dispatchers.Main) { toast("Error starting video: ${e.message}") }
+            null
         }
-        return true
     }
 
     private fun handleWatchMenu(rawKey: String) {
@@ -755,8 +760,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     }
 
     private fun isTorrentUrl(url: String, ep: Episode): Boolean =
-        url.startsWith("magnet:") ||
-                url.endsWith(".torrent") ||
+        url.startsWith("magnet:", ignoreCase = true) ||
+                url.endsWith(".torrent", ignoreCase = true) ||
                 url.contains("/stream?hash=") ||
                 url.contains("127.0.0.1") ||
                 ep.extra?.containsKey("torrentHash") == true
@@ -773,12 +778,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         }?.videos?.getOrNull(ep.selectedVideo)
         val url = video?.file?.url
 
-        if (ep != null && video != null && url != null) {
-            if (isTorrentUrl(url, ep)) {
-                if (handleTorrentPlayback(ep, video, url, media)) {
-                    return
-                }
-            } else if (url.startsWith("magnet:")) {
+        if (ep != null && video != null && url != null && isTorrentUrl(url, ep)) {
+            if (handleTorrentPlayback(ep, video, url, media)) {
+                return
+            }
+            if (url.startsWith("magnet:", ignoreCase = true)) {
                 launchExternalMagnetPlayer(ep, video)
                 return
             }
@@ -792,95 +796,23 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         val torrentManager = Injekt.get<TorrentServerManager>()
         if (!torrentManager.isAvailable()) return false
 
-        if (torrentStarting) return true
-        torrentStarting = true
-        _binding?.let {
-            it.selectorRecyclerView.alpha = 0.5f
-            it.selectorProgressBar.visibility = View.VISIBLE
-        }
+        val index = ep.extra?.get("fileId")?.toIntOrNull()
+            ?: TorrentLinks.fileIndex(url)
 
-        val activity = activity ?: currActivity()
-        launchIO {
-            try {
-                ani.dantotsu.addons.torrent.TorrentServerService.start()
-                torrentManager.start()
-                val torrentHash = ep.extra?.get("torrentHash")
-                    ?: if (url.contains("hash=")) url.substringAfter("hash=").substringBefore("&") else null
-                val index = ep.extra?.get("fileId")?.toIntOrNull()
-                    ?: (if (url.contains("index=")) url.substringAfter("index=").substringBefore("&").toIntOrNull() else null)
-                    ?: 0
-
-                val previousHash = torrentManager.activeTorrentHash
-                val startedHash = prepareTorrentBuffer(torrentManager, torrentHash, ep.extra?.get("torrentUrl"), url, video, index)
-
-                withContext(Dispatchers.Main) {
-                    // closed while buffering: don't open the player behind the user's back,
-                    // and stop downloading a torrent nothing is going to play
-                    if (!isAdded) {
-                        if (startedHash != null && !startedHash.equals(previousHash, ignoreCase = true)) {
-                            launchIO { torrentManager.removeTorrent(startedHash) }
-                        }
-                        return@withContext
-                    }
-                    if (launch == true) {
-                        Intent(activity, ExoplayerView::class.java).apply {
-                            ExoplayerView.media = media
-                            ExoplayerView.initialized = true
-                            startActivity(this)
-                        }
-                    } else {
-                        val epKey = media.anime?.selectedEpisode
-                        val targetEp = media.anime?.episodes?.getEpisode(epKey) ?: ep
-                        model.setEpisode(targetEp, "startExo no launch")
-                    }
-                    dismissAllowingStateLoss()
+        ani.dantotsu.addons.torrent.TorrentServerService.start()
+        if (url.startsWith("magnet:", ignoreCase = true)) {
+            launchIO {
+                try {
+                    torrentManager.startMagnetForStream(url, index)
+                } catch (e: Exception) {
+                    Injekt.get<CrashlyticsInterface>().logException(e)
+                    Logger.log(e)
                 }
-            } catch (e: Exception) {
-                Injekt.get<CrashlyticsInterface>().logException(e)
-                Logger.log(e)
-                toast("Error starting video: ${e.message}")
-                withContext(Dispatchers.Main) { if (isAdded) dismissAllowingStateLoss() }
-            } finally {
-                torrentStarting = false
             }
         }
-        return true
-    }
 
-    private suspend fun prepareTorrentBuffer(
-        torrentManager: TorrentServerManager,
-        torrentHash: String?,
-        sourceUrl: String?,
-        url: String,
-        video: Video,
-        index: Int
-    ): String? {
-        if (torrentHash != null) {
-            // closing the player stops the session, so the listed episode's torrent may be gone
-            if (!torrentManager.hasTorrent(torrentHash)) {
-                val source = sourceUrl ?: throw IllegalStateException("Torrent is no longer loaded, reload the source")
-                torrentManager.addTorrent(source, video.quality.toString(), "", "", false)
-            }
-            torrentManager.activeTorrentHash = torrentHash
-            check(torrentManager.prebuffer(torrentHash, index)) { NO_TORRENT_DATA }
-            // the server may be on another port after a restart
-            video.file.url = torrentManager.getLink(torrentHash, index)
-            return torrentHash
-        } else if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
-            val previousHash = torrentManager.activeTorrentHash
-            val currentTorrent = torrentManager.addTorrent(
-                url, video.quality.toString(), "", "", false
-            )
-            // next episode of a batch is the same torrent; removing it drops every peer
-            if (previousHash != null && !previousHash.equals(currentTorrent.hash, ignoreCase = true)) {
-                torrentManager.removeTorrent(previousHash)
-            }
-            torrentManager.activeTorrentHash = currentTorrent.hash
-            check(torrentManager.prebuffer(currentTorrent.hash!!, index)) { NO_TORRENT_DATA }
-            video.file.url = torrentManager.getLink(currentTorrent, index)
-            return currentTorrent.hash
-        }
-        return null
+        launchDefaultExoplayer(media)
+        return true
     }
 
     private fun launchExternalMagnetPlayer(ep: Episode, video: Video) {
@@ -1367,7 +1299,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 itemView.setOnLongClickListener {
                     val video = extractor.videos[bindingAdapterPosition]
                     val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(Uri.parse(video.file.url), "video/*")
+                        if (video.file.url.startsWith("magnet:", ignoreCase = true)) {
+                            data = Uri.parse(video.file.url)
+                        } else {
+                            setDataAndType(Uri.parse(video.file.url), "video/*")
+                        }
                     }
                     copyToClipboard(video.file.url, true)
                     dismissAllowingStateLoss()
@@ -1379,9 +1315,6 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     }
 
     companion object {
-        // metadata never arrived (no peers) or the episode's file isn't in the torrent
-        private const val NO_TORRENT_DATA = "couldn't load this torrent, try another release"
-
         fun newInstance(
             server: String? = null,
             la: Boolean = true,

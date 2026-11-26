@@ -118,11 +118,16 @@ import ani.dantotsu.startMainActivity
 import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.toPx
 import ani.dantotsu.toast
+import ani.dantotsu.torrent.TorrentLinks
+import ani.dantotsu.torrent.TorrentRelayLink
+import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.util.Logger
 import ani.dantotsu.util.customAlertDialog
 import com.bumptech.glide.Glide
 import com.google.android.material.slider.Slider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -1173,37 +1178,63 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         }
     }
 
-    private fun initPlayer() {
-        gestureManager.checkNotch()
-        aniSkipManager.resetForNewEpisode()
-        val selEp = media.anime?.selectedEpisode ?: episodeArr.firstOrNull() ?: return
-        recordAnimeContinuation(selEp)
+    private var torrentStartJob: Job? = null
 
-        lifecycleScope.launch(Dispatchers.IO) { extractor?.onVideoStopped(video) }
+    private fun resolveTorrentStreamUrl(
+        torrentManager: TorrentServerManager,
+        rawVideo: Video,
+        relay: TorrentRelayLink?
+    ): String {
+        ani.dantotsu.addons.torrent.TorrentServerService.start()
+        val rawUrl = rawVideo.file.url
+        if (relay != null) {
+            torrentManager.start()
+            if (!torrentManager.hasTorrent(relay.hash)) {
+                val source = episode.extra?.get("torrentUrl") ?: torrentManager.sourceFor(relay.hash)
+                if (source.startsWith("magnet:", ignoreCase = true)) {
+                    torrentManager.startMagnetForStream(source, relay.index)
+                } else {
+                    val previous = torrentManager.activeTorrentHash
+                    val added = torrentManager.addTorrent(source, rawVideo.quality.toString(), "", "", false)
+                    if (previous != null && !previous.equals(added.hash, ignoreCase = true)) {
+                        torrentManager.removeTorrent(previous)
+                    }
+                    torrentManager.activeTorrentHash = added.hash
+                    torrentManager.prebufferAsync(added.hash!!, relay.index)
+                }
+            } else {
+                torrentManager.activeTorrentHash = relay.hash
+                torrentManager.prebufferAsync(relay.hash, relay.index)
+            }
+            return torrentManager.getLink(relay.hash, relay.index)
+        }
 
-        val ext = episode.extractors?.find { it.server.name == episode.selectedExtractor }
-            ?: episode.extractors?.firstOrNull { it.isPreferred }
-            ?: episode.extractors?.firstOrNull() ?: return
-        extractor = ext
-        video = ext.videos.getOrNull(episode.selectedVideo) ?: ext.videos.firstOrNull() ?: return
+        val index = episode.extra?.get("fileId")?.toIntOrNull()
+            ?: TorrentLinks.fileIndex(rawUrl)
+        return if (rawUrl.startsWith("magnet:", ignoreCase = true)) {
+            val hash = torrentManager.startMagnetForStream(rawUrl, index)
+            torrentManager.getLink(hash, index)
+        } else {
+            val previous = torrentManager.activeTorrentHash
+            val added = torrentManager.addTorrent(rawUrl, rawVideo.quality.toString(), "", "", false)
+            if (previous != null && !previous.equals(added.hash, ignoreCase = true)) {
+                torrentManager.removeTorrent(previous)
+            }
+            torrentManager.activeTorrentHash = added.hash
+            torrentManager.prebufferAsync(added.hash!!, index)
+            torrentManager.getLink(added, index)
+        }
+    }
 
-        val lang = SUBTITLE_LANGUAGES.getOrNull(PrefManager.getVal<Int>(PrefName.SubLanguage)) ?: "English"
-        subtitle = resolveInitialSubtitle(ext, lang)
-
-        exoSource.setOnClickListener { sourceClick() }
-        triggerOnlineEpisodeMapping()
-
-        exoSubtitle.isVisible = true
-        exoSubtitle.setOnClickListener { subClick() }
-
+    private fun startPlaybackWithVideo(ext: VideoExtractor, playbackVideo: Video, lang: String) {
         val subConfigs = subtitleManager.buildSubtitleConfigurations(
-            ext.subtitles, ext.server.embed.url, video!!.file.url, hasExtSubtitles, subtitle?.language ?: lang
+            ext.subtitles, ext.server.embed.url, playbackVideo.file.url, hasExtSubtitles, subtitle?.language ?: lang
         )
 
-        lifecycleScope.launch(Dispatchers.IO) { ext.onVideoPlayed(video) }
+        lifecycleScope.launch(Dispatchers.IO) { ext.onVideoPlayed(playbackVideo) }
 
-        val videoUrl = video?.file?.url.orEmpty()
-        val mimeType = detectStreamMimeType(videoUrl, video?.format)
+        val videoUrl = playbackVideo.file.url
+        val mimeType = detectStreamMimeType(videoUrl, playbackVideo.format)
 
         val (downloadedMediaItem, offlineAudioUri) = resolveOfflineDownloadItem(ext)
 
@@ -1217,11 +1248,11 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         } ?: ext.audioTracks
 
         playerManager.buildMediaSource(
-            video!!, subConfigs, mimeType, downloadedMediaItem, mediaMetadata, playbackAudioTracks
+            playbackVideo, subConfigs, mimeType, downloadedMediaItem, mediaMetadata, playbackAudioTracks
         )
 
         castManager.setupCastButton(
-            customCastButton, media, video, subtitle, hasExtSubtitles,
+            customCastButton, media, playbackVideo, subtitle, hasExtSubtitles,
             episodeTitleArr.getOrNull(currentEpisodeIndex) ?: episode.number
         )
 
@@ -1231,6 +1262,67 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         checkSmartDownloadAnime(ext)
 
         buildExoplayer()
+    }
+
+    private fun initPlayer() {
+        torrentStartJob?.cancel()
+        torrentStartJob = null
+        gestureManager.checkNotch()
+        aniSkipManager.resetForNewEpisode()
+        val selEp = media.anime?.selectedEpisode ?: episodeArr.firstOrNull() ?: return
+        recordAnimeContinuation(selEp)
+
+        lifecycleScope.launch(Dispatchers.IO) { extractor?.onVideoStopped(video) }
+
+        val ext = episode.extractors?.find { it.server.name == episode.selectedExtractor }
+            ?: episode.extractors?.firstOrNull { it.isPreferred }
+            ?: episode.extractors?.firstOrNull() ?: return
+        extractor = ext
+        val rawVideo = ext.videos.getOrNull(episode.selectedVideo) ?: ext.videos.firstOrNull() ?: return
+        video = rawVideo
+
+        val lang = SUBTITLE_LANGUAGES.getOrNull(PrefManager.getVal<Int>(PrefName.SubLanguage)) ?: "English"
+        subtitle = resolveInitialSubtitle(ext, lang)
+
+        exoSource.setOnClickListener { sourceClick() }
+        triggerOnlineEpisodeMapping()
+
+        exoSubtitle.isVisible = true
+        exoSubtitle.setOnClickListener { subClick() }
+
+        val rawUrl = rawVideo.file.url
+        val relay = TorrentRelayLink.parse(rawUrl)
+        val isTorrentSource = relay != null ||
+            rawUrl.startsWith("magnet:", ignoreCase = true) ||
+            rawUrl.endsWith(".torrent", ignoreCase = true)
+
+        if (isTorrentSource) {
+            val torrentManager = Injekt.get<TorrentServerManager>()
+            if (torrentManager.isAvailable()) {
+                torrentStartJob = lifecycleScope.launch {
+                    val resolvedUrl = try {
+                        withContext(Dispatchers.IO) {
+                            resolveTorrentStreamUrl(torrentManager, rawVideo, relay)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Injekt.get<CrashlyticsInterface>().logException(e)
+                        Logger.log(e)
+                        toast("Error starting torrent: ${e.message}")
+                        sourceClick()
+                        null
+                    } ?: return@launch
+                    // Play through a copy so the episode's Video keeps its magnet/.torrent source
+                    val playbackVideo = rawVideo.copy(file = rawVideo.file.copy(url = resolvedUrl))
+                    video = playbackVideo
+                    startPlaybackWithVideo(ext, playbackVideo, lang)
+                }
+                return
+            }
+        }
+
+        startPlaybackWithVideo(ext, rawVideo, lang)
     }
 
     private fun findBestVideoForDownload(
@@ -1739,6 +1831,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         when (error.errorCode) {
             PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
             PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,
             PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE -> handleIoNetworkError(error)
 
@@ -2056,6 +2149,8 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
     }
 
     override fun onDestroy() {
+        torrentStartJob?.cancel()
+        torrentStartJob = null
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         orientationListener?.disable()
         orientationListener = null

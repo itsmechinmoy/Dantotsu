@@ -9,15 +9,28 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import eu.kanade.tachiyomi.data.torrentServer.model.FileStat
 import eu.kanade.tachiyomi.data.torrentServer.model.Torrent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.libtorrent4j.*
 import java.io.File
+import java.net.InetAddress
+import java.net.URLDecoder
 import java.net.URLEncoder
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 @Inject
 @SingleIn(AppScope::class)
 class TorrentServerManager(private val context: Context) {
     private val sessionManager by lazy { SessionManager() }
     private var httpServer: TorrentHttpServer? = null
+    private val prebufferScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var prebufferJob: Job? = null
+    private var prebufferKey: Pair<String, Int>? = null
+    private val sources = ConcurrentHashMap<String, String>()
     var activeTorrentHash: String? = null
 
     /** Last time anything started, added or buffered; a closing player only stops an unused session. */
@@ -44,6 +57,77 @@ class TorrentServerManager(private val context: Context) {
         // Reliable DHT bootstrap routers matching qBittorrent
         const val DHT_BOOTSTRAP_NODES =
             "dht.libtorrent.org:25401,dht.transmissionbt.com:6881,router.bittorrent.com:6881,router.utorrent.com:6881,router.bt.ouinet.work:6881"
+
+        private const val BASE32_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+        private const val HEX_CHARS = "0123456789ABCDEF"
+
+        private fun base32ToHex(base32: String): String {
+            val clean = base32.uppercase(Locale.US).trim()
+            var bits = 0L
+            var bitCount = 0
+            val out = StringBuilder(40)
+            for (c in clean) {
+                val valIndex = BASE32_CHARS.indexOf(c)
+                if (valIndex == -1) throw IllegalArgumentException("Invalid base32 character: $c")
+                bits = (bits shl 5) or valIndex.toLong()
+                bitCount += 5
+                if (bitCount >= 8) {
+                    bitCount -= 8
+                    val b = ((bits shr bitCount) and 0xFF).toInt()
+                    out.append(HEX_CHARS[b ushr 4])
+                    out.append(HEX_CHARS[b and 0x0F])
+                }
+            }
+            return out.toString()
+        }
+
+        private fun normalizeBtih(raw: String, originalUrl: String): String {
+            val hash = raw.trim().uppercase(Locale.US)
+            if (hash.length == 40 && hash.all { it in HEX_CHARS }) {
+                return hash
+            }
+            if (hash.length == 32 && hash.all { it in BASE32_CHARS }) {
+                return base32ToHex(hash)
+            }
+            throw IllegalArgumentException("Invalid magnet link: $originalUrl")
+        }
+
+        fun parseMagnetHash(url: String): String {
+            val candidates = buildList {
+                runCatching { URLDecoder.decode(url, "UTF-8") }.getOrNull()?.let { add(it) }
+                add(url)
+            }
+            for (candidate in candidates) {
+                val xtIndex = candidate.indexOf("xt=urn:btih:", ignoreCase = true)
+                if (xtIndex != -1) {
+                    val rawHash = candidate.substring(xtIndex + 12).substringBefore('&')
+                    return normalizeBtih(rawHash, url)
+                }
+            }
+            // Fallback: decode individual query params if an unrelated param has invalid '%'
+            val query = url.substringAfter('?', "")
+            if (query.isNotEmpty()) {
+                for (param in query.split('&')) {
+                    val eq = param.indexOf('=')
+                    if (eq <= 0) continue
+                    if (!param.substring(0, eq).equals("xt", ignoreCase = true)) continue
+                    val rawValue = param.substring(eq + 1)
+                    val decodedValue = runCatching { URLDecoder.decode(rawValue, "UTF-8") }.getOrDefault(rawValue)
+                    val prefix = "urn:btih:"
+                    if (decodedValue.startsWith(prefix, ignoreCase = true)) {
+                        return normalizeBtih(decodedValue.substring(prefix.length).substringBefore('&'), url)
+                    }
+                }
+            }
+            val clean = url.trim().uppercase(Locale.US)
+            if (clean.length == 40 && clean.all { it in HEX_CHARS }) {
+                return clean
+            }
+            if (clean.length == 32 && clean.all { it in BASE32_CHARS }) {
+                return base32ToHex(clean)
+            }
+            throw IllegalArgumentException("Invalid magnet link: $url")
+        }
     }
 
     // the service and the picker both start the server; without the lock both pass the check
@@ -98,6 +182,11 @@ class TorrentServerManager(private val context: Context) {
 
     fun stop() {
         Logger.log("Stopping built-in TorrentServerManager...")
+        synchronized(this) {
+            prebufferJob?.cancel()
+            prebufferJob = null
+            prebufferKey = null
+        }
         httpServer?.stop()
         httpServer = null
         if (sessionManager.isRunning) {
@@ -160,10 +249,10 @@ class TorrentServerManager(private val context: Context) {
         var handle: TorrentHandle? = null
 
         if (url.startsWith("magnet:", ignoreCase = true)) {
-            val enhancedUrl = enhanceMagnetUrl(url)
-            sessionManager.download(enhancedUrl, cacheDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
             val infoHash = parseMagnetHash(url)
             val sha1 = Sha1Hash.parseHex(infoHash)
+            val enhancedUrl = enhanceMagnetUrl(url)
+            sessionManager.download(enhancedUrl, cacheDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
             handle = sessionManager.find(sha1)
 
             // Wait for metadata (up to 60 seconds)
@@ -205,6 +294,7 @@ class TorrentServerManager(private val context: Context) {
         handle.resume()
 
         val infoHash = handle.infoHash().toHex()
+        sources[infoHash.uppercase(Locale.US)] = url
         val name = handle.getName() ?: title
         val size = handle.torrentFile()?.totalSize() ?: 0L
 
@@ -228,6 +318,48 @@ class TorrentServerManager(private val context: Context) {
     }
 
     /**
+     * Starts streaming a magnet without blocking on metadata or initial pieces.
+     * Swaps out any different active torrent, adds the magnet if not loaded, and kicks off
+     * head+tail pre-buffering on IO.
+     */
+    @Synchronized
+    fun startMagnetForStream(url: String, fileIndex: Int): String {
+        if (isBatteryLowAndNotCharging()) {
+            throw Exception("Battery low and not charging")
+        }
+        val infoHash = parseMagnetHash(url)
+        start()
+        markUsed()
+        val previous = activeTorrentHash
+        if (previous != null && !previous.equals(infoHash, ignoreCase = true)) {
+            removeTorrent(previous)
+        }
+        val sha1 = Sha1Hash.parseHex(infoHash)
+        if (sessionManager.find(sha1)?.isValid != true) {
+            sessionManager.download(enhanceMagnetUrl(url), getTorrentCacheDir(), TorrentFlags.SEQUENTIAL_DOWNLOAD)
+        }
+        sessionManager.find(sha1)?.takeIf { it.isValid }?.resume()
+        sources[infoHash.uppercase(Locale.US)] = url
+        activeTorrentHash = infoHash
+        prebufferAsync(infoHash, fileIndex)
+        return infoHash
+    }
+
+    @Synchronized
+    fun prebufferAsync(torrentHash: String, fileIndex: Int) {
+        val key = Pair(torrentHash.uppercase(Locale.US), fileIndex)
+        if (prebufferKey == key && prebufferJob?.isActive == true) return
+        prebufferKey = key
+        prebufferJob = prebufferScope.launch {
+            prebuffer(torrentHash, fileIndex)
+        }
+    }
+
+    /** Where [hash] was added from in this session, else a bare magnet for DHT re-add. */
+    fun sourceFor(hash: String): String =
+        sources[hash.uppercase(Locale.US)] ?: "magnet:?xt=urn:btih:${hash.uppercase(Locale.US)}"
+
+    /**
      * Pre-buffers video file using qBittorrent's 1% Head + 1% Tail piece algorithm.
      * This guarantees container header and moov atom / Matroska Cues are downloaded
      * before ExoPlayer begins playback, preventing buffering freezes.
@@ -236,11 +368,20 @@ class TorrentServerManager(private val context: Context) {
         markUsed()
         try {
             val sha1 = Sha1Hash.parseHex(torrentHash)
-            val handle = sessionManager.find(sha1) ?: return false
+            var handle = sessionManager.find(sha1)
+            var waitHandle = 0
+            while ((handle == null || !handle.isValid) && waitHandle < 60) {
+                if (!sessionManager.isRunning) return false
+                Thread.sleep(50)
+                handle = sessionManager.find(sha1)
+                waitHandle++
+            }
+            if (handle == null || !handle.isValid) return false
 
             // Wait for metadata if not loaded yet
             var waitTime = 0
             while (handle.torrentFile() == null && waitTime < 300) {
+                if (!sessionManager.isRunning || !handle.isValid) return false
                 Thread.sleep(100)
                 waitTime++
             }
@@ -249,7 +390,9 @@ class TorrentServerManager(private val context: Context) {
             val fileStorage = torrentInfo.files()
 
             if (fileIndex < 0 || fileIndex >= fileStorage.numFiles()) return false
-            handle.filePriority(fileIndex, Priority.TOP_PRIORITY)
+            val priorities = Priority.array(Priority.IGNORE, fileStorage.numFiles())
+            priorities[fileIndex] = Priority.TOP_PRIORITY
+            handle.prioritizeFiles(priorities)
 
             val fileOffset = fileStorage.fileOffset(fileIndex)
             val fileSize = fileStorage.fileSize(fileIndex)
@@ -328,7 +471,7 @@ class TorrentServerManager(private val context: Context) {
         var port = startPort
         while (port < 65535) {
             try {
-                java.net.ServerSocket(port).use {
+                java.net.ServerSocket(port, 50, InetAddress.getByName("127.0.0.1")).use {
                     return port
                 }
             } catch (e: java.io.IOException) {
@@ -336,19 +479,6 @@ class TorrentServerManager(private val context: Context) {
             }
         }
         return startPort
-    }
-
-    private fun parseMagnetHash(url: String): String {
-        val xtIndex = url.indexOf("xt=urn:btih:")
-        if (xtIndex != -1) {
-            var hash = url.substring(xtIndex + 12)
-            val ampersandIndex = hash.indexOf("&")
-            if (ampersandIndex != -1) {
-                hash = hash.substring(0, ampersandIndex)
-            }
-            return hash.uppercase()
-        }
-        throw IllegalArgumentException("Invalid magnet link")
     }
 
     private fun downloadTorrentFile(url: String): File? {
