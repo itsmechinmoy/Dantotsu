@@ -15,12 +15,18 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.libtorrent4j.*
+import org.libtorrent4j.alerts.Alert
+import org.libtorrent4j.alerts.AlertType
+import org.libtorrent4j.alerts.SaveResumeDataAlert
+import org.libtorrent4j.alerts.TorrentAlert
 import java.io.File
 import java.net.InetAddress
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @Inject
 @SingleIn(AppScope::class)
@@ -31,6 +37,14 @@ class TorrentServerManager(private val context: Context) {
     private var prebufferJob: Job? = null
     private var prebufferKey: Pair<String, Int>? = null
     private val sources = ConcurrentHashMap<String, String>()
+    private val metadataCache by lazy {
+        TorrentMetadataCache(File(context.cacheDir, "torrent_meta"))
+    }
+    private val resumeDir by lazy { File(context.cacheDir, "torrent_resume") }
+    private val sessionStateStore by lazy {
+        SessionStateStore(File(context.filesDir, "torrent/session.state"))
+    }
+    @Volatile
     var activeTorrentHash: String? = null
 
     /** Last time anything started, added or buffered; a closing player only stops an unused session. */
@@ -60,6 +74,10 @@ class TorrentServerManager(private val context: Context) {
 
         private const val BASE32_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
         private const val HEX_CHARS = "0123456789ABCDEF"
+        private val HEX_HASH_REGEX = Regex("^[0-9A-F]{40}$")
+        private const val REMOVE_RESUME_TIMEOUT_MS = 1_500L
+        private const val STOP_RESUME_TIMEOUT_MS = 1_000L
+        private const val MAX_RESUME_BYTES = 4L * 1024 * 1024
 
         private fun base32ToHex(base32: String): String {
             val clean = base32.uppercase(Locale.US).trim()
@@ -142,7 +160,14 @@ class TorrentServerManager(private val context: Context) {
 
             configureSessionSettings(settings)
 
-                        val params = SessionParams(settings)
+            // Resume saved DHT state when present; current settings always take precedence.
+            val params = sessionStateStore.loadParsed(
+                onCorrupt = { e ->
+                    Logger.log("TorrentServerManager: saved session state unusable, starting clean: ${e.message}")
+                }
+            ) { bytes ->
+                SessionParams(bytes).also { it.setSettings(settings) }
+            } ?: SessionParams(settings)
             sessionManager.start(params)
             sessionManager.startDht()
 
@@ -190,7 +215,202 @@ class TorrentServerManager(private val context: Context) {
         httpServer?.stop()
         httpServer = null
         if (sessionManager.isRunning) {
+            saveSessionState()
+            activeTorrentHash?.let { hash ->
+                try {
+                    val norm = hash.uppercase(Locale.US)
+                    val handle = sessionManager.find(Sha1Hash.parseHex(norm))
+                    if (handle != null && handle.isValid) {
+                        saveMetadataIfMissing(handle, norm)
+                        saveResumeDataBlocking(handle, norm, STOP_RESUME_TIMEOUT_MS)
+                    }
+                } catch (_: Exception) {}
+            }
             sessionManager.stop()
+        }
+    }
+
+    private fun saveSessionState() {
+        try {
+            if (sessionManager.isRunning) {
+                sessionStateStore.save(sessionManager.saveState())
+            }
+        } catch (e: Exception) {
+            Logger.log("TorrentServerManager: saving session state failed: ${e.message}")
+        }
+    }
+
+    private fun loadCachedTorrentInfo(infoHash: String): TorrentInfo? =
+        metadataCache.loadParsed(
+            infoHash,
+            onCorrupt = { e ->
+                Logger.log("TorrentServerManager: corrupt cached metadata for $infoHash, discarding: ${e.message}")
+            }
+        ) { bytes ->
+            val ti = TorrentInfo(bytes)
+            ti.takeIf { it.infoHash().toHex().equals(infoHash, ignoreCase = true) }
+        }
+
+    private fun saveMetadataIfMissing(handle: TorrentHandle, infoHash: String): Boolean {
+        val norm = infoHash.uppercase(Locale.US)
+        if (metadataCache.contains(norm)) return false
+        return try {
+            val span = handle.torrentFile()?.swig()?.get_info_section() ?: return false
+            val n = span.size().toInt()
+            if (n !in 1..TorrentMetadataCache.MAX_INFO_BYTES) return false
+            val info = ByteArray(n) { span.at(it.toLong()) }
+            val wrapped = TorrentMetadataCache.wrapInfoSection(info) ?: return false
+            metadataCache.save(norm, wrapped)
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun attachMagnetTrackers(handle: TorrentHandle, url: String) {
+        TorrentMetadataCache.magnetTrackers(url).forEach { trk ->
+            try { handle.addTracker(AnnounceEntry(trk)) } catch (_: Exception) {}
+        }
+        DEFAULT_TRACKERS.forEach { trk ->
+            try { handle.addTracker(AnnounceEntry(trk)) } catch (_: Exception) {}
+        }
+        try { handle.forceReannounce() } catch (_: Exception) {}
+    }
+
+    private fun addFromTorrentInfo(
+        ti: TorrentInfo,
+        infoHash: String,
+        cacheDir: File,
+        prioritizeFileIndex: Int? = null
+    ): TorrentHandle? {
+        val sha1 = Sha1Hash.parseHex(infoHash)
+        sessionManager.find(sha1)?.takeIf { it.isValid }?.let { return it }
+
+        val priorities = Priority.array(Priority.IGNORE, ti.numFiles())
+        if (prioritizeFileIndex != null && prioritizeFileIndex in 0 until ti.numFiles()) {
+            priorities[prioritizeFileIndex] = Priority.TOP_PRIORITY
+        }
+
+        val resume = takeResumeFile(infoHash, ti, cacheDir)
+        if (resume != null) {
+            try {
+                sessionManager.download(ti, cacheDir, resume, priorities, null, TorrentFlags.SEQUENTIAL_DOWNLOAD)
+                val handle = sessionManager.find(sha1)?.takeIf { it.isValid }
+                if (handle != null) return handle
+            } catch (t: Throwable) {
+                Logger.log("TorrentServerManager: resume data unusable for $infoHash, retrying clean: ${t.message}")
+            } finally {
+                runCatching { resume.delete() }
+            }
+        }
+
+        sessionManager.download(ti, cacheDir, null, priorities, null, TorrentFlags.SEQUENTIAL_DOWNLOAD)
+        return sessionManager.find(sha1)
+    }
+
+    private fun resumeFileFor(infoHash: String): File? {
+        val norm = infoHash.trim().uppercase(Locale.US)
+        if (!HEX_HASH_REGEX.matches(norm)) return null
+        return File(resumeDir, "$norm.fastresume")
+    }
+
+    private fun writeResumeFile(infoHash: String, bytes: ByteArray?) {
+        val target = resumeFileFor(infoHash) ?: return
+        if (bytes == null || bytes.size !in 1..MAX_RESUME_BYTES.toInt()) return
+        val tmp = File(resumeDir, target.name + ".tmp")
+        try {
+            resumeDir.mkdirs()
+            tmp.writeBytes(bytes)
+            val ok = tmp.renameTo(target) || (target.delete() && tmp.renameTo(target))
+            if (!ok) runCatching { tmp.delete() }
+        } catch (t: Throwable) {
+            runCatching { tmp.delete() }
+            Logger.log("TorrentServerManager: writing resume data failed: ${t.message}")
+        }
+    }
+
+    /** Writes [handle]'s resume data with a bounded wait so removals and stops never hang. */
+    private fun saveResumeDataBlocking(
+        handle: TorrentHandle,
+        infoHash: String,
+        timeoutMs: Long = REMOVE_RESUME_TIMEOUT_MS
+    ) {
+        if (!sessionManager.isRunning) return
+        val norm = infoHash.trim().uppercase(Locale.US)
+        if (!HEX_HASH_REGEX.matches(norm)) return
+        try {
+            if (!handle.isValid || handle.torrentFile() == null) return
+            if (handle.status().totalDone() <= 0L) return
+        } catch (_: Exception) {
+            return
+        }
+        val latch = CountDownLatch(1)
+        val listener = object : AlertListener {
+            override fun types(): IntArray = intArrayOf(
+                AlertType.SAVE_RESUME_DATA.swig(),
+                AlertType.SAVE_RESUME_DATA_FAILED.swig()
+            )
+
+            override fun alert(alert: Alert<*>) {
+                val torrentAlert = alert as? TorrentAlert<*> ?: return
+                val hash = try {
+                    torrentAlert.handle().infoHash().toHex()
+                } catch (_: Exception) {
+                    return
+                }
+                if (!hash.equals(norm, ignoreCase = true)) return
+                if (alert is SaveResumeDataAlert) {
+                    try {
+                        val bytes = AddTorrentParams.writeResumeDataBuf(alert.params())
+                        writeResumeFile(norm, bytes)
+                    } catch (t: Throwable) {
+                        Logger.log("TorrentServerManager: writing resume data failed: ${t.message}")
+                    }
+                }
+                latch.countDown()
+            }
+        }
+        sessionManager.addListener(listener)
+        try {
+            if (!handle.isValid) return
+            handle.saveResumeData()
+            latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: Exception) {
+        } finally {
+            sessionManager.removeListener(listener)
+        }
+    }
+
+    /** Returns a single-use temp copy of the resume file if payload files exist on disk, deleting the original. */
+    private fun takeResumeFile(infoHash: String, ti: TorrentInfo, saveDir: File): File? {
+        val norm = infoHash.trim().uppercase(Locale.US)
+        val file = resumeFileFor(norm) ?: return null
+        if (!file.isFile) return null
+        if (file.length() !in 1..MAX_RESUME_BYTES) {
+            runCatching { file.delete() }
+            return null
+        }
+        val payloadPresent = try {
+            val fs = ti.files()
+            (0 until fs.numFiles()).any { i ->
+                val f = File(fs.filePath(i, saveDir.absolutePath))
+                f.isFile && f.length() > 0L
+            }
+        } catch (_: Exception) {
+            false
+        }
+        if (!payloadPresent) {
+            runCatching { file.delete() }
+            return null
+        }
+        val copy = File(resumeDir, "$norm.fastresume.using")
+        return try {
+            file.copyTo(copy, overwrite = true)
+            file.delete()
+            copy
+        } catch (_: Exception) {
+            runCatching { copy.delete() }
+            runCatching { file.delete() }
+            null
         }
     }
 
@@ -251,38 +471,57 @@ class TorrentServerManager(private val context: Context) {
         if (url.startsWith("magnet:", ignoreCase = true)) {
             val infoHash = parseMagnetHash(url)
             val sha1 = Sha1Hash.parseHex(infoHash)
-            val enhancedUrl = enhanceMagnetUrl(url)
-            sessionManager.download(enhancedUrl, cacheDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
-            handle = sessionManager.find(sha1)
+            val cachedTi = loadCachedTorrentInfo(infoHash)
+            if (cachedTi != null) {
+                handle = addFromTorrentInfo(cachedTi, infoHash, cacheDir)
+                if (handle != null && handle.isValid) {
+                    attachMagnetTrackers(handle, url)
+                }
+            } else {
+                handle = sessionManager.find(sha1)?.takeIf { it.isValid }
+                val createdHere = handle == null
+                if (handle == null) {
+                    val enhancedUrl = enhanceMagnetUrl(url)
+                    sessionManager.download(enhancedUrl, cacheDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
+                    handle = sessionManager.find(sha1)
+                }
 
-            // Wait for metadata (up to 60 seconds)
-            var waitTime = 0
-            while ((handle == null || handle.torrentFile() == null) && waitTime < 600) {
-                Thread.sleep(100)
-                handle = sessionManager.find(sha1)
-                waitTime++
-            }
-            if (handle != null && handle.torrentFile() != null) {
-                val numFiles = handle.torrentFile()!!.numFiles()
-                val priorities = Priority.array(Priority.IGNORE, numFiles)
-                handle.prioritizeFiles(priorities)
+                // Wait for metadata (up to 60 seconds)
+                var waitTime = 0
+                while ((handle == null || handle.torrentFile() == null) && waitTime < 600) {
+                    if (!sessionManager.isRunning) break
+                    Thread.sleep(100)
+                    handle = sessionManager.find(sha1)
+                    waitTime++
+                }
+                if (handle != null && handle.torrentFile() != null) {
+                    if (createdHere) {
+                        val numFiles = handle.torrentFile()!!.numFiles()
+                        val priorities = Priority.array(Priority.IGNORE, numFiles)
+                        handle.prioritizeFiles(priorities)
+                    }
+                    saveMetadataIfMissing(handle, infoHash)
+                    saveSessionState()
+                }
             }
         } else if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
             val tempFile = downloadTorrentFile(url)
             if (tempFile != null) {
-                val ti = TorrentInfo(tempFile)
-                val p = Priority.array(Priority.IGNORE, ti.numFiles())
-                sessionManager.download(ti, cacheDir, null, p, null, TorrentFlags.SEQUENTIAL_DOWNLOAD)
-                handle = sessionManager.find(ti.infoHash())
+                try {
+                    val ti = TorrentInfo(tempFile)
+                    val infoHash = ti.infoHash().toHex().uppercase(Locale.US)
+                    handle = addFromTorrentInfo(ti, infoHash, cacheDir)
+                } finally {
+                    runCatching { tempFile.delete() }
+                }
             }
         } else {
             val path = url.removePrefix("file://")
             val file = File(path)
             if (file.exists()) {
                 val ti = TorrentInfo(file)
-                val p = Priority.array(Priority.IGNORE, ti.numFiles())
-                sessionManager.download(ti, cacheDir, null, p, null, TorrentFlags.SEQUENTIAL_DOWNLOAD)
-                handle = sessionManager.find(ti.infoHash())
+                val infoHash = ti.infoHash().toHex().uppercase(Locale.US)
+                handle = addFromTorrentInfo(ti, infoHash, cacheDir)
             }
         }
 
@@ -336,7 +575,16 @@ class TorrentServerManager(private val context: Context) {
         }
         val sha1 = Sha1Hash.parseHex(infoHash)
         if (sessionManager.find(sha1)?.isValid != true) {
-            sessionManager.download(enhanceMagnetUrl(url), getTorrentCacheDir(), TorrentFlags.SEQUENTIAL_DOWNLOAD)
+            val cacheDir = getTorrentCacheDir()
+            val cachedTi = loadCachedTorrentInfo(infoHash)
+            if (cachedTi != null) {
+                val handle = addFromTorrentInfo(cachedTi, infoHash, cacheDir, prioritizeFileIndex = fileIndex)
+                if (handle != null && handle.isValid) {
+                    attachMagnetTrackers(handle, url)
+                }
+            } else {
+                sessionManager.download(enhanceMagnetUrl(url), cacheDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
+            }
         }
         sessionManager.find(sha1)?.takeIf { it.isValid }?.resume()
         sources[infoHash.uppercase(Locale.US)] = url
@@ -387,6 +635,9 @@ class TorrentServerManager(private val context: Context) {
             }
 
             val torrentInfo = handle.torrentFile() ?: return false
+            if (saveMetadataIfMissing(handle, torrentHash)) {
+                saveSessionState()
+            }
             val fileStorage = torrentInfo.files()
 
             if (fileIndex < 0 || fileIndex >= fileStorage.numFiles()) return false
@@ -449,9 +700,12 @@ class TorrentServerManager(private val context: Context) {
 
     fun removeTorrent(torrentHash: String) {
         try {
-            val sha1 = Sha1Hash.parseHex(torrentHash)
+            val normHash = torrentHash.uppercase(Locale.US)
+            val sha1 = Sha1Hash.parseHex(normHash)
             val handle = sessionManager.find(sha1)
             if (handle != null && handle.isValid) {
+                saveMetadataIfMissing(handle, normHash)
+                saveResumeDataBlocking(handle, normHash, REMOVE_RESUME_TIMEOUT_MS)
                 sessionManager.remove(handle)
             }
         } catch (e: Exception) {
