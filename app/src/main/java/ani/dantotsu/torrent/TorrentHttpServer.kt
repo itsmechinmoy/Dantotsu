@@ -131,7 +131,7 @@ class TorrentHttpServer(
         var torrentInfo = torrentHandle.torrentFile()
         if (torrentInfo != null) return torrentInfo
         var waitMetadata = 0
-        while (torrentHandle.torrentFile() == null && waitMetadata < 300) {
+        while (torrentHandle.torrentFile() == null && waitMetadata < METADATA_WAIT_ATTEMPTS) {
             if (!isRunning || !torrentHandle.isValid || socket.isClosed) break
             Thread.sleep(100)
             waitMetadata++
@@ -363,6 +363,12 @@ class TorrentHttpServer(
     }
 
     private fun prioritizeTargetFile(torrentHandle: TorrentHandle, fileStorage: FileStorage, fileIndex: Int) {
+        // Setting file priorities resets every piece priority. A resume opens several range requests
+        // at once (header, cues, resume point), so redoing it per request wipes the other reads' windows.
+        val current = runCatching { torrentHandle.filePriorities() }.getOrNull()
+        if (current != null && current.size == fileStorage.numFiles() &&
+            current.withIndex().all { (i, p) -> if (i == fileIndex) p == Priority.TOP_PRIORITY else p == Priority.IGNORE }
+        ) return
         val priorities = Array(fileStorage.numFiles()) { Priority.IGNORE }
         priorities[fileIndex] = Priority.TOP_PRIORITY
         torrentHandle.prioritizeFiles(priorities)
@@ -534,7 +540,9 @@ class TorrentHttpServer(
         const val HANDLE_WAIT_POLL_MS = 50L
         const val HANDLE_WAIT_ATTEMPTS = 60
         const val PIECE_WAIT_POLL_MS = 50L
-        const val PIECE_WAIT_TIMEOUT_MS = 60_000L
+        // below the player's 150 s read timeout for local torrents; a slow swarm is a stall, not a dead source
+        const val PIECE_WAIT_TIMEOUT_MS = 120_000L
+        const val METADATA_WAIT_ATTEMPTS = 900
         const val CLIENT_CHECK_INTERVAL_MS = 500L
     }
 }

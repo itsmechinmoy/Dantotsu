@@ -186,7 +186,7 @@ class DantotsuPlayerManager(
     }
 
     private fun createPlayerHttpClient(isLocalhostTorrent: Boolean): okhttp3.OkHttpClient {
-        val readTimeoutSeconds = if (isLocalhostTorrent) 60L else 20L
+        val readTimeoutSeconds = if (isLocalhostTorrent) 150L else 20L
         return client.newBuilder().apply {
             connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             readTimeout(readTimeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)

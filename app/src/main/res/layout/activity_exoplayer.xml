@@ -11,7 +11,7 @@
         android:gravity="center"
         app:animation_enabled="false"
         app:resize_mode="fit"
-        app:show_buffering="when_playing" />
+        app:show_buffering="always" />
 
     <include
         android:id="@+id/castScreenView"

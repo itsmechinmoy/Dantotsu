@@ -302,6 +302,10 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         lateinit var media: Media
         var targetStartPosition: Long? = null
         private const val MAX_PLAYER_ERROR_RETRIES = 1
+        // a torrent keeps downloading while the player retries, so a stall is worth a few more tries
+        private const val MAX_TORRENT_ERROR_RETRIES = 4
+        // players still alive; a closing player must not stop the torrent session a newer one is using
+        private val livePlayers = java.util.concurrent.atomic.AtomicInteger(0)
         private val SUBTITLE_LANGUAGES = arrayOf(
             "Albanian", "Arabic", "Bosnian", "Bulgarian", "Chinese", "Croatian", "Czech", "Danish", "Dutch", "English",
             "Estonian", "Finnish", "French", "Georgian", "German", "Greek", "Hebrew", "Hindi", "Indonesian", "Irish",
@@ -334,6 +338,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        livePlayers.incrementAndGet()
 
         if (!initialized) {
             startMainActivity(this)
@@ -1299,6 +1304,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         if (isTorrentSource) {
             val torrentManager = Injekt.get<TorrentServerManager>()
             if (torrentManager.isAvailable()) {
+                setResolvingSpinner(true)
                 torrentStartJob = lifecycleScope.launch {
                     val resolvedUrl = try {
                         withContext(Dispatchers.IO) {
@@ -1310,9 +1316,11 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                         Injekt.get<CrashlyticsInterface>().logException(e)
                         Logger.log(e)
                         toast("Error starting torrent: ${e.message}")
+                        setResolvingSpinner(false)
                         sourceClick()
                         null
                     } ?: return@launch
+                    setResolvingSpinner(false)
                     // Play through a copy so the episode's Video keeps its magnet/.torrent source
                     val playbackVideo = rawVideo.copy(file = rawVideo.file.copy(url = resolvedUrl))
                     video = playbackVideo
@@ -1323,6 +1331,11 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         }
 
         startPlaybackWithVideo(ext, rawVideo, lang)
+    }
+
+    /** Shows the player's buffering spinner while a torrent resolves, before any player exists. */
+    private fun setResolvingSpinner(show: Boolean) {
+        playerView.findViewById<View>(androidx.media3.ui.R.id.exo_buffering)?.isVisible = show
     }
 
     private fun findBestVideoForDownload(
@@ -1764,8 +1777,12 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
             playbackPosition
         }
 
+    private fun isLocalTorrentStream(): Boolean =
+        StreamTypeDetector.isTorrentStreamUrl(video?.file?.url)
+
     private fun handleIoNetworkError(error: PlaybackException) {
-        if (playerErrorRetryCount < MAX_PLAYER_ERROR_RETRIES) {
+        val maxRetries = if (isLocalTorrentStream()) MAX_TORRENT_ERROR_RETRIES else MAX_PLAYER_ERROR_RETRIES
+        if (playerErrorRetryCount < maxRetries) {
             playerErrorRetryCount++
             val savedPos = getErrorRecoveryPosition()
             val player = playerManager.exoPlayer
@@ -2151,6 +2168,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
     override fun onDestroy() {
         torrentStartJob?.cancel()
         torrentStartJob = null
+        livePlayers.decrementAndGet()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         orientationListener?.disable()
         orientationListener = null
@@ -2160,6 +2178,8 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
             try {
                 extractor?.onVideoStopped(video)
             } catch (_: Exception) {}
+            // another player (the same or the next episode) is open and owns the session now
+            if (livePlayers.get() > 0) return@launchIO
             try {
                 val torrentManager = uy.kohesive.injekt.Injekt.get<ani.dantotsu.torrent.TorrentServerManager>()
                 // a picker may already have started the next episode on this session
