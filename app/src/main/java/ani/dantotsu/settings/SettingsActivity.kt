@@ -107,6 +107,7 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
     }
 
     private fun setupBackNavigation() {
+        watchSearchKeyboard()
         onBackPressedDispatcher.addCallback(this) {
             if (closeSearchKeyboard()) return@addCallback
             if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
@@ -350,18 +351,45 @@ class SettingsActivity : AppCompatActivity(), SettingsHost {
     }
 
     /**
-     * Back while the keyboard is up only closes the keyboard; the next back clears the
-     * search. Without this the first back gesture after typing wiped the results.
+     * Back while typing only closes the keyboard; the next back clears the search. A back
+     * swipe hides the keyboard before this callback runs, so a back that arrives just after
+     * the keyboard went away ([keyboardClosedAt]) still counts as closing it.
      */
     private fun closeSearchKeyboard(): Boolean {
         val field = binding.settingsSearchBarText
         val imeVisible = androidx.core.view.ViewCompat.getRootWindowInsets(field)
             ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
-        if (!imeVisible) return false
+        val justClosed = android.os.SystemClock.uptimeMillis() - keyboardClosedAt < 800L
+        keyboardClosedAt = 0L
+        if (!imeVisible && !justClosed && !field.hasFocus()) return false
         (getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
             .hideSoftInputFromWindow(field.windowToken, 0)
         field.clearFocus()
         return true
+    }
+
+    private var keyboardClosedAt = 0L
+
+    private fun watchSearchKeyboard() {
+        val field = binding.settingsSearchBarText
+        androidx.core.view.ViewCompat.setWindowInsetsAnimationCallback(
+            field,
+            object : androidx.core.view.WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+                override fun onProgress(
+                    insets: androidx.core.view.WindowInsetsCompat,
+                    running: MutableList<androidx.core.view.WindowInsetsAnimationCompat>
+                ) = insets
+
+                override fun onEnd(animation: androidx.core.view.WindowInsetsAnimationCompat) {
+                    val imeVisible = androidx.core.view.ViewCompat.getRootWindowInsets(field)
+                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+                    if (!imeVisible && field.hasFocus()) {
+                        keyboardClosedAt = android.os.SystemClock.uptimeMillis()
+                        field.clearFocus()
+                    }
+                }
+            }
+        )
     }
 
 }

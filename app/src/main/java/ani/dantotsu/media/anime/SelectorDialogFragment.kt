@@ -48,6 +48,7 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.media.SubtitleDownloader
+import ani.dantotsu.media.anime.selector.ReleaseEpisode
 import ani.dantotsu.media.anime.selector.ReleaseFamily
 import ani.dantotsu.media.anime.selector.SourceMetaIcon
 import ani.dantotsu.media.anime.selector.SourcePresentationKind
@@ -619,6 +620,21 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             }
         }
 
+        // The remembered name is last episode's release ("... S03E02 ..."): loading it by name could
+        // hand back that episode. Load the whole list instead and match by release group.
+        if (!ReleaseEpisode.fits(serverName, ep.number)) {
+            scope.launch {
+                withContext(Dispatchers.IO) {
+                    if (!ep.allStreams) model.loadEpisodeVideos(ep, media?.selected?.sourceIndex ?: return@withContext)
+                }
+                withContext(Dispatchers.Main) {
+                    if (_binding == null || !isAdded) return@withContext
+                    loadMatchedExtractorAndPlay(ep, actualKey, serverName)
+                }
+            }
+            return
+        }
+
         val hasMatchingExtractor = ep.extractors?.any {
             it.server.name == serverName || it.isPreferred
         } == true
@@ -654,7 +670,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
     private fun findMatchedExtractor(ep: Episode, sourceIndex: Int, serverName: String): VideoExtractor? {
         // one snapshot: a preload on IO may still be adding servers to ep.extractors
-        val list = ep.extractors?.toList() ?: return null
+        // rows named for another episode (torrent lists carry neighbours) are never picked
+        val list = ep.extractors?.toList()?.filter { ReleaseEpisode.fits(it.server.name, ep.number) } ?: return null
         return if (model.watchSources?.isDownloadedSource(sourceIndex) == true) {
             list.firstOrNull()
         } else {
