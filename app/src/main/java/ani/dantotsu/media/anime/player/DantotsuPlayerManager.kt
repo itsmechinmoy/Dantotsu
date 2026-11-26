@@ -505,6 +505,9 @@ class DantotsuPlayerManager(
 
         Logger.log("Libass: Calling handler.init(exoPlayer)")
         handler.init(player)
+        // playerView.player above already reported an existing surface (every episode after the
+        // first) before the handler listened, so it would render at 0x0: hand it the size now
+        player.surfaceSize.takeIf { it.width > 0 && it.height > 0 }?.let { handler.onSurfaceSizeChanged(it.width, it.height) }
 
         player.playWhenReady = true
         player.playbackParameters = playbackParameters

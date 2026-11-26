@@ -1298,10 +1298,10 @@ class PlayerSubtitleManager(
     fun release() {
         serverSubJob?.cancel()
         serverSubJob = null
-        // the next episode adds a fresh overlay; a view left here keeps its last line on screen
-        assSubtitleView?.let { (it.parent as? ViewGroup)?.removeView(it) }
-        // freed once the removed view's render thread has stopped drawing with it
-        assHandler?.let { old -> android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ runCatching { old.release() } }, 1000) }
+        // the next episode adds a fresh overlay; a visible one left here keeps its last line on
+        // screen. it is hidden, not removed or released: tearing down its GL render thread also
+        // stops the next episode's overlay from drawing.
+        assSubtitleView?.visibility = View.GONE
         assHandler = null
         assSubtitleView = null
         loadedFontNames.clear()
