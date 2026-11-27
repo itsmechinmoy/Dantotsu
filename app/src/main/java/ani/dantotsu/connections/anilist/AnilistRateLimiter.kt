@@ -93,13 +93,7 @@ internal fun computeRetryWaitMs(
     return max(minRetryWaitMs, fallback)
 }
 
-/**
- * Estimates how many AniList rate-limit quota units [query] consumes by counting
- * top-level root fields/aliases inside the outer GraphQL selection set (Nov 2026
- * aliased query & `Page` rate-limit rules). Returns at least 1.
- */
-internal fun estimateGraphqlOperationCount(query: String): Int {
-    val len = query.length
+private class GraphqlRootScanner {
     var depth = 0
     var parenDepth = 0
     var inString = false
@@ -108,55 +102,64 @@ internal fun estimateGraphqlOperationCount(query: String): Int {
     var rootFields = 0
     var expectFieldName = false
 
-    var i = 0
-    while (i < len) {
-        val ch = query[i]
-        when {
-            inComment -> {
-                if (ch == '\n' || ch == '\r') inComment = false
-            }
-            inString -> {
-                if (escaped) {
-                    escaped = false
-                } else if (ch == '\\') {
-                    escaped = true
-                } else if (ch == '"') {
-                    inString = false
-                }
-            }
-            ch == '#' -> inComment = true
-            ch == '"' -> inString = true
-            ch == '(' && depth == 1 -> parenDepth++
-            ch == ')' && depth == 1 -> if (parenDepth > 0) parenDepth--
-            ch == '{' -> {
-                depth++
-                if (depth == 1) {
-                    expectFieldName = true
-                } else if (depth == 2 && parenDepth == 0) {
-                    expectFieldName = false
-                }
-            }
-            ch == '}' -> {
-                depth--
-                if (depth == 1) {
-                    expectFieldName = true
-                }
-            }
-            depth == 1 && parenDepth == 0 -> {
-                if (ch.isWhitespace() || ch == ',') {
-                    // Wait for the next field token.
-                } else if (ch == ':') {
-                    // Alias delimiter preceding the actual field name; do not double-count.
-                    expectFieldName = false
-                } else if (expectFieldName && (ch.isLetter() || ch == '_')) {
-                    rootFields++
-                    expectFieldName = false
-                }
-            }
+    fun feed(ch: Char) {
+        if (handleCommentOrString(ch)) return
+        when (ch) {
+            '#' -> inComment = true
+            '"' -> inString = true
+            '(' -> if (depth == 1) parenDepth++
+            ')' -> if (depth == 1 && parenDepth > 0) parenDepth--
+            '{' -> onOpenBrace()
+            '}' -> onCloseBrace()
+            else -> handleRootTokenChar(ch)
         }
-        i++
     }
-    return max(1, rootFields)
+
+    private fun handleCommentOrString(ch: Char): Boolean {
+        if (inComment) {
+            if (ch == '\n' || ch == '\r') inComment = false
+            return true
+        }
+        if (!inString) return false
+        when {
+            escaped -> escaped = false
+            ch == '\\' -> escaped = true
+            ch == '"' -> inString = false
+        }
+        return true
+    }
+
+    private fun onOpenBrace() {
+        depth++
+        if (depth == 1) expectFieldName = true
+        else if (depth == 2 && parenDepth == 0) expectFieldName = false
+    }
+
+    private fun onCloseBrace() {
+        depth--
+        if (depth == 1) expectFieldName = true
+    }
+
+    private fun handleRootTokenChar(ch: Char) {
+        if (depth != 1 || parenDepth != 0) return
+        if (ch == ':') {
+            expectFieldName = false
+        } else if (expectFieldName && (ch.isLetter() || ch == '_')) {
+            rootFields++
+            expectFieldName = false
+        }
+    }
+}
+
+/**
+ * Estimates how many AniList rate-limit quota units [query] consumes by counting
+ * top-level root fields/aliases inside the outer GraphQL selection set (Nov 2026
+ * aliased query & `Page` rate-limit rules). Returns at least 1.
+ */
+internal fun estimateGraphqlOperationCount(query: String): Int {
+    val scanner = GraphqlRootScanner()
+    for (ch in query) scanner.feed(ch)
+    return max(1, scanner.rootFields)
 }
 
 /**

@@ -100,28 +100,19 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
     }
 
     private fun createDesc(author: Author): String {
-        val age = if (author.age != null) "**${getString(R.string.age)}** ${author.age}" else ""
-        val height =
-            if (!author.height.isNullOrBlank()) "**${getString(R.string.character_height)}** ${author.height}" else ""
-        val yearsActive =
-            if (author.yearsActive != null) "**${getString(R.string.years_active)}** ${author.yearsActive}" else ""
-        val dob =
-            if (author.dateOfBirth != null) "**${getString(R.string.birthday)}** ${author.dateOfBirth}" else ""
-        val homeTown =
-            if (author.homeTown != null) "**${getString(R.string.hometown)}** ${author.homeTown}" else ""
-        val dod =
-            if (author.dateOfDeath != null) "**${getString(R.string.date_of_death)}** ${author.dateOfDeath}" else ""
-        val about = author.about ?: ""
+        val infoLine = listOf(
+            R.string.age to author.age?.toString(),
+            R.string.character_height to author.height,
+            R.string.years_active to author.yearsActive?.toString(),
+            R.string.birthday to author.dateOfBirth,
+            R.string.hometown to author.homeTown,
+            R.string.date_of_death to author.dateOfDeath,
+        ).mapNotNull { (labelRes, value) ->
+            value?.takeIf { it.isNotBlank() }?.let { "**${getString(labelRes)}** $it" }
+        }.joinToString("  \n")
 
-        val infoLine = listOf(age, height, yearsActive, dob, homeTown, dod)
-            .filter { it.isNotBlank() }
-            .joinToString("  \n")
-
-        return if (about.isNotBlank()) {
-            if (infoLine.isNotBlank()) "$infoLine\n\n$about" else about
-        } else {
-            infoLine
-        }
+        val about = author.about.orEmpty()
+        return listOf(infoLine, about).filter { it.isNotBlank() }.joinToString("\n\n")
     }
 
 
