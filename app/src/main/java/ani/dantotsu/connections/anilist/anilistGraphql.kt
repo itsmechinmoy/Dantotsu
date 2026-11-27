@@ -35,7 +35,7 @@ const val REVIEW_GRAPHQL_FIELDS = """
         mediaId
         mediaType
         summary
-        body(asHtml: true)
+        body(asHtml: true, htmlVersion: 2)
         rating
         ratingAmount
         userRating
@@ -84,6 +84,20 @@ fun characterInformation(includeMediaInfo: Boolean) = """
     }
     age
     gender
+    height {
+      initial {
+        metric
+        imperial
+      }
+      min {
+        metric
+        imperial
+      }
+      max {
+        metric
+        imperial
+      }
+    }
     description
     dateOfBirth {
       year
@@ -184,6 +198,21 @@ fun staffInformation(page: Int, perPage: Int) = """
     age
     yearsActive
     homeTown
+    height {
+      initial {
+        metric
+        imperial
+      }
+      min {
+        metric
+        imperial
+      }
+      max {
+        metric
+        imperial
+      }
+    }
+    description
     staffMedia(page: $page,sort:START_DATE_DESC, perPage: $perPage) {
       $standardPageInformation
       edges {
@@ -199,7 +228,7 @@ $MEDIA_NODE_GRAPHQL_FIELDS
 fun userInformation() = """
     id
     name
-    about(asHtml: true)
+    about(asHtml: true, htmlVersion: 2)
     avatar {
       large
       medium
@@ -344,6 +373,7 @@ $REVIEW_GRAPHQL_FIELDS
     characters(sort: [ROLE, FAVOURITES_DESC], perPage: 25, page: 1) {
       edges {
         role
+        name
         voiceActors {
           id
           name {

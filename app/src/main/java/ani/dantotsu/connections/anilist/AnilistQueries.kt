@@ -346,7 +346,7 @@ class AnilistQueries {
             media.characters?.add(
                 Character(
                     id = node.id,
-                    name = node.name?.userPreferred,
+                    name = edge.name?.takeIf { it.isNotBlank() } ?: node.name?.userPreferred,
                     image = node.image?.medium,
                     banner = media.banner ?: media.cover,
                     isFav = node.isFavourite ?: false,
@@ -2151,7 +2151,8 @@ Page(page:$page,perPage:50) {
                             va.languageV2
                         )
                     } ?: emptyList()
-                }?.distinctBy { it.id }?.let { ArrayList(it) }
+                }?.distinctBy { it.id }?.let { ArrayList(it) },
+                height = i.height?.formatDisplay()
             )
         }
         return character
@@ -2224,6 +2225,10 @@ Page(page:$page,perPage:50) {
             author.yearsActive =
                 if (query?.yearsActive?.isEmpty() == true) null else query?.yearsActive
             author.homeTown = if (query?.homeTown?.isBlank() == true) null else query?.homeTown
+            author.height = query?.height?.formatDisplay() ?: author.height
+            if (author.about.isNullOrBlank()) {
+                author.about = query?.description?.takeIf { it.isNotBlank() }
+            }
             author.dateOfDeath = if (query?.dateOfDeath?.toStringOrEmpty()
                     ?.isBlank() == true
             ) null else query?.dateOfDeath?.toStringOrEmpty()
@@ -2277,14 +2282,14 @@ Page(page:$page,perPage:50) {
         sort: String = "SCORE_DESC"
     ): Query.ReviewsResponse? {
         return executeQuery<Query.ReviewsResponse>(
-            """{Page(page:$page,perPage:10){$standardPageInformation reviews(mediaId:$mediaId,sort:$sort){id,mediaId,mediaType,summary,body(asHtml:true)rating,ratingAmount,userRating,score,private,siteUrl,createdAt,updatedAt,user{id,name,bannerImage avatar{medium,large}}}}}""",
+            """{Page(page:$page,perPage:10){$standardPageInformation reviews(mediaId:$mediaId,sort:$sort){id,mediaId,mediaType,summary,body(asHtml:true,htmlVersion:2)rating,ratingAmount,userRating,score,private,siteUrl,createdAt,updatedAt,user{id,name,bannerImage avatar{medium,large}}}}}""",
             force = true
         )
     }
 
     suspend fun getUserProfile(id: Int): Query.UserProfileResponse? {
         return executeQuery<Query.UserProfileResponse>(
-            """{followerPage:Page{followers(userId:$id){id}$standardPageInformation}followingPage:Page{following(userId:$id){id}$standardPageInformation}user:User(id:$id){id name about(asHtml:true)avatar{medium large}bannerImage isFollowing isFollower isBlocked favourites{anime{nodes{id coverImage{extraLarge large medium color}}}manga{nodes{id coverImage{extraLarge large medium color}}}characters{nodes{id name{first middle last full native alternative userPreferred}image{large medium}isFavourite}}staff{nodes{id name{first middle last full native alternative userPreferred}image{large medium}isFavourite}}studios{nodes{id name isFavourite}}}statistics{anime{count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead}manga{count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead}}siteUrl}}""",
+            """{followerPage:Page{followers(userId:$id){id}$standardPageInformation}followingPage:Page{following(userId:$id){id}$standardPageInformation}user:User(id:$id){id name about(asHtml:true,htmlVersion:2)avatar{medium large}bannerImage isFollowing isFollower isBlocked favourites{anime{nodes{id coverImage{extraLarge large medium color}}}manga{nodes{id coverImage{extraLarge large medium color}}}characters{nodes{id name{first middle last full native alternative userPreferred}image{large medium}isFavourite}}staff{nodes{id name{first middle last full native alternative userPreferred}image{large medium}isFavourite}}studios{nodes{id name isFavourite}}}statistics{anime{count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead}manga{count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead}}siteUrl}}""",
             force = true
         )
     }
@@ -2391,7 +2396,7 @@ Page(page:$page,perPage:50) {
         val typeIn =
             if (filter == "isFollowing:true,") "type_in:[TEXT,ANIME_LIST,MANGA_LIST,MEDIA_LIST]," else ""
         return executeQuery<FeedResponse>(
-            """{Page(page:$page,perPage:$ITEMS_PER_PAGE){pageInfo{hasNextPage}activities(${filter}${typeIn}sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id title{english romaji native userPreferred}bannerImage coverImage{medium large}isAdult}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id recipientId messengerId type replyCount likeCount message(asHtml:true)isLocked isSubscribed isLiked isPrivate siteUrl createdAt recipient{id name bannerImage avatar{medium large}}messenger{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}}""",
+            """{Page(page:$page,perPage:$ITEMS_PER_PAGE){pageInfo{hasNextPage}activities(${filter}${typeIn}sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true,htmlVersion:2)siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true,htmlVersion:2)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id title{english romaji native userPreferred}bannerImage coverImage{medium large}isAdult}replies{id userId activityId text(asHtml:true,htmlVersion:2)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id recipientId messengerId type replyCount likeCount message(asHtml:true,htmlVersion:2)isLocked isSubscribed isLiked isPrivate siteUrl createdAt recipient{id name bannerImage avatar{medium large}}messenger{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true,htmlVersion:2)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}}""",
             force = true
         )
     }
@@ -2401,12 +2406,12 @@ Page(page:$page,perPage:50) {
         page: Int = 1
     ): ReplyResponse? {
         val query =
-            """{Page(page:$page,perPage:50){activityReplies(activityId:$activityId){id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}"""
+            """{Page(page:$page,perPage:50){activityReplies(activityId:$activityId){id userId activityId text(asHtml:true,htmlVersion:2)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}"""
         return executeQuery(query, force = true)
     }
 
     private fun statusActivityFields(): String {
-        return """__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{large extraLarge}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id type createdAt likes{id name isFollowing isFollower bannerImage avatar{medium large}}}"""
+        return """__typename ... on TextActivity{id userId type replyCount text(asHtml:true,htmlVersion:2)siteUrl isLocked isSubscribed likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{large extraLarge}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id type createdAt likes{id name isFollowing isFollower bannerImage avatar{medium large}}}"""
     }
 
     private fun status(page: Int = 1): String {

@@ -2,7 +2,6 @@ package ani.dantotsu.media.anime.mpv
 
 import android.content.Context
 import android.graphics.Color
-import android.media.AudioManager
 import android.os.Build
 import android.os.Environment
 import android.os.Handler
@@ -12,9 +11,6 @@ import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import androidx.media.AudioAttributesCompat
-import androidx.media.AudioFocusRequestCompat
-import androidx.media.AudioManagerCompat
 import ani.dantotsu.R
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -35,13 +31,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 class MpvVideoView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-) : SurfaceView(context, attrs), SurfaceHolder.Callback, AudioManager.OnAudioFocusChangeListener {
+) : SurfaceView(context, attrs), SurfaceHolder.Callback {
 
     private var mpv: MPV? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val audioManager by lazy { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
-    private var audioFocusRequest: AudioFocusRequestCompat? = null
-    private var restoreAudioFocus: () -> Unit = {}
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -89,6 +82,8 @@ class MpvVideoView @JvmOverloads constructor(
     var isInitialized = false
         private set
     var surfaceReady = false
+        private set
+    var playWhenReady = true
         private set
 
     private var isFileLoaded = false
@@ -220,7 +215,6 @@ class MpvVideoView @JvmOverloads constructor(
         instance.addObserver(eventObserver)
         instance.addLogObserver(logObserver)
         observeProperties(instance)
-        requestAudioFocus()
         isInitialized = true
     }
 
@@ -481,6 +475,7 @@ class MpvVideoView @JvmOverloads constructor(
         val state = PendingMediaState(videoUrl, headers, startPositionMs, audioTracks, subtitles, cencKeyHex)
         pendingMediaState = state
         wasBackgrounded = false
+        playWhenReady = true
         ensureInitialized()
         if (!surfaceReady) {
             _playbackState.value = PlaybackState.BUFFERING
@@ -530,22 +525,24 @@ class MpvVideoView @JvmOverloads constructor(
             state.videoUrl
         }
 
-        m.command("set", "pause", "no")
+        m.command("set", "pause", if (playWhenReady) "no" else "yes")
         m.command("loadfile", targetUrl, "replace")
     }
 
     fun play() {
+        playWhenReady = true
         if (!isInitialized || isShutdown.get()) return
         mpv?.command("set", "pause", "no")
     }
 
     fun pause() {
+        playWhenReady = false
         if (!isInitialized || isShutdown.get()) return
         mpv?.command("set", "pause", "yes")
     }
 
     fun togglePlayPause() {
-        if (_isPlaying.value) pause() else play()
+        if (playWhenReady || _isPlaying.value) pause() else play()
     }
 
     fun seekTo(positionMs: Long) {
@@ -674,40 +671,6 @@ class MpvVideoView @JvmOverloads constructor(
         return true
     }
 
-    private fun requestAudioFocus() {
-        val req = AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN).apply {
-            setAudioAttributes(
-                AudioAttributesCompat.Builder()
-                    .setUsage(AudioAttributesCompat.USAGE_MEDIA)
-                    .setContentType(AudioAttributesCompat.CONTENT_TYPE_MOVIE)
-                    .build()
-            )
-            setOnAudioFocusChangeListener(this@MpvVideoView)
-        }.build()
-        if (AudioManagerCompat.requestAudioFocus(audioManager, req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            audioFocusRequest = req
-        }
-    }
-
-    override fun onAudioFocusChange(focusChange: Int) {
-        val m = mpv ?: return
-        when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                val wasPaused = m.getPropertyBoolean("pause") ?: true
-                m.setPropertyBoolean("pause", true)
-                restoreAudioFocus = { if (!wasPaused) m.setPropertyBoolean("pause", false) }
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                m.command("multiply", "volume", "0.5")
-                restoreAudioFocus = { m.command("multiply", "volume", "2") }
-            }
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                restoreAudioFocus()
-                restoreAudioFocus = {}
-            }
-        }
-    }
-
     override fun surfaceCreated(holder: SurfaceHolder) {
         ensureInitialized()
         surfaceReady = true
@@ -724,6 +687,7 @@ class MpvVideoView @JvmOverloads constructor(
             isFileLoaded && wasBackgrounded -> {
                 wasBackgrounded = false
                 seekTo(lastGoodPositionMs)
+                if (playWhenReady) m.command("set", "pause", "no")
             }
         }
     }
@@ -767,8 +731,6 @@ class MpvVideoView @JvmOverloads constructor(
         surfaceReady = false
         isFileLoaded = false
         pendingMediaState = null
-        audioFocusRequest?.let { AudioManagerCompat.abandonAudioFocusRequest(audioManager, it) }
-        audioFocusRequest = null
         releaseInternal()
         isShutdown.set(true)
         _playbackState.value = PlaybackState.IDLE

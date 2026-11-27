@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.NO_HOSTER_LIST
+import eu.kanade.tachiyomi.animesource.model.HttpServer
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -78,6 +79,25 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         (extension.sources.firstOrNull() as? AnimeHttpSource)?.baseUrl ?: extension.sources.firstOrNull()?.name ?: ""
     override val isNSFW = extension.isNsfw
     override val icon = extension.icon
+
+    @Volatile
+    private var activeHttpServer: HttpServer? = null
+
+    private fun ensureHttpServerStarted(source: AnimeSource, video: Video): Video {
+        if (!video.usesHttpServer() || source !is AnimeHttpSource) return video
+        return synchronized(this) {
+            val server = activeHttpServer?.takeIf { it.isAlive } ?: source.createHttpServer()?.also {
+                runCatching {
+                    it.start()
+                    activeHttpServer = it
+                }.onFailure { err ->
+                    Logger.log("Failed to start extension HttpServer: ${err.message}")
+                }
+            }
+            val port = server?.listeningPort ?: 0
+            if (port > 0) video.copyHttpServer(port) else video
+        }
+    }
 
     private var userSelectDub: Boolean? = null
 
@@ -396,18 +416,18 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
         video: Video
     ): Video = withContext(Dispatchers.IO) {
         if (video.initialized && isFullyResolved(video)) {
-            return@withContext video
+            return@withContext ensureHttpServerStarted(source, video)
         }
 
         val modern = tryModernResolve(source, video)
-        if (modern != null) return@withContext modern
+        if (modern != null) return@withContext ensureHttpServerStarted(source, modern)
 
         if (!isFullyResolved(video)) {
             val legacy = tryLegacyResolve(source, video)
-            if (legacy != null) return@withContext legacy
+            if (legacy != null) return@withContext ensureHttpServerStarted(source, legacy)
         }
 
-        return@withContext video
+        return@withContext ensureHttpServerStarted(source, video)
     }
 
 
@@ -477,9 +497,9 @@ class DynamicAnimeParser(extension: AnimeExtension.Installed) : AnimeParser() {
             },
             sEpisode.url,
             sEpisode.name,
-            null,
-            null,
-            false,
+            sEpisode.preview_url?.takeIf { it.isNotBlank() }?.let { FileUrl(it) },
+            sEpisode.summary,
+            sEpisode.fillermark,
             null,
             sEpisode
         )

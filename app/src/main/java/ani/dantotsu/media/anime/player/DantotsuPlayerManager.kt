@@ -60,7 +60,7 @@ class DantotsuPlayerManager(
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                if (mpvView.isPlaying.value) {
+                if (mpvView.playWhenReady || mpvView.isPlaying.value) {
                     pausedByFocusLoss = true
                     mpvView.pause()
                 }

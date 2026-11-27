@@ -139,34 +139,6 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         }
     }
 
-    fun findBestVideoForDownload(
-        videos: List<Video>,
-        preferredResolutions: List<String>
-    ): Video? {
-        if (videos.isEmpty()) return null
-        val preferredVideo = videos.firstOrNull { it.preferred }
-        if (preferredVideo != null) return preferredVideo
-        if (preferredResolutions.isEmpty()) return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
-
-        for (preferred in preferredResolutions) {
-            val resNumber = Regex("""\d+""").find(preferred)?.value?.toIntOrNull()
-            if (resNumber != null) {
-                val match = videos.firstOrNull { it.quality == resNumber }
-                if (match != null) return match
-            }
-            val cleanPreferred = preferred.lowercase().replace("p", "").trim()
-            val matchFallback = videos.firstOrNull { video ->
-                val note = video.extraNote?.lowercase() ?: ""
-                val url = video.file.url.lowercase()
-                note.contains(preferred.lowercase()) || note.contains(cleanPreferred) ||
-                        url.contains("${cleanPreferred}p") || url.contains(cleanPreferred)
-            }
-            if (matchFallback != null) return matchFallback
-        }
-
-        return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
-    }
-
     @SuppressLint("SetTextI18n")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         var loaded = false
@@ -302,7 +274,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         chosenExtractor: VideoExtractor,
         preferredResolutions: List<String>
     ): Boolean {
-        val bestVideo = findBestVideoForDownload(chosenExtractor.videos, preferredResolutions) ?: return false
+        val bestVideo = Helper.findBestVideoForDownload(chosenExtractor.videos, preferredResolutions) ?: return false
         ep.selectedExtractor = chosenExtractor.server.name
         ep.selectedVideo = chosenExtractor.videos.indexOf(bestVideo).takeIf { it >= 0 } ?: 0
         val currentKey = media?.anime?.selectedEpisode ?: ep.number
@@ -449,7 +421,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
         currentEp.selectedExtractor = extractor.server.name
         val bestVideo = if (autoPriority && extractor.videos.isNotEmpty()) {
-            findBestVideoForDownload(extractor.videos, preferredResolutions)
+            Helper.findBestVideoForDownload(extractor.videos, preferredResolutions)
         } else null
 
         val chosenVideoIndex = if (bestVideo != null) {

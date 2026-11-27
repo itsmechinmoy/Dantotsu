@@ -27,6 +27,8 @@ class CharacterDetailsAdapter(private val character: Character, private val acti
                     (if (character.age != null && character.age != "null") "**${binding.root.context.getString(R.string.age)}** ${character.age}  \n" else "") +
                     (if (character.dateOfBirth != null && character.dateOfBirth.toString() != "??" && character.dateOfBirth.toString().isNotEmpty())
                         "**${binding.root.context.getString(R.string.birthday)}** ${character.dateOfBirth.toString()}  \n" else "") +
+                    (if (!character.height.isNullOrBlank())
+                        "**${binding.root.context.getString(R.string.character_height)}** ${character.height}  \n" else "") +
                     (if (character.gender != null && character.gender != "null")
                         "**${binding.root.context.getString(R.string.gender)}** " + when (character.gender) {
                             binding.root.context.getString(R.string.male) -> binding.root.context.getString(

@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.MangaSource
 import tachiyomi.domain.source.manga.model.MangaSourceData
 
 import eu.kanade.tachiyomi.extension.model.BaseExtension
+import eu.kanade.tachiyomi.extension.model.ExtensionContentWarning
 
 sealed class MangaExtension : BaseExtension {
 
@@ -26,6 +27,8 @@ sealed class MangaExtension : BaseExtension {
         val isUnofficial: Boolean = false,
         val repository: String? = null,
         val repoName: String? = null,
+        override val contentWarning: ExtensionContentWarning =
+            if (isNsfw) ExtensionContentWarning.NSFW else ExtensionContentWarning.SAFE,
     ) : MangaExtension()
 
     data class Available(
@@ -43,6 +46,8 @@ sealed class MangaExtension : BaseExtension {
         val iconUrl: String,
         val repository: String,
         val repoName: String? = null,
+        override val contentWarning: ExtensionContentWarning =
+            if (isNsfw) ExtensionContentWarning.NSFW else ExtensionContentWarning.SAFE,
     ) : MangaExtension()
 
     data class Untrusted(
@@ -56,6 +61,8 @@ sealed class MangaExtension : BaseExtension {
         override val isNsfw: Boolean = false,
         override val hasReadme: Boolean = false,
         override val hasChangelog: Boolean = false,
+        override val contentWarning: ExtensionContentWarning =
+            if (isNsfw) ExtensionContentWarning.NSFW else ExtensionContentWarning.SAFE,
     ) : MangaExtension()
 }
 

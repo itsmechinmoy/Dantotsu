@@ -17,6 +17,7 @@ import ani.dantotsu.util.Logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -305,13 +306,29 @@ object Anilist {
         }
     }
 
+    /** Set to true when AniList rejects the current token with 401 / Invalid token. */
+    @Volatile
+    var tokenInvalid: Boolean = false
+
     fun getSavedToken(): Boolean {
         token = PrefManager.getVal(PrefName.AnilistToken, null as String?)
+        tokenInvalid = false
         return !token.isNullOrEmpty()
+    }
+
+    fun saveToken(newToken: String) {
+        val changed = token != newToken
+        token = newToken
+        tokenInvalid = false
+        PrefManager.setVal(PrefName.AnilistToken, newToken)
+        if (changed) {
+            clearAllCaches()
+        }
     }
 
     fun removeSavedToken() {
         token = null
+        tokenInvalid = false
         username = null
         adult = false
         userid = null
@@ -338,21 +355,32 @@ object Anilist {
     /**
      * Decodes the JWT token and returns the number of days until expiry.
      * Returns null if the token is missing or cannot be decoded.
-     * Returns a negative number if the token is already expired.
+     * Returns <= 0 if the token is already expired or invalidated (401).
      */
     fun getTokenExpiryDays(): Long? {
-        val t = token ?: return null
+        val t = token?.takeIf { it.isNotEmpty() }
+            ?: PrefManager.getVal(PrefName.AnilistToken, null as String?)?.takeIf { it.isNotEmpty() }
+            ?: return null
+        if (tokenInvalid) return -1L
         return try {
             val parts = t.split(".")
             if (parts.size != 3) return null
+            // JWT segments are Base64URL encoded (- and _); replacing with + and / while
+            // passing URL_SAFE breaks decoding on any token containing '-' or '_'.
             val payload = android.util.Base64.decode(
-                parts[1].replace('-', '+').replace('_', '/'),
-                android.util.Base64.NO_PADDING or android.util.Base64.URL_SAFE
+                parts[1],
+                android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
             )
-            val json = Json.parseToJsonElement(String(payload)).jsonObject
-            val expSeconds = json["exp"]?.jsonPrimitive?.longOrNull ?: return null
-            val nowSeconds = System.currentTimeMillis() / 1000
-            (expSeconds - nowSeconds) / 86400
+            val json = Json.parseToJsonElement(String(payload, Charsets.UTF_8)).jsonObject
+            val expPrim = json["exp"]?.jsonPrimitive ?: return null
+            val expSeconds = expPrim.longOrNull ?: expPrim.doubleOrNull?.toLong() ?: return null
+            val nowSeconds = System.currentTimeMillis() / 1000L
+            val remainingSeconds = expSeconds - nowSeconds
+            if (remainingSeconds <= 0L) {
+                remainingSeconds / 86400L
+            } else {
+                (remainingSeconds + 86399L) / 86400L
+            }
         } catch (e: Exception) {
             Logger.log("getTokenExpiryDays error: ${e.message}")
             null
@@ -432,7 +460,8 @@ object Anilist {
         lastError = message
         if (message.contains("disabled", ignoreCase = true)) {
             anilistDisabledSignal = true
-        } else if (jsonCode == 401 || message.contains("Invalid token")) {
+        } else if (jsonCode == 401 || message.contains("Invalid token", ignoreCase = true)) {
+            tokenInvalid = true
             if (!show) snackString("Anilist token expired, please login again")
         } else {
             if (!show) snackString("Error fetching Anilist data: $message")
@@ -523,7 +552,8 @@ object Anilist {
     private suspend fun fetchOverNetwork(r: AnilistRawRequest): String {
         if (r.show) Logger.log("Anilist Query: ${r.query}")
         val headers = buildGraphQLHeaders(r.useToken)
-        val response = rateLimiter.execute(isMutation = r.isMutation) {
+        val weight = estimateGraphqlOperationCount(r.query)
+        val response = rateLimiter.execute(isMutation = r.isMutation, weight = weight) {
             val res = client.post(
                 "https://graphql.anilist.co/",
                 headers,
@@ -550,6 +580,7 @@ object Anilist {
             throw Exception(downMsg)
         }
         anilistDisabledSignal = false
+        if (r.useToken && token != null) tokenInvalid = false
         if (r.cacheSpec != null && r.cacheKey != null) responseCache.put(r.cacheKey, response.text, r.cacheSpec)
         return response.text
     }

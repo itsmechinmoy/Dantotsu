@@ -94,6 +94,72 @@ internal fun computeRetryWaitMs(
 }
 
 /**
+ * Estimates how many AniList rate-limit quota units [query] consumes by counting
+ * top-level root fields/aliases inside the outer GraphQL selection set (Nov 2026
+ * aliased query & `Page` rate-limit rules). Returns at least 1.
+ */
+internal fun estimateGraphqlOperationCount(query: String): Int {
+    val len = query.length
+    var depth = 0
+    var parenDepth = 0
+    var inString = false
+    var escaped = false
+    var inComment = false
+    var rootFields = 0
+    var expectFieldName = false
+
+    var i = 0
+    while (i < len) {
+        val ch = query[i]
+        when {
+            inComment -> {
+                if (ch == '\n' || ch == '\r') inComment = false
+            }
+            inString -> {
+                if (escaped) {
+                    escaped = false
+                } else if (ch == '\\') {
+                    escaped = true
+                } else if (ch == '"') {
+                    inString = false
+                }
+            }
+            ch == '#' -> inComment = true
+            ch == '"' -> inString = true
+            ch == '(' && depth == 1 -> parenDepth++
+            ch == ')' && depth == 1 -> if (parenDepth > 0) parenDepth--
+            ch == '{' -> {
+                depth++
+                if (depth == 1) {
+                    expectFieldName = true
+                } else if (depth == 2 && parenDepth == 0) {
+                    expectFieldName = false
+                }
+            }
+            ch == '}' -> {
+                depth--
+                if (depth == 1) {
+                    expectFieldName = true
+                }
+            }
+            depth == 1 && parenDepth == 0 -> {
+                if (ch.isWhitespace() || ch == ',') {
+                    // Wait for the next field token.
+                } else if (ch == ':') {
+                    // Alias delimiter preceding the actual field name; do not double-count.
+                    expectFieldName = false
+                } else if (expectFieldName && (ch.isLetter() || ch == '_')) {
+                    rootFields++
+                    expectFieldName = false
+                }
+            }
+        }
+        i++
+    }
+    return max(1, rootFields)
+}
+
+/**
  * Computes proactive pacing delay before dispatching the next AniList request based on
  * minimum request spacing and the most recently observed `X-RateLimit-Remaining` / `Reset`.
  */
@@ -103,6 +169,7 @@ internal fun computePacingDelayMs(
     resetAtMs: Long?,
     minIntervalMs: Long,
     lastDispatchMs: Long,
+    weight: Int = 1,
 ): Long {
     val baseDelay = if (lastDispatchMs > 0L) {
         max(0L, lastDispatchMs + minIntervalMs - nowMs)
@@ -119,13 +186,14 @@ internal fun computePacingDelayMs(
         60_000L
     }
 
-    if (remaining <= 0) {
+    if (remaining <= 0 || remaining < weight) {
         return max(baseDelay, untilResetMs)
     }
 
+    val effectiveThreshold = max(5, weight + 3)
     val targetGapMs = when {
-        remaining <= 5 -> (untilResetMs / (remaining + 1)).coerceIn(1_500L, 10_000L)
-        remaining <= 10 -> (untilResetMs / (remaining + 1)).coerceIn(600L, 4_000L)
+        remaining <= effectiveThreshold -> (untilResetMs / ((remaining / weight.coerceAtLeast(1)) + 1)).coerceIn(1_500L, 10_000L)
+        remaining <= effectiveThreshold + 5 -> (untilResetMs / ((remaining / weight.coerceAtLeast(1)) + 1)).coerceIn(600L, 4_000L)
         else -> minIntervalMs
     }
     val adaptiveDelay = if (lastDispatchMs > 0L) {
@@ -207,10 +275,12 @@ class AnilistRateLimiter(
 
     suspend fun execute(
         isMutation: Boolean,
+        weight: Int = 1,
         call: suspend () -> AnilistHttpResponse,
     ): AnilistHttpResponse {
         var attempt = 0
         var totalWaitedMs = 0L
+        val safeWeight = weight.coerceAtLeast(1)
 
         while (true) {
             val cooldownWaited = awaitSharedCooldownIfNeeded(isMutation, totalWaitedMs)
@@ -219,7 +289,7 @@ class AnilistRateLimiter(
                 continue
             }
 
-            when (val outcome = runAttemptUnderSemaphore(isMutation, attempt, totalWaitedMs, call)) {
+            when (val outcome = runAttemptUnderSemaphore(isMutation, safeWeight, attempt, totalWaitedMs, call)) {
                 is AttemptOutcome.Done -> return outcome.response
                 is AttemptOutcome.RetryAfter429 -> {
                     attempt++
@@ -276,6 +346,7 @@ class AnilistRateLimiter(
 
     private suspend fun runAttemptUnderSemaphore(
         isMutation: Boolean,
+        weight: Int,
         attempt: Int,
         totalWaitedMs: Long,
         call: suspend () -> AnilistHttpResponse,
@@ -296,12 +367,18 @@ class AnilistRateLimiter(
                     resetAtMs = resetAtMs,
                     minIntervalMs = minIntervalMs,
                     lastDispatchMs = lastDispatchMs,
+                    weight = weight,
                 )
                 if (delayNeeded > 1_500L) {
                     longPacingSleepMs = delayNeeded
                 } else {
                     shortSleepMs = delayNeeded
                     lastDispatchMs = nowInner + delayNeeded
+                    lastRemaining?.let { prev ->
+                        if (resetAtMs == null || nowInner < resetAtMs!!) {
+                            lastRemaining = (prev - weight).coerceAtLeast(0)
+                        }
+                    }
                 }
             }
 

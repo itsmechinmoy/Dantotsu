@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.animesource
 
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimeRelation
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SAnimeEpisodeUpdate
@@ -28,6 +30,38 @@ interface AnimeSource {
 
     val lang: String
         get() = ""
+
+    val supportsLatest: Boolean
+        get() = false
+
+    fun getFilterList(): AnimeFilterList = AnimeFilterList()
+
+    /**
+     * Get a page with a list of anime.
+     *
+     * @since extensions-lib 17
+     * @param page the page number to retrieve.
+     */
+    suspend fun getPopularAnime(page: Int): AnimesPage = throw IllegalStateException("Not used")
+
+    /**
+     * Get a page with a list of latest anime updates.
+     *
+     * @since extensions-lib 17
+     * @param page the page number to retrieve.
+     */
+    suspend fun getLatestUpdates(page: Int): AnimesPage = throw IllegalStateException("Not used")
+
+    /**
+     * Get a page with a list of anime.
+     *
+     * @since extensions-lib 17
+     * @param page the page number to retrieve.
+     * @param query the search query.
+     * @param filters the list of filters to apply.
+     */
+    suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage =
+        throw IllegalStateException("Not used")
 
     val supportsRelatedAnime: Boolean
         get() = false

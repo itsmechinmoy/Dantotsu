@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 
 class SettingsAccountActivity : SettingsScreenActivity() {
     override val screen get() = AccountsScreen
+    private var reloadAccountsCard: (() -> Unit)? = null
 
     /** On after a logout: back then restarts the main screen. */
     private val restartMainActivity = object : OnBackPressedCallback(false) {
@@ -43,6 +44,11 @@ class SettingsAccountActivity : SettingsScreenActivity() {
 
     override fun onScreenCreate(savedInstanceState: android.os.Bundle?) {
         onBackPressedDispatcher.addCallback(this, restartMainActivity)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        reloadAccountsCard?.invoke()
     }
 
     /** Fills the account logins block (AniList card, MAL, Discord, MangaBaka, Comick). */
@@ -97,6 +103,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
                         settingsAnilistTokenExpiry.visibility = View.VISIBLE
                         settingsAnilistTokenExpiry.text = when {
                             daysLeft <= 0 -> "Reconnect Now"
+                            daysLeft == 1L -> "Reconnect in 1 day"
                             else -> "Reconnect in $daysLeft days"
                         }
                         settingsAnilistTokenExpiry.setOnClickListener {
@@ -216,6 +223,7 @@ class SettingsAccountActivity : SettingsScreenActivity() {
                     }
                 }
             }
+            reloadAccountsCard = { reload() }
             reload()
         }
     }

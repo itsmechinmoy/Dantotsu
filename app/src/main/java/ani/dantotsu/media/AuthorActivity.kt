@@ -101,6 +101,8 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
 
     private fun createDesc(author: Author): String {
         val age = if (author.age != null) "**${getString(R.string.age)}** ${author.age}" else ""
+        val height =
+            if (!author.height.isNullOrBlank()) "**${getString(R.string.character_height)}** ${author.height}" else ""
         val yearsActive =
             if (author.yearsActive != null) "**${getString(R.string.years_active)}** ${author.yearsActive}" else ""
         val dob =
@@ -111,7 +113,7 @@ class AuthorActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedListener
             if (author.dateOfDeath != null) "**${getString(R.string.date_of_death)}** ${author.dateOfDeath}" else ""
         val about = author.about ?: ""
 
-        val infoLine = listOf(age, yearsActive, dob, homeTown, dod)
+        val infoLine = listOf(age, height, yearsActive, dob, homeTown, dod)
             .filter { it.isNotBlank() }
             .joinToString("  \n")
 

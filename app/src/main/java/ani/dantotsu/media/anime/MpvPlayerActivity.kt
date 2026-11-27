@@ -198,6 +198,10 @@ class MpvPlayerActivity : AppCompatActivity() {
     private var playerErrorRetryCount = 0
     private var rotation = 0
     private var wasPlaying = false
+    private var wasPlayingOnPause = false
+
+    private fun isInPipMode(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
 
     val model: MediaDetailsViewModel by viewModels()
     private val client = OkHttpClient()
@@ -362,6 +366,23 @@ class MpvPlayerActivity : AppCompatActivity() {
         }
     }
 
+    private fun updatePlayingUi(isPlaying: Boolean) {
+        if (isPlayerPlaying == isPlaying) return
+        isPlayerPlaying = isPlaying
+        playerView.keepScreenOn = isPlaying
+        (exoPlay.drawable as? Animatable)?.start()
+        if (!isDestroyed) {
+            Glide.with(this)
+                .load(if (isPlaying) R.drawable.anim_play_to_pause else R.drawable.anim_pause_to_play)
+                .into(exoPlay)
+        }
+        val mpv = playerManager.mpvView
+        if (initialized && this::episode.isInitialized) {
+            discordManager.updatePresence(media, episode, mpv, isPlaying)
+        }
+        updatePipActions(isPlaying)
+    }
+
     private fun observeMpvCallbacks() {
         val mpv = playerManager.mpvView
         mpv.onFileLoaded = { handleFileLoaded() }
@@ -373,6 +394,7 @@ class MpvPlayerActivity : AppCompatActivity() {
                 when (state) {
                     PlaybackState.PLAYING -> {
                         isBuffering = false
+                        updatePlayingUi(true)
                         val dur = mpv.duration.value
                         if (progressManager.episodeLength <= 0f && dur > 0) {
                             progressManager.episodeLength = dur.toFloat()
@@ -384,9 +406,11 @@ class MpvPlayerActivity : AppCompatActivity() {
                     }
                     PlaybackState.PAUSED -> {
                         isBuffering = false
+                        updatePlayingUi(false)
                     }
                     PlaybackState.ENDED -> {
                         isBuffering = false
+                        updatePlayingUi(false)
                     }
                     PlaybackState.IDLE -> {}
                 }
@@ -396,18 +420,7 @@ class MpvPlayerActivity : AppCompatActivity() {
         lifecycleScope.launch {
             mpv.isPlaying.collectLatest { isPlaying ->
                 if (!isBuffering) {
-                    isPlayerPlaying = isPlaying
-                    playerView.keepScreenOn = isPlaying
-                    (exoPlay.drawable as? Animatable)?.start()
-                    if (!isDestroyed) {
-                        Glide.with(this@MpvPlayerActivity)
-                            .load(if (isPlaying) R.drawable.anim_play_to_pause else R.drawable.anim_pause_to_play)
-                            .into(exoPlay)
-                    }
-                    if (initialized && this@MpvPlayerActivity::episode.isInitialized) {
-                        discordManager.updatePresence(media, episode, mpv, isPlaying)
-                    }
-                    updatePipActions(isPlaying)
+                    updatePlayingUi(isPlaying)
                 }
             }
         }
@@ -1304,34 +1317,6 @@ class MpvPlayerActivity : AppCompatActivity() {
         playerView.findViewById<View>(R.id.exo_buffering)?.isVisible = show
     }
 
-    private fun findBestVideoForDownload(
-        videos: List<Video>,
-        preferredResolutions: List<String>
-    ): Video? {
-        if (videos.isEmpty()) return null
-        val preferredVideo = videos.firstOrNull { it.preferred }
-        if (preferredVideo != null) return preferredVideo
-        if (preferredResolutions.isEmpty()) return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
-
-        for (preferred in preferredResolutions) {
-            val resNumber = Regex("""\d+""").find(preferred)?.value?.toIntOrNull()
-            if (resNumber != null) {
-                val match = videos.firstOrNull { it.quality == resNumber }
-                if (match != null) return match
-            }
-            val cleanPreferred = preferred.lowercase().replace("p", "").trim()
-            val matchFallback = videos.firstOrNull { video ->
-                val note = video.extraNote?.lowercase() ?: ""
-                val url = video.file.url.lowercase()
-                note.contains(preferred.lowercase()) || note.contains(cleanPreferred) ||
-                    url.contains("${cleanPreferred}p") || url.contains(cleanPreferred)
-            }
-            if (matchFallback != null) return matchFallback
-        }
-
-        return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
-    }
-
     private fun getNextEpisodeKeyForSmartDownload(currentExt: VideoExtractor): String? {
         if (!PrefManager.getVal<Boolean>(PrefName.SmartDownloadAnime)) return null
         val isOffline = currentExt.server.offline || Injekt.get<DownloadsManager>().queryDownload(media.mainName(), episode.number, MediaType.ANIME)
@@ -1377,7 +1362,7 @@ class MpvPlayerActivity : AppCompatActivity() {
 
                 val sourceName = model.watchSources?.get(sourceIndex)?.name
                 val preferredResolutions = PrefManager.getPreferredDownloadResolutions(sourceName)
-                val bestVideo = findBestVideoForDownload(extractorToUse.videos, preferredResolutions) ?: return@launch
+                val bestVideo = Helper.findBestVideoForDownload(extractorToUse.videos, preferredResolutions) ?: return@launch
 
                 withContext(Dispatchers.Main) {
                     Helper.startAnimeDownloadService(
@@ -1556,9 +1541,11 @@ class MpvPlayerActivity : AppCompatActivity() {
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
-        if (PrefManager.getVal(PrefName.FocusPause) && !epChanging) {
+        if (PrefManager.getVal(PrefName.FocusPause) && !epChanging && !isInPipMode()) {
             val mpv = playerManager.mpvView
-            if (playerManager.isInitialized && !hasFocus) wasPlaying = mpv.isPlaying.value
+            if (playerManager.isInitialized && !hasFocus) {
+                wasPlaying = mpv.playWhenReady
+            }
             if (hasFocus) {
                 if (playerManager.isInitialized && wasPlaying) mpv.play()
             } else {
@@ -1782,7 +1769,8 @@ class MpvPlayerActivity : AppCompatActivity() {
         orientationListener?.enable()
         hideSystemBarsExtendView()
         playerView.useController = true
-        if (playerManager.isInitialized) {
+        if (playerManager.isInitialized && wasPlayingOnPause) {
+            wasPlayingOnPause = false
             playerManager.play()
         }
     }
@@ -1790,7 +1778,8 @@ class MpvPlayerActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         orientationListener?.disable()
-        if (playerManager.isInitialized) {
+        if (playerManager.isInitialized && !isInPipMode()) {
+            wasPlayingOnPause = playerManager.mpvView.playWhenReady
             playerManager.pause()
         }
         aniSkipManager.stopTracking()

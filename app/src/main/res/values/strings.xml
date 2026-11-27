@@ -697,6 +697,7 @@
     <string name="age">Age:</string>
     <string name="birthday">Birthday:</string>
     <string name="gender">Gender:</string>
+    <string name="character_height">Height:</string>
     <string name="hometown">Home Town:</string>
     <string name="years_active">Years Active:</string>
     <string name="date_of_death">Date of Death:</string>
