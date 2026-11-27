@@ -223,30 +223,51 @@ class FastVideoDownloader(
 
     private suspend fun getType(client: OkHttpClient, url: String, headers: Headers): DownloadType {
         if (!url.startsWith("http", ignoreCase = true)) {
-            if (url.endsWith(".m3u8", true)) return DownloadType.Hls
-            if (url.endsWith(".mpd", true)) return DownloadType.Dash
-            return DownloadType.Direct
+            return detectTypeByExtension(url) ?: DownloadType.Direct
         }
 
         val path = url.toHttpUrl().encodedPath
-        if (path.endsWith(".m3u8", true)) return DownloadType.Hls
-        if (path.endsWith(".mpd", true)) return DownloadType.Dash
-        if (url.endsWith(".vtt", true) || url.endsWith(".ass", true) || url.endsWith(".mkv", true)) return DownloadType.Direct
+        detectTypeByExtension(path)?.let { return it }
+        if (url.endsWith(".vtt", true) || url.endsWith(".ass", true) || url.endsWith(".mkv", true)) {
+            return DownloadType.Direct
+        }
 
+        detectHttpHeaderType(client, url, headers)?.let { return it }
+        return probeStreamType(client, url, headers)
+    }
+
+    private fun detectTypeByExtension(path: String): DownloadType? = when {
+        path.endsWith(".m3u8", true) -> DownloadType.Hls
+        path.endsWith(".mpd", true) -> DownloadType.Dash
+        else -> null
+    }
+
+    private suspend fun detectHttpHeaderType(
+        client: OkHttpClient,
+        url: String,
+        headers: Headers,
+    ): DownloadType? {
         val contentType = runCatching {
             val headHeaders = headers.newBuilder().set("Connection", "close").build()
             val headReq = Request.Builder().url(url).head().headers(headHeaders).build()
             client.newCall(headReq).awaitSuccess().use { it.header("Content-Type")?.lowercase() }
-        }.getOrNull()
+        }.getOrNull() ?: return null
 
-        if (contentType != null) {
-            if (contentType.contains("mpegurl")) return DownloadType.Hls
-            if (contentType.contains("dash+xml")) return DownloadType.Dash
-            if (contentType.contains("video/x-matroska") || contentType.contains("video/mp4") || contentType.contains("video/webm")) {
-                return DownloadType.Direct
-            }
+        return when {
+            contentType.contains("mpegurl") -> DownloadType.Hls
+            contentType.contains("dash+xml") -> DownloadType.Dash
+            contentType.contains("video/x-matroska") ||
+                contentType.contains("video/mp4") ||
+                contentType.contains("video/webm") -> DownloadType.Direct
+            else -> null
         }
+    }
 
+    private suspend fun probeStreamType(
+        client: OkHttpClient,
+        url: String,
+        headers: Headers,
+    ): DownloadType {
         val probeHeaders = headers.newBuilder().set("Range", "bytes=0-1023").build()
         return flow {
             client.newCall(GET(url, probeHeaders)).awaitSuccess().use { resp ->
@@ -320,7 +341,7 @@ class FastVideoDownloader(
                 { stats ->
                     val timeMs = stats.time.toDouble()
                     val pct = if (durationSec != null && durationSec > 0.0) {
-                        ((timeMs / (durationSec * 1000.0)) * 100.0).toInt().coerceIn(0, 100)
+                        (timeMs / (durationSec * 1000.0) * 100.0).toInt().coerceIn(0, 100)
                     } else 50
                     onRemuxProgress(pct, timeMs)
                 },

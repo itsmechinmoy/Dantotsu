@@ -660,7 +660,7 @@ class MpvVideoView @JvmOverloads constructor(
         if (mapped == null) {
             if (!event.isPrintingKey) return false
             val ch = event.unicodeChar
-            if ((ch and KeyCharacterMap.COMBINING_ACCENT) != 0) return false
+            if (ch and KeyCharacterMap.COMBINING_ACCENT != 0) return false
             mapped = ch.toChar().toString()
         }
         if (event.repeatCount > 0) return true

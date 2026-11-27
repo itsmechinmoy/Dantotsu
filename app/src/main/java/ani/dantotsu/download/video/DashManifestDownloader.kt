@@ -232,7 +232,7 @@ class DashManifestDownloader(
         if (timeline == null || timeline.isEmpty()) {
             val duration = template.duration ?: throw IllegalStateException("Duration not found")
             val count = ceil((end - offset) / duration).toLong()
-            return (0 until count).map { (start + it) to (offset + it * duration) }
+            return (0 until count).map { start + it to offset + it * duration }
         }
 
         val out = mutableListOf<Pair<Long, Long>>()

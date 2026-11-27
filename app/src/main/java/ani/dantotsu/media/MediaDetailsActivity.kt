@@ -632,7 +632,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         val container = binding.compactPlayerContainer ?: return false
         val playerView = binding.compactPlayerView ?: return false
         val screenW = resources.displayMetrics.widthPixels
-        playerView.updateLayoutParams { height = (screenW * 9) / 16 }
+        playerView.updateLayoutParams { height = screenW * 9 / 16 }
         container.setPadding(0, statusBarHeight, 0, 0)
 
         binding.mediaBanner.isVisible = false

@@ -229,6 +229,23 @@ class AnilistHomeViewModel : ViewModel() {
         res["recommendations"]?.let { recommendation.postValue(it) }
         res["missingSequels"]?.let { missingSequels.postValue(it) }
         res["hidden"]?.let { hidden.postValue(it) }
+        mergeMangaBakaRecommendations(res["recommendations"])
+    }
+
+    private fun mergeMangaBakaRecommendations(baseList: ArrayList<Media>?) {
+        if (MangaBaka.token == null) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val mbRecs = MangaBaka.query.getRecommendations()
+            if (mbRecs.isEmpty()) return@launch
+            val combined = ArrayList(baseList ?: recommendation.value ?: arrayListOf())
+            val existingIds = combined.map { it.id }.toMutableSet()
+            for (item in mbRecs) {
+                if (existingIds.add(item.id)) {
+                    combined.add(item)
+                }
+            }
+            recommendation.postValue(combined)
+        }
     }
 
     private suspend fun initHomePageFromMAL() {
