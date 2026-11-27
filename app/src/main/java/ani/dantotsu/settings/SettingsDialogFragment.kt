@@ -86,14 +86,12 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
         binding.settingsRescueMode.isChecked = PrefManager.getVal(PrefName.RescueMode)
         binding.settingsRescueMode.setOnCheckedChangeListener { _, isChecked ->
             PrefManager.setVal(PrefName.RescueMode, isChecked)
-            activity?.let { act ->
-                dismiss()
-                val intent = Intent(act, MainActivity::class.java)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-                act.startActivity(intent)
-                act.overridePendingTransition(0, 0)
-                act.finish()
-                act.overridePendingTransition(0, 0)
+            val act = activity
+            dismiss()
+            when (act) {
+                is MainActivity -> act.serviceChanged()
+                null -> {}
+                else -> startMainActivity(act)
             }
         }
 

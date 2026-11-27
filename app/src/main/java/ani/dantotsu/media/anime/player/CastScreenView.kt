@@ -4,7 +4,6 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
-import androidx.media3.common.util.UnstableApi
 import ani.dantotsu.R
 import ani.dantotsu.databinding.LayoutCastScreenBinding
 import ani.dantotsu.media.Media
@@ -16,7 +15,6 @@ import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.google.android.material.slider.Slider
 import java.util.Locale
 
-@UnstableApi
 class CastScreenView(
     private val activity: AppCompatActivity,
     private val binding: LayoutCastScreenBinding,

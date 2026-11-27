@@ -15,5 +15,6 @@ data class Author(
     var about: String? = null,
     var yearMedia: MutableMap<String, ArrayList<Media>>? = null,
     var character: ArrayList<Character>? = null,
-    var isFav: Boolean = false
+    var isFav: Boolean = false,
+    var height: String? = null
 ) : Serializable

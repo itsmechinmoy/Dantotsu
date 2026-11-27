@@ -3,8 +3,6 @@ package ani.dantotsu.media.anime.player
 import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.C
-import androidx.media3.common.Player
 import ani.dantotsu.R
 import ani.dantotsu.connections.discord.Discord
 import ani.dantotsu.connections.discord.RPC
@@ -12,6 +10,7 @@ import ani.dantotsu.connections.discord.RPCManager
 import ani.dantotsu.isOnline
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.anime.Episode
+import ani.dantotsu.media.anime.mpv.MpvVideoView
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import kotlinx.coroutines.launch
@@ -23,7 +22,7 @@ class PlayerDiscordManager(
     fun updatePresence(
         media: Media?,
         episode: Episode?,
-        player: Player?,
+        player: MpvVideoView?,
         isPlaying: Boolean
     ) {
         if (media == null || episode == null || player == null) return
@@ -37,10 +36,10 @@ class PlayerDiscordManager(
             return
         }
 
-        if (isOnline(context) && !offline && Discord.token != null && !incognito && rpcEnabled) {
+        if (isOnline(context) && !offline && !incognito && rpcEnabled) {
             activity.lifecycleScope.launch {
                 val rpcData = buildDiscordRpcData(context, media, episode, player, isPlaying)
-                RPCManager.setPresence(context, rpcData)
+                RPCManager.setPresence(context, rpcData, activity)
             }
         }
     }
@@ -49,7 +48,7 @@ class PlayerDiscordManager(
         context: Context,
         media: Media,
         episode: Episode,
-        player: Player,
+        player: MpvVideoView,
         isPlaying: Boolean
     ): RPC.Companion.RPCData {
         val buttons = mutableListOf<RPC.Link>()
@@ -59,12 +58,10 @@ class PlayerDiscordManager(
         }
 
         val now = System.currentTimeMillis()
-        val currentPosMs = if (player.currentPosition > 0) player.currentPosition else 0L
-        val safeDurationMs = if (player.duration > 0 && player.duration != C.TIME_UNSET) {
-            player.duration
-        } else {
-            1440000L
-        }
+        val posMs = player.currentPosition.value
+        val durMs = player.duration.value
+        val currentPosMs = if (posMs > 0L) posMs else 0L
+        val safeDurationMs = if (durMs > 0L) durMs else 1440000L
 
         val isPaused = !isPlaying
         val startTimestamp = if (isPaused) null else now - currentPosMs
@@ -89,6 +86,6 @@ class PlayerDiscordManager(
     }
 
     fun clear() {
-        RPCManager.clearPresence(activity)
+        RPCManager.clearPresence(activity, activity)
     }
 }

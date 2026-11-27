@@ -29,6 +29,9 @@ data class Character(
     // The characters blood type
     @SerialName("bloodType") var bloodType: String?,
 
+    // The character's height
+    @SerialName("height") var height: Height? = null,
+
     // If the character is marked as favourite by the currently authenticated user
     @SerialName("isFavourite") var isFavourite: Boolean?,
 
@@ -119,3 +122,76 @@ data class CharacterImage(
     // The character's image of media at medium size
     @SerialName("medium") var medium: String?,
 ) : java.io.Serializable
+
+@Serializable
+data class HeightValue(
+    @SerialName("metric") var metric: Double? = null,
+    @SerialName("imperial") var imperial: String? = null,
+) : java.io.Serializable {
+    fun nonBlankImperial(): String? = imperial?.takeIf { it.isNotBlank() }
+
+    fun presentOrNull(): HeightValue? = takeIf { metric != null || nonBlankImperial() != null }
+
+    fun sameAs(other: HeightValue): Boolean =
+        metric == other.metric && nonBlankImperial() == other.nonBlankImperial()
+
+    fun formatMetricNumber(): String? {
+        val m = metric ?: return null
+        return if (m % 1.0 == 0.0) m.toLong().toString() else m.toString()
+    }
+
+    fun formatSingle(): String? {
+        val m = formatMetricNumber()?.let { "${it}cm" }
+        val imp = nonBlankImperial()
+        return when {
+            m != null && imp != null -> "$m ($imp)"
+            else -> m ?: imp
+        }
+    }
+}
+
+@Serializable
+data class Height(
+    @SerialName("initial") var initial: HeightValue? = null,
+    @SerialName("min") var min: HeightValue? = null,
+    @SerialName("max") var max: HeightValue? = null,
+) : java.io.Serializable {
+    private fun formatRange(minVal: HeightValue, maxVal: HeightValue): String? {
+        if (minVal.sameAs(maxVal)) return minVal.formatSingle()
+        val mMin = minVal.formatMetricNumber()
+        val mMax = maxVal.formatMetricNumber()
+        val iMin = minVal.nonBlankImperial()
+        val iMax = maxVal.nonBlankImperial()
+        val metricRange = if (mMin != null && mMax != null) "$mMin-${mMax}cm" else null
+        val impRange = if (iMin != null && iMax != null) "$iMin - $iMax" else null
+        return when {
+            metricRange != null && impRange != null -> "$metricRange ($impRange)"
+            metricRange != null -> metricRange
+            else -> listOfNotNull(minVal.formatSingle(), maxVal.formatSingle())
+                .joinToString(" - ")
+                .ifBlank { null }
+        }
+    }
+
+    /**
+     * Formats character/staff height following AniList's Nov 2026 spec:
+     * equal [min] and [max] render as a single value; unequal [min]/[max] render as a range;
+     * [initial] is shown when final height is unknown (or annotated alongside a range).
+     */
+    fun formatDisplay(): String? {
+        val minVal = min?.presentOrNull()
+        val maxVal = max?.presentOrNull()
+        val mainPart = when {
+            minVal != null && maxVal != null -> formatRange(minVal, maxVal)
+            minVal != null -> minVal.formatSingle()
+            maxVal != null -> maxVal.formatSingle()?.let { "≤ $it" }
+            else -> null
+        }
+        val initPart = initial?.presentOrNull()?.formatSingle()
+        return when {
+            mainPart != null && initPart != null -> "$mainPart (Initial: $initPart)"
+            mainPart != null -> mainPart
+            else -> initPart?.let { "$it (Initial)" }
+        }
+    }
+}

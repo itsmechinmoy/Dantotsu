@@ -2,7 +2,6 @@ package ani.dantotsu.di
 
 import android.app.Application
 import android.content.Context
-import androidx.media3.database.StandaloneDatabaseProvider
 import ani.dantotsu.addons.download.DownloadAddonManager
 import ani.dantotsu.download.DownloadsManager
 import ani.dantotsu.media.manga.MangaCache
@@ -49,10 +48,6 @@ object AppBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun providesMangaCache(): MangaCache = MangaCache()
-
-    @Provides
-    @SingleIn(AppScope::class)
-    fun providesDatabaseProvider(context: Context): StandaloneDatabaseProvider = StandaloneDatabaseProvider(context)
 
     @Provides
     @SingleIn(AppScope::class)

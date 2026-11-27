@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import ani.dantotsu.Mapper
 import ani.dantotsu.R
 import ani.dantotsu.client
 import ani.dantotsu.connections.comments.CommentsAPI
@@ -12,14 +13,17 @@ import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
-import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.contentOrNull
+import java.io.File
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
@@ -45,7 +49,35 @@ object Anilist {
     var genres: ArrayList<String>? = null
     var tags: Map<Boolean, List<String>>? = null
 
-    var rateLimitReset: Long = 0
+    val rateLimiter: AnilistRateLimiter = AnilistRateLimiter()
+    val coalescer: AnilistRequestCoalescer<String, String> = AnilistRequestCoalescer()
+    val responseCache: AnilistResponseCache = AnilistResponseCache(
+        diskDirProvider = {
+            currContext()?.cacheDir?.let { File(it, "anilist_cache") }
+        }
+    )
+
+    val rateLimitState: StateFlow<AnilistRateLimitState>
+        get() = rateLimiter.state
+
+    /** Legacy epoch-seconds cooldown gate, kept synced with [rateLimiter]. */
+    var rateLimitReset: Long
+        get() = rateLimiter.currentBlockedUntilMs() / 1000L
+        set(value) {
+            if (value <= 0L) {
+                rateLimiter.clearExternalGate()
+            } else {
+                rateLimiter.externalBlockedUntilMs = value * 1000L
+            }
+        }
+
+    fun isRateLimited(): Boolean {
+        val state = rateLimiter.state.value
+        return state.waiting || state.exhausted || rateLimiter.isCurrentlyBlocked()
+    }
+
+    @Volatile
+    private var lastRateLimitSnackMs: Long = 0L
 
     var initialized = false
     var adult: Boolean = false
@@ -274,13 +306,29 @@ object Anilist {
         }
     }
 
+    /** Set to true when AniList rejects the current token with 401 / Invalid token. */
+    @Volatile
+    var tokenInvalid: Boolean = false
+
     fun getSavedToken(): Boolean {
         token = PrefManager.getVal(PrefName.AnilistToken, null as String?)
+        tokenInvalid = false
         return !token.isNullOrEmpty()
+    }
+
+    fun saveToken(newToken: String) {
+        val changed = token != newToken
+        token = newToken
+        tokenInvalid = false
+        PrefManager.setVal(PrefName.AnilistToken, newToken)
+        if (changed) {
+            clearAllCaches()
+        }
     }
 
     fun removeSavedToken() {
         token = null
+        tokenInvalid = false
         username = null
         adult = false
         userid = null
@@ -298,8 +346,7 @@ object Anilist {
         PrefManager.setVal(PrefName.UnreadSubscriptionNotifications, 0)
         PrefManager.setVal(PrefName.UnreadCommentNotifications, 0)
         Anilist.unreadNotificationCount = 0
-        Anilist.query.invalidateHomePageCache()
-        Anilist.query.invalidateUserStatusCache()
+        clearAllCaches()
         //logout from comments api
         CommentsAPI.logout()
 
@@ -308,38 +355,78 @@ object Anilist {
     /**
      * Decodes the JWT token and returns the number of days until expiry.
      * Returns null if the token is missing or cannot be decoded.
-     * Returns a negative number if the token is already expired.
+     * Returns <= 0 if the token is already expired or invalidated (401).
      */
     fun getTokenExpiryDays(): Long? {
-        val t = token ?: return null
+        val t = token?.takeIf { it.isNotEmpty() }
+            ?: PrefManager.getVal(PrefName.AnilistToken, null as String?)?.takeIf { it.isNotEmpty() }
+            ?: return null
+        if (tokenInvalid) return -1L
         return try {
             val parts = t.split(".")
             if (parts.size != 3) return null
+            // JWT segments are Base64URL encoded (- and _); replacing with + and / while
+            // passing URL_SAFE breaks decoding on any token containing '-' or '_'.
             val payload = android.util.Base64.decode(
-                parts[1].replace('-', '+').replace('_', '/'),
-                android.util.Base64.NO_PADDING or android.util.Base64.URL_SAFE
+                parts[1],
+                android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
             )
-            val json = Json.parseToJsonElement(String(payload)).jsonObject
-            val expSeconds = json["exp"]?.jsonPrimitive?.longOrNull ?: return null
-            val nowSeconds = System.currentTimeMillis() / 1000
-            (expSeconds - nowSeconds) / 86400
+            val json = Json.parseToJsonElement(String(payload, Charsets.UTF_8)).jsonObject
+            val expPrim = json["exp"]?.jsonPrimitive ?: return null
+            val expSeconds = expPrim.longOrNull ?: expPrim.doubleOrNull?.toLong() ?: return null
+            val nowSeconds = System.currentTimeMillis() / 1000L
+            val remainingSeconds = expSeconds - nowSeconds
+            if (remainingSeconds <= 0L) {
+                remainingSeconds / 86400L
+            } else {
+                (remainingSeconds + 86399L) / 86400L
+            }
         } catch (e: Exception) {
             Logger.log("getTokenExpiryDays error: ${e.message}")
             null
         }
     }
 
-        fun checkPreQueryRateLimit() {
-        val nowSec = System.currentTimeMillis() / 1000
-        val secondsRemaining = rateLimitReset - nowSec
-        if (secondsRemaining > 0) {
-            val rateMsg = "Rate limited. Try after $secondsRemaining seconds"
-            toast(rateMsg)
-            lastError = rateMsg
-            throw Exception(rateMsg)
+    fun clearAllCaches() {
+        responseCache.clearAll()
+        query.invalidateHomePageCache()
+        query.invalidateUserStatusCache()
+        query.invalidateBannerCache()
+        rateLimiter.reset()
+    }
+
+    fun buildRequestKey(query: String, variables: String = "", useToken: Boolean = true): String {
+        val authScope = if (useToken && !token.isNullOrEmpty()) {
+            "u:${userid ?: token.hashCode()}"
         } else {
-            rateLimitReset = 0
+            "anon"
         }
+        return "$authScope|${query.trim()}|${variables.trim()}"
+    }
+
+    private fun buildCacheKey(
+        query: String,
+        variables: String,
+        useToken: Boolean,
+        cacheSpec: AnilistCacheSpec,
+    ): String {
+        val override = cacheSpec.cacheKeyOverride ?: return buildRequestKey(query, variables, useToken)
+        val authScope = if (useToken && !token.isNullOrEmpty()) {
+            "u:${userid ?: token.hashCode()}"
+        } else {
+            "anon"
+        }
+        return "$authScope|$override"
+    }
+
+    fun peekCachedRawQuery(
+        query: String,
+        variables: String = "",
+        useToken: Boolean = true,
+        cacheSpec: AnilistCacheSpec,
+    ): CacheLookup {
+        val key = buildCacheKey(query, variables, useToken, cacheSpec)
+        return responseCache.get(key, cacheSpec.category, checkDisk = cacheSpec.persistToDisk)
     }
 
     fun buildGraphQLHeaders(useToken: Boolean): MutableMap<String, String> {
@@ -368,33 +455,13 @@ object Anilist {
         return jsonPayload.toRequestBody("application/json; charset=utf-8".toMediaType())
     }
 
-    fun handle429RateLimit(headers: okhttp3.Headers) {
-        val currentSec = System.currentTimeMillis() / 1000
-        val retry = headers["Retry-After"]?.toIntOrNull() ?: -1
-        var passedLimitReset = headers["X-RateLimit-Reset"]?.toLongOrNull() ?: 0L
-        if (passedLimitReset > 10_000_000_000L) {
-            passedLimitReset /= 1000
-        }
-        val waitFromReset = if (passedLimitReset > currentSec) (passedLimitReset - currentSec).toInt() else 0
-        val actualWait = when {
-            retry > 0 -> retry
-            waitFromReset > 0 -> waitFromReset
-            else -> 60
-        }.coerceAtLeast(1)
-
-        rateLimitReset = currentSec + actualWait
-        val rateMsg = "Rate limited. Try after $actualWait seconds"
-        toast(rateMsg)
-        lastError = rateMsg
-        throw Exception(rateMsg)
-    }
-
     fun handle403Or400Error(jsonText: String, jsonCode: Int, show: Boolean) {
         val message = extractGraphQLForbiddenMessage(jsonText, jsonCode)
         lastError = message
         if (message.contains("disabled", ignoreCase = true)) {
             anilistDisabledSignal = true
-        } else if (message.contains("Invalid token")) {
+        } else if (jsonCode == 401 || message.contains("Invalid token", ignoreCase = true)) {
+            tokenInvalid = true
             if (!show) snackString("Anilist token expired, please login again")
         } else {
             if (!show) snackString("Error fetching Anilist data: $message")
@@ -416,55 +483,140 @@ object Anilist {
         Logger.log("Anilist Query Error: ${e.message}")
     }
 
+    private fun handleRateLimitException(
+        e: AnilistRateLimitException,
+        isMutation: Boolean,
+        show: Boolean,
+    ) {
+        val rateMsg = e.message ?: "Rate limited. Try after ${e.waitSeconds} seconds"
+        lastError = rateMsg
+        if (isMutation && show) {
+            val now = System.currentTimeMillis()
+            if (now - lastRateLimitSnackMs > 30_000L) {
+                lastRateLimitSnackMs = now
+                snackString(rateMsg)
+            }
+        }
+        Logger.log("Anilist Rate Limited: $rateMsg")
+    }
+
+    suspend fun executeRawQuery(
+        query: String,
+        variables: String = "",
+        force: Boolean = false,
+        useToken: Boolean = true,
+        show: Boolean = false,
+        @Suppress("UNUSED_PARAMETER") cache: Int? = null,
+        cacheSpec: AnilistCacheSpec? = null,
+        bypassCache: Boolean = false,
+    ): String? {
+        lastError = null
+        if (token == null && !force) return null
+        val isMutation = isGraphqlMutation(query)
+        // Mutations are never cached.
+        val cacheKey = cacheSpec?.takeIf { !isMutation }?.let { buildCacheKey(query, variables, useToken, it) }
+        if (cacheSpec != null && cacheKey != null && !bypassCache) {
+            val cached = responseCache.get(cacheKey, cacheSpec.category, checkDisk = cacheSpec.persistToDisk)
+            if (cached is CacheLookup.Fresh) return cached.value
+        }
+        val request = AnilistRawRequest(query, variables, useToken, show, isMutation, cacheSpec, cacheKey)
+        return try {
+            if (isMutation) {
+                fetchOverNetwork(request)
+            } else {
+                coalescer.execute(buildRequestKey(query, variables, useToken)) { fetchOverNetwork(request) }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: AnilistRateLimitException) {
+            handleRateLimitException(e, isMutation, show)
+            null
+        } catch (e: Exception) {
+            handleQueryException(e, show)
+            null
+        }
+    }
+
+    /** One GraphQL call as [executeRawQuery] sends it. */
+    private class AnilistRawRequest(
+        val query: String,
+        val variables: String,
+        val useToken: Boolean,
+        val show: Boolean,
+        val isMutation: Boolean,
+        val cacheSpec: AnilistCacheSpec?,
+        val cacheKey: String?,
+    )
+
+    /** Sends [r] through the rate limiter, checks the answer and caches it. */
+    private suspend fun fetchOverNetwork(r: AnilistRawRequest): String {
+        if (r.show) Logger.log("Anilist Query: ${r.query}")
+        val headers = buildGraphQLHeaders(r.useToken)
+        val weight = estimateGraphqlOperationCount(r.query)
+        val response = rateLimiter.execute(isMutation = r.isMutation, weight = weight) {
+            val res = client.post(
+                "https://graphql.anilist.co/",
+                headers,
+                requestBody = buildGraphQLRequestBody(r.query, r.variables),
+                cacheTime = 0
+            )
+            AnilistHttpResponse(
+                code = res.code,
+                text = res.text,
+                retryAfterSeconds = res.headers["Retry-After"]?.toIntOrNull(),
+                rateLimitRemaining = res.headers["X-RateLimit-Remaining"]?.toIntOrNull(),
+                rateLimitResetRaw = res.headers["X-RateLimit-Reset"]?.toLongOrNull(),
+                rateLimitLimit = res.headers["X-RateLimit-Limit"]?.toIntOrNull(),
+            )
+        }
+        Logger.log("Remaining requests: ${response.rateLimitRemaining ?: -1}")
+        if (response.code == 403 || response.code == 400 || response.code == 401) {
+            handle403Or400Error(response.text, response.code, r.show)
+        }
+        if (!response.text.startsWith("{")) {
+            anilistDisabledSignal = true
+            val downMsg = (currContext()?.getString(R.string.anilist_down) ?: "AniList is down") + " (error: ${response.code})"
+            lastError = downMsg
+            throw Exception(downMsg)
+        }
+        anilistDisabledSignal = false
+        if (r.useToken && token != null) tokenInvalid = false
+        if (r.cacheSpec != null && r.cacheKey != null) responseCache.put(r.cacheKey, response.text, r.cacheSpec)
+        return response.text
+    }
+
     suspend inline fun <reified T : Any> executeQuery(
         query: String,
         variables: String = "",
         force: Boolean = false,
         useToken: Boolean = true,
         show: Boolean = false,
-        cache: Int? = null
+        cache: Int? = null,
+        cacheSpec: AnilistCacheSpec? = null,
+        bypassCache: Boolean = false,
     ): T? {
-        lastError = null
+        val raw = executeRawQuery(
+            query = query,
+            variables = variables,
+            force = force,
+            useToken = useToken,
+            show = show,
+            cache = cache,
+            cacheSpec = cacheSpec,
+            bypassCache = bypassCache,
+        ) ?: return null
         return try {
-            if (show) Logger.log("Anilist Query: $query")
-            checkPreQueryRateLimit()
-
-            if (token != null || force) {
-                val headers = buildGraphQLHeaders(useToken)
-                val requestBody = buildGraphQLRequestBody(query, variables)
-
-                val json = client.post(
-                    "https://graphql.anilist.co/",
-                    headers,
-                    requestBody = requestBody,
-                    cacheTime = if (force) 0 else cache ?: 10
-                )
-                val remaining = json.headers["X-RateLimit-Remaining"]?.toIntOrNull() ?: -1
-                Logger.log("Remaining requests: $remaining")
-
-                if (json.code == 429) {
-                    handle429RateLimit(json.headers)
-                }
-
-                if (json.code == 403 || json.code == 400) {
-                    handle403Or400Error(json.text, json.code, show)
-                }
-
-                if (!json.text.startsWith("{")) {
-                    anilistDisabledSignal = true
-                    val downMsg = (currContext()?.getString(R.string.anilist_down) ?: "AniList is down") + " (error: ${json.code})"
-                    lastError = downMsg
-                    throw Exception(downMsg)
-                }
-
-                anilistDisabledSignal = false
-                json.parsed()
-            } else null
+            Mapper.parse<T>(raw)
         } catch (e: Exception) {
-            handleQueryException(e, show)
+            if (lastError == null) {
+                lastError = e.message
+            }
+            Logger.log("Anilist Query Parse Error: ${e.message}")
             null
         }
-    }    fun extractGraphQLForbiddenMessage(text: String, code: Int): String {
+    }
+
+    fun extractGraphQLForbiddenMessage(text: String, code: Int): String {
         return runCatching {
             val root = Json.parseToJsonElement(text).jsonObject
             val firstError = root["errors"]?.jsonArray?.firstOrNull()?.jsonObject

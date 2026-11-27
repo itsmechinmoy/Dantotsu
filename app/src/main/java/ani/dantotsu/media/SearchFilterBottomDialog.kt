@@ -469,6 +469,7 @@ class SearchFilterBottomDialog : BottomSheetDialogFragment() {
             popupMenu.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     R.id.country_global -> {
+                        activity.aniMangaResult.countryOfOrigin = null
                         binding.countryFilter.setImageResource(R.drawable.ic_round_globe_search_googlefonts)
                         startBounceZoomAnimation(binding.countryFilter)
                     }

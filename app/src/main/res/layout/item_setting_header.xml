@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Section header above a card. 32dp start = card margin (16dp) + row padding (16dp), so the
+     text lines up with the row icons. Theme accent colour. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/headerTitle"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:accessibilityHeading="true"
+    android:fontFamily="@font/poppins_semi_bold"
+    android:paddingStart="32dp"
+    android:paddingTop="24dp"
+    android:paddingEnd="32dp"
+    android:paddingBottom="8dp"
+    android:textColor="?attr/colorPrimary"
+    android:textSize="14sp"
+    tools:ignore="UnusedAttribute"
+    tools:text="Section" />

@@ -6,10 +6,13 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewModelScope
 import ani.dantotsu.BuildConfig
 import ani.dantotsu.R
+import ani.dantotsu.connections.comick.Comick
 import ani.dantotsu.connections.discord.Discord
 import ani.dantotsu.connections.mal.MAL
+import ani.dantotsu.connections.mangabaka.MangaBaka
 import ani.dantotsu.connections.mal.MalAnimeNode
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.Character
@@ -26,19 +29,19 @@ import ani.dantotsu.media.anime.Anime
 import ani.dantotsu.media.manga.Manga
 import ani.dantotsu.tryWithSuspend
 import ani.dantotsu.util.Logger
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 suspend fun getUserId(context: Context? = null, block: () -> Unit) {
-    if ((!Anilist.initialized || Anilist.avatar == null) && PrefManager.getVal<String>(PrefName.AnilistToken) != "") {
+    if (!Anilist.initialized && PrefManager.getVal<String>(PrefName.AnilistToken) != "") {
         if (Anilist.query.getUserData()) {
             tryWithSuspend {
                 if (MAL.token != null && !MAL.query.getUserData())
                     context?.let { snackString(it.getString(R.string.error_loading_mal_user_data)) }
             }
-        } else {
+        } else if (!Anilist.isRateLimited()) {
             context?.let { snackString(it.getString(R.string.error_loading_anilist_user_data)) }
         }
     }
@@ -136,15 +139,21 @@ class AnilistHomeViewModel : ViewModel() {
 
     fun getUserStatus(): LiveData<ArrayList<User>?> = userStatus
     suspend fun initUserStatus(forceRefresh: Boolean = false) {
-        if (forceRefresh || userStatus.value == null) {
+        val hadExisting = !userStatus.value.isNullOrEmpty()
+        if (userStatus.value == null) {
             userStatus.postValue(null)
         }
         val res = try {
             Anilist.query.getUserStatus(forceRefresh)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }
-        userStatus.postValue(res ?: arrayListOf())
+        val fetched = res ?: arrayListOf()
+        if (fetched.isNotEmpty() || !hadExisting || !Anilist.isRateLimited()) {
+            userStatus.postValue(fetched)
+        }
     }
 
     private val hidden: MutableLiveData<ArrayList<Media>> =
@@ -152,39 +161,56 @@ class AnilistHomeViewModel : ViewModel() {
 
     fun getHidden(): LiveData<ArrayList<Media>> = hidden
 
-    suspend fun initHomePage(forceRefresh: Boolean = false) {
+    companion object {
+        private const val HOME_FRESH_TTL_MS = 2 * 60_000L
+    }
+
+    suspend fun initHomePage(forceRefresh: Boolean = false): Boolean {
         recommendationPage = 1
         recommendationHasNextPage = true
         recommendationLoading = false
         val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
         if (rescueMode) {
             initHomePageFromMAL()
-            return
+            return true
         }
         if (!forceRefresh) {
-            val cachedRes = Anilist.query.loadHomePageCache()
-            if (cachedRes != null) {
+            val cachedWithAge = Anilist.query.loadHomePageCacheWithAge()
+            if (cachedWithAge != null) {
+                val (cachedRes, ageMs) = cachedWithAge
+                Anilist.query.seedBannerImagesFromHome(cachedRes)
                 postHomePageData(cachedRes)
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val freshRes = Anilist.query.initHomePage()
-                        if (freshRes.isNotEmpty()) {
-                            Anilist.query.saveHomePageCache(freshRes)
-                            withContext(Dispatchers.Main) {
-                                postHomePageData(freshRes)
+                if (ageMs >= HOME_FRESH_TTL_MS) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        try {
+                            val freshRes = Anilist.query.initHomePage()
+                            if (freshRes.isNotEmpty()) {
+                                Anilist.query.saveHomePageCache(freshRes)
+                                withContext(Dispatchers.Main) {
+                                    postHomePageData(freshRes)
+                                }
                             }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
                         }
-                    } catch (_: Exception) {
                     }
                 }
-                return
+                return true
+            }
+            val staleRes = Anilist.query.loadHomePageCacheStale()
+            if (staleRes != null && staleRes.isNotEmpty()) {
+                Anilist.query.seedBannerImagesFromHome(staleRes)
+                postHomePageData(staleRes)
             }
         }
         val res = Anilist.query.initHomePage()
         if (res.isNotEmpty()) {
             Anilist.query.saveHomePageCache(res)
             postHomePageData(res)
+            return true
         }
+        return animeContinue.value != null || recommendation.value != null || mangaContinue.value != null
     }
 
     private fun postHomePageData(res: Map<String, ArrayList<Media>>) {
@@ -203,6 +229,23 @@ class AnilistHomeViewModel : ViewModel() {
         res["recommendations"]?.let { recommendation.postValue(it) }
         res["missingSequels"]?.let { missingSequels.postValue(it) }
         res["hidden"]?.let { hidden.postValue(it) }
+        mergeMangaBakaRecommendations(res["recommendations"])
+    }
+
+    private fun mergeMangaBakaRecommendations(baseList: ArrayList<Media>?) {
+        if (MangaBaka.token == null) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val mbRecs = MangaBaka.query.getRecommendations()
+            if (mbRecs.isEmpty()) return@launch
+            val combined = ArrayList(baseList ?: recommendation.value ?: arrayListOf())
+            val existingIds = combined.map { it.id }.toMutableSet()
+            for (item in mbRecs) {
+                if (existingIds.add(item.id)) {
+                    combined.add(item)
+                }
+            }
+            recommendation.postValue(combined)
+        }
     }
 
     private suspend fun initHomePageFromMAL() {
@@ -341,7 +384,9 @@ class AnilistHomeViewModel : ViewModel() {
     suspend fun loadMain(context: FragmentActivity) {
         Anilist.getSavedToken()
         MAL.getSavedToken()
-        Discord.getSavedToken()
+        Discord.removeLegacyLogin(context)
+        MangaBaka.getSavedToken()
+        Comick.getSavedToken()
         if (!BuildConfig.FLAVOR.contains("fdroid")) {
             if (PrefManager.getVal(PrefName.CheckUpdate))
                 context.lifecycleScope.launch(Dispatchers.IO) {
@@ -536,17 +581,11 @@ class AnilistAnimeViewModel : ViewModel() {
         MutableLiveData<MutableList<Media>>(null)
 
     fun getMostFav(): LiveData<MutableList<Media>> = mostFavAnime
-    suspend fun loadAll(onList: Boolean = PrefManager.getVal(PrefName.PopularAnimeList)) {
-        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-        if (rescueMode) {
-            loadAllFromMAL()
-            return
-        }
-        val list = Anilist.query.loadAnimeList(onList)
-        updated.postValue(list["recentUpdates"])
-        popularMovies.postValue(list["trendingMovies"])
-        topRatedAnime.postValue(list["topRated"])
-        mostFavAnime.postValue(list["mostFav"])
+    private fun postAnimeListData(list: Map<String, ArrayList<Media>>, onList: Boolean) {
+        list["recentUpdates"]?.let { updated.postValue(it) }
+        list["trendingMovies"]?.let { popularMovies.postValue(it) }
+        list["topRated"]?.let { topRatedAnime.postValue(it) }
+        list["mostFav"]?.let { mostFavAnime.postValue(it) }
         list["trending"]?.let { trending.postValue(it) }
         list["popular"]?.let {
             animePopular.postValue(
@@ -561,6 +600,42 @@ class AnilistAnimeViewModel : ViewModel() {
                 )
             )
         }
+    }
+
+    suspend fun loadAll(
+        onList: Boolean = PrefManager.getVal(PrefName.PopularAnimeList),
+        forceRefresh: Boolean = false,
+    ): Boolean {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            loadAllFromMAL()
+            return true
+        }
+        if (!forceRefresh) {
+            val cached = Anilist.query.peekAnimeListCache(onList)
+            if (cached != null) {
+                val (data, isFresh) = cached
+                postAnimeListData(data, onList)
+                if (!isFresh) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        try {
+                            val fresh = Anilist.query.loadAnimeList(onList, forceRefresh = true)
+                            if (fresh.isNotEmpty()) postAnimeListData(fresh, onList)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
+                return true
+            }
+        }
+        val list = Anilist.query.loadAnimeList(onList, forceRefresh = forceRefresh)
+        if (list.isNotEmpty()) {
+            postAnimeListData(list, onList)
+            return true
+        }
+        return updated.value != null || trending.value != null
     }
 
     private suspend fun loadAllFromMAL() {
@@ -743,18 +818,12 @@ class AnilistMangaViewModel : ViewModel() {
         MutableLiveData<MutableList<Media>>(null)
 
     fun getMostFav(): LiveData<MutableList<Media>> = mostFavManga
-    suspend fun loadAll(onList: Boolean = PrefManager.getVal(PrefName.PopularMangaList)) {
-        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
-        if (rescueMode) {
-            loadAllFromMAL()
-            return
-        }
-        val list = Anilist.query.loadMangaList(onList)
-        popularManga.postValue(list["trendingManga"])
-        popularManhwa.postValue(list["trendingManhwa"])
-        popularNovel.postValue(list["trendingNovel"])
-        topRatedManga.postValue(list["topRated"])
-        mostFavManga.postValue(list["mostFav"])
+    private fun postMangaListData(list: Map<String, ArrayList<Media>>, onList: Boolean) {
+        list["trendingManga"]?.let { popularManga.postValue(it) }
+        list["trendingManhwa"]?.let { popularManhwa.postValue(it) }
+        list["trendingNovel"]?.let { popularNovel.postValue(it) }
+        list["topRated"]?.let { topRatedManga.postValue(it) }
+        list["mostFav"]?.let { mostFavManga.postValue(it) }
         list["trending"]?.let { trending.postValue(it) }
         list["popular"]?.let {
             mangaPopular.postValue(
@@ -769,6 +838,42 @@ class AnilistMangaViewModel : ViewModel() {
                 )
             )
         }
+    }
+
+    suspend fun loadAll(
+        onList: Boolean = PrefManager.getVal(PrefName.PopularMangaList),
+        forceRefresh: Boolean = false,
+    ): Boolean {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        if (rescueMode) {
+            loadAllFromMAL()
+            return true
+        }
+        if (!forceRefresh) {
+            val cached = Anilist.query.peekMangaListCache(onList)
+            if (cached != null) {
+                val (data, isFresh) = cached
+                postMangaListData(data, onList)
+                if (!isFresh) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        try {
+                            val fresh = Anilist.query.loadMangaList(onList, forceRefresh = true)
+                            if (fresh.isNotEmpty()) postMangaListData(fresh, onList)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
+                return true
+            }
+        }
+        val list = Anilist.query.loadMangaList(onList, forceRefresh = forceRefresh)
+        if (list.isNotEmpty()) {
+            postMangaListData(list, onList)
+            return true
+        }
+        return popularManga.value != null || trending.value != null
     }
 
     private suspend fun loadAllFromMAL() {

@@ -8,28 +8,27 @@ import android.widget.ImageButton
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.PlayerView
 import ani.dantotsu.R
 import ani.dantotsu.media.MediaDetailsViewModel
+import ani.dantotsu.media.anime.mpv.DantotsuPlayerView
+import ani.dantotsu.media.anime.mpv.MpvVideoView
+import ani.dantotsu.media.anime.mpv.PlaybackState
 import ani.dantotsu.others.AniSkip
 import ani.dantotsu.others.AniSkip.getType
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 
-@UnstableApi
 class PlayerAniSkipManager(
     private val activity: AppCompatActivity,
-    private val playerView: PlayerView,
+    private val playerView: DantotsuPlayerView,
     private val model: MediaDetailsViewModel,
     private val exoSkipOpEd: ImageButton,
     private val exoSkip: View,
     private val skipTimeButton: View,
     private val skipTimeText: TextView,
     private val timeStampText: TextView,
-    private val getPlayer: () -> Player?
+    private val getPlayer: () -> MpvVideoView?
 ) {
 
     private val handler = Handler(Looper.getMainLooper())
@@ -129,9 +128,9 @@ class PlayerAniSkipManager(
 
     private fun updateTimeStamp() {
         val player = getPlayer() ?: return
-        if (player.playbackState == Player.STATE_IDLE) return
+        if (player.playbackState.value == PlaybackState.IDLE) return
 
-        val playerCurrentTime = player.currentPosition / 1000.0
+        val playerCurrentTime = player.currentPosition.value / 1000.0
         currentTimeStamp = model.timeStamps.value?.find { timestamp ->
             timestamp.interval.startTime <= playerCurrentTime &&
                     playerCurrentTime < timestamp.interval.endTime - 1

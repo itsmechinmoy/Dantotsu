@@ -1,33 +1,31 @@
 package ani.dantotsu.settings
 
 import android.app.AlarmManager
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.Bundle
-import android.view.ViewGroup
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.api.NotificationType
-import ani.dantotsu.databinding.ActivitySettingsNotificationsBinding
-import ani.dantotsu.initActivity
 import ani.dantotsu.media.Media
-import ani.dantotsu.navBarHeight
 import ani.dantotsu.notifications.TaskScheduler
 import ani.dantotsu.notifications.anilist.AnilistNotificationWorker
 import ani.dantotsu.notifications.comment.CommentNotificationWorker
 import ani.dantotsu.notifications.subscription.SubscriptionHelper
 import ani.dantotsu.notifications.subscription.SubscriptionNotificationWorker
 import ani.dantotsu.openSettings
+import ani.dantotsu.settings.rows.Kind
+import ani.dantotsu.settings.rows.Row
+import ani.dantotsu.settings.rows.Section
+import ani.dantotsu.settings.rows.SettingsHost
+import ani.dantotsu.settings.rows.SettingsScreen
+import ani.dantotsu.settings.rows.SettingsScreenActivity
+import ani.dantotsu.settings.rows.actionRow
+import ani.dantotsu.settings.rows.choiceRow
+import ani.dantotsu.settings.rows.switchRow
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
-import ani.dantotsu.statusBarHeight
-import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.toast
 import ani.dantotsu.util.customAlertDialog
 import kotlinx.coroutines.Dispatchers
@@ -35,13 +33,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-class SettingsNotificationActivity : AppCompatActivity() {
-    private lateinit var binding: ActivitySettingsNotificationsBinding
+class SettingsNotificationActivity : SettingsScreenActivity() {
+    override val screen get() = NotificationScreen
+}
+
+object NotificationScreen : SettingsScreen(
+    "notifications", R.string.notifications, R.drawable.ic_round_notifications_none_24, R.string.notifications_desc,
+) {
+
+    override val activity get() = SettingsNotificationActivity::class.java
+
     private var isImportingLists = false
     private var isImportingStatuses = false
 
-    private fun formatInterval(minutes: Long): String {
-        if (minutes <= 0) return getString(R.string.do_not_update)
+    private fun formatInterval(c: Context, minutes: Long): String {
+        if (minutes <= 0) return c.getString(R.string.do_not_update)
         val mins = minutes % 60
         val hours = minutes / 60
         val hoursStr = if (hours > 0) "$hours hrs " else ""
@@ -49,111 +55,119 @@ class SettingsNotificationActivity : AppCompatActivity() {
         return "$hoursStr$minsStr"
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        ThemeManager(this).applyTheme()
-        initActivity(this)
-        binding = ActivitySettingsNotificationsBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        setupNotificationsView()
-    }
+    private fun reschedule(host: SettingsHost) =
+        TaskScheduler.create(host.activity, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(host.activity)
 
-    private fun setupNotificationsView() {
-        val context = this
-        binding.apply {
-            settingsNotificationsLayout.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                topMargin = statusBarHeight
-                bottomMargin = navBarHeight
-            }
-            notificationSettingsBack.setOnClickListener {
-                onBackPressedDispatcher.onBackPressed()
-            }
+    override fun sections() = listOf(
+        Section(R.string.subscriptions, listOf(
+            choiceRow(PrefName.SubscriptionNotificationInterval, R.string.subscriptions_checking_time,
+                R.drawable.ic_round_notifications_none_24, summary = R.string.subscriptions_info,
+                labels = { c -> SubscriptionNotificationWorker.checkIntervals.map { formatInterval(c, it) } },
+                onChange = { host, _ -> reschedule(host) }).withLongClick { reschedule(it) },
+            actionRow("view_subscriptions", R.string.view_subscriptions, R.string.view_subscriptions_desc,
+                R.drawable.ic_round_search_24,
+                onClick = { host, _ ->
+                    SubscriptionsBottomDialog.newInstance(SubscriptionHelper.getSubscriptions())
+                        .show(host.activity.supportFragmentManager, "subscriptions")
+                }),
+            actionRow("import_lists", R.string.import_anilist_lists_to_subscriptions,
+                R.string.import_anilist_lists_to_subscriptions_desc, R.drawable.ic_round_playlist_add_24,
+                onClick = { host, _ -> importAnilistLists(host) }),
+            actionRow("import_statuses", R.string.import_anilist_statuses_to_subscriptions,
+                R.string.import_anilist_statuses_to_subscriptions_desc, R.drawable.ic_round_playlist_add_24,
+                onClick = { host, _ -> importAnilistStatuses(host) }),
+            switchRow(PrefName.SubscriptionCheckingNotifications, R.string.notification_for_checking_subscriptions,
+                R.string.notification_for_checking_subscriptions_desc, R.drawable.ic_round_smart_button_24)
+                .withLongClick { openSettings(it.activity, null) },
+            switchRow(PrefName.SubscriptionPromptAtEnd, R.string.subscription_prompt_at_end,
+                R.string.subscription_prompt_at_end_desc, R.drawable.ic_round_smart_button_24),
+        )),
+        Section(R.string.settings_section_anilist_comments, listOf(
+            choiceRow(PrefName.AnilistNotificationInterval, R.string.anilist_notifications_interval,
+                R.drawable.ic_round_notifications_none_24, summary = R.string.anilist_notifications_checking_time_desc,
+                labels = { c -> AnilistNotificationWorker.checkIntervals.map { formatInterval(c, it) } },
+                onChange = { host, _ -> reschedule(host) }),
+            actionRow(PrefName.AnilistFilteredTypes.name, R.string.anilist_notification_filters,
+                R.string.anilist_notification_filters_desc, R.drawable.ic_anilist,
+                keys = listOf(PrefName.AnilistFilteredTypes), onClick = { host, _ -> editFilters(host) }),
+            choiceRow(PrefName.CommentNotificationInterval, R.string.comment_notifications_interval,
+                R.drawable.ic_round_notifications_none_24, summary = R.string.comment_notification_checking_time_desc,
+                labels = { c -> CommentNotificationWorker.checkIntervals.map { formatInterval(c, it) } },
+                onChange = { host, _ -> reschedule(host) }),
+        )),
+        Section(R.string.settings_section_reliability, listOf(
+            Row(
+                id = PrefName.UseAlarmManager.name, title = R.string.use_alarm_manager_reliable,
+                summary = R.string.use_alarm_manager_reliable_desc, icon = R.drawable.ic_anilist,
+                keys = listOf(PrefName.UseAlarmManager),
+                kind = Kind.Switch(get = { PrefManager.getVal(PrefName.UseAlarmManager) }, set = ::setAlarmManager),
+            ),
+        )),
+    )
 
-            val timeNames = SubscriptionNotificationWorker.checkIntervals.map { formatInterval(it.toLong()) }.toTypedArray()
-            val aTimeNames = AnilistNotificationWorker.checkIntervals.map { it.toInt() }
-            val aItems = AnilistNotificationWorker.checkIntervals.map { formatInterval(it) }
-            val cTimeNames = CommentNotificationWorker.checkIntervals.map { it.toInt() }
-            val cItems = CommentNotificationWorker.checkIntervals.map { formatInterval(it) }
+    private fun Row.withLongClick(action: (SettingsHost) -> Unit) = Row(
+        id = id, title = title, summary = summary, icon = icon, kind = kind, advanced = advanced,
+        visible = visible, enabled = enabled, keywords = keywords, keys = keys, extra = extra,
+        onLongClick = action,
+    )
 
-            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
-            val allSettings = ArrayList<Settings>().apply {
-                addAll(buildSubscriptionSettings(context, timeNames))
-                addAll(buildAnilistNotificationSettings(context, aTimeNames, aItems, cTimeNames, cItems))
-                addAll(buildBehaviorSettings(context))
+    /** Turning it on asks first and may open the exact-alarm page; cancel puts the switch back. */
+    private fun setAlarmManager(host: SettingsHost, on: Boolean) = with(host.activity) {
+        if (on) {
+            customAlertDialog().apply {
+                setTitle(R.string.use_alarm_manager)
+                setMessage(R.string.use_alarm_manager_confirm)
+                setPosButton(R.string.use) {
+                    PrefManager.setVal(PrefName.UseAlarmManager, true)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                        !(getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+                    ) {
+                        startActivity(Intent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM",
+                            android.net.Uri.parse("package:$packageName")))
+                    }
+                    host.refresh()
+                }
+                setNegButton(R.string.cancel) {
+                    PrefManager.setVal(PrefName.UseAlarmManager, false)
+                    host.refresh()
+                }
+                show()
             }
-            settingsRecyclerView.adapter = SettingsAdapter(
-                allSettings,
-                highlightKey = highlightKey
-            )
-            settingsRecyclerView.apply {
-                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-                setHasFixedSize(true)
-            }
+        } else {
+            PrefManager.setVal(PrefName.UseAlarmManager, false)
+            TaskScheduler.create(this, true).cancelAllTasks()
+            TaskScheduler.create(this, false).scheduleAllTasks(this)
         }
     }
-    private fun buildSubscriptionSettings(context: Context, timeNames: Array<String>): List<Settings> {
-        var curTime = PrefManager.getVal<Int>(PrefName.SubscriptionNotificationInterval)
-        return listOf(
-            Settings(
-                type = 1,
-                name = getString(
-                    R.string.subscriptions_checking_time_s,
-                    timeNames[curTime]
-                ),
-                desc = getString(R.string.subscriptions_info),
-                icon = R.drawable.ic_round_notifications_none_24,
-                onClick = {
-                    context.customAlertDialog().apply {
-                        setTitle(R.string.subscriptions_checking_time)
-                        singleChoiceItems(timeNames, curTime) { i ->
-                            curTime = i
-                            it.settingsTitle.text = getString(R.string.subscriptions_checking_time_s, timeNames[i])
-                            PrefManager.setVal(PrefName.SubscriptionNotificationInterval, curTime)
-                            TaskScheduler.create(context, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(context)
-                        }
-                        show()
+
+    private fun editFilters(host: SettingsHost) = with(host.activity) {
+        val types = NotificationType.entries.map { it.name }
+        val filteredTypes = PrefManager.getVal<Set<String>>(PrefName.AnilistFilteredTypes).toMutableSet()
+        val selected = types.map { filteredTypes.contains(it) }.toBooleanArray()
+        customAlertDialog().apply {
+            setTitle(R.string.anilist_notification_filters)
+            multiChoiceItems(
+                types.map { name ->
+                    name.replace("_", " ").lowercase().replaceFirstChar {
+                        if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString()
                     }
-                },
-                onLongClick = {
-                    TaskScheduler.create(
-                        context, PrefManager.getVal(PrefName.UseAlarmManager)
-                    ).scheduleAllTasks(context)
+                }.toTypedArray(),
+                selected
+            ) { updatedSelected ->
+                types.forEachIndexed { index, type ->
+                    if (updatedSelected[index]) filteredTypes.add(type) else filteredTypes.remove(type)
                 }
-            ),
-            Settings(
-                type = 1,
-                name = getString(R.string.view_subscriptions),
-                desc = getString(R.string.view_subscriptions_desc),
-                icon = R.drawable.ic_round_search_24,
-                onClick = {
-                    val subscriptions = SubscriptionHelper.getSubscriptions()
-                    SubscriptionsBottomDialog.newInstance(subscriptions).show(
-                        supportFragmentManager,
-                        "subscriptions"
-                    )
-                }
-            ),
-            Settings(
-                type = 1,
-                name = getString(R.string.import_anilist_lists_to_subscriptions),
-                desc = getString(R.string.import_anilist_lists_to_subscriptions_desc),
-                icon = R.drawable.ic_round_playlist_add_24,
-                onClick = { importAnilistLists(context) }
-            ),
-            Settings(
-                type = 1,
-                name = getString(R.string.import_anilist_statuses_to_subscriptions),
-                desc = getString(R.string.import_anilist_statuses_to_subscriptions_desc),
-                icon = R.drawable.ic_round_playlist_add_24,
-                onClick = { importAnilistStatuses(context) }
-            )
-        )
+                PrefManager.setVal(PrefName.AnilistFilteredTypes, filteredTypes)
+            }
+            show()
+        }
     }
 
-    private fun importAnilistLists(context: Context) {
+    private fun importAnilistLists(host: SettingsHost): Unit = with(host.activity) {
+        val context = this
         if (isImportingLists) {
             toast(getString(R.string.loading))
-            return
+            return@with
         }
         isImportingLists = true
         lifecycleScope.launch(Dispatchers.IO) {
@@ -221,10 +235,11 @@ class SettingsNotificationActivity : AppCompatActivity() {
         }
     }
 
-    private fun importAnilistStatuses(context: Context) {
+    private fun importAnilistStatuses(host: SettingsHost): Unit = with(host.activity) {
+        val context = this
         if (isImportingStatuses) {
             toast(getString(R.string.loading))
-            return
+            return@with
         }
         isImportingStatuses = true
         lifecycleScope.launch(Dispatchers.IO) {
@@ -303,178 +318,5 @@ class SettingsNotificationActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) { isImportingStatuses = false }
             }
         }
-    }
-
-    private fun buildAnilistNotificationSettings(
-        context: Context,
-        aTimeNames: List<Int>,
-        aItems: List<String>,
-        cTimeNames: List<Int>,
-        cItems: List<String>
-    ): List<Settings> {
-        return listOf(
-Settings(
-                        type = 1,
-                        name = getString(R.string.anilist_notification_filters),
-                        desc = getString(R.string.anilist_notification_filters_desc),
-                        icon = R.drawable.ic_anilist,
-                        onClick = {
-                            val types = NotificationType.entries.map { it.name }
-                            val filteredTypes =
-                                PrefManager.getVal<Set<String>>(PrefName.AnilistFilteredTypes)
-                                    .toMutableSet()
-                            val selected = types.map { filteredTypes.contains(it) }.toBooleanArray()
-                            context.customAlertDialog().apply {
-                                 setTitle(R.string.anilist_notification_filters)
-                                 multiChoiceItems(
-                                    types.map { name ->
-                                        name.replace("_", " ").lowercase().replaceFirstChar {
-                                        if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString()
-                                    } }.toTypedArray(),
-                                    selected
-                                ) { updatedSelected ->
-                                types.forEachIndexed { index, type ->
-                                    if (updatedSelected[index]) {
-                                        filteredTypes.add(type)
-                                    } else {
-                                        filteredTypes.remove(type)
-                                    }
-                                }
-                                    PrefManager.setVal(PrefName.AnilistFilteredTypes, filteredTypes)
-                                }
-                                show()
-                            }
-                        }
-
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(
-                            R.string.anilist_notifications_checking_time,
-                            aItems[PrefManager.getVal(PrefName.AnilistNotificationInterval)]
-                        ),
-                        desc = getString(R.string.anilist_notifications_checking_time_desc),
-                        icon = R.drawable.ic_round_notifications_none_24,
-                        onClick = {
-                            context.customAlertDialog().apply {
-                                 setTitle(R.string.subscriptions_checking_time)
-                                 singleChoiceItems(
-                                    aItems.toTypedArray(),
-                                    PrefManager.getVal<Int>(PrefName.AnilistNotificationInterval)
-                                ) { i ->
-                                    PrefManager.setVal(PrefName.AnilistNotificationInterval, i)
-                                    it.settingsTitle.text =
-                                        getString(
-                                            R.string.anilist_notifications_checking_time,
-                                            aItems[i]
-                                        )
-                                    TaskScheduler.create(
-                                        context, PrefManager.getVal(PrefName.UseAlarmManager)
-                                    ).scheduleAllTasks(context)
-                                }
-                                show()
-                            }
-                        }
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(
-                            R.string.comment_notification_checking_time,
-                            cItems[PrefManager.getVal(PrefName.CommentNotificationInterval)]
-                        ),
-                        desc = getString(R.string.comment_notification_checking_time_desc),
-                        icon = R.drawable.ic_round_notifications_none_24,
-                        onClick = {
-                            context.customAlertDialog().apply {
-                                 setTitle(R.string.subscriptions_checking_time)
-                                 singleChoiceItems(
-                                    cItems.toTypedArray(),
-                                    PrefManager.getVal<Int>(PrefName.CommentNotificationInterval)
-                                ) {  i ->
-                                    PrefManager.setVal(PrefName.CommentNotificationInterval, i)
-                                    it.settingsTitle.text =
-                                        getString(
-                                            R.string.comment_notification_checking_time,
-                                            cItems[i]
-                                        )
-                                    TaskScheduler.create(
-                                        context, PrefManager.getVal(PrefName.UseAlarmManager)
-                                    ).scheduleAllTasks(context)
-                                }
-                                show()
-                            }
-                        }
-                    )
-        )
-    }
-
-    private fun buildBehaviorSettings(context: Context): List<Settings> {
-        return listOf(
-Settings(
-                        type = 2,
-                        name = getString(R.string.notification_for_checking_subscriptions),
-                        desc = getString(R.string.notification_for_checking_subscriptions_desc),
-                        icon = R.drawable.ic_round_smart_button_24,
-                        isChecked = PrefManager.getVal(PrefName.SubscriptionCheckingNotifications),
-                        switch = { isChecked, _ ->
-                            PrefManager.setVal(
-                                PrefName.SubscriptionCheckingNotifications,
-                                isChecked
-                            )
-                        },
-                        onLongClick = {
-                            openSettings(context, null)
-                        }
-                    ),
-                    Settings(
-                        type = 2,
-                        name = getString(R.string.subscription_prompt_at_end),
-                        desc = getString(R.string.subscription_prompt_at_end_desc),
-                        icon = R.drawable.ic_round_smart_button_24,
-                        isChecked = PrefManager.getVal(PrefName.SubscriptionPromptAtEnd),
-                        switch = { isChecked, _ ->
-                            PrefManager.setVal(
-                                PrefName.SubscriptionPromptAtEnd,
-                                isChecked
-                            )
-                        }
-                    ),
-                    Settings(
-                        type = 2,
-                        name = getString(R.string.use_alarm_manager_reliable),
-                        desc = getString(R.string.use_alarm_manager_reliable_desc),
-                        icon = R.drawable.ic_anilist,
-                        isChecked = PrefManager.getVal(PrefName.UseAlarmManager),
-                        switch = { isChecked, view ->
-                            if (isChecked) {
-                                context.customAlertDialog().apply {
-                                     setTitle(R.string.use_alarm_manager)
-                                     setMessage(R.string.use_alarm_manager_confirm)
-                                     setPosButton(R.string.use) {
-                                        PrefManager.setVal(PrefName.UseAlarmManager, true)
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                            if (!(getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()) {
-                                                val intent =
-                                                    Intent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM", android.net.Uri.parse("package:${context.packageName}"))
-                                                startActivity(intent)
-                                                view.settingsButton.isChecked = true
-                                            }
-                                        }
-                                    }
-                                    setNegButton(R.string.cancel) {
-                                        view.settingsButton.isChecked = false
-                                        PrefManager.setVal(PrefName.UseAlarmManager, false)
-                                    }
-                                    show()
-                                }
-                            } else {
-                                PrefManager.setVal(PrefName.UseAlarmManager, false)
-                                TaskScheduler.create(context, true).cancelAllTasks()
-                                TaskScheduler.create(context, false)
-                                    .scheduleAllTasks(context)
-                            }
-                        },
-                    ),
-        )
     }
 }

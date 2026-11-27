@@ -5,10 +5,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
 import android.widget.LinearLayout
-import androidx.annotation.OptIn
 import androidx.core.view.isVisible
 import androidx.lifecycle.coroutineScope
-import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.R
 import ani.dantotsu.connections.updateProgress
@@ -19,6 +17,7 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.setAnimation
 import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.customAlertDialog
 import ani.dantotsu.util.SizeFormatter
 import com.bumptech.glide.Glide
@@ -53,7 +52,6 @@ fun handleProgress(cont: LinearLayout, bar: View, empty: View, mediaId: Int, ep:
     }
 }
 
-@OptIn(UnstableApi::class)
 class EpisodeAdapter(
     private var type: Int,
     private val media: Media,
@@ -176,7 +174,8 @@ class EpisodeAdapter(
             binding.itemEpisodeFillerView.visibility = View.GONE
         }
 
-        if (ep.rating != null) {
+        val showRating = PrefManager.getVal<Boolean>(PrefName.ShowEpisodeRating)
+        if (showRating && ep.rating != null) {
             binding.itemEpisodeRating.visibility = View.VISIBLE
             binding.itemEpisodeRating.text = "★ ${ep.rating}"
         } else {
@@ -215,7 +214,8 @@ class EpisodeAdapter(
         binding.itemEpisodeNumber.text = ep.number
         binding.itemEpisodeTitle.text = title
 
-        if (ep.rating != null) {
+        val showRating = PrefManager.getVal<Boolean>(PrefName.ShowEpisodeRating)
+        if (showRating && ep.rating != null) {
             binding.itemEpisodeRating.visibility = View.VISIBLE
             binding.itemEpisodeRating.text = "★ ${ep.rating}"
         } else {
@@ -293,7 +293,6 @@ class EpisodeAdapter(
         }
     }
 
-    @OptIn(UnstableApi::class)
     fun addToDownloadedEpisodes(episodeNumber: String, size: Double) {
         AnimeDownloader.stopDownload(media.id, episodeNumber)
         downloadedEpisodes.add(episodeNumber)

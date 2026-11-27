@@ -162,16 +162,13 @@ dependencies {
     // ffmpeg-kit for NativeVideoDownloader
     implementation(libs.ffmpeg.kit)
 
-    // Media3 & decoders
-    implementation(libs.bundles.media3)
-    implementation(libs.bundles.subtitles)
+    testImplementation(libs.junit)
+
+    // MPV Android Lib & Cast & MPD Parser
+    implementation(libs.mpv.lib)
+    implementation(libs.gms.cast)
     implementation(libs.mediarouter)
-    // HTTP/3 (QUIC) — media3-datasource-cronet:1.11.1 API surface:
-    // Tier 1 (GMS devices): CronetDataSource via Play Services CronetProvider — HTTP/3 + HTTP/2.
-    // Tier 2 (fallback / F-Droid): OkHttp — HTTP/2. CronetProvider absent → caught → falls through.
-    implementation(libs.media3.cronet)
-    // GMS Cronet provider — google flavor only; absent from F-Droid APK
-    add("googleImplementation", libs.play.services.cronet)
+    implementation(libs.mpd.parser)
 
     // Firebase
     add("googleImplementation", platform(libs.firebase.bom))

@@ -9,15 +9,12 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.databinding.ItemSettingsSearchResultBinding
 import ani.dantotsu.setAnimation
+import ani.dantotsu.settings.rows.SettingsCards
 
 class SettingsSearchAdapter(
     private var results: List<SearchableSetting>,
     private val onItemClick: ((SearchableSetting) -> Unit)? = null
 ) : RecyclerView.Adapter<SettingsSearchAdapter.SearchResultViewHolder>() {
-
-    companion object {
-        const val EXTRA_HIGHLIGHT_KEY = "extra_highlight_key"
-    }
 
     inner class SearchResultViewHolder(val binding: ItemSettingsSearchResultBinding) :
         RecyclerView.ViewHolder(binding.root)
@@ -37,6 +34,7 @@ class SettingsSearchAdapter(
         val context = binding.root.context
 
         setAnimation(context, binding.root)
+        SettingsCards.apply(binding.root, position == 0, position == results.lastIndex)
 
         binding.searchResultTitle.text = item.title
 
@@ -80,7 +78,7 @@ class SettingsSearchAdapter(
 
     private fun launchSetting(context: Context, item: SearchableSetting) {
         val intent = Intent(context, item.targetActivity).apply {
-            putExtra(EXTRA_HIGHLIGHT_KEY, item.highlightKey)
+            putExtra(ani.dantotsu.settings.rows.SettingsScreenActivity.EXTRA_ROW, item.rowId)
         }
         context.startActivity(intent)
     }

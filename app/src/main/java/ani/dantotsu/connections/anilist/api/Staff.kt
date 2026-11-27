@@ -42,6 +42,9 @@ data class Staff(
     // The persons blood type
     @SerialName("bloodType") var bloodType: String?,
 
+    // The staff member's height
+    @SerialName("height") var height: Height? = null,
+
     // If the staff member is marked as favourite by the currently authenticated user
     @SerialName("isFavourite") var isFavourite: Boolean?,
 

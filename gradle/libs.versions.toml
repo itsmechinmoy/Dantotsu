@@ -1,22 +1,20 @@
 [versions]
 kotlin = "2.4.21"
-ksp = "2.3.13"
+ksp = "2.3.14"
 agp = "9.5.1"
-serialization = "1.12.0"
+serialization = "1.13.0"
 coroutines = "1.11.0"
-firebase-bom = "35.1.0"
-glide = "5.0.9"
-exo = "1.11.1"
+firebase-bom = "35.2.0"
+glide = "5.0.10"
+mpv = "0.1.16"
 markwon = "4.6.2"
 groupie = "2.10.1"
-nextlib = "0.8.4"
-ass = "0.5.1"
 libtorrent4j = "2.1.0-39"
 shizuku = "13.1.5"
 ffmpeg-kit = "2.2.3"
 nanohttpd = "2.3.1"
-metro = "1.5.2"
-metrox-viewmodel = "1.5.2"
+metro = "1.6.0"
+metrox-viewmodel = "1.6.0"
 materialKolor = "5.0.1"
 compose-runtime = "1.12.1"
 coil = "3.5.0"
@@ -37,6 +35,7 @@ desugar-jdk-libs = "2.1.5"
 leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanary" }
 leakcanary-plumber = { module = "com.squareup.leakcanary:plumber-android", version.ref = "leakcanary" }
 ffmpeg-kit = { module = "com.antonkarpenko:ffmpeg-kit-https", version.ref = "ffmpeg-kit" }
+junit = { module = "junit:junit", version = "4.13.2" }
 
 
 # Firebase
@@ -57,7 +56,7 @@ androidx-work = "androidx.work:work-runtime-ktx:2.12.0"
 androidx-preference = "androidx.preference:preference-ktx:1.2.1"
 androidx-webkit = "androidx.webkit:webkit:1.18.0"
 androidx-biometric = "androidx.biometric:biometric:1.1.0"
-mediarouter = "androidx.mediarouter:mediarouter:1.8.1"
+mediarouter = "androidx.mediarouter:mediarouter:1.9.0"
 paging = "androidx.paging:paging-runtime-ktx:3.5.3"
 
 # Kotlin
@@ -92,22 +91,10 @@ glide-ksp = { module = "com.github.bumptech.glide:ksp", version.ref = "glide" }
 glide-okhttp = { module = "com.github.bumptech.glide:okhttp3-integration", version.ref = "glide" }
 glide-transform = "jp.wasabeef:glide-transformations:4.3.0"
 
-# Media3 / Exo
-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "exo" }
-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "exo" }
-media3-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "exo" }
-media3-dash = { module = "androidx.media3:media3-exoplayer-dash", version.ref = "exo" }
-media3-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "exo" }
-media3-cronet = { module = "androidx.media3:media3-datasource-cronet", version.ref = "exo" }
-play-services-cronet = "com.google.android.gms:play-services-cronet:18.1.1"
-media3-session = { module = "androidx.media3:media3-session", version.ref = "exo" }
-media3-cast = { module = "androidx.media3:media3-cast", version.ref = "exo" }
-media3-effect = { module = "androidx.media3:media3-effect", version.ref = "exo" }
-
-# Extra Media
-nextlib = { module = "com.github.anilbeesetti.nextlib:nextlib-media3ext", version.ref = "nextlib" }
-ass-media = { module = "io.github.peerless2012:ass-media", version.ref = "ass" }
-ass-kt = { module = "io.github.peerless2012:ass-kt", version.ref = "ass" }
+# MPV & Cast & MPD
+mpv-lib = { module = "io.github.animiruorg:mpv-android-lib", version.ref = "mpv" }
+gms-cast = "com.google.android.gms:play-services-cast-framework:22.3.1"
+mpd-parser = "io.lindstrom:mpd-parser:0.23"
 
 # UI
 material = "com.google.android.material:material:1.14.0"
@@ -184,7 +171,7 @@ play-services-base = "com.google.android.gms:play-services-base:18.11.1"
 android = { id = "com.android.application", version.ref = "agp" }
 serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-google = { id = "com.google.gms.google-services", version = "4.5.0" }
+google = { id = "com.google.gms.google-services", version = "4.6.0" }
 crashlytics = { id = "com.google.firebase.crashlytics", version = "3.0.8" }
 metro = { id = "dev.zacsweers.metro", version.ref = "metro" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
@@ -212,19 +199,6 @@ androidx = [
 ]
 
 glide = ["glide", "glide-okhttp", "glide-transform"]
-
-media3 = [
-    "media3-exoplayer",
-    "media3-ui",
-    "media3-hls",
-    "media3-dash",
-    "media3-okhttp",
-    "media3-session",
-    "media3-cast",
-    "media3-effect"
-]
-
-subtitles = ["ass-media", "ass-kt"]
 
 markwon = [
     "markwon-core",

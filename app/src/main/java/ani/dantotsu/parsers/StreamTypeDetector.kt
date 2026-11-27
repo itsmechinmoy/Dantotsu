@@ -8,6 +8,7 @@ import java.net.URLDecoder
 
 object StreamTypeDetector {
     private val TORRENT_HASH_REGEX = Regex("""/[0-9a-fA-F]{40}(?:/|$)""")
+    private val HASH_QUERY_REGEX = Regex("""(?:^|&)hash=[0-9a-fA-F]{40}(?:&|$)""")
     private val LOOPBACK_HOSTS = setOf("127.0.0.1", "localhost", "::1", "[::1]")
 
     fun isLocalhost(host: String?): Boolean = host != null && host in LOOPBACK_HOSTS
@@ -30,6 +31,8 @@ object StreamTypeDetector {
                 q.contains("torrent", ignoreCase = true) ||
                 q.contains("infohash", ignoreCase = true) ||
                 q.contains("tr=") ||
+                // TorrentServerManager.getLink, on whatever port was free
+                HASH_QUERY_REGEX.containsMatchIn(q) ||
                 TORRENT_HASH_REGEX.containsMatchIn(p)
     }
 

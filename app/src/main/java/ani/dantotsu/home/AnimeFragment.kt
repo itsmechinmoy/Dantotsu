@@ -219,8 +219,7 @@ class AnimeFragment : Fragment() {
             true
         }
 
-        var running = false
-        setupRefreshObserver(popularAdaptor, scope)
+        setupRefreshObserver(scope)
     }
 
     override fun onResume() {
@@ -286,7 +285,6 @@ class AnimeFragment : Fragment() {
     }
 
     private fun setupRefreshObserver(
-        popularAdaptor: MediaAdaptor,
         scope: androidx.lifecycle.LifecycleCoroutineScope
     ) {
         fun load() = scope.launch(Dispatchers.Main) {
@@ -303,30 +301,24 @@ class AnimeFragment : Fragment() {
                         if (rescueMode) {
                             withContext(Dispatchers.Main) { load() }
                         } else {
-                            Anilist.userid =
-                                PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
-                                    ?.toIntOrNull()
                             if (Anilist.userid == null) {
-                                getUserId(context) {
-                                    load()
-                                }
-                            } else {
-                                getUserId(context) {
-                                    load()
-                                }
+                                Anilist.userid =
+                                    PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
+                                        ?.toIntOrNull()
+                            }
+                            getUserId(context) {
+                                load()
                             }
                         }
                     }
-                    model.loaded = true
-                    if (_binding?.animeRefresh?.isRefreshing == true) {
-                        withContext(Dispatchers.Main) {
-                            model.aniMangaSearchResults.results.clear()
-                            popularAdaptor.notifyDataSetChanged()
-                        }
+                    val isPullToRefresh = _binding?.animeRefresh?.isRefreshing == true
+                    val loadedOk = withContext(Dispatchers.IO) {
+                        model.loadAll(
+                            onList = PrefManager.getVal(PrefName.PopularAnimeList),
+                            forceRefresh = isPullToRefresh,
+                        )
                     }
-                    withContext(Dispatchers.IO) {
-                        model.loadAll(PrefManager.getVal(PrefName.PopularAnimeList))
-                    }
+                    model.loaded = loadedOk
                     live.postValue(false)
                     _binding?.animeRefresh?.isRefreshing = false
                     running = false

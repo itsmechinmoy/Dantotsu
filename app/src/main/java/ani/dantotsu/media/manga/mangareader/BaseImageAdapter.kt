@@ -298,6 +298,10 @@ abstract class BaseImageAdapter(
                 override fun onSingleClick(event: MotionEvent) =
                     activity.handleController(event = event)
             })
+            view.setOnTouchListener { _, event ->
+                detector.onTouchEvent(event)
+                false
+            }
             view.findViewById<View>(R.id.imgProgCover).apply {
                 setOnTouchListener { _, event ->
                     detector.onTouchEvent(event)

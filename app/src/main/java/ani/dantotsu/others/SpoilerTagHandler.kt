@@ -23,7 +23,8 @@ class SpoilerTagHandler : SimpleTagHandler() {
         tag: HtmlTag
     ): Any? {
         val attrs = tag.attributes()
-        val isSpoiler = attrs["class"] == "markdown-spoiler" || attrs["rel"] == "spoiler"
+        val classes = attrs["class"]?.split(Regex("\\s+")).orEmpty()
+        val isSpoiler = "markdown-spoiler" in classes || "markdown_spoiler" in classes || attrs["rel"] == "spoiler"
         if (!isSpoiler) return null
 
         val spoilerSpan = SpoilerPlugin.RedditSpoilerSpan()

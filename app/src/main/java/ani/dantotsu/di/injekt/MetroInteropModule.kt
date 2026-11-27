@@ -2,7 +2,6 @@ package ani.dantotsu.di.injekt
 
 import android.app.Application
 import android.content.Context
-import androidx.media3.database.StandaloneDatabaseProvider
 import ani.dantotsu.addons.download.DownloadAddonManager
 import ani.dantotsu.download.DownloadsManager
 import ani.dantotsu.media.manga.MangaCache
@@ -45,7 +44,6 @@ class MetroInteropModule(
     private val animeSourceManager: AnimeSourceManager,
     private val mangaSourceManager: MangaSourceManager,
     private val mangaCache: MangaCache,
-    private val databaseProvider: StandaloneDatabaseProvider,
     private val json: Json,
     private val protoBuf: ProtoBuf,
 ) : InjektModule {
@@ -76,7 +74,6 @@ class MetroInteropModule(
 
         addSingleton(json)
         addSingleton(protoBuf)
-        addSingleton(databaseProvider)
         addSingleton(mangaCache)
     }
 }

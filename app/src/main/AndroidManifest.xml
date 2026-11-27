@@ -184,6 +184,14 @@
         <activity android:name=".forum.ThreadViewActivity" />
         <activity android:name=".settings.UserInterfaceSettingsActivity" />
         <activity android:name=".settings.PlayerSettingsActivity" />
+        <activity android:name=".settings.PlayerInternalSettingsActivity" />
+        <activity android:name=".settings.PlayerGesturesSettingsActivity" />
+        <activity android:name=".settings.PlayerDecoderSettingsActivity" />
+        <activity android:name=".settings.PlayerSubtitlesSettingsActivity" />
+        <activity android:name=".settings.PlayerAudioSettingsActivity" />
+        <activity android:name=".settings.PlayerCustomButtonsSettingsActivity" />
+        <activity android:name=".settings.PlayerScriptEditorSettingsActivity" />
+        <activity android:name=".settings.PlayerAdvancedSettingsActivity" />
         <activity android:name=".settings.ReaderSettingsActivity" />
         <activity android:name=".settings.FAQActivity" />
         <activity android:name=".settings.DownloadQueueActivity" android:parentActivityName=".settings.SettingsActivity" />
@@ -301,7 +309,7 @@
             android:process=":error_process"
             android:launchMode="singleTask" />
         <activity
-            android:name=".media.anime.ExoplayerView"
+            android:name=".media.anime.MpvPlayerActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
             android:excludeFromRecents="true"
             android:exported="true"
@@ -344,19 +352,38 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".connections.discord.Login"
+            android:name=".connections.mangabaka.Login"
             android:configChanges="orientation|screenSize|layoutDirection"
             android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTask">
-            <intent-filter android:label="Discord Login for Dantotsu">
+            <intent-filter android:label="MangaBaka Login for Dantotsu">
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="dantotsu" />
-                <data android:host="discord" />
+                <data
+                    android:host="mangabaka"
+                    android:scheme="dantotsu" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".connections.comick.Login"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter android:label="Comick Login for Dantotsu">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="app.dantotsu" />
+                <data
+                    android:host="comick"
+                    android:scheme="dantotsu" />
             </intent-filter>
         </activity>
         <activity
@@ -364,19 +391,7 @@
             android:configChanges="orientation|screenSize|layoutDirection"
             android:excludeFromRecents="true"
             android:exported="true"
-            android:launchMode="singleTask">
-            <intent-filter android:label="Discord Login for Dantotsu">
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="dantotsu" />
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-                <data android:host="discord.dantotsu.com" />
-            </intent-filter>
-        </activity>
+            android:launchMode="singleTask" />
         <activity
             android:name=".connections.anilist.UrlMedia"
             android:configChanges="orientation|screenSize|layoutDirection"
@@ -524,6 +539,9 @@
                 <data android:host="*" />
                 <data android:pathPattern=".*\\.torrent" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
         <activity
             android:name="eu.kanade.tachiyomi.extension.util.ExtensionInstallActivity"
@@ -592,27 +610,10 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
         <service
-            android:name=".connections.discord.DiscordService"
-            android:exported="false"
-            android:stopWithTask="false"
-            android:foregroundServiceType="dataSync" />
-        <service
-            android:name="androidx.media3.exoplayer.scheduler.PlatformScheduler$PlatformSchedulerService"
-            android:exported="true"
-            android:permission="android.permission.BIND_JOB_SERVICE" />
-        <service
             android:name=".addons.torrent.TorrentServerService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="true" />
-        <service
-            android:name=".media.anime.AnimePlayerService"
-            android:exported="true"
-            android:foregroundServiceType="mediaPlayback">
-            <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
-            </intent-filter>
-        </service>
 
         <service
             android:name=".media.anime.cast.CastProxyServerService"

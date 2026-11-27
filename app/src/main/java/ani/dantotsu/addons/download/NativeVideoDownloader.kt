@@ -100,6 +100,34 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             }
         }
 
+        class FastSession(
+            override val sessionId: Long,
+            override val downloadPath: String
+        ) : DownloadSession() {
+            @Volatile
+            var currentStatus: String = "RUNNING"
+            @Volatile
+            var failReason: String? = null
+            @Volatile
+            var hasError: Boolean = false
+            @Volatile
+            var job: Job? = null
+
+            val downloadedBytes = AtomicLong(0L)
+            val totalBytes = AtomicLong(0L)
+
+            override fun cancel() {
+                currentStatus = "FAILED"
+                hasError = true
+                failReason = "Cancelled by user"
+                job?.cancel()
+            }
+
+            override fun getStatus(): String = currentStatus
+            override fun getStackTrace(): String? = failReason
+            override fun hadError(): Boolean = hasError
+        }
+
         class Aria2Session(
             override val sessionId: Long,
             override val downloadPath: String,
@@ -221,6 +249,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
     override fun getDownloadedBytes(sessionId: Long): Long {
         val session = activeSessions[sessionId] ?: return -1L
         return when (session) {
+            is DownloadSession.FastSession -> session.downloadedBytes.get()
             is DownloadSession.Aria2Session -> session.downloadedBytes
             is DownloadSession.HlsSession -> session.downloadedBytes.get()
             is DownloadSession.ComplexHlsSession -> session.downloadedBytes.get()
@@ -231,6 +260,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
     override fun getEstimatedTotalBytes(sessionId: Long): Long {
         val session = activeSessions[sessionId] ?: return -1L
         return when (session) {
+            is DownloadSession.FastSession -> session.totalBytes.get()
             is DownloadSession.Aria2Session -> session.totalBytes
             is DownloadSession.HlsSession -> session.totalBytes
             is DownloadSession.ComplexHlsSession -> session.totalBytes
@@ -283,23 +313,45 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         statCallback: (Double) -> Unit
     ): Long {
         val sessionId = nextSessionId.incrementAndGet()
-        val isHls = videoUrl.contains(".m3u8", ignoreCase = true) || videoUrl.contains("m3u8", ignoreCase = true)
-        val isDash = videoUrl.contains(".mpd", ignoreCase = true) || videoUrl.contains("mpd", ignoreCase = true)
+        val session = DownloadSession.FastSession(sessionId, downloadPath)
+        activeSessions[sessionId] = session
 
-        return when {
-            isHls && subtitleUrls.isEmpty() && audioUrls.isEmpty() -> {
-                executeSimpleHlsDownload(sessionId, videoUrl, downloadPath, headers, statCallback)
-            }
-            !isHls && !isDash && subtitleUrls.isEmpty() && audioUrls.isEmpty() -> {
-                executeProgressiveDownload(sessionId, videoUrl, downloadPath, headers, statCallback)
-            }
-            isHls -> {
-                executeComplexHlsDownload(sessionId, videoUrl, downloadPath, headers, subtitleUrls, audioUrls, statCallback)
-            }
-            else -> {
-                executeFallbackFFmpegDownload(sessionId, videoUrl, downloadPath, headers, subtitleUrls, audioUrls, statCallback)
+        session.job = scope.launch {
+            try {
+                session.currentStatus = "RUNNING"
+                val downloader = ani.dantotsu.download.video.FastVideoDownloader(
+                    context = context,
+                    downloadedBytesCounter = session.downloadedBytes,
+                    totalBytesEstimate = session.totalBytes,
+                )
+                downloader.downloadAndRemux(
+                    sessionId = sessionId,
+                    videoUrl = videoUrl,
+                    outputPath = downloadPath,
+                    headersMap = headers,
+                    externalSubtitles = subtitleUrls,
+                    externalAudios = audioUrls,
+                ) { percent, _ ->
+                    emitProgress(sessionId, statCallback, percent.toDouble() * 1000.0)
+                }
+                if (!session.hasError && !cancelledSessions.contains(sessionId)) {
+                    session.currentStatus = "COMPLETED"
+                } else {
+                    session.currentStatus = "FAILED"
+                }
+            } catch (e: CancellationException) {
+                session.currentStatus = "FAILED"
+                session.hasError = true
+                session.failReason = "Cancelled by user"
+                throw e
+            } catch (e: Exception) {
+                Logger.log("FastVideoDownloader failed ($videoUrl): ${e.message}")
+                session.currentStatus = "FAILED"
+                session.hasError = true
+                session.failReason = e.stackTraceToString()
             }
         }
+        return sessionId
     }
 
     @RequiresApi(Build.VERSION_CODES.N)

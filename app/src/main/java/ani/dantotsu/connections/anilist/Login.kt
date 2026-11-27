@@ -16,12 +16,18 @@ class Login : AppCompatActivity() {
         ThemeManager(this).applyTheme()
         val data: Uri? = intent?.data
         try {
-            Anilist.token =
-                Regex("""(?<=access_token=).+(?=&token_type)""").find(data.toString())!!.value
-            PrefManager.setVal(PrefName.AnilistToken, Anilist.token ?: "")
+            val rawQuery = data?.encodedFragment ?: data?.encodedQuery
+            val parsedToken = rawQuery
+                ?.let { Uri.parse("https://localhost?$it").getQueryParameter("access_token") }
+                ?.takeIf { it.isNotBlank() }
+                ?: Regex("""(?<=access_token=)[^&]+""").find(data?.toString().orEmpty())?.value
+            if (!parsedToken.isNullOrBlank()) {
+                Anilist.saveToken(parsedToken)
+            }
         } catch (e: Exception) {
             logError(e)
         }
         startMainActivity(this)
+        finish()
     }
 }

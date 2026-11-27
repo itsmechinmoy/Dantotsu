@@ -6,7 +6,6 @@ import ani.dantotsu.media.MediaType
 import ani.dantotsu.snackString
 import ani.dantotsu.util.Logger
 import eu.kanade.tachiyomi.extension.InstallStep
-import eu.kanade.tachiyomi.extension.api.ExtensionGithubApi
 import eu.kanade.tachiyomi.extension.util.ExtensionInstallReceiver
 import eu.kanade.tachiyomi.extension.util.ExtensionInstaller
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
@@ -29,7 +28,7 @@ class DanNovelExtensionManager(private val context: Context) {
         private set
 
     private val scope = CoroutineScope(Dispatchers.IO)
-    private val api = ExtensionGithubApi()
+    private val api = NovelExtensionApi()
     private val installer by lazy { ExtensionInstaller(context) }
     private val iconMap = mutableMapOf<String, Drawable>()
 

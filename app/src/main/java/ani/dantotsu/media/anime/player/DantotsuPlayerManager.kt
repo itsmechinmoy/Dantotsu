@@ -1,183 +1,193 @@
 package ani.dantotsu.media.anime.player
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
+import android.util.Base64
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.PlaybackParameters
-import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionParameters
-import androidx.media3.common.MimeTypes
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.HttpDataSource
-import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
-import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.dash.DashMediaSource
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.MediaSource
-import androidx.media3.exoplayer.source.MergingMediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import androidx.media3.exoplayer.source.SingleSampleMediaSource
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.session.MediaSession
-import androidx.media3.ui.PlayerView
+import androidx.lifecycle.lifecycleScope
 import ani.dantotsu.defaultHeaders
-import ani.dantotsu.media.anime.AudioFocusListener
-import ani.dantotsu.media.anime.MediaDataSourceFactory
-import ani.dantotsu.media.anime.VideoCache
+import ani.dantotsu.media.anime.mpv.DantotsuPlayerView
+import ani.dantotsu.media.anime.mpv.ExternalAudio
+import ani.dantotsu.media.anime.mpv.ExternalSubtitle
+import ani.dantotsu.media.anime.mpv.MpvVideoView
+import ani.dantotsu.media.anime.mpv.VideoScaleMode
 import ani.dantotsu.others.LanguageMapper
+import ani.dantotsu.parsers.DrmInfo
 import ani.dantotsu.parsers.StreamTypeDetector
 import ani.dantotsu.parsers.Video
-import ani.dantotsu.parsers.VideoType
-import ani.dantotsu.settings.saving.PrefManager
-import ani.dantotsu.settings.saving.PrefName
-import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
-import io.github.peerless2012.ass.media.kt.withAssSupport
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import eu.kanade.tachiyomi.animesource.model.Track
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayInputStream
-import java.util.Calendar
-import java.util.zip.GZIPInputStream
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
-@UnstableApi
 class DantotsuPlayerManager(
     private val activity: AppCompatActivity,
-    private val playerView: PlayerView,
+    private val playerView: DantotsuPlayerView,
     private val subtitleManager: PlayerSubtitleManager,
     private val client: OkHttpClient,
-    private val onPlayerErrorCallback: (error: PlaybackException) -> Unit
+    private val onPlayerErrorCallback: (message: String) -> Unit
 ) {
 
-    var exoPlayer: ExoPlayer? = null
-        private set
-    var trackSelector: DefaultTrackSelector? = null
-        private set
-    var mediaSession: MediaSession? = null
-        private set
-    var audioFocusListener: AudioFocusListener? = null
+    val mpvView: MpvVideoView
+        get() = playerView.mpvView
+
+    var isInitialized: Boolean = false
         private set
 
-    var mediaSource: MediaSource? = null
-        private set
-    var currentMediaItem: MediaItem? = null
-        private set
-    var isInitialized = false
+    var currentVideo: Video? = null
         private set
 
-    private val DEFAULT_MIN_BUFFER_MS = 15_000
-    private val DEFAULT_MAX_BUFFER_MS = 45_000
-    private val BUFFER_FOR_PLAYBACK_MS = 1_500
-    private val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 3_000
-    private val BACK_BUFFER_DURATION_MS = 15_000
+    var currentHeaders: Map<String, String> = emptyMap()
+        private set
 
-    fun initTrackSelector() {
-        val subLanguages = arrayOf(
-            "Albanian", "Arabic", "Bosnian", "Bulgarian", "Chinese", "Croatian", "Czech", "Danish", "Dutch", "English",
-            "Estonian", "Finnish", "French", "Georgian", "German", "Greek", "Hebrew", "Hindi", "Indonesian", "Irish",
-            "Italian", "Japanese", "Korean", "Lithuanian", "Luxembourgish", "Macedonian", "Mongolian", "Norwegian",
-            "Polish", "Portuguese", "Punjabi", "Romanian", "Russian", "Serbian", "Slovak", "Slovenian", "Spanish",
-            "Turkish", "Ukrainian", "Urdu", "Vietnamese"
-        )
-        val langName = subLanguages.getOrNull(PrefManager.getVal<Int>(PrefName.SubLanguage)) ?: "English"
-        val langCode = LanguageMapper.getLanguageCode(langName)
-        val selector = DefaultTrackSelector(activity)
-        val params = selector.buildUponParameters()
-        if (langCode.isNotBlank() && !langCode.equals("all", ignoreCase = true)) {
-            params.setPreferredTextLanguage(langCode)
-        }
-        trackSelector = selector.apply {
-            parameters = params.build()
+    private var loadJob: Job? = null
+    private var pausedByFocusLoss: Boolean = false
+
+    private val audioManager = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var audioFocusRequest: AudioFocusRequest? = null
+
+    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                if (mpvView.playWhenReady || mpvView.isPlaying.value) {
+                    pausedByFocusLoss = true
+                    mpvView.pause()
+                }
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                if (pausedByFocusLoss) {
+                    pausedByFocusLoss = false
+                    mpvView.play()
+                }
+            }
         }
     }
 
-        fun buildMediaSource(
+    fun requestAudioFocus(): Boolean {
+        val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                .build()
+            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attrs)
+                .setAcceptsDelayedFocusGain(true)
+                .setOnAudioFocusChangeListener(audioFocusListener)
+                .build()
+                .also { audioFocusRequest = it }
+            audioManager.requestAudioFocus(req)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                audioFocusListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
+        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(audioFocusListener)
+        }
+    }
+
+    fun loadVideo(
         video: Video,
-        subConfigs: List<MediaItem.SubtitleConfiguration>,
-        mimeType: String?,
-        downloadedMediaItem: MediaItem?,
-        mediaMetadata: MediaMetadata? = null,
-        audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
-    ): Pair<MediaSource, MediaItem> {
+        startPositionMs: Long,
+        externalSubtitles: List<ExternalSubtitle>,
+        audioTracks: List<Track> = emptyList(),
+        speed: Float = 1.0f
+    ) {
+        loadJob?.cancel()
+        currentVideo = video
         val videoUri = runCatching { video.file.url.toUri() }.getOrNull()
         val isLocalhost = StreamTypeDetector.isLocalhost(videoUri)
-        val isLocalhostTorrent = StreamTypeDetector.isTorrentStream(videoUri)
-        val isLocalhostMp4 = StreamTypeDetector.isLocalMp4(videoUri)
-
         val headers = createVideoHeaders(video, isLocalhost)
-        val httpClient = createPlayerHttpClient()
-        val httpDataSourceFactory = MediaDataSourceFactory.resolveHttpFactory(
-            context = activity,
+        currentHeaders = headers
+
+        val extAudio = audioTracks.map { track ->
+            val langCode = LanguageMapper.getLanguageCode(track.lang)
+                .takeUnless { it.equals("all", ignoreCase = true) || it.isBlank() }
+                ?: "und"
+            ExternalAudio(
+                url = track.url,
+                headers = headers,
+                label = track.lang,
+                language = langCode
+            )
+        }
+
+        subtitleManager.loadLocalFonts()
+
+        val drm = video.drm
+        if (drm != null) {
+            if (!drm.scheme.equals("clearkey", ignoreCase = true)) {
+                val msg = "DRM (${drm.scheme}) requires an external player; libmpv supports ClearKey and HLS AES-128 natively."
+                Logger.log("DantotsuPlayerManager: $msg")
+                onPlayerErrorCallback(msg)
+                return
+            }
+            loadJob = activity.lifecycleScope.launch(Dispatchers.IO) {
+                val cencKeyHex = resolveClearKeyHex(drm, headers)
+                withContext(Dispatchers.Main) {
+                    if (cencKeyHex == null && drm.licenseUrl.startsWith("http", ignoreCase = true)) {
+                        onPlayerErrorCallback("Failed to acquire ClearKey decryption key")
+                        return@withContext
+                    }
+                    startMpvPlayback(video.file.url, headers, startPositionMs, extAudio, externalSubtitles, speed, cencKeyHex)
+                }
+            }
+            return
+        }
+
+        startMpvPlayback(video.file.url, headers, startPositionMs, extAudio, externalSubtitles, speed, cencKeyHex = null)
+    }
+
+    private fun startMpvPlayback(
+        url: String,
+        headers: Map<String, String>,
+        startPositionMs: Long,
+        extAudio: List<ExternalAudio>,
+        externalSubtitles: List<ExternalSubtitle>,
+        speed: Float,
+        cencKeyHex: String?
+    ) {
+        isInitialized = true
+        requestAudioFocus()
+        mpvView.loadMedia(
+            videoUrl = url,
             headers = headers,
-            okHttpClient = httpClient,
-            isLocalhost = isLocalhost,
+            startPositionMs = startPositionMs,
+            audioTracks = extAudio,
+            subtitles = externalSubtitles,
+            cencKeyHex = cencKeyHex
         )
-
-        val upstream = DefaultDataSource.Factory(activity, httpDataSourceFactory)
-        val cacheFactory: DataSource.Factory = CacheDataSource.Factory()
-            .setCache(VideoCache.getInstance(activity))
-            .setUpstreamDataSourceFactory(upstream)
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-
-        val extractorsFactory = subtitleManager.createExtractorsFactory()
-        val assParserFactory = subtitleManager.createSubtitleParserFactory()
-        val drmProvider = WrappedDrmCallback.providerFor(httpDataSourceFactory)
-
-        val mediaItem = createPlayerMediaItem(
-            video = video,
-            subConfigs = subConfigs,
-            mimeType = mimeType,
-            downloadedMediaItem = downloadedMediaItem,
-            mediaMetadata = mediaMetadata,
-            isLocalhost = isLocalhost,
-            isLocalhostTorrent = isLocalhostTorrent,
-            isLocalhostMp4 = isLocalhostMp4
-        )
-        this.currentMediaItem = mediaItem
-
-        val activeFactory = resolveActiveMediaSourceFactory(
-            mediaItem = mediaItem,
-            video = video,
-            isLocalhost = isLocalhost,
-            isLocalhostTorrent = isLocalhostTorrent,
-            upstream = upstream,
-            cacheFactory = cacheFactory,
-            extractorsFactory = extractorsFactory,
-            assParserFactory = assParserFactory,
-            drmProvider = drmProvider
-        )
-        this.activeMediaSourceFactory = activeFactory
-        val primarySource = activeFactory.createMediaSource(mediaItem)
-
-        val finalSource = combineWithAudioTracks(
-            primarySource = primarySource,
-            activeFactory = activeFactory,
-            audioTracks = audioTracks,
-            primaryUrl = video.file.url
-        )
-
-        this.mediaSource = finalSource
-        return Pair(finalSource, mediaItem)
+        if (speed != 1.0f) {
+            mpvView.setPlaybackSpeed(speed)
+        }
     }
 
     private fun createVideoHeaders(video: Video, isLocalhost: Boolean): MutableMap<String, String> {
         val headers = mutableMapOf<String, String>()
         headers.putAll(defaultHeaders)
-        video.file.headers?.let {
-            headers.putAll(it)
-        }
+        video.file.headers.let { headers.putAll(it) }
         if (isLocalhost) {
             headers.remove("Accept-Encoding")
             headers.remove("accept-encoding")
@@ -185,365 +195,94 @@ class DantotsuPlayerManager(
         return headers
     }
 
-    private fun createPlayerHttpClient(): okhttp3.OkHttpClient {
-        return client.newBuilder().apply {
-            connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-            readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-            writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-            addNetworkInterceptor { chain ->
-                val request = chain.request()
-                val isLocal = StreamTypeDetector.isLocalhost(request.url.host)
-                val newRequest = if (isLocal) {
-                    request.newBuilder().removeHeader("Accept-Encoding").build()
-                } else {
-                    request
-                }
-                chain.proceed(newRequest)
+    private fun resolveClearKeyHex(drm: DrmInfo, headers: Map<String, String>): String? {
+        val raw = drm.licenseUrl.trim()
+        if (raw.matches(Regex("^[0-9a-fA-F]{32}$"))) {
+            return raw.lowercase()
+        }
+        if (raw.contains(":") && !raw.startsWith("http", ignoreCase = true)) {
+            val candidate = raw.substringAfterLast(":").trim()
+            if (candidate.matches(Regex("^[0-9a-fA-F]{32}$"))) {
+                return candidate.lowercase()
             }
-            addInterceptor { chain ->
-                val request = chain.request()
-                val isLocal = StreamTypeDetector.isLocalhost(request.url.host)
-                val newRequest = if (isLocal) {
-                    request.newBuilder().removeHeader("Accept-Encoding").build()
-                } else {
-                    request
-                }
-                val response = chain.proceed(newRequest)
-                if (isLocal && response.isSuccessful) {
-                    processLocalhostResponse(chain, response, request)
-                } else {
-                    response
-                }
-            }
-        }.build()
-    }
-
-    private fun isSegmentRequest(contentType: String, url: okhttp3.HttpUrl): Boolean {
-        val isMediaContent = contentType.startsWith("video/") ||
-            contentType.startsWith("audio/") ||
-            contentType.startsWith("image/")
-        return isMediaContent || StreamTypeDetector.isSegmentUrl(url)
-    }
-
-    private fun decompressGzipIfPresent(rawBytes: ByteArray, hasGzipEncoding: Boolean): ByteArray {
-        val isGzip = (rawBytes.size >= 2 && rawBytes[0] == 0x1F.toByte() && rawBytes[1] == 0x8B.toByte()) || hasGzipEncoding
-        if (!isGzip) return rawBytes
-        return try {
-            GZIPInputStream(ByteArrayInputStream(rawBytes)).use { it.readBytes() }
-        } catch (_: Exception) {
-            rawBytes
         }
-    }
-
-    private fun cleanHlsManifest(bytes: ByteArray): ByteArray {
-        var text = bytes.toString(Charsets.UTF_8)
-        if (text.startsWith("\uFEFF")) {
-            text = text.substring(1)
+        if (!raw.startsWith("http", ignoreCase = true)) {
+            return parseClearKeyJsonToHex(raw)
         }
-        return text.trimStart().toByteArray(Charsets.UTF_8)
-    }
-
-    private fun rewriteLocalhostResponseBody(
-        response: okhttp3.Response,
-        body: okhttp3.ResponseBody,
-        isM3u8: Boolean,
-        hasGzipEncoding: Boolean
-    ): okhttp3.Response {
-        val rawBytes = body.bytes()
-        val decompressedBytes = decompressGzipIfPresent(rawBytes, hasGzipEncoding)
-        val startsWithHls = StreamTypeDetector.startsWithHlsMagic(decompressedBytes)
-        val isHls = startsWithHls || isM3u8
-
-        val finalBytes = if (isHls) cleanHlsManifest(decompressedBytes) else decompressedBytes
-        val mediaType = (if (isHls) {
-            "application/vnd.apple.mpegurl"
-        } else {
-            body.contentType()?.toString()
-        })?.toMediaTypeOrNull() ?: body.contentType()
-
-        val strippedHeaders = response.headers.newBuilder()
-            .removeAll("Content-Encoding")
-            .removeAll("Content-Length")
-            .build()
-
-        return response.newBuilder()
-            .headers(strippedHeaders)
-            .body(finalBytes.toResponseBody(mediaType))
-            .build()
-    }
-
-    private fun processLocalhostResponse(
-        chain: okhttp3.Interceptor.Chain,
-        response: okhttp3.Response,
-        request: okhttp3.Request
-    ): okhttp3.Response {
-        val contentType = response.header("Content-Type").orEmpty().lowercase()
-        val isSegment = isSegmentRequest(contentType, request.url)
-        val isM3u8 = !isSegment && (
-            contentType.contains("mpegurl") ||
-            StreamTypeDetector.isM3u8Url(request.url)
-        )
-        val hasGzipEncoding = response.header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true
-        val body = response.body
-        if (body != null && !isSegment && (isM3u8 || hasGzipEncoding)) {
-            return rewriteLocalhostResponseBody(response, body, isM3u8, hasGzipEncoding)
-        }
-        return response
-    }
-
-    private fun createPlayerMediaItem(
-        video: Video,
-        subConfigs: List<MediaItem.SubtitleConfiguration>,
-        mimeType: String?,
-        downloadedMediaItem: MediaItem?,
-        mediaMetadata: MediaMetadata?,
-        isLocalhost: Boolean,
-        isLocalhostTorrent: Boolean,
-        isLocalhostMp4: Boolean
-    ): MediaItem {
-        return downloadedMediaItem?.buildUpon()?.apply {
-            if (mediaMetadata != null) setMediaMetadata(mediaMetadata)
-        }?.build() ?: MediaItem.Builder()
-            .setUri(video.file.url.toUri())
-            .apply {
-                val effectiveMimeType = mimeType ?: if (isLocalhost && !isLocalhostTorrent && !isLocalhostMp4 && video.format != VideoType.DASH && video.format != VideoType.CONTAINER) {
-                    androidx.media3.common.MimeTypes.APPLICATION_M3U8
-                } else null
-                if (effectiveMimeType != null) setMimeType(effectiveMimeType)
-                if (subConfigs.isNotEmpty()) setSubtitleConfigurations(subConfigs)
-                if (mediaMetadata != null) setMediaMetadata(mediaMetadata)
-                video.drm?.let { drm ->
-                    val uuid = when (drm.scheme.lowercase()) {
-                        "playready" -> C.PLAYREADY_UUID
-                        "clearkey" -> C.CLEARKEY_UUID
-                        else -> C.WIDEVINE_UUID
+        return runCatching {
+            val reqBuilder = Request.Builder().url(raw)
+            headers.forEach { (k, v) -> reqBuilder.addHeader(k, v) }
+            drm.licenseHeaders.forEach { (k, v) -> reqBuilder.addHeader(k, v) }
+            val jsonPayload = """{"type":"temporary","kids":[]}""".toRequestBody("application/json".toMediaType())
+            reqBuilder.post(jsonPayload)
+            client.newCall(reqBuilder.build()).execute().use { resp ->
+                val body = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    // Some ClearKey servers respond to GET instead of POST
+                    val getReq = Request.Builder().url(raw).apply {
+                        headers.forEach { (k, v) -> addHeader(k, v) }
+                        drm.licenseHeaders.forEach { (k, v) -> addHeader(k, v) }
+                    }.build()
+                    client.newCall(getReq).execute().use { getResp ->
+                        if (!getResp.isSuccessful) return null
+                        return parseClearKeyJsonToHex(getResp.body?.string().orEmpty())
                     }
-                    setDrmConfiguration(
-                        MediaItem.DrmConfiguration.Builder(uuid)
-                            .setLicenseUri(drm.licenseUrl)
-                            .setLicenseRequestHeaders(drm.licenseHeaders)
-                            .setMultiSession(true)
-                            .build()
-                    )
-                    Logger.log("DRM: ${drm.scheme} license @ ${drm.licenseUrl}")
                 }
+                parseClearKeyJsonToHex(body)
             }
-            .build()
+        }.onFailure {
+            Logger.log("ClearKey resolution error: ${it.message}")
+        }.getOrNull()
     }
 
-    private fun resolveActiveMediaSourceFactory(
-        mediaItem: MediaItem,
-        video: Video,
-        isLocalhost: Boolean,
-        isLocalhostTorrent: Boolean,
-        upstream: DataSource.Factory,
-        cacheFactory: DataSource.Factory,
-        extractorsFactory: androidx.media3.extractor.ExtractorsFactory,
-        assParserFactory: androidx.media3.extractor.text.SubtitleParser.Factory,
-        drmProvider: androidx.media3.exoplayer.drm.DrmSessionManagerProvider
-    ): MediaSource.Factory {
-        val isContentUri =
-            (mediaItem.localConfiguration?.uri?.scheme ?: video.file.url.substringBefore(":")) == "content"
-
-        return if (isContentUri) {
-            val localDataSourceFactory = DefaultDataSource.Factory(activity)
-            DefaultMediaSourceFactory(localDataSourceFactory, extractorsFactory)
-                .setSubtitleParserFactory(assParserFactory)
-                .setDrmSessionManagerProvider(drmProvider)
-        } else if (isLocalhostTorrent || isLocalhost) {
-            DefaultMediaSourceFactory(upstream, extractorsFactory)
-                .setSubtitleParserFactory(assParserFactory)
-                .setDrmSessionManagerProvider(drmProvider)
-        } else {
-            DefaultMediaSourceFactory(cacheFactory, extractorsFactory)
-                .setSubtitleParserFactory(assParserFactory)
-                .setDrmSessionManagerProvider(drmProvider)
-        }
+    private fun parseClearKeyJsonToHex(jsonStr: String): String? {
+        val trimmed = jsonStr.trim()
+        if (trimmed.isBlank()) return null
+        return runCatching {
+            val obj = JSONObject(trimmed)
+            val keys = obj.optJSONArray("keys") ?: return null
+            if (keys.length() == 0) return null
+            val first = keys.getJSONObject(0)
+            val k = first.optString("k")
+            if (k.isBlank()) return null
+            val bytes = Base64.decode(k, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+            bytes.joinToString("") { "%02x".format(it) }
+        }.getOrNull()
     }
 
-    private fun combineWithAudioTracks(
-        primarySource: MediaSource,
-        activeFactory: MediaSource.Factory,
-        audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track>,
-        primaryUrl: String
-    ): MediaSource {
-        val audioSources = mutableListOf<MediaSource>()
-        audioTracks.forEach { audioTrack ->
-            val audioUrl = audioTrack.url
-            if (audioUrl.isNotBlank() && audioUrl != primaryUrl) {
-                val audioMimeType = when {
-                    audioUrl.contains(".m3u8", ignoreCase = true) || audioUrl.contains("/m3u8", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
-                    audioUrl.contains(".mpd", ignoreCase = true) || audioUrl.contains("/mpd", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_MPD
-                    else -> null
-                }
-                val audioMediaItem = MediaItem.Builder()
-                    .setUri(audioUrl.toUri())
-                    .apply {
-                        if (audioMimeType != null) setMimeType(audioMimeType)
-                    }
-                    .build()
-                val audioSource = activeFactory.createMediaSource(audioMediaItem)
-                audioSources.add(audioSource)
-            }
-        }
-
-        return if (audioSources.isNotEmpty()) {
-            MergingMediaSource(primarySource, *audioSources.toTypedArray())
-        } else {
-            primarySource
-        }
-    }    var activeMediaSourceFactory: MediaSource.Factory? = null
-
-    fun applyUpdatedSubtitles(newSubConfigs: List<MediaItem.SubtitleConfiguration>, position: Long) {
-        val player = exoPlayer ?: return
-        val currentItem = currentMediaItem ?: return
-
-        // Snapshot current track parameters so audio selection survives the media-source rebuild.
-        val savedTrackParams = player.trackSelectionParameters
-
-        val newMediaItem = currentItem.buildUpon()
-            .setSubtitleConfigurations(newSubConfigs)
-            .build()
-        this.currentMediaItem = newMediaItem
-
-        val factory = activeMediaSourceFactory
-        if (factory != null) {
-            val newSource = factory.createMediaSource(newMediaItem)
-            this.mediaSource = newSource
-            player.setMediaSource(newSource, position)
-        } else {
-            player.setMediaItem(newMediaItem, position)
-        }
-        player.prepare()
-        // Restore track selection so the audio track (and any disabled text tracks) are not reset.
-        player.trackSelectionParameters = savedTrackParams
-        player.play()
+    fun play() {
+        if (isInitialized) mpvView.play()
     }
 
-    fun buildExoplayer(
-        playbackPosition: Long,
-        playbackParameters: PlaybackParameters,
-        listener: Player.Listener,
-        forceDefaultRenderers: Boolean = false
-    ): ExoPlayer {
-        releaseExoPlayer()
-
-        val uri = currentMediaItem?.localConfiguration?.uri
-        val isTorrentStream = StreamTypeDetector.isTorrentStream(uri)
-        val targetBufferBytes = if (isTorrentStream) 48 * 1024 * 1024 else androidx.media3.common.C.LENGTH_UNSET
-        val maxBufferMs = if (isTorrentStream) 60_000 else DEFAULT_MAX_BUFFER_MS
-        val loadControl = DefaultLoadControl.Builder()
-            .setBackBuffer(BACK_BUFFER_DURATION_MS, false)
-            .setBufferDurationsMs(
-                DEFAULT_MIN_BUFFER_MS,
-                maxBufferMs,
-                BUFFER_FOR_PLAYBACK_MS,
-                BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
-            )
-            .setTargetBufferBytes(targetBufferBytes)
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
-
-        subtitleManager.initAssHandler()
-        val handler = subtitleManager.assHandler!!
-        Logger.log("Libass: Calling renderersFactory.withAssSupport()")
-        val renderersFactory = DefaultRenderersFactory(activity)
-            .setEnableDecoderFallback(true)
-            .setMediaCodecSelector(object : MediaCodecSelector {
-                override fun getDecoderInfos(
-                    mimeType: String,
-                    requiresSecureDecoder: Boolean,
-                    requiresTunnelingDecoder: Boolean
-                ): List<MediaCodecInfo> {
-                    val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(
-                        mimeType,
-                        requiresSecureDecoder,
-                        requiresTunnelingDecoder
-                    )
-                    if (mimeType.equals(MimeTypes.AUDIO_AAC, ignoreCase = true)) {
-                        // Prefer Google's software decoder for AAC to fix AAC Main (mp4a.40.1) crashes on hardware decoders (especially Samsung/Qualcomm)
-                        val (softwareDecoders, hardwareDecoders) = decoders.partition {
-                            it.name.startsWith("c2.android.", ignoreCase = true) ||
-                            it.name.startsWith("OMX.google.", ignoreCase = true) ||
-                            it.name.contains("sw", ignoreCase = true)
-                        }
-                        return softwareDecoders + hardwareDecoders
-                    }
-                    return decoders
-                }
-            })
-            .withAssSupport(handler)
-
-        val mediaSourceFactory = activeMediaSourceFactory ?: DefaultMediaSourceFactory(activity)
-            .setSubtitleParserFactory(subtitleManager.createSubtitleParserFactory())
-
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-            .build()
-
-        val newTrackSelector = DefaultTrackSelector(activity)
-        this.trackSelector = newTrackSelector
-
-        val player = ExoPlayer.Builder(activity, renderersFactory)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setTrackSelector(newTrackSelector)
-            .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttributes, true)
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_NETWORK)
-            .build()
-
-        this.exoPlayer = player
-        playerView.player = player
-
-        audioFocusListener = AudioFocusListener(activity, player)
-        player.addListener(audioFocusListener!!)
-
-        Logger.log("Libass: Calling handler.init(exoPlayer)")
-        handler.init(player)
-
-        player.playWhenReady = true
-        player.playbackParameters = playbackParameters
-        mediaSource?.let { player.setMediaSource(it) }
-        player.prepare()
-        if (playbackPosition > 0L) {
-            player.seekTo(playbackPosition)
-        }
-
-        try {
-            val rightNow = Calendar.getInstance()
-            mediaSession = MediaSession.Builder(activity, player)
-                .setId(rightNow.timeInMillis.toString())
-                .build()
-        } catch (e: Exception) {
-            toast(e.toString())
-        }
-
-        player.addListener(listener)
-        isInitialized = true
-        return player
+    fun pause() {
+        if (isInitialized) mpvView.pause()
     }
 
-    fun releaseExoPlayer() {
-        audioFocusListener?.abandonRequest()
-        audioFocusListener = null
-        isInitialized = false
-        playerView.player = null
-        exoPlayer?.let { p ->
-            p.stop()
-            p.clearMediaItems()
-            p.release()
-        }
-        exoPlayer = null
-        trackSelector = null
-        mediaSession?.release()
-        mediaSession = null
+    fun seekTo(positionMs: Long) {
+        if (isInitialized) mpvView.seekTo(positionMs)
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        if (isInitialized) mpvView.setPlaybackSpeed(speed)
+    }
+
+    fun setVideoScaleMode(mode: VideoScaleMode) {
+        if (isInitialized) mpvView.setVideoScaleMode(mode)
+    }
+
+    fun selectAudioTrack(trackId: Int) {
+        if (isInitialized) mpvView.selectAudioTrack(trackId)
+    }
+
+    fun selectSubtitleTrack(trackId: Int) {
+        if (isInitialized) mpvView.selectSubtitleTrack(trackId)
     }
 
     fun release() {
-        releaseExoPlayer()
-        VideoCache.release()
-        subtitleManager.release()
+        loadJob?.cancel()
+        loadJob = null
+        abandonAudioFocus()
+        isInitialized = false
+        mpvView.release()
     }
 }

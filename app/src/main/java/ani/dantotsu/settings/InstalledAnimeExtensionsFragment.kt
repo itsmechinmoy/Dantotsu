@@ -167,7 +167,7 @@ class InstalledAnimeExtensionsFragment : BaseInstalledExtensionsFragment(), Sear
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val extension = getItem(position)
-            val nsfw = if (extension.isNsfw) "(18+)" else ""
+            val nsfw = extension.contentWarning.badgeLabel()
             val lang = getLanguageName(extension.lang)
             holder.extensionNameTextView.text = extension.name
             val majorLib = extension.libVersion.toInt()

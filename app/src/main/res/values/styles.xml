@@ -9,4 +9,14 @@
         <item name="android:background">?android:attr/colorBackground</item>
         <item name="android:textColor">?android:attr/textColorPrimary</item>
     </style>
+
+    <style name="ExoMediaButton">
+        <item name="android:background">?android:attr/selectableItemBackgroundBorderless</item>
+        <item name="android:tint">#FFFFFFFF</item>
+        <item name="android:scaleType">fitCenter</item>
+    </style>
+
+    <style name="ExoMediaButton.Play" parent="ExoMediaButton" />
+
+    <style name="ExoMediaButton.Pause" parent="ExoMediaButton" />
 </resources>

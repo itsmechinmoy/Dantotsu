@@ -70,14 +70,15 @@ object HomePageAdapterHelper {
         snackStringFn: (String) -> Unit,
         joblessMessage: String
     ) {
-        if (oldIncludeList == (it.onList != false)) {
-            val prev = aniMangaSearchResults.results.size
-            aniMangaSearchResults.results.addAll(it.results)
-            popularAdaptor.notifyItemRangeInserted(prev, it.results.size)
-        } else {
+        if (it.page <= 1 || oldIncludeList != (it.onList != false)) {
+            aniMangaSearchResults.results.clear()
             aniMangaSearchResults.results.addAll(it.results)
             popularAdaptor.notifyDataSetChanged()
             onUpdateOldIncludeList(it.onList ?: true)
+        } else {
+            val prev = aniMangaSearchResults.results.size
+            aniMangaSearchResults.results.addAll(it.results)
+            popularAdaptor.notifyItemRangeInserted(prev, it.results.size)
         }
         aniMangaSearchResults.onList = it.onList
         aniMangaSearchResults.hasNextPage = it.hasNextPage

@@ -2,7 +2,6 @@ package ani.dantotsu.parsers
 
 import ani.dantotsu.FileUrl
 import ani.dantotsu.media.Media
-import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.util.Logger
@@ -109,7 +108,7 @@ class TorrentAnimeParser : AnimeParser() {
                     relPath.replace('\\', '/').substringBeforeLast('/')
                 } else ""
 
-                val epNum = MediaNameAdapter.findEpisodeNumber(cleanFileName)?.let {
+                val epNum = episodeNumberFromFileName(cleanFileName)?.let {
                     if (it % 1 == 0f) it.toInt().toString() else it.toString()
                 } ?: (index + 1).toString()
 
@@ -129,6 +128,7 @@ class TorrentAnimeParser : AnimeParser() {
                 extraData["torrentHash"] = torrent.hash ?: ""
                 extraData["fileId"] = fileId.toString()
                 extraData["streamUrl"] = streamUrl
+                extraData["torrentUrl"] = animeLink
 
                 val sizeDesc = if (stat.length > 0) formatFileSize(stat.length) else null
 
@@ -186,6 +186,34 @@ class TorrentAnimeParser : AnimeParser() {
     }
 
     companion object {
+        private val VIDEO_EXT = Regex("""\.[A-Za-z0-9]{2,4}$""")
+        private val BRACKETS = Regex("""\[[^\]]*\]|\([^)]*\)|\{[^}]*\}|【[^】]*】""")
+        private val SEASON_EPISODE = Regex("""(?i)\bS\d{1,2}[ ._-]?E(\d{1,4}(?:\.\d(?!\d))?)""")
+        private val CROSS_EPISODE = Regex("""(?i)\b\d{1,2}x(\d{1,4})\b""")
+        private val EPISODE_WORD = Regex("""(?i)(?:\bepisode|\bep|\be)[ ._-]?(\d{1,4}(?:\.\d(?!\d))?)\b""")
+        private val DASH_NUMBER = Regex("""\s-\s(\d{1,4}(?:\.\d(?!\d))?)(?:v\d)?\b""")
+        private val NOISE = Regex("""(?i)\b(?:\d{3,4}p|[xh]\.?26[45]|hevc|avc|aac\d?(?:\.\d)?|ddp?\d\.\d|flac|opus|10-?bit|8-?bit|\d{1,2}ch|web(?:-?dl|rip)?|bd(?:rip)?|blu-?ray|v\d)\b""")
+        private val PLAIN_NUMBER = Regex("""(?<![\d.])(\d{1,4}(?:\.\d(?!\d))?)(?![\d.]|\s*(?:p\b|bit\b))""")
+
+        /**
+         * Episode number from a release filename. Ignores bracketed tags (group, CRC/hash,
+         * resolution), so a batch doesn't list "486689 - 486689". Null when nothing fits.
+         */
+        fun episodeNumberFromFileName(fileName: String): Float? {
+            val base = fileName.replace(VIDEO_EXT, "")
+            val name = BRACKETS.replace(base, " ").replace('_', ' ')
+            SEASON_EPISODE.find(name)?.let { return it.groupValues[1].toFloatOrNull() }
+            CROSS_EPISODE.find(name)?.let { return it.groupValues[1].toFloatOrNull() }
+            EPISODE_WORD.find(name)?.let { return it.groupValues[1].toFloatOrNull() }
+            DASH_NUMBER.findAll(name).lastOrNull()?.let { return it.groupValues[1].toFloatOrNull() }
+            val rest = NOISE.replace(name.replace('.', ' '), " ")
+            return PLAIN_NUMBER.findAll(rest)
+                .map { it.groupValues[1] }
+                .filterNot { it.length == 4 && it.startsWith("19") || it.length == 4 && it.startsWith("20") }
+                .lastOrNull()
+                ?.toFloatOrNull()
+        }
+
         /**
          * Strips common top-level root directory (e.g. "[Anime Time] Attack On Titan (Ultimate Collection)/")
          * when all files in the torrent share the same top-level root folder.

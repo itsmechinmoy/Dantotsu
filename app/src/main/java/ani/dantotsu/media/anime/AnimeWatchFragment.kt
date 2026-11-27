@@ -23,7 +23,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -245,7 +244,12 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
             if (data != null) {
                 applyData(data)
                 if (loaded) {
-                    loadEpisodes(media.selected!!.sourceIndex, false)
+                    val currentEpisodes = model.getEpisodes().value
+                    if (currentEpisodes?.get(media.selected!!.sourceIndex) != null) {
+                        onEpisodesLoaded(currentEpisodes)
+                    } else {
+                        loadEpisodes(media.selected!!.sourceIndex, false)
+                    }
                 }
             }
         }
@@ -253,10 +257,24 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
 
     private fun initOrReloadMedia(it: Media?) {
         if (it == null) return
-        if (this::media.isInitialized) {
-            if (it.anime != null && it.anime?.episodes == null) {
+        val prevMalId = if (this::media.isInitialized) media.idMAL else null
+        if (this::media.isInitialized && it.anime != null) {
+            if (it.anime?.episodes == null) {
                 it.anime?.episodes = media.anime?.episodes
             }
+            it.anime?.fillerEpisodes = it.anime?.fillerEpisodes
+                ?: media.anime?.fillerEpisodes
+                ?: model.getFillerEpisodes().value
+            it.anime?.kitsuEpisodes = it.anime?.kitsuEpisodes
+                ?: media.anime?.kitsuEpisodes
+                ?: model.getKitsuEpisodes().value
+            it.anime?.anifyEpisodes = it.anime?.anifyEpisodes
+                ?: media.anime?.anifyEpisodes
+                ?: model.getAnifyEpisodes().value
+        } else if (it.anime != null) {
+            it.anime?.fillerEpisodes = it.anime?.fillerEpisodes ?: model.getFillerEpisodes().value
+            it.anime?.kitsuEpisodes = it.anime?.kitsuEpisodes ?: model.getKitsuEpisodes().value
+            it.anime?.anifyEpisodes = it.anime?.anifyEpisodes ?: model.getAnifyEpisodes().value
         }
         media = it
         media.selected = model.loadSelected(media)
@@ -278,7 +296,17 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
             loadMediaEpisodes(media, force = false)
             loaded = true
         } else {
-            reload()
+            if (media.idMAL != null && prevMalId == null && model.getFillerEpisodes().value.isNullOrEmpty()) {
+                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                    model.loadFillerEpisodes(media, force = false)
+                }
+            }
+            val currentEpisodes = model.getEpisodes().value
+            if (currentEpisodes?.get(media.selected!!.sourceIndex) != null) {
+                onEpisodesLoaded(currentEpisodes)
+            } else {
+                reload()
+            }
         }
     }
 
@@ -301,6 +329,11 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
     private fun onEpisodesLoaded(loadedEpisodes: Map<Int, Map<String, Episode>>?) {
         if (loadedEpisodes == null) return
         val episodes = loadedEpisodes[media.selected!!.sourceIndex] ?: return
+        media.anime?.let { anime ->
+            if (anime.fillerEpisodes == null) anime.fillerEpisodes = model.getFillerEpisodes().value
+            if (anime.kitsuEpisodes == null) anime.kitsuEpisodes = model.getKitsuEpisodes().value
+            if (anime.anifyEpisodes == null) anime.anifyEpisodes = model.getAnifyEpisodes().value
+        }
         val currentSourceName = model.watchSources?.get(media.selected!!.sourceIndex)?.name ?: ""
         val isTorrentSource = currentSourceName.equals("Torrent", ignoreCase = true) ||
             episodes.values.any { it.extra?.containsKey("torrentHash") == true }
@@ -828,7 +861,6 @@ class AnimeWatchFragment : Fragment(), AnimeWatchAdapter.ScanlatorSelectionListe
         ) {}
     }
 
-    @OptIn(UnstableApi::class)
     fun onAnimeEpisodeRemoveDownloadClick(i: String) {
         downloadManager.removeDownload(
             DownloadedType(

@@ -1,7 +1,7 @@
 package ani.dantotsu.media.anime
 
 import android.graphics.Bitmap
-import androidx.media3.ui.TimeBar
+import ani.dantotsu.media.anime.mpv.DantotsuTimeBar
 
 data class ThumbnailTileInfo(
     val timeMs: Long,
@@ -25,20 +25,20 @@ class SeekThumbnailPreview {
     }
 
     fun attachToTimeBar(
-        timeBar: TimeBar,
+        timeBar: DantotsuTimeBar,
         onScrubMove: (positionMs: Long, tile: ThumbnailTileInfo?) -> Unit,
         onScrubStop: () -> Unit
     ) {
-        timeBar.addListener(object : TimeBar.OnScrubListener {
-            override fun onScrubStart(timeBar: TimeBar, position: Long) {
+        timeBar.addListener(object : DantotsuTimeBar.OnScrubListener {
+            override fun onScrubStart(timeBar: DantotsuTimeBar, position: Long) {
                 onScrubMove(position, getTileForPosition(position))
             }
 
-            override fun onScrubMove(timeBar: TimeBar, position: Long) {
+            override fun onScrubMove(timeBar: DantotsuTimeBar, position: Long) {
                 onScrubMove(position, getTileForPosition(position))
             }
 
-            override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
+            override fun onScrubStop(timeBar: DantotsuTimeBar, position: Long, canceled: Boolean) {
                 onScrubStop()
             }
         })

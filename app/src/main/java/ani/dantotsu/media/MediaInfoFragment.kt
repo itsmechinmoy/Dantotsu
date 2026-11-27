@@ -1092,7 +1092,6 @@ class MediaInfoFragment : Fragment() {
     private fun bindMediaContent(media: Media, offline: Boolean) {
         bindBasicInfo(media, offline)
         val parent = _binding?.mediaInfoContainer ?: return
-        bindProducers(media, parent)
         bindMangaExtrasAndSynonyms(media, parent, offline)
         bindSocialUsers(media, parent, offline)
         bindTrailerView(media, parent, offline)
@@ -1102,6 +1101,7 @@ class MediaInfoFragment : Fragment() {
         bindTags(media, parent, offline)
         bindRankings(media, parent, offline)
         bindExternalLinks(media, parent, offline)
+        bindProducers(media, parent)
         bindPrequelSequel(media, parent, offline)
         bindWatchOrderAndNews(media, parent, offline)
         bindReviews(media, parent)

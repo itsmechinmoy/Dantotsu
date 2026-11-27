@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings for the settings row system. -->
+<resources>
+    <string name="back">Back</string>
+    <string name="increase">Increase</string>
+    <string name="decrease">Decrease</string>
+    <string name="share_log">Share log</string>
+    <string name="speed_kbps">%1$d KB/s</string>
+    <string name="extension_installer">Extension Installer</string>
+    <string name="anilist_notifications_interval">AniList notifications update frequency</string>
+    <string name="comment_notifications_interval">Comment notifications update frequency</string>
+    <string name="theme_mode">Light or dark</string>
+    <string name="theme_mode_auto">Follow system</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="max_parallel_downloads">Max Parallel Downloads</string>
+    <string name="max_parallel_downloads_desc">Concurrent download tasks (0 = Sequential, 1-10 = Concurrent). Note: High concurrency may trigger source rate limits.</string>
+    <string name="max_parallel_downloads_off">0 (Off / Sequential)</string>
+    <string name="storage_downloads_path">Downloads: %1$s</string>
+    <string name="backups_to_retain_count">%1$d backups</string>
+    <string name="collapsed">Collapsed</string>
+    <string name="expanded">Expanded</string>
+    <string name="settings_fewer">Show fewer</string>
+    <string name="accounts_cards">Linked accounts</string>
+    <string name="accounts_keywords">login, logout, account, AniList, MyAnimeList, MAL, Discord</string>
+    <string name="add_custom_list">Add list</string>
+    <string name="edit_bio_desc">Your AniList profile bio and About Me</string>
+    <string name="log_in_to">Log in to %1$s</string>
+    <string name="log_out_of">Log out of %1$s</string>
+    <plurals name="settings_more">
+        <item quantity="one">Show %d more</item>
+        <item quantity="other">Show %d more</item>
+    </plurals>
+</resources>

@@ -1,60 +1,60 @@
 package ani.dantotsu.settings
 
-import android.content.Context
 import android.content.Intent
-import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
-import android.view.ViewGroup
-import android.view.animation.AnimationUtils
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
-import ani.dantotsu.connections.discord.Discord
+import ani.dantotsu.connections.comick.Comick
+import ani.dantotsu.connections.discord.RPCManager
 import ani.dantotsu.connections.mal.MAL
-import ani.dantotsu.databinding.ActivitySettingsAccountsBinding
-import ani.dantotsu.initActivity
+import ani.dantotsu.connections.mangabaka.MangaBaka
+import ani.dantotsu.currContext
+import ani.dantotsu.databinding.ItemSettingsAccountsBinding
 import ani.dantotsu.loadImage
-import ani.dantotsu.navBarHeight
 import ani.dantotsu.openLinkInBrowser
 import ani.dantotsu.others.CustomBottomDialog
+import ani.dantotsu.settings.rows.Kind
+import ani.dantotsu.settings.rows.Row
+import ani.dantotsu.settings.rows.Section
+import ani.dantotsu.settings.rows.SettingsScreen
+import ani.dantotsu.settings.rows.SettingsScreenActivity
+import ani.dantotsu.settings.rows.actionRow
+import ani.dantotsu.settings.rows.customRow
+import ani.dantotsu.settings.rows.switchRow
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.startMainActivity
-import ani.dantotsu.statusBarHeight
-import ani.dantotsu.themes.ThemeManager
 import io.noties.markwon.Markwon
 import io.noties.markwon.SoftBreakAddsNewLinePlugin
 import kotlinx.coroutines.launch
 
-class SettingsAccountActivity : AppCompatActivity() {
-    private lateinit var binding: ActivitySettingsAccountsBinding
+class SettingsAccountActivity : SettingsScreenActivity() {
+    override val screen get() = AccountsScreen
+    private var reloadAccountsCard: (() -> Unit)? = null
+
+    /** On after a logout: back then restarts the main screen. */
     private val restartMainActivity = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = startMainActivity(this@SettingsAccountActivity)
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        ThemeManager(this).applyTheme()
-        initActivity(this)
+    override fun onScreenCreate(savedInstanceState: android.os.Bundle?) {
+        onBackPressedDispatcher.addCallback(this, restartMainActivity)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        reloadAccountsCard?.invoke()
+    }
+
+    /** Fills the account logins block (AniList card, MAL, Discord, MangaBaka, Comick). */
+    internal fun bindAccounts(b: ItemSettingsAccountsBinding) {
         val context = this
-
-        binding = ActivitySettingsAccountsBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        binding.apply {
-            settingsAccountsLayout.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                topMargin = statusBarHeight
-                bottomMargin = navBarHeight
-            }
-            accountSettingsBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
-
+        b.apply {
             settingsAccountHelp.setOnClickListener {
                 CustomBottomDialog.newInstance().apply {
                     setTitleText(context.getString(R.string.account_help))
@@ -68,67 +68,14 @@ class SettingsAccountActivity : AppCompatActivity() {
                 }.show(supportFragmentManager, "dialog")
             }
 
-            setupAccountConnections(context)
-        }
-        val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
-        binding.settingsRecyclerView.adapter = SettingsAdapter(
-            arrayListOf(
-                Settings(
-                    type = 2,
-                    name = getString(R.string.enable_rpc),
-                    desc = getString(R.string.enable_rpc_desc),
-                    icon = R.drawable.interests_24,
-                    isChecked = PrefManager.getVal(PrefName.rpcEnabled),
-                    switch = { isChecked, _ ->
-                        PrefManager.setVal(PrefName.rpcEnabled, isChecked)
-                    },
-                    isVisible = Discord.token != null
-                ),
-                Settings(
-                    type = 1,
-                    name = getString(R.string.anilist_settings),
-                    desc = getString(R.string.alsettings_desc),
-                    icon = R.drawable.ic_anilist,
-                    onClick = {
-                        lifecycleScope.launch {
-                            Anilist.query.getUserData()
-                            startActivity(Intent(context, AnilistSettingsActivity::class.java))
-                        }
-                    },
-                    isActivity = true
-                ),
-                Settings(
-                    type = 2,
-                    name = getString(R.string.comments_button),
-                    desc = getString(R.string.comments_button_desc),
-                    icon = R.drawable.ic_round_comment_24,
-                    isChecked = PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1,
-                    switch = { isChecked, _ ->
-                        PrefManager.setVal(PrefName.CommentsEnabled, if (isChecked) 1 else 2)
-                        reload()
-                    },
-                    isVisible = Anilist.token != null
-                ),
-            ),
-            highlightKey = highlightKey
-        )
-        binding.settingsRecyclerView.layoutManager =
-            LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-
-    }
-
-    fun reload() {
-        snackString(getString(R.string.restart_app_extra))
-    }
-    private fun setupAccountConnections(context: Context) {
-        binding.apply {
             fun reload() {
                 if (Anilist.token != null) {
                     settingsAnilistLogin.setText(R.string.logout)
+                    settingsAnilistLogin.contentDescription = getString(R.string.log_out_of, getString(R.string.anilist))
                     settingsAnilistLogin.setOnClickListener {
                         Anilist.removeSavedToken()
                         restartMainActivity.isEnabled = true
-                        reload()
+                        refresh()
                     }
                     settingsAnilistUsername.visibility = View.VISIBLE
                     settingsAnilistUsername.text = Anilist.username
@@ -150,12 +97,13 @@ class SettingsAccountActivity : AppCompatActivity() {
                         settingsAnilistBanner.visibility = View.GONE
                         settingsAnilistScrim.visibility = View.GONE
                     }
-                    
+                
                     val daysLeft = Anilist.getTokenExpiryDays()
                     if (daysLeft != null) {
                         settingsAnilistTokenExpiry.visibility = View.VISIBLE
                         settingsAnilistTokenExpiry.text = when {
                             daysLeft <= 0 -> "Reconnect Now"
+                            daysLeft == 1L -> "Reconnect in 1 day"
                             else -> "Reconnect in $daysLeft days"
                         }
                         settingsAnilistTokenExpiry.setOnClickListener {
@@ -171,10 +119,11 @@ class SettingsAccountActivity : AppCompatActivity() {
 
                     if (MAL.token != null) {
                         settingsMALLogin.setText(R.string.logout)
+                        settingsMALLogin.contentDescription = getString(R.string.log_out_of, getString(R.string.myanimelist))
                         settingsMALLogin.setOnClickListener {
                             MAL.removeSavedToken()
                             restartMainActivity.isEnabled = true
-                            reload()
+                            refresh()
                         }
                         settingsMALUsername.visibility = View.VISIBLE
                         settingsMALUsername.text = MAL.username
@@ -187,6 +136,7 @@ class SettingsAccountActivity : AppCompatActivity() {
                         settingsMALAvatar.setImageResource(R.drawable.ic_round_person_24)
                         settingsMALUsername.visibility = View.GONE
                         settingsMALLogin.setText(R.string.login)
+                        settingsMALLogin.contentDescription = getString(R.string.log_in_to, getString(R.string.myanimelist))
                         settingsMALLogin.setOnClickListener {
                             MAL.loginIntent(context)
                         }
@@ -197,8 +147,8 @@ class SettingsAccountActivity : AppCompatActivity() {
                     settingsAnilistTokenExpiry.visibility = View.GONE
                     settingsAnilistBanner.visibility = View.GONE
                     settingsAnilistScrim.visibility = View.GONE
-                    settingsRecyclerView.visibility = View.GONE
                     settingsAnilistLogin.setText(R.string.login)
+                    settingsAnilistLogin.contentDescription = getString(R.string.log_in_to, getString(R.string.anilist))
                     settingsAnilistLogin.setOnClickListener {
                         Anilist.loginIntent(context)
                     }
@@ -207,88 +157,118 @@ class SettingsAccountActivity : AppCompatActivity() {
                     settingsMALUsername.visibility = View.GONE
                 }
 
-                if (Discord.token != null) {
-                    val id = PrefManager.getVal(PrefName.DiscordId, null as String?)
-                    val avatar = PrefManager.getVal(PrefName.DiscordAvatar, null as String?)
-                    val username = PrefManager.getVal(PrefName.DiscordUserName, null as String?)
-                    if (id != null && avatar != null) {
-                        settingsDiscordAvatar.loadImage("https://cdn.discordapp.com/avatars/$id/$avatar.png")
-                        settingsDiscordAvatar.setOnClickListener {
-                            it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            val discordLink = getString(R.string.discord_link, id)
-                            openLinkInBrowser(discordLink)
-                        }
-                    }
-                    settingsDiscordUsername.visibility = View.VISIBLE
-                    settingsDiscordUsername.text =
-                        username ?: Discord.token?.replace(Regex("."), "*")
-                    settingsDiscordLogin.setText(R.string.logout)
-                    settingsDiscordLogin.setOnClickListener {
-                        Discord.removeSavedToken(context)
-                        restartMainActivity.isEnabled = true
-                        reload()
-                    }
-
+                settingsDiscordAvatarContainer.visibility = View.GONE
+                settingsDiscordUsername.visibility = View.VISIBLE
+                if (RPCManager.isAvailable(context)) {
+                    settingsDiscordUsername.setText(R.string.discord_rich_presence)
+                    settingsDiscordLogin.visibility = View.GONE
                     settingsPresenceSwitcher.visibility = View.VISIBLE
-                    var initialStatus = when (PrefManager.getVal<String>(PrefName.DiscordStatus)) {
-                        "online" -> R.drawable.discord_status_online
-                        "idle" -> R.drawable.discord_status_idle
-                        "dnd" -> R.drawable.discord_status_dnd
-                        "invisible" -> R.drawable.discord_status_invisible
-                        else -> R.drawable.discord_status_online
-                    }
-                    settingsPresenceSwitcher.setImageResource(initialStatus)
-
-                    val zoomInAnimation =
-                        AnimationUtils.loadAnimation(context, R.anim.bounce_zoom)
+                    settingsPresenceSwitcher.setImageResource(R.drawable.ic_round_settings_24)
                     settingsPresenceSwitcher.setOnClickListener {
-                        var status = "online"
-                        initialStatus = when (initialStatus) {
-                            R.drawable.discord_status_online -> {
-                                status = "idle"
-                                R.drawable.discord_status_idle
-                            }
-
-                            R.drawable.discord_status_idle -> {
-                                status = "dnd"
-                                R.drawable.discord_status_dnd
-                            }
-
-                            R.drawable.discord_status_dnd -> {
-                                status = "invisible"
-                                R.drawable.discord_status_invisible
-                            }
-
-                            R.drawable.discord_status_invisible -> {
-                                status = "online"
-                                R.drawable.discord_status_online
-                            }
-
-                            else -> R.drawable.discord_status_online
-                        }
-
-                        PrefManager.setVal(PrefName.DiscordStatus, status)
-                        settingsPresenceSwitcher.setImageResource(initialStatus)
-                        settingsPresenceSwitcher.startAnimation(zoomInAnimation)
-                    }
-                    settingsPresenceSwitcher.setOnLongClickListener {
-                        it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         DiscordDialogFragment().show(supportFragmentManager, "dialog")
-                        true
                     }
                 } else {
+                    settingsDiscordUsername.setText(R.string.discord_app_required)
                     settingsPresenceSwitcher.visibility = View.GONE
-                    settingsDiscordAvatar.setImageResource(R.drawable.ic_round_person_24)
-                    settingsDiscordUsername.visibility = View.GONE
-                    settingsDiscordLogin.setText(R.string.login)
+                    settingsDiscordLogin.visibility = View.VISIBLE
+                    settingsDiscordLogin.setText(R.string.get_discord)
                     settingsDiscordLogin.setOnClickListener {
-                        Discord.warning(context)
-                            .show(supportFragmentManager, "dialog")
+                        openLinkInBrowser("https://play.google.com/store/apps/details?id=com.discord")
+                    }
+                }
+
+                if (MangaBaka.token != null) {
+                    settingsMangaBakaLogin.setText(R.string.logout)
+                    settingsMangaBakaLogin.contentDescription = getString(R.string.log_out_of, getString(R.string.mangabaka))
+                    settingsMangaBakaLogin.setOnClickListener {
+                        MangaBaka.removeSavedToken()
+                        restartMainActivity.isEnabled = true
+                        refresh()
+                    }
+                    settingsMangaBakaUsername.visibility = View.VISIBLE
+                    settingsMangaBakaUsername.text = MangaBaka.username
+                    settingsMangaBakaAvatar.loadImage(MangaBaka.avatar)
+                } else {
+                    settingsMangaBakaAvatar.setImageResource(R.drawable.ic_round_person_24)
+                    settingsMangaBakaUsername.visibility = View.GONE
+                    settingsMangaBakaLogin.setText(R.string.login)
+                    settingsMangaBakaLogin.contentDescription = getString(R.string.log_in_to, getString(R.string.mangabaka))
+                    settingsMangaBakaLogin.setOnClickListener {
+                        MangaBaka.loginIntent(context)
+                    }
+                }
+
+                if (Comick.token != null) {
+                    settingsComickLogin.setText(R.string.logout)
+                    settingsComickLogin.contentDescription = getString(R.string.log_out_of, getString(R.string.comick))
+                    settingsComickLogin.setOnClickListener {
+                        Comick.removeSavedToken()
+                        restartMainActivity.isEnabled = true
+                        refresh()
+                    }
+                    settingsComickUsername.visibility = View.VISIBLE
+                    settingsComickUsername.text = Comick.username
+                    settingsComickAvatar.loadImage(Comick.avatar)
+                    settingsComickAvatar.setOnClickListener {
+                        it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        openLinkInBrowser(getString(R.string.comick_link, Comick.username))
+                    }
+                } else {
+                    settingsComickAvatar.setImageResource(R.drawable.ic_round_person_24)
+                    settingsComickUsername.visibility = View.GONE
+                    settingsComickLogin.setText(R.string.login)
+                    settingsComickLogin.contentDescription = getString(R.string.log_in_to, getString(R.string.comick))
+                    settingsComickLogin.setOnClickListener {
+                        Comick.loginIntent(context)
                     }
                 }
             }
+            reloadAccountsCard = { reload() }
             reload()
-                }
+        }
     }
+}
 
+object AccountsScreen : SettingsScreen("accounts", R.string.accounts, R.drawable.ic_round_person_24, R.string.accounts_desc) {
+
+    override val activity get() = SettingsAccountActivity::class.java
+
+    private val loggedIn = { Anilist.token != null }
+
+    override fun sections() = listOf(
+        Section(0, listOf(
+            customRow("accounts", R.string.accounts_cards, R.layout.item_settings_accounts,
+                keywords = listOf(R.string.accounts_keywords)) { host, view ->
+                (host.activity as SettingsAccountActivity).bindAccounts(ItemSettingsAccountsBinding.bind(view))
+            },
+        )),
+        // Signed out, every row in this section is hidden, so ScreenItems drops the heading too.
+        Section(R.string.settings_section_preferences, listOf(
+            switchRow(PrefName.rpcEnabled, R.string.enable_rpc, R.string.enable_rpc_desc, R.drawable.interests_24,
+                visible = { loggedIn() && currContext()?.let { RPCManager.isAvailable(it) } == true }),
+            actionRow("anilist_settings", R.string.anilist_settings, R.string.alsettings_desc, R.drawable.ic_anilist,
+                opensScreen = true, visible = loggedIn,
+                // AniList's own settings live on that screen; search finds them through this row.
+                keywords = listOf(R.string.airing_notifications, R.string.display_adult_content,
+                    R.string.edit_bio, R.string.restrict_messages),
+                onClick = { host, _ ->
+                    host.activity.lifecycleScope.launch {
+                        Anilist.query.getUserData()
+                        host.activity.startActivity(Intent(host.activity, AnilistSettingsActivity::class.java))
+                    }
+                }),
+            Row(
+                id = PrefName.CommentsEnabled.name, title = R.string.comments_button,
+                summary = R.string.comments_button_desc, icon = R.drawable.ic_round_comment_24,
+                visible = loggedIn, keys = listOf(PrefName.CommentsEnabled),
+                kind = Kind.Switch(
+                    get = { PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1 },
+                    set = { host, on ->
+                        PrefManager.setVal(PrefName.CommentsEnabled, if (on) 1 else 2)
+                        snackString(host.activity.getString(R.string.restart_app_extra))
+                    },
+                ),
+            ),
+        )),
+    )
 }

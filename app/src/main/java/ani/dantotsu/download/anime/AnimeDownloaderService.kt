@@ -17,7 +17,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
-import androidx.media3.common.util.UnstableApi
 import ani.dantotsu.FileUrl
 import ani.dantotsu.R
 import ani.dantotsu.addons.download.DownloadAddonManager
@@ -26,7 +25,6 @@ import ani.dantotsu.defaultHeaders
 import ani.dantotsu.download.DownloadedType
 import ani.dantotsu.download.DownloadsManager
 import ani.dantotsu.download.DownloadsManager.Companion.getSubDirectory
-import ani.dantotsu.download.video.DrmDownloader
 import ani.dantotsu.download.anime.AnimeDownloaderService.AnimeDownloadTask.Companion.getTaskName
 import ani.dantotsu.download.findValidName
 import ani.dantotsu.media.Media
@@ -225,7 +223,6 @@ class AnimeDownloaderService : Service() {
         }
     }
 
-    @UnstableApi
     fun cancelDownload(taskName: String) {
         val tasks = mutableListOf<AnimeDownloadTask>()
         tasks.addAll(AnimeServiceDataSingleton.downloadQueue.filter { it.getTaskName() == taskName })
@@ -292,8 +289,7 @@ class AnimeDownloaderService : Service() {
     }
 
     @Suppress("ComplexMethod", "LongMethod")
-    @androidx.annotation.OptIn(UnstableApi::class)
-        suspend fun download(task: AnimeDownloadTask) {
+    suspend fun download(task: AnimeDownloadTask) {
         withContext(Dispatchers.IO) {
             if (checkWifiRestricted(task)) return@withContext
             val notifi = checkNotificationPermission()
@@ -305,8 +301,8 @@ class AnimeDownloaderService : Service() {
                 val outputDir = getSubDirectory(this@AnimeDownloaderService, MediaType.ANIME, false, task.title, task.episode)
                     ?: throw Exception("Failed to create output directory")
 
-                if (handleDrmDownload(task, baseOutputDir, outputDir, notifi)) {
-                    return@withContext
+                if (task.video.drm != null) {
+                    throw UnsupportedOperationException("DRM-protected streams (${task.video.drm.scheme}) are not supported for offline download")
                 }
 
                 val outputFile = prepareOutputFile(task, outputDir)
@@ -355,37 +351,6 @@ class AnimeDownloaderService : Service() {
                 notificationManager.notify(NOTIFICATION_ID, builder.build())
             }
         }
-    }
-
-    private suspend fun kotlinx.coroutines.CoroutineScope.handleDrmDownload(
-        task: AnimeDownloadTask,
-        baseOutputDir: androidx.documentfile.provider.DocumentFile,
-        outputDir: androidx.documentfile.provider.DocumentFile,
-        notifi: Boolean
-    ): Boolean {
-        val drm = task.video.drm ?: return false
-        val offlineDrm = drm.offline ?: return false
-
-        saveMediaInfo(task, baseOutputDir)
-        val lastPercent = java.util.concurrent.atomic.AtomicInteger(-1)
-        val result = DrmDownloader.download(
-            context = this@AnimeDownloaderService,
-            drm = offlineDrm,
-            scheme = drm.scheme,
-            outputDir = outputDir,
-        ) { percent ->
-            if (task.cancelled || lastPercent.getAndSet(percent) == percent) {
-                return@download
-            }
-            AnimeServiceDataSingleton.progress[task.getTaskName()] = percent
-            builder.setProgress(100, percent, false)
-            if (notifi) notificationManager.notify(NOTIFICATION_ID, builder.build())
-            broadcastDownloadProgress(task.episode, percent, task.sourceMedia?.id, 0L, 0L)
-        }
-        if (task.cancelled) return true
-        Logger.log("DRM download finished; license valid for ${result.licenseSeconds}s, playback window ${result.playbackSeconds}s")
-        completeDownload(task, notifi)
-        return true
     }
 
     private fun prepareOutputFile(
@@ -743,7 +708,6 @@ class AnimeDownloaderService : Service() {
     }
 
     private val cancelReceiver = object : BroadcastReceiver() {
-        @androidx.annotation.OptIn(UnstableApi::class)
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == ACTION_CANCEL_DOWNLOAD) {
                 val taskName = intent.getStringExtra(EXTRA_TASK_NAME)

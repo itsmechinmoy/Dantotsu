@@ -1,145 +1,66 @@
 package ani.dantotsu.settings
 
 import android.content.Intent
-import android.os.Bundle
-import android.view.View
-import android.view.ViewGroup
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.updateLayoutParams
-import androidx.recyclerview.widget.LinearLayoutManager
 import ani.dantotsu.R
-import ani.dantotsu.databinding.ActivitySettingsMangaBinding
 import ani.dantotsu.download.DownloadsManager
-import ani.dantotsu.initActivity
 import ani.dantotsu.media.MediaType
-import ani.dantotsu.navBarHeight
 import ani.dantotsu.restartApp
-import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.rows.Section
+import ani.dantotsu.settings.rows.Segment
+import ani.dantotsu.settings.rows.SettingsHost
+import ani.dantotsu.settings.rows.SettingsScreen
+import ani.dantotsu.settings.rows.SettingsScreenActivity
+import ani.dantotsu.settings.rows.actionRow
+import ani.dantotsu.settings.rows.segmentedRow
+import ani.dantotsu.settings.rows.switchRow
 import ani.dantotsu.settings.saving.PrefName
-import ani.dantotsu.statusBarHeight
-import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.util.customAlertDialog
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class SettingsMangaActivity : AppCompatActivity() {
-    private lateinit var binding: ActivitySettingsMangaBinding
+class SettingsMangaActivity : SettingsScreenActivity() {
+    override val screen get() = MangaScreen
+}
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        ThemeManager(this).applyTheme()
-        initActivity(this)
-        val context = this
-        binding = ActivitySettingsMangaBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        binding.apply {
-            settingsMangaLayout.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                topMargin = statusBarHeight
-                bottomMargin = navBarHeight
-            }
-            mangaSettingsBack.setOnClickListener {
-                onBackPressedDispatcher.onBackPressed()
-            }
+object MangaScreen : SettingsScreen("manga", R.string.manga, R.drawable.ic_round_import_contacts_24, R.string.manga_desc) {
 
-            var previousChp: View = when (PrefManager.getVal<Int>(PrefName.MangaDefaultView)) {
-                0 -> settingsChpList
-                1 -> settingsChpCompact
-                else -> settingsChpList
-            }
-            previousChp.alpha = 1f
-            fun uiChp(mode: Int, current: View) {
-                previousChp.alpha = 0.33f
-                previousChp = current
-                current.alpha = 1f
-                PrefManager.setVal(PrefName.MangaDefaultView, mode)
-            }
+    override val activity get() = SettingsMangaActivity::class.java
 
-            settingsChpList.setOnClickListener {
-                uiChp(0, it)
-            }
+    override fun sections() = listOf(
+        Section(R.string.settings_section_reading, listOf(
+            actionRow("reader_settings", R.string.reader_settings, R.string.reader_settings_desc,
+                R.drawable.ic_round_reader_settings, opensScreen = true,
+                keywords = listOf(R.string.true_colors, R.string.crop_borders),
+                onClick = { host, _ -> host.activity.startActivity(Intent(host.activity, ReaderSettingsActivity::class.java)) }),
+            segmentedRow(PrefName.MangaDefaultView, R.string.default_chp_view, R.drawable.ic_round_view_list_24,
+                options = listOf(
+                    Segment(R.drawable.ic_round_view_list_24, R.string.list),
+                    Segment(R.drawable.ic_round_view_comfy_24, R.string.compact),
+                )),
+            switchRow(PrefName.SkipDuplicateChapters, R.string.skip_duplicate_chapters,
+                R.string.skip_duplicate_chapters_desc, R.drawable.view_list_24),
+            switchRow(PrefName.IncludeMangaList, R.string.include_list, R.string.include_list_desc,
+                R.drawable.view_list_24, onChange = { host, _ -> host.activity.restartApp() }),
+        )),
+        Section(R.string.downloads, listOf(
+            switchRow(PrefName.SmartDownloadManga, R.string.smart_download_manga, R.string.smart_download_manga_desc,
+                R.drawable.ic_download_24),
+            actionRow("purge_manga_downloads", R.string.purge_manga_downloads, R.string.purge_manga_downloads_desc,
+                R.drawable.ic_round_delete_24,
+                onClick = { host, _ -> purge(host, R.string.purge_manga_downloads, R.string.manga, MediaType.MANGA) }),
+            actionRow("purge_novel_downloads", R.string.purge_novel_downloads, R.string.purge_novel_downloads_desc,
+                R.drawable.ic_round_delete_24,
+                onClick = { host, _ -> purge(host, R.string.purge_novel_downloads, R.string.novels, MediaType.NOVEL) }),
+        )),
+    )
 
-            settingsChpCompact.setOnClickListener {
-                uiChp(1, it)
-            }
-
-            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
-            settingsRecyclerView.adapter = SettingsAdapter(
-                arrayListOf(
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.reader_settings),
-                        desc = getString(R.string.reader_settings_desc),
-                        icon = R.drawable.ic_round_reader_settings,
-                        onClick = {
-                            startActivity(Intent(context, ReaderSettingsActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.purge_manga_downloads),
-                        desc = getString(R.string.purge_manga_downloads_desc),
-                        icon = R.drawable.ic_round_delete_24,
-                        onClick = {
-                            context.customAlertDialog().apply {
-                                setTitle(R.string.purge_manga_downloads)
-                                setMessage(R.string.purge_confirm, getString(R.string.manga))
-                                setPosButton(R.string.yes, onClick = {
-                                    val downloadsManager = Injekt.get<DownloadsManager>()
-                                    downloadsManager.purgeDownloads(MediaType.MANGA)
-                                })
-                                setNegButton(R.string.no)
-                                show()
-                            }
-                        }
-
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.purge_novel_downloads),
-                        desc = getString(R.string.purge_novel_downloads_desc),
-                        icon = R.drawable.ic_round_delete_24,
-                        onClick = {
-                            context.customAlertDialog().apply {
-                                setTitle(R.string.purge_novel_downloads)
-                                setMessage(R.string.purge_confirm, getString(R.string.novels))
-                                setPosButton(R.string.yes) {
-                                    val downloadsManager = Injekt.get<DownloadsManager>()
-                                    downloadsManager.purgeDownloads(MediaType.NOVEL)
-                                }
-                                setNegButton(R.string.no)
-                                show()
-                            }
-                        }
-                    ),
-                    Settings(
-                        type = 2,
-                        name = getString(R.string.smart_download_manga),
-                        desc = getString(R.string.smart_download_manga_desc),
-                        icon = R.drawable.ic_download_24,
-                        isChecked = PrefManager.getVal(PrefName.SmartDownloadManga),
-                        switch = { isChecked, _ ->
-                            PrefManager.setVal(PrefName.SmartDownloadManga, isChecked)
-                        }
-                    ),
-                    Settings(
-                        type = 2,
-                        name = getString(R.string.include_list),
-                        desc = getString(R.string.include_list_desc),
-                        icon = R.drawable.view_list_24,
-                        isChecked = PrefManager.getVal(PrefName.IncludeMangaList),
-                        switch = { isChecked, _ ->
-                            PrefManager.setVal(PrefName.IncludeMangaList, isChecked)
-                            restartApp()
-                        }
-                    ),
-                ),
-                highlightKey = highlightKey
-            )
-            settingsRecyclerView.apply {
-                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-                setHasFixedSize(true)
-            }
+    private fun purge(host: SettingsHost, title: Int, what: Int, type: MediaType) {
+        host.activity.customAlertDialog().apply {
+            setTitle(title)
+            setMessage(R.string.purge_confirm, host.activity.getString(what))
+            setPosButton(R.string.yes) { Injekt.get<DownloadsManager>().purgeDownloads(type) }
+            setNegButton(R.string.no)
+            show()
         }
     }
 }
