@@ -10,7 +10,7 @@
         android:background="#000"
         tools:visibility="gone" />
 
-    <androidx.media3.ui.AspectRatioFrameLayout
+    <FrameLayout
         android:id="@id/exo_content_frame"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -42,18 +42,15 @@
             android:visibility="gone"
             tools:ignore="PrivateResource" />
 
-    </androidx.media3.ui.AspectRatioFrameLayout>
+    </FrameLayout>
 
-    <androidx.media3.ui.SubtitleView
+    <View
         android:id="@id/exo_subtitles"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="bottom"
         android:layout_marginBottom="16dp"
-        android:layout_weight="1"
-        android:adjustViewBounds="true">
-
-    </androidx.media3.ui.SubtitleView>
+        android:visibility="gone" />
 
     <ani.dantotsu.others.Xubtitle
         android:id="@+id/customSubtitleView"

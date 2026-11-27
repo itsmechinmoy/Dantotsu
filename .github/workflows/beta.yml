@@ -46,34 +46,40 @@ jobs:
           LAST_SHA=$(git rev-list --max-parents=0 HEAD)
         fi
         echo "Commits since $LAST_SHA:"
-        COMMIT_LOGS=$(git log $LAST_SHA..HEAD --pretty=format:"● %s ~%an [֍](https://github.com/${{ github.repository }}/commit/%H)" --max-count=10)
+        COMMIT_LOGS=$(git log "$LAST_SHA..HEAD" --pretty=format:"● %s ~%an [֍](https://github.com/$GITHUB_REPO_VAL/commit/%H)" --max-count=10)
         COMMIT_LOGS=$(echo "$COMMIT_LOGS" | sed -E 's/#([0-9]+)/[#\1](https:\/\/github.com\/rebelonion\/Dantotsu\/pull\/\1)/g')
         COMMIT_LOGS="${COMMIT_LOGS//'%'/'%25'}"
         COMMIT_LOGS="${COMMIT_LOGS//$'\n'/'%0A'}"
         COMMIT_LOGS="${COMMIT_LOGS//$'\r'/'%0D'}"
-        echo "COMMIT_LOG=${COMMIT_LOGS}" >> $GITHUB_ENV
+        echo "COMMIT_LOG=${COMMIT_LOGS}" >> "$GITHUB_ENV"
         echo "$COMMIT_LOGS"
         echo "$COMMIT_LOGS" > commit_log.txt
-        BRANCH=${{ github.ref }}
+        BRANCH="$GITHUB_REF_VAL"
         BRANCH=${BRANCH#refs/heads/}
-        echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+        echo "BRANCH=${BRANCH}" >> "$GITHUB_ENV"
       shell: /usr/bin/bash -e {0}
       env:
         CI: true
+        GITHUB_REPO_VAL: ${{ github.repository }}
+        GITHUB_REF_VAL: ${{ github.ref }}
 
     - name: Save Current SHA for Next Run
-      run: echo ${{ github.sha }} > last_sha.txt
+      env:
+        GITHUB_SHA_VAL: ${{ github.sha }}
+      run: echo "$GITHUB_SHA_VAL" > last_sha.txt
 
     - name: Set variables
+      env:
+        GITHUB_SHA_VAL: ${{ github.sha }}
       run: |
         VER=$(grep -E -o 'baseVersion = ".*"' app/build.gradle.kts 2>/dev/null | sed -e 's/baseVersion = //g' | tr -d '"')
         if [ -z "$VER" ]; then
           VER=$(grep -E -o 'versionName = ".*"' app/build.gradle.kts 2>/dev/null | sed -e 's/versionName = //g' | tr -d '"')
         fi
-        SHA=${{ github.sha }}
+        SHA="$GITHUB_SHA_VAL"
         VERSION="$VER+${SHA:0:7}"
         echo "Version $VERSION"
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
     - name: List files in the directory
       run: ls -l
@@ -98,7 +104,9 @@ jobs:
 
     - name: Decode Keystore File
       if: ${{ github.repository == 'rebelonion/Dantotsu' }}
-      run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > $GITHUB_WORKSPACE/key.keystore
+      env:
+        KEYSTORE_FILE_B64: ${{ secrets.KEYSTORE_FILE }}
+      run: echo "$KEYSTORE_FILE_B64" | base64 -d > "$GITHUB_WORKSPACE/key.keystore"
 
     - name: Make gradlew executable
       if: ${{ env.SKIP_BUILD != 'true' }}
@@ -106,15 +114,20 @@ jobs:
 
     - name: Build with Gradle
       if: ${{ env.SKIP_BUILD != 'true' }}
+      env:
+        GITHUB_REPO_VAL: ${{ github.repository }}
+        KEYSTORE_PASSWORD_VAL: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS_VAL: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD_VAL: ${{ secrets.KEY_PASSWORD }}
       run: |
-        if [ "${{ github.repository }}" == "rebelonion/Dantotsu" ]; then
+        if [ "$GITHUB_REPO_VAL" == "rebelonion/Dantotsu" ]; then
           ./gradlew assembleGoogleAlpha \
-            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/key.keystore \
-            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }};
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/key.keystore" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD_VAL" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS_VAL" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD_VAL"
         else
-          ./gradlew assembleGoogleAlpha;
+          ./gradlew assembleGoogleAlpha
         fi
 
     - name: Generate APK checksum

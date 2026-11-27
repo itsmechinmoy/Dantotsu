@@ -239,7 +239,7 @@ class App : Application(), GraphProvider<AppGraph> {
         }
 
         val activityName = activity.javaClass.simpleName
-        if (activityName == "ExoplayerView" || activityName == "MangaReaderActivity" || activityName == "NovelReaderActivity") {
+        if (activityName == "MpvPlayerActivity" || activityName == "MangaReaderActivity" || activityName == "NovelReaderActivity") {
             // These activities manage their own Discord presence
             return
         }

@@ -184,6 +184,14 @@
         <activity android:name=".forum.ThreadViewActivity" />
         <activity android:name=".settings.UserInterfaceSettingsActivity" />
         <activity android:name=".settings.PlayerSettingsActivity" />
+        <activity android:name=".settings.PlayerInternalSettingsActivity" />
+        <activity android:name=".settings.PlayerGesturesSettingsActivity" />
+        <activity android:name=".settings.PlayerDecoderSettingsActivity" />
+        <activity android:name=".settings.PlayerSubtitlesSettingsActivity" />
+        <activity android:name=".settings.PlayerAudioSettingsActivity" />
+        <activity android:name=".settings.PlayerCustomButtonsSettingsActivity" />
+        <activity android:name=".settings.PlayerScriptEditorSettingsActivity" />
+        <activity android:name=".settings.PlayerAdvancedSettingsActivity" />
         <activity android:name=".settings.ReaderSettingsActivity" />
         <activity android:name=".settings.FAQActivity" />
         <activity android:name=".settings.DownloadQueueActivity" android:parentActivityName=".settings.SettingsActivity" />
@@ -301,7 +309,7 @@
             android:process=":error_process"
             android:launchMode="singleTask" />
         <activity
-            android:name=".media.anime.ExoplayerView"
+            android:name=".media.anime.MpvPlayerActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
             android:excludeFromRecents="true"
             android:exported="true"
@@ -602,22 +610,10 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
         <service
-            android:name="androidx.media3.exoplayer.scheduler.PlatformScheduler$PlatformSchedulerService"
-            android:exported="true"
-            android:permission="android.permission.BIND_JOB_SERVICE" />
-        <service
             android:name=".addons.torrent.TorrentServerService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="true" />
-        <service
-            android:name=".media.anime.AnimePlayerService"
-            android:exported="true"
-            android:foregroundServiceType="mediaPlayback">
-            <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
-            </intent-filter>
-        </service>
 
         <service
             android:name=".media.anime.cast.CastProxyServerService"

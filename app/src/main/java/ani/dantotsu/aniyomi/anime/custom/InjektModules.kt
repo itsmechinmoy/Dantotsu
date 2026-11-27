@@ -3,10 +3,7 @@ package ani.dantotsu.aniyomi.anime.custom
 
 import android.app.Application
 import android.content.Context
-import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.database.StandaloneDatabaseProvider
 import ani.dantotsu.addons.download.DownloadAddonManager
 import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.download.DownloadsManager
@@ -34,7 +31,6 @@ import uy.kohesive.injekt.api.get
 
 class AppModule(val app: Application) : InjektModule {
     @kotlin.OptIn(ExperimentalSerializationApi::class)
-    @OptIn(UnstableApi::class)
     override fun InjektRegistrar.registerInjectables() {
         addSingleton(app)
         addSingleton<Application>(app)
@@ -60,8 +56,6 @@ class AppModule(val app: Application) : InjektModule {
             }
         }
         addSingletonFactory<ProtoBuf> { ProtoBuf }
-
-        addSingletonFactory { StandaloneDatabaseProvider(app) }
 
         addSingletonFactory { MangaCache() }
 

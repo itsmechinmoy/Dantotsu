@@ -306,8 +306,17 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         ep.selectedExtractor = chosenExtractor.server.name
         ep.selectedVideo = chosenExtractor.videos.indexOf(bestVideo).takeIf { it >= 0 } ?: 0
         val currentKey = media?.anime?.selectedEpisode ?: ep.number
-        media?.anime?.episodes?.getEpisode(currentKey)?.selectedExtractor = ep.selectedExtractor
-        media?.anime?.episodes?.getEpisode(currentKey)?.selectedVideo = ep.selectedVideo
+        media?.anime?.episodes?.let { map ->
+            val existing = map.getEpisode(currentKey)
+            if (existing != null && existing !== ep) {
+                existing.extractors = ep.extractors
+                existing.allStreams = ep.allStreams
+                existing.selectedExtractor = ep.selectedExtractor
+                existing.selectedVideo = ep.selectedVideo
+            } else {
+                map[currentKey] = ep
+            }
+        }
         media?.let { startExoplayer(it) }
         return true
     }
@@ -690,9 +699,20 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         val size = matchedExtractor?.videos?.size
         if (matchedExtractor != null && size != null && size > 0) {
             val currentKey = m.anime?.selectedEpisode ?: actualKey
-            m.anime?.episodes?.getEpisode(currentKey)?.selectedExtractor = matchedExtractor.server.name
             val chosenVideo = if (sel.video in 0 until size) sel.video else 0
-            m.anime?.episodes?.getEpisode(currentKey)?.selectedVideo = chosenVideo
+            ep.selectedExtractor = matchedExtractor.server.name
+            ep.selectedVideo = chosenVideo
+            m.anime?.episodes?.let { map ->
+                val existing = map.getEpisode(currentKey)
+                if (existing != null && existing !== ep) {
+                    existing.extractors = ep.extractors
+                    existing.allStreams = ep.allStreams
+                    existing.selectedExtractor = ep.selectedExtractor
+                    existing.selectedVideo = ep.selectedVideo
+                } else {
+                    map[currentKey] = ep
+                }
+            }
             sel.server = matchedExtractor.server.name
             model.saveSelected(m.id, sel)
             startExoplayer(m)
@@ -863,9 +883,13 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         dismissAllowingStateLoss()
         if (launch == true) {
             stopAddingToList()
-            val intent = Intent(activity, ExoplayerView::class.java)
-            ExoplayerView.media = media
-            ExoplayerView.initialized = true
+            val detailsAct = activity as? ani.dantotsu.media.MediaDetailsActivity
+            if (detailsAct?.startCompactPlayback(media) == true) {
+                return
+            }
+            val intent = Intent(activity, MpvPlayerActivity::class.java)
+            MpvPlayerActivity.media = media
+            MpvPlayerActivity.initialized = true
             startActivity(intent)
         } else {
             val epKey = media.anime?.selectedEpisode

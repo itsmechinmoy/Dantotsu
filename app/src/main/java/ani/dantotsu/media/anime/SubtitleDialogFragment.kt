@@ -8,15 +8,11 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
-import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.C
-import androidx.media3.common.Tracks
-import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -36,6 +32,7 @@ import ani.dantotsu.getThemeColor
 import ani.dantotsu.media.EpisodeMapper
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.media.MediaNameAdapter
+import ani.dantotsu.media.anime.mpv.SubtitleTrack
 import ani.dantotsu.media.anime.player.PlayerSubtitleManager
 import ani.dantotsu.others.IdMappers
 import ani.dantotsu.parsers.Subtitle
@@ -49,14 +46,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-@OptIn(UnstableApi::class)
 class SubtitleDialogFragment : BottomSheetDialogFragment() {
 
     // Models for subtitle list items
     object NoneSubtitleOption
     data class ActiveOnlineSubtitle(val title: String, val provider: String, val idOrUrl: String, val format: String? = null)
     data class OtherServerSubtitle(val serverName: String, val subtitle: Subtitle, val suffix: String = "")
-    data class EmbeddedSubtitleTrack(val group: Tracks.Group, val trackIndex: Int, val language: String?, val label: String?, val flatIndex: Int = 0)
+    data class EmbeddedSubtitleTrack(val track: SubtitleTrack, val flatIndex: Int = 0)
     enum class TabType { SERVER, ONLINE, LOCAL }
 
     private var _binding: BottomSheetSubtitlesBinding? = null
@@ -398,14 +394,14 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
 
     private fun setupLocalControls() {
         binding.importLocalSubCard.setOnClickListener {
-            (requireActivity() as? ExoplayerView)?.requestLocalSubtitle()
+            (requireActivity() as? MpvPlayerActivity)?.requestLocalSubtitle()
             dismiss()
         }
     }
 
     private fun updateActiveSubtitleBadge() {
-        val exoActivity = activity as? ExoplayerView
-        val subManager = exoActivity?.subtitleManager
+        val mpvActivity = activity as? MpvPlayerActivity
+        val subManager = mpvActivity?.subtitleManager
         val activeOnlineName = if (subManager?.activeSubtitleId != null &&
             subManager.activeSubtitleDisplayName?.contains("[Server]") != true &&
             subManager.activeSubtitleDisplayName?.startsWith("[Local]") != true
@@ -441,8 +437,8 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
         binding.activeSubBadge.text = badgeText
     }
 
-    private fun resolveActiveExternalSubtitle(mediaId: Int, exoActivity: ExoplayerView?, savedLang: String?): Any? {
-        val subManager = exoActivity?.subtitleManager
+    private fun resolveActiveExternalSubtitle(mediaId: Int, mpvActivity: MpvPlayerActivity?, savedLang: String?): Any? {
+        val subManager = mpvActivity?.subtitleManager
         val isOnlineActive = subManager?.activeSubtitleId != null &&
             subManager.activeSubtitleDisplayName?.contains("[Server]") != true &&
             subManager.activeSubtitleDisplayName?.startsWith("[Local]") != true
@@ -462,26 +458,13 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
         }
     }
 
-    private fun collectEmbeddedSubtitleTracks(exoActivity: ExoplayerView?): List<EmbeddedSubtitleTrack> {
-        val trackGroups = exoActivity?.currentSubTrackGroups ?: return emptyList()
-        if (trackGroups.isEmpty()) return emptyList()
-        val result = mutableListOf<EmbeddedSubtitleTrack>()
-        val periodPrefix = Regex("^\\d+:")
+    private fun collectEmbeddedSubtitleTracks(mpvActivity: MpvPlayerActivity?): List<EmbeddedSubtitleTrack> {
+        val tracks = mpvActivity?.currentEmbeddedSubtitleTracks ?: return emptyList()
+        if (tracks.isEmpty()) return emptyList()
         var flatIndex = 0
-        trackGroups.forEach { group ->
-            for (trackIndex in 0 until group.length) {
-                val format = group.getTrackFormat(trackIndex)
-                val lang = format.language
-                val cleanTrackId = format.id.orEmpty().replace(periodPrefix, "")
-                val isExternal = cleanTrackId.startsWith("ext_sub_") ||
-                    cleanTrackId.startsWith("shifted_sub_") ||
-                    cleanTrackId.startsWith("local_sub_")
-                if (lang != "none" && !isExternal) {
-                    result.add(EmbeddedSubtitleTrack(group, trackIndex, lang, format.label, flatIndex++))
-                }
-            }
+        return tracks.filter { !it.isExternal }.map { track ->
+            EmbeddedSubtitleTrack(track, flatIndex++)
         }
-        return result
     }
 
     private fun collectOtherServerSubtitles(): List<OtherServerSubtitle> {
@@ -507,15 +490,15 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
         val savedLang: String? = PrefManager.getNullableCustomVal("subLang_${media.id}", null, String::class.java)
 
         items.add(NoneSubtitleOption)
-        val exoActivity = activity as? ExoplayerView
-        resolveActiveExternalSubtitle(media.id, exoActivity, savedLang)?.let { items.add(it) }
+        val mpvActivity = activity as? MpvPlayerActivity
+        resolveActiveExternalSubtitle(media.id, mpvActivity, savedLang)?.let { items.add(it) }
 
         val currentExtractor = episode.extractors?.find { it.server.name == episode.selectedExtractor }
         if (currentExtractor != null && currentExtractor.subtitles.isNotEmpty()) {
             items.addAll(currentExtractor.subtitles)
         }
 
-        items.addAll(collectEmbeddedSubtitleTracks(exoActivity))
+        items.addAll(collectEmbeddedSubtitleTracks(mpvActivity))
         items.addAll(collectOtherServerSubtitles())
 
         val hasAnySubtitles = items.size > 1
@@ -700,7 +683,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
     private var subCapturedTime: Long? = null
 
     private fun setupSyncControls() {
-        val subtitleManager = (activity as? ExoplayerView)?.subtitleManager
+        val subtitleManager = (activity as? MpvPlayerActivity)?.subtitleManager
 
         fun updateSubDelayDisplay() {
             val delay = subtitleManager?.subtitleDelayMs ?: 0L
@@ -821,14 +804,14 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
         }
 
         binding.syncHearingAudioBtn.setOnClickListener {
-            val currentPos = (activity as? ExoplayerView)?.playerManager?.exoPlayer?.currentPosition ?: 0L
+            val currentPos = (activity as? MpvPlayerActivity)?.playerView?.mpvView?.currentPosition?.value ?: 0L
             audioCapturedTime = currentPos
             binding.syncHelperStatusText.text = getString(R.string.sync_audio_captured, formatTime(currentPos))
             checkAndCalculateSync()
         }
 
         binding.syncSeenSubtitleBtn.setOnClickListener {
-            val currentPos = (activity as? ExoplayerView)?.playerManager?.exoPlayer?.currentPosition ?: 0L
+            val currentPos = (activity as? MpvPlayerActivity)?.playerView?.mpvView?.currentPosition?.value ?: 0L
             subCapturedTime = currentPos
             binding.syncHelperStatusText.text = getString(R.string.sync_sub_captured, formatTime(currentPos))
             checkAndCalculateSync()
@@ -846,7 +829,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             val highlightColor: Int,
             val borderSelectedColor: Int,
             val normalBorderColor: Int,
-            val exoActivity: ExoplayerView?,
+            val mpvActivity: MpvPlayerActivity?,
             val mediaId: Int,
             val effectiveOnlineId: String?,
             val savedLang: String?
@@ -894,8 +877,8 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             } catch (_: Exception) {
                 ContextCompat.getColor(requireContext(), R.color.grey_20)
             }
-            val exoActivity = activity as? ExoplayerView
-            val subManager = exoActivity?.subtitleManager
+            val mpvActivity = activity as? MpvPlayerActivity
+            val subManager = mpvActivity?.subtitleManager
             val isOnlineActive = subManager?.activeSubtitleId != null &&
                 subManager.activeSubtitleDisplayName?.contains("[Server]") != true &&
                 subManager.activeSubtitleDisplayName?.startsWith("[Local]") != true
@@ -911,7 +894,7 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
                 highlightColor = highlightColor,
                 borderSelectedColor = borderSelectedColor,
                 normalBorderColor = normalBorderColor,
-                exoActivity = exoActivity,
+                mpvActivity = mpvActivity,
                 mediaId = mediaId,
                 effectiveOnlineId = effectiveOnlineId,
                 savedLang = savedLang
@@ -932,10 +915,8 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
                 episode.selectedSubtitle = null
                 model.setEpisode(episode, "Subtitle")
                 PrefManager.setCustomVal("subLang_${ctx.mediaId}", "None")
-                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
-                ctx.exoActivity?.playerManager?.exoPlayer?.let { p ->
-                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
-                }
+                ctx.mpvActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                ctx.mpvActivity?.subtitleManager?.selectSubtitleTrack(-1)
                 updateActiveSubtitleBadge()
                 dismiss()
             }
@@ -991,9 +972,9 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             itemBinding.subtitleCardRoot.setOnClickListener {
                 episode.selectedSubtitle = null
                 PrefManager.setCustomVal("subLang_${ctx.mediaId}", item.language)
-                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                ctx.mpvActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
                 if (item.file.url.isNotBlank()) {
-                    ctx.exoActivity?.reApplyLocalSubtitle(item.file.url)
+                    ctx.mpvActivity?.reApplyLocalSubtitle(item.file.url)
                 }
                 updateActiveSubtitleBadge()
                 dismiss()
@@ -1037,17 +1018,12 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
                 episode.selectedSubtitle = subIdx
                 model.setEpisode(episode, "Subtitle")
                 PrefManager.setCustomVal("subLang_${ctx.mediaId}", item.language)
-                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
-                ctx.exoActivity?.playerManager?.exoPlayer?.let { p ->
-                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
+                PrefManager.setVal(PrefName.Subtitles, true)
+                ctx.mpvActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                val selected = ctx.mpvActivity?.subtitleManager?.selectSubtitleByLabel(item.language) == true
+                if (!selected && item.file.url.isNotBlank()) {
+                    ctx.mpvActivity?.subtitleManager?.applyOtherServerSubtitle(item, episode.selectedExtractor ?: "Server", item.language)
                 }
-                val videoUrl = ctx.exoActivity?.playerManager?.exoPlayer?.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
-                val embedUrl = curExt?.server?.embed?.url.orEmpty()
-                val resolvedUrl = PlayerSubtitleManager.unwrapProxyUrl(
-                    PlayerSubtitleManager.resolveSubtitleUrl(item.file.url, embedUrl, videoUrl)
-                )
-                val targetTrackId = PlayerSubtitleManager.buildSubtitleId(subIdx, item.language, resolvedUrl)
-                ctx.exoActivity?.subtitleManager?.selectSubtitleTrack(targetTrackId, item.language)
                 updateActiveSubtitleBadge()
                 dismiss()
             }
@@ -1069,11 +1045,9 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             itemBinding.subtitleCardRoot.setOnClickListener {
                 episode.selectedSubtitle = null
                 PrefManager.setCustomVal("subLang_${ctx.mediaId}", uniqueKey)
-                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
-                ctx.exoActivity?.playerManager?.exoPlayer?.let { p ->
-                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-                }
-                ctx.exoActivity?.subtitleManager?.applyOtherServerSubtitle(item.subtitle, item.serverName, uniqueKey)
+                PrefManager.setVal(PrefName.Subtitles, true)
+                ctx.mpvActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                ctx.mpvActivity?.subtitleManager?.applyOtherServerSubtitle(item.subtitle, item.serverName, uniqueKey)
                 updateActiveSubtitleBadge()
                 dismiss()
             }
@@ -1081,19 +1055,20 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
 
         @SuppressLint("SetTextI18n")
         private fun bindEmbeddedTrack(item: EmbeddedSubtitleTrack, itemBinding: ItemSubtitleCardBinding, ctx: SubtitleBindContext) {
-            val langName = item.language?.let { mapLanguageCode(it) } ?: "Stream Track ${item.flatIndex + 1}"
+            val langName = item.track.language?.let { mapLanguageCode(it) } ?: "Stream Track ${item.flatIndex + 1}"
+            val rawName = item.track.name
             val accurateName = when {
-                item.label.isNullOrBlank() -> "$langName (Track ${item.flatIndex + 1})"
-                item.label.contains(langName, ignoreCase = true) -> item.label.replaceFirstChar { it.uppercase() }
-                else -> "$langName (${item.label.replaceFirstChar { it.uppercase() }})"
+                rawName.isBlank() || rawName == "Track ${item.track.id}" -> "$langName (Track ${item.flatIndex + 1})"
+                rawName.contains(langName, ignoreCase = true) -> rawName.replaceFirstChar { it.uppercase() }
+                else -> "$langName (${rawName.replaceFirstChar { it.uppercase() }})"
             }
 
             itemBinding.subtitleIcon.setImageResource(R.drawable.ic_round_subtitles_24)
             itemBinding.subtitleTitle.text = accurateName
-            itemBinding.subtitleDetails.text = "${getString(R.string.embedded_stream_subs)} • ${item.label ?: "Track ${item.flatIndex + 1}"}"
+            itemBinding.subtitleDetails.text = "${getString(R.string.embedded_stream_subs)} • ${rawName.ifBlank { "Track ${item.flatIndex + 1}" }}"
 
             val uniqueKey = "Embedded:$accurateName"
-            val isTrackMatched = if (ctx.savedLang != null) ctx.savedLang == uniqueKey else item.group.isTrackSelected(item.trackIndex)
+            val isTrackMatched = if (ctx.savedLang != null) ctx.savedLang == uniqueKey else item.track.isSelected
             val isSelected = ctx.effectiveOnlineId == null && isTrackMatched
             if (isSelected) {
                 applySelectedStyling(itemBinding, ctx.highlightColor, ctx.borderSelectedColor)
@@ -1102,15 +1077,8 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             itemBinding.subtitleCardRoot.setOnClickListener {
                 episode.selectedSubtitle = null
                 PrefManager.setCustomVal("subLang_${ctx.mediaId}", uniqueKey)
-                ctx.exoActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
-                ctx.exoActivity?.playerManager?.exoPlayer?.let { p ->
-                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-                }
-                ctx.exoActivity?.onSetTrackGroupOverride(
-                    item.group,
-                    C.TRACK_TYPE_TEXT,
-                    item.trackIndex
-                )
+                ctx.mpvActivity?.subtitleManager?.clearOnlineSubtitle(ctx.mediaId, episode.number)
+                ctx.mpvActivity?.subtitleManager?.selectSubtitleTrack(item.track.id)
                 updateActiveSubtitleBadge()
                 dismiss()
             }
@@ -1135,10 +1103,10 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             }
 
             itemBinding.subtitleCardRoot.setOnClickListener {
-                val exoActivity = requireActivity() as? ExoplayerView
-                if (exoActivity != null) {
+                val mpvActivity = requireActivity() as? MpvPlayerActivity
+                if (mpvActivity != null) {
                     episode.selectedSubtitle = -1
-                    exoActivity.applyWyzieSubtitle(item)
+                    mpvActivity.applyWyzieSubtitle(item)
                 }
                 updateActiveSubtitleBadge()
                 dismiss()
@@ -1161,10 +1129,10 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             }
 
             itemBinding.subtitleCardRoot.setOnClickListener {
-                val exoActivity = requireActivity() as? ExoplayerView
-                if (exoActivity != null) {
+                val mpvActivity = requireActivity() as? MpvPlayerActivity
+                if (mpvActivity != null) {
                     episode.selectedSubtitle = -1
-                    exoActivity.applySubSourceSubtitle(item)
+                    mpvActivity.applySubSourceSubtitle(item)
                 }
                 updateActiveSubtitleBadge()
                 dismiss()
@@ -1191,10 +1159,10 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             }
 
             itemBinding.subtitleCardRoot.setOnClickListener {
-                val exoActivity = requireActivity() as? ExoplayerView
-                if (exoActivity != null) {
+                val mpvActivity = requireActivity() as? MpvPlayerActivity
+                if (mpvActivity != null) {
                     episode.selectedSubtitle = -1
-                    exoActivity.applyOpenSubRestSubtitle(item)
+                    mpvActivity.applyOpenSubRestSubtitle(item)
                 }
                 updateActiveSubtitleBadge()
                 dismiss()
@@ -1216,10 +1184,10 @@ class SubtitleDialogFragment : BottomSheetDialogFragment() {
             }
 
             itemBinding.subtitleCardRoot.setOnClickListener {
-                val exoActivity = requireActivity() as? ExoplayerView
-                if (exoActivity != null) {
+                val mpvActivity = requireActivity() as? MpvPlayerActivity
+                if (mpvActivity != null) {
                     episode.selectedSubtitle = -1
-                    exoActivity.applyOnlineSubtitle(item, langName, "OpenSubtitles")
+                    mpvActivity.applyOnlineSubtitle(item, langName, "OpenSubtitles")
                 }
                 updateActiveSubtitleBadge()
                 dismiss()

@@ -8,59 +8,57 @@ import android.os.Looper
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
-import androidx.media3.cast.CastPlayer
-import androidx.media3.cast.SessionAvailabilityListener
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.PlaybackParameters
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.PlayerView
+import androidx.mediarouter.media.MediaRouter
+import androidx.mediarouter.media.MediaRouterParams
 import ani.dantotsu.R
 import ani.dantotsu.defaultHeaders
 import ani.dantotsu.media.Media
 import ani.dantotsu.media.anime.CustomCastButton
 import ani.dantotsu.media.anime.CustomCastThemeFactory
-import ani.dantotsu.parsers.Episode
+import ani.dantotsu.media.anime.cast.CastProxyServer
+import ani.dantotsu.media.anime.cast.CastProxyServerService
+import ani.dantotsu.media.anime.mpv.DantotsuPlayerView
+import ani.dantotsu.media.anime.mpv.ExternalSubtitle
+import ani.dantotsu.media.anime.mpv.MpvVideoView
 import ani.dantotsu.parsers.Subtitle
 import ani.dantotsu.parsers.Video
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.cast.MediaStatus
+import com.google.android.gms.cast.MediaTrack
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
-import java.util.concurrent.Executors
-import androidx.mediarouter.media.MediaRouter
-import androidx.mediarouter.media.MediaRouterParams
-import ani.dantotsu.media.anime.cast.CastProxyServer
-import ani.dantotsu.media.anime.cast.CastProxyServerService
 import com.google.android.gms.cast.framework.media.RemoteMediaClient
+import com.google.android.gms.common.images.WebImage
+import java.util.concurrent.Executors
 
-@UnstableApi
 class PlayerCastManager(
     private val activity: AppCompatActivity,
-    private val playerView: PlayerView,
+    private val playerView: DantotsuPlayerView,
     private val onCastStateChanged: (isPlaying: Boolean) -> Unit
-) : SessionAvailabilityListener {
+) {
 
-    var castPlayer: CastPlayer? = null
-        private set
     var castContext: CastContext? = null
         private set
     var isCastApiAvailable = true
         private set
 
-    var currentMediaItem: MediaItem? = null
-        private set
     var currentVideo: Video? = null
         private set
-    private var exoPlayer: Player? = null
+    private var mpvView: MpvVideoView? = null
+    private var currentTitle: String? = null
+    private var currentSubtitleTitle: String? = null
+    private var currentPosterUrl: String? = null
+    private var currentExternalSubtitles: List<ExternalSubtitle> = emptyList()
 
     var castScreenView: CastScreenView? = null
-
     private var customCastButton: CustomCastButton? = null
 
     var activeDeviceName: String? = null
@@ -78,17 +76,19 @@ class PlayerCastManager(
     private val progressHandler = Handler(Looper.getMainLooper())
     private var isTrackingProgress = false
 
+    private val remoteMediaClient: RemoteMediaClient?
+        get() = castContext?.sessionManager?.currentCastSession?.remoteMediaClient
+
     private val progressRunnable = object : Runnable {
         override fun run() {
-            if (isCasting() || castPlayer?.playbackState == Player.STATE_BUFFERING) {
-                castPlayer?.let { cp ->
-                    currentPositionMs = cp.currentPosition.coerceAtLeast(0L)
-                    currentDurationMs = cp.duration.coerceAtLeast(0L)
-                    isBuffering = cp.playbackState == Player.STATE_BUFFERING
-                    castScreenView?.updateProgress(currentPositionMs, currentDurationMs)
-                    castScreenView?.updatePlaybackState(cp.isPlaying, isBuffering)
-                }
-                progressHandler.postDelayed(this, 100)
+            val client = remoteMediaClient
+            if (isCasting() && client != null) {
+                currentPositionMs = client.approximateStreamPosition.coerceAtLeast(0L)
+                currentDurationMs = client.streamDuration.coerceAtLeast(0L)
+                isBuffering = client.playerState == MediaStatus.PLAYER_STATE_BUFFERING
+                castScreenView?.updateProgress(currentPositionMs, currentDurationMs)
+                castScreenView?.updatePlaybackState(client.isPlaying, isBuffering)
+                progressHandler.postDelayed(this, 250)
             } else {
                 isTrackingProgress = false
             }
@@ -101,17 +101,26 @@ class PlayerCastManager(
         castScreenView?.updateProgress(currentPositionMs, currentDurationMs)
     }
 
+    private val remoteCallback = object : RemoteMediaClient.Callback() {
+        override fun onStatusUpdated() {
+            val client = remoteMediaClient ?: return
+            isBuffering = client.playerState == MediaStatus.PLAYER_STATE_BUFFERING
+            val playing = client.isPlaying
+            onCastStateChanged(playing)
+            castScreenView?.updatePlaybackState(playing, isBuffering)
+        }
+    }
+
     private val sessionManagerListener = object : SessionManagerListener<CastSession> {
         override fun onSessionStarted(session: CastSession, sessionId: String) {
-            activeDeviceName = session.castDevice?.friendlyName
-            castScreenView?.updateDeviceName(activeDeviceName)
-            session.remoteMediaClient?.addProgressListener(remoteProgressListener, 100)
-            onSessionStartedListener?.invoke(activeDeviceName)
+            attachCastSession(session)
+            loadMediaOntoCastSession(session)
         }
 
         override fun onSessionEnded(session: CastSession, error: Int) {
             val resumePos = currentPositionMs
             activeDeviceName = null
+            session.remoteMediaClient?.unregisterCallback(remoteCallback)
             session.remoteMediaClient?.removeProgressListener(remoteProgressListener)
             stopProgressTracking()
             CastProxyServerService.stop(activity)
@@ -119,10 +128,7 @@ class PlayerCastManager(
         }
 
         override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
-            activeDeviceName = session.castDevice?.friendlyName
-            castScreenView?.updateDeviceName(activeDeviceName)
-            session.remoteMediaClient?.addProgressListener(remoteProgressListener, 100)
-            onSessionStartedListener?.invoke(activeDeviceName)
+            attachCastSession(session)
         }
 
         override fun onSessionResumeFailed(session: CastSession, error: Int) {}
@@ -135,12 +141,23 @@ class PlayerCastManager(
         override fun onSessionEnding(session: CastSession) {}
         override fun onSessionResuming(session: CastSession, sessionId: String) {}
         override fun onSessionSuspended(session: CastSession, reason: Int) {
+            session.remoteMediaClient?.unregisterCallback(remoteCallback)
             session.remoteMediaClient?.removeProgressListener(remoteProgressListener)
+            stopProgressTracking()
         }
     }
 
     init {
         initCastApi()
+    }
+
+    private fun attachCastSession(session: CastSession) {
+        activeDeviceName = session.castDevice?.friendlyName
+        castScreenView?.updateDeviceName(activeDeviceName)
+        session.remoteMediaClient?.registerCallback(remoteCallback)
+        session.remoteMediaClient?.addProgressListener(remoteProgressListener, 250)
+        startProgressTracking()
+        onSessionStartedListener?.invoke(activeDeviceName)
     }
 
     private fun initCastApi() {
@@ -157,10 +174,10 @@ class PlayerCastManager(
                     if (task.isSuccessful && task.result != null) {
                         castContext = task.result
                         try {
-                            castContext?.sessionManager?.addSessionManagerListener(sessionManagerListener, CastSession::class.java)
-                            castPlayer = castContext?.let { CastPlayer(it) }
-                            castPlayer?.setSessionAvailabilityListener(this)
-                            setupCastPlayerListener()
+                            castContext?.sessionManager?.addSessionManagerListener(
+                                sessionManagerListener,
+                                CastSession::class.java
+                            )
                             if (PrefManager.getVal(PrefName.UseInternalCast)) {
                                 activity.runOnUiThread {
                                     customCastButton?.let { btn ->
@@ -172,38 +189,16 @@ class PlayerCastManager(
                                     }
                                 }
                             }
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             isCastApiAvailable = false
                         }
                     } else {
                         isCastApiAvailable = false
                     }
                 }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             isCastApiAvailable = false
         }
-    }
-
-    private fun setupCastPlayerListener() {
-        castPlayer?.addListener(object : Player.Listener {
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                onCastStateChanged(playWhenReady)
-                castScreenView?.updatePlaybackState(playWhenReady, isBuffering)
-            }
-
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                onCastStateChanged(isPlaying)
-                castScreenView?.updatePlaybackState(isPlaying, isBuffering)
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                isBuffering = playbackState == Player.STATE_BUFFERING
-                if (playbackState == Player.STATE_READY) {
-                    castScreenView?.updatePlaybackState(true, isBuffering)
-                }
-                castScreenView?.updatePlaybackState(castPlayer?.isPlaying == true, isBuffering)
-            }
-        })
     }
 
     fun startProgressTracking() {
@@ -228,6 +223,9 @@ class PlayerCastManager(
         episodeTitle: String?
     ) {
         this.customCastButton = castButton
+        this.currentTitle = media?.userPreferredName
+        this.currentSubtitleTitle = episodeTitle
+        this.currentPosterUrl = media?.cover
         if (!PrefManager.getVal<Boolean>(PrefName.Cast)) {
             castButton.visibility = View.GONE
             return
@@ -239,7 +237,7 @@ class PlayerCastManager(
             try {
                 CastButtonFactory.setUpMediaRouteButton(activity, castButton)
                 castButton.dialogFactory = CustomCastThemeFactory()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 isCastApiAvailable = false
                 castButton.setCastCallback {
                     castExternal(media, video, subtitle, hasExtSubtitles, episodeTitle)
@@ -252,39 +250,127 @@ class PlayerCastManager(
         }
     }
 
-    fun updateCurrentMedia(mediaItem: MediaItem?, exoPlayer: Player?, video: Video? = null) {
-        this.currentMediaItem = mediaItem
-        this.exoPlayer = exoPlayer
+    fun updateCurrentMedia(
+        mpvView: MpvVideoView?,
+        video: Video? = null,
+        title: String? = null,
+        episodeTitle: String? = null,
+        posterUrl: String? = null,
+        externalSubtitles: List<ExternalSubtitle> = emptyList()
+    ) {
+        this.mpvView = mpvView
         this.currentVideo = video
+        if (title != null) this.currentTitle = title
+        if (episodeTitle != null) this.currentSubtitleTitle = episodeTitle
+        if (posterUrl != null) this.currentPosterUrl = posterUrl
+        this.currentExternalSubtitles = externalSubtitles
+
+        castContext?.sessionManager?.currentCastSession?.takeIf { it.isConnected }?.let { session ->
+            loadMediaOntoCastSession(session)
+        }
     }
 
-    fun isCasting(): Boolean = castPlayer?.isCastSessionAvailable == true && castPlayer?.currentMediaItem != null
+    private fun loadMediaOntoCastSession(session: CastSession) {
+        val video = currentVideo ?: return
+        if (!isCastApiAvailable || activity.isDestroyed) return
+
+        val handoverPosition = mpvView?.currentPosition?.value ?: 0L
+        mpvView?.pause()
+
+        val mediaInfo = buildProxiedCastMediaInfo(video)
+        val request = MediaLoadRequestData.Builder()
+            .setMediaInfo(mediaInfo)
+            .setAutoplay(true)
+            .setCurrentTime(handoverPosition.coerceAtLeast(0L))
+            .build()
+
+        session.remoteMediaClient?.load(request)
+    }
+
+    private fun buildProxiedCastMediaInfo(video: Video): MediaInfo {
+        val uriStr = video.file.url
+        val headers = mutableMapOf<String, String>()
+        headers.putAll(defaultHeaders)
+        video.file.headers.let { headers.putAll(it) }
+
+        val proxyServer = CastProxyServerService.currentProxyServer
+            ?: CastProxyServer(contentResolver = activity.contentResolver, ipAddress = CastProxyServer.getLocalIpAddress())
+
+        val proxiedUri = when {
+            uriStr.startsWith("content://") -> proxyServer.getLocalUrl(uriStr)
+            uriStr.startsWith("http://") || uriStr.startsWith("https://") -> proxyServer.getProxyUrl(uriStr, headers)
+            else -> uriStr
+        }
+
+        val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_TV_SHOW).apply {
+            currentTitle?.let { putString(MediaMetadata.KEY_TITLE, it) }
+            currentSubtitleTitle?.let { putString(MediaMetadata.KEY_SUBTITLE, it) }
+            currentPosterUrl?.takeIf { it.isNotBlank() }?.let {
+                addImage(WebImage(it.toUri()))
+            }
+        }
+
+        val tracks = currentExternalSubtitles.mapIndexed { idx, sub ->
+            val proxiedSubUrl = when {
+                sub.url.startsWith("http://") || sub.url.startsWith("https://") ->
+                    proxyServer.getProxyUrl(sub.url, headers + sub.headers)
+                sub.url.startsWith("content://") || sub.url.startsWith("file://") ->
+                    proxyServer.getLocalUrl(sub.url)
+                else -> sub.url
+            }
+            MediaTrack.Builder((idx + 1).toLong(), MediaTrack.TYPE_TEXT)
+                .setName(sub.label ?: "Subtitle ${idx + 1}")
+                .setSubtype(MediaTrack.SUBTYPE_SUBTITLES)
+                .setContentId(proxiedSubUrl)
+                .setLanguage(sub.language ?: "und")
+                .build()
+        }
+
+        val contentType = when {
+            uriStr.contains(".m3u8", ignoreCase = true) -> "application/x-mpegURL"
+            uriStr.contains(".mpd", ignoreCase = true) -> "application/dash+xml"
+            else -> "video/mp4"
+        }
+
+        return MediaInfo.Builder(proxiedUri)
+            .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+            .setContentType(contentType)
+            .setMetadata(metadata)
+            .apply {
+                if (tracks.isNotEmpty()) setMediaTracks(tracks)
+            }
+            .build()
+    }
+
+    fun isCasting(): Boolean =
+        castContext?.sessionManager?.currentCastSession?.isConnected == true &&
+            remoteMediaClient?.hasMediaSession() == true
 
     fun pause() {
-        castPlayer?.pause()
+        remoteMediaClient?.pause()
     }
 
     fun play() {
-        castPlayer?.play()
+        remoteMediaClient?.play()
     }
 
     fun togglePlayPause() {
-        castPlayer?.let { cp ->
-            if (cp.isPlaying) {
-                cp.pause()
-            } else {
-                cp.play()
-            }
+        remoteMediaClient?.let { client ->
+            if (client.isPlaying) client.pause() else client.play()
         }
     }
 
     fun seekTo(positionMs: Long) {
         currentPositionMs = positionMs
-        castPlayer?.seekTo(positionMs)
+        remoteMediaClient?.seek(
+            com.google.android.gms.cast.MediaSeekOptions.Builder()
+                .setPosition(positionMs)
+                .build()
+        )
     }
 
     fun setPlaybackSpeed(speed: Float) {
-        castPlayer?.playbackParameters = PlaybackParameters(speed)
+        remoteMediaClient?.setPlaybackRate(speed.toDouble().coerceIn(0.5, 2.0))
     }
 
     fun setRemoteVolume(volumeFraction: Float) {
@@ -326,7 +412,7 @@ class PlayerCastManager(
             putExtra("poster", media?.cover)
             val headers = Bundle().apply {
                 defaultHeaders.forEach { putString(it.key, it.value) }
-                video.file.headers?.forEach { putString(it.key, it.value) }
+                video.file.headers.forEach { putString(it.key, it.value) }
             }
             putExtra("android.media.intent.extra.HTTP_HEADERS", headers)
             putExtra("secure_uri", true)
@@ -334,12 +420,12 @@ class PlayerCastManager(
 
         try {
             activity.startActivity(shareVideo)
-        } catch (ex: ActivityNotFoundException) {
+        } catch (_: ActivityNotFoundException) {
             try {
                 activity.startActivity(
                     Intent(Intent.ACTION_VIEW, "market://details?id=com.instantbits.cast.webvideo".toUri())
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 activity.startActivity(
                     Intent(Intent.ACTION_VIEW, "https://play.google.com/store/apps/details?id=com.instantbits.cast.webvideo".toUri())
                 )
@@ -347,76 +433,18 @@ class PlayerCastManager(
         }
     }
 
-    override fun onCastSessionAvailable() {
-        val item = currentMediaItem
-        if (isCastApiAvailable && !activity.isDestroyed && item != null) {
-            val handoverPosition = exoPlayer?.currentPosition ?: 0L
-            exoPlayer?.pause()
-
-            activeDeviceName = castContext?.sessionManager?.currentCastSession?.castDevice?.friendlyName
-            castScreenView?.updateDeviceName(activeDeviceName)
-
-            val proxiedItem = getProxiedMediaItem(item, currentVideo)
-
-            castPlayer?.setMediaItem(proxiedItem, handoverPosition)
-            castPlayer?.prepare()
-            castPlayer?.play()
-
-            startProgressTracking()
-            onSessionStartedListener?.invoke(activeDeviceName)
-        }
-    }
-
-    private fun getProxiedMediaItem(item: MediaItem, video: Video?): MediaItem {
-        val originalUri = item.localConfiguration?.uri ?: return item
-        val uriStr = originalUri.toString()
-        val headers = mutableMapOf<String, String>()
-        headers.putAll(defaultHeaders)
-        video?.file?.headers?.let { headers.putAll(it) }
-
-        val proxyServer = CastProxyServerService.currentProxyServer
-            ?: CastProxyServer(contentResolver = activity.contentResolver, ipAddress = CastProxyServer.getLocalIpAddress())
-
-        val proxiedUri = if (uriStr.startsWith("content://")) {
-            proxyServer.getLocalUrl(uriStr).toUri()
-        } else if (uriStr.startsWith("http://") || uriStr.startsWith("https://")) {
-            proxyServer.getProxyUrl(uriStr, headers).toUri()
-        } else {
-            originalUri
-        }
-
-        val proxiedSubs = item.localConfiguration?.subtitleConfigurations?.map { sub ->
-            val subUriStr = sub.uri.toString()
-            val proxiedSubUri = if (subUriStr.startsWith("http://") || subUriStr.startsWith("https://")) {
-                proxyServer.getProxyUrl(subUriStr, headers).toUri()
-            } else if (subUriStr.startsWith("content://") || subUriStr.startsWith("file://")) {
-                proxyServer.getLocalUrl(subUriStr).toUri()
-            } else {
-                sub.uri
-            }
-            sub.buildUpon().setUri(proxiedSubUri).build()
-        } ?: emptyList()
-
-        return item.buildUpon()
-            .setUri(proxiedUri)
-            .setSubtitleConfigurations(proxiedSubs)
-            .build()
-    }
-
-    override fun onCastSessionUnavailable() {
-        val resumePosition = currentPositionMs
-        stopProgressTracking()
-        onSessionEndedListener?.invoke(resumePosition)
-    }
-
     fun release() {
         stopProgressTracking()
         try {
-            castContext?.sessionManager?.removeSessionManagerListener(sessionManagerListener, CastSession::class.java)
+            castContext?.sessionManager?.currentCastSession?.remoteMediaClient?.let {
+                it.unregisterCallback(remoteCallback)
+                it.removeProgressListener(remoteProgressListener)
+            }
+            castContext?.sessionManager?.removeSessionManagerListener(
+                sessionManagerListener,
+                CastSession::class.java
+            )
         } catch (_: Exception) {}
-        castPlayer?.setSessionAvailabilityListener(null)
-        castPlayer?.release()
-        castPlayer = null
         castScreenView = null
     }
 }

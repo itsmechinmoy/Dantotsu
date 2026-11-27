@@ -523,7 +523,7 @@ class CommentsFragment : Fragment() {
                 if (cleanEp != null) {
                     PrefManager.setCustomVal("${currentMedia.id}_$cleanEp", timestampMs)
                 }
-                ani.dantotsu.media.anime.ExoplayerView.targetStartPosition = timestampMs
+                ani.dantotsu.media.anime.MpvPlayerActivity.targetStartPosition = timestampMs
                 model.onEpisodeClick(currentMedia, targetTag, childFragmentManager, true)
             } else {
                 snackString("Episode $targetTag not found for this provider")

@@ -30,7 +30,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.util.UnstableApi
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.addons.torrent.TorrentServerService
@@ -93,7 +92,6 @@ class MainActivity : AppCompatActivity() {
 
     @kotlin.OptIn(DelicateCoroutinesApi::class)
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
-    @OptIn(UnstableApi::class)
     private fun checkSecurityAndLauncher(): Boolean {
         if (!isTaskRoot && intent.hasCategory(Intent.CATEGORY_LAUNCHER) && intent.action == Intent.ACTION_MAIN) {
             finish()
@@ -704,90 +702,96 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleIncomingExtras(targetIntent: Intent) {
-        targetIntent.extras?.let { extras ->
-            val shortcutAction = extras.getString("shortcut_action")
-            if (shortcutAction != null) {
-                targetIntent.removeExtra("shortcut_action")
-                when (shortcutAction) {
-                    "search" -> startActivity(Intent(this, SearchActivity::class.java))
-                    "downloads" -> startActivity(Intent(this, DownloadQueueActivity::class.java))
-                }
-            }
-            val shortcutTab = extras.getInt("shortcut_tab", -1).takeIf { it != -1 }
-                ?: extras.getString("shortcut_tab")?.toIntOrNull()
-            if (shortcutTab != null && shortcutTab in 0..2) {
-                targetIntent.removeExtra("shortcut_tab")
-                selectedOption = shortcutTab
-                binding.includedNavbar.navbar.selectTabAt(shortcutTab)
-                binding.viewpager.setCurrentItem(shortcutTab, false)
-            }
-            val fragmentToLoad = extras.getString("FRAGMENT_TO_LOAD")
-            val mediaId = extras.getInt("mediaId", -1)
-            val commentId = extras.getInt("commentId", -1)
-            val activityId = extras.getInt("activityId", -1)
+        val extras = targetIntent.extras ?: return
+        handleShortcutExtras(targetIntent, extras)
+        if (handleNotificationExtra(extras)) return
+        handleMediaOrProfileExtra(extras)
+    }
 
-            if (fragmentToLoad != null && mediaId != -1 && commentId != -1) {
-                val detailIntent = Intent(this, MediaDetailsActivity::class.java).apply {
-                    putExtra("FRAGMENT_TO_LOAD", fragmentToLoad)
-                    putExtra("mediaId", mediaId)
-                    putExtra("commentId", commentId)
-                }
-                startActivity(detailIntent)
-                return
-            } else if (fragmentToLoad == "FEED" && activityId != -1) {
-                if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-                    val feedIntent = Intent(this, FeedActivity::class.java).apply {
+    private fun handleShortcutExtras(targetIntent: Intent, extras: android.os.Bundle) {
+        val shortcutAction = extras.getString("shortcut_action")
+        if (shortcutAction != null) {
+            targetIntent.removeExtra("shortcut_action")
+            when (shortcutAction) {
+                "search" -> startActivity(Intent(this, SearchActivity::class.java))
+                "downloads" -> startActivity(Intent(this, DownloadQueueActivity::class.java))
+            }
+        }
+        val shortcutTab = extras.getInt("shortcut_tab", -1).takeIf { it != -1 }
+            ?: extras.getString("shortcut_tab")?.toIntOrNull()
+        if (shortcutTab != null && shortcutTab in 0..2) {
+            targetIntent.removeExtra("shortcut_tab")
+            selectedOption = shortcutTab
+            binding.includedNavbar.navbar.selectTabAt(shortcutTab)
+            binding.viewpager.setCurrentItem(shortcutTab, false)
+        }
+    }
+
+    private fun handleNotificationExtra(extras: android.os.Bundle): Boolean {
+        val fragmentToLoad = extras.getString("FRAGMENT_TO_LOAD")
+        val mediaId = extras.getInt("mediaId", -1)
+        val commentId = extras.getInt("commentId", -1)
+        val activityId = extras.getInt("activityId", -1)
+        val isRescue = PrefManager.getVal<Boolean>(PrefName.RescueMode)
+
+        return when {
+            fragmentToLoad != null && mediaId != -1 && commentId != -1 -> {
+                startActivity(
+                    Intent(this, MediaDetailsActivity::class.java).apply {
+                        putExtra("FRAGMENT_TO_LOAD", fragmentToLoad)
+                        putExtra("mediaId", mediaId)
+                        putExtra("commentId", commentId)
+                    }
+                )
+                true
+            }
+            fragmentToLoad == "FEED" && activityId != -1 && !isRescue -> {
+                startActivity(
+                    Intent(this, FeedActivity::class.java).apply {
                         putExtra("FRAGMENT_TO_LOAD", "NOTIFICATIONS")
                         putExtra("activityId", activityId)
                     }
-                    startActivity(feedIntent)
-                    return
-                }
-            } else if (fragmentToLoad == "NOTIFICATIONS" && activityId != -1) {
-                if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-                    val notificationIntent = Intent(this, NotificationActivity::class.java).apply {
+                )
+                true
+            }
+            fragmentToLoad == "NOTIFICATIONS" && activityId != -1 && !isRescue -> {
+                startActivity(
+                    Intent(this, NotificationActivity::class.java).apply {
                         putExtra("activityId", activityId)
                     }
-                    startActivity(notificationIntent)
-                    return
-                }
+                )
+                true
             }
+            else -> false
+        }
+    }
 
-            val id = extras.getInt("mediaId", 0).takeIf { it != 0 }
-                ?: extras.getInt("media", 0)
+    private fun handleMediaOrProfileExtra(extras: android.os.Bundle) {
+        val id = extras.getInt("mediaId", 0).takeIf { it != 0 }
+            ?: extras.getInt("media", 0)
+        if (id > 0) {
             val isMAL = extras.getBoolean("mal", false)
             val cont = extras.getBoolean("continue", false)
             val mediaType = extras.getString("mediaType")
-            if (id > 0) {
-                scope.launch(Dispatchers.IO) {
-                    val media = Anilist.query.getMedia(id, isMAL, mediaType)
-                    if (media != null) {
-                        media.cameFromContinue = cont
-                        startActivity(
-                            Intent(this@MainActivity, MediaDetailsActivity::class.java)
-                                .putExtra("media", media as java.io.Serializable)
-                        )
-                    } else {
-                        snackString(this@MainActivity.getString(R.string.anilist_not_found))
-                    }
-                }
-            }
-            val username = extras.getString("username")
-            if (username != null) {
-                val nameInt = username.toIntOrNull()
-                if (nameInt != null) {
+            scope.launch(Dispatchers.IO) {
+                val media = Anilist.query.getMedia(id, isMAL, mediaType)
+                if (media != null) {
+                    media.cameFromContinue = cont
                     startActivity(
-                        Intent(this@MainActivity, ProfileActivity::class.java)
-                            .putExtra("userId", nameInt)
+                        Intent(this@MainActivity, MediaDetailsActivity::class.java)
+                            .putExtra("media", media as java.io.Serializable)
                     )
                 } else {
-                    startActivity(
-                        Intent(this@MainActivity, ProfileActivity::class.java)
-                            .putExtra("username", username)
-                    )
+                    snackString(this@MainActivity.getString(R.string.anilist_not_found))
                 }
             }
         }
+        val username = extras.getString("username") ?: return
+        val intent = Intent(this@MainActivity, ProfileActivity::class.java).apply {
+            val nameInt = username.toIntOrNull()
+            if (nameInt != null) putExtra("userId", nameInt) else putExtra("username", username)
+        }
+        startActivity(intent)
     }
 
     override fun onDestroy() {

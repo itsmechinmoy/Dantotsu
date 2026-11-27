@@ -5,24 +5,18 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.annotation.OptIn
-import androidx.media3.common.C.TRACK_TYPE_AUDIO
-import androidx.media3.common.C.TrackType
-import androidx.media3.common.Tracks
-import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.R
 import ani.dantotsu.databinding.BottomSheetTrackGroupsBinding
 import ani.dantotsu.databinding.ItemSubtitleTextBinding
+import ani.dantotsu.media.anime.mpv.AudioTrack
 import java.util.Locale
 
-@OptIn(UnstableApi::class)
 class TrackGroupDialogFragment(
-    private var instance: ExoplayerView,
-    private var trackGroups: ArrayList<Tracks.Group>,
-    private var type: @TrackType Int,
+    private var instance: MpvPlayerActivity,
+    private var audioTracks: List<AudioTrack>,
     private var overrideTrackNames: List<Pair<String, String>>? = null
 ) : BottomSheetDialogFragment() {
     private var _binding: BottomSheetTrackGroupsBinding? = null
@@ -40,7 +34,7 @@ class TrackGroupDialogFragment(
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        if (type == TRACK_TYPE_AUDIO) binding.selectionTitle.text = getString(R.string.audio_tracks)
+        binding.selectionTitle.text = getString(R.string.audio_tracks)
         binding.subtitlesRecycler.layoutManager = LinearLayoutManager(requireContext())
         binding.subtitlesRecycler.adapter = TrackGroupAdapter()
     }
@@ -59,70 +53,54 @@ class TrackGroupDialogFragment(
             )
 
         @SuppressLint("SetTextI18n")
-        @OptIn(UnstableApi::class)
         override fun onBindViewHolder(holder: StreamViewHolder, position: Int) {
             val binding = holder.binding
-            trackGroups[position].let { trackGroup ->
-                if (overrideTrackNames?.getOrNull(
-                        position - (trackGroups.size - (overrideTrackNames?.size ?: 0))
-                    ) != null
-                ) {
-                    val pair =
-                        overrideTrackNames!![position - (trackGroups.size - overrideTrackNames!!.size)]
-                    binding.subtitleTitle.text =
-                        "[${pair.second}] ${pair.first}"
-                } else when (val language = trackGroup.getTrackFormat(0).language?.lowercase()) {
-                    null -> {
-                        val label = trackGroup.getTrackFormat(0).label
-                        binding.subtitleTitle.text =
-                            if (!label.isNullOrBlank()) label else getString(R.string.unknown_track, "Track $position")
-                    }
+            val track = audioTracks[position]
+            val overridePair = overrideTrackNames?.getOrNull(
+                position - (audioTracks.size - (overrideTrackNames?.size ?: 0))
+            )
 
-                    "none" -> {
-                        binding.subtitleTitle.text = getString(R.string.disabled_track)
-                    }
-
+            val displayText = if (overridePair != null) {
+                "[${overridePair.second}] ${overridePair.first}"
+            } else {
+                when (val language = track.language?.lowercase()) {
+                    null -> track.name.ifBlank { getString(R.string.unknown_track, "Track $position") }
+                    "none" -> getString(R.string.disabled_track)
                     else -> {
-                        val format = trackGroup.getTrackFormat(0)
-                        val locale = if (language.contains("-")) {
-                            val parts = language.split("-")
-                            try {
+                        val locale = try {
+                            if (language.contains("-")) {
+                                val parts = language.split("-")
                                 Locale(parts[0], parts[1])
-                            } catch (ignored: Exception) {
-                                null
-                            }
-                        } else {
-                            try {
+                            } else {
                                 Locale(language)
-                            } catch (ignored: Exception) {
-                                null
                             }
+                        } catch (_: Exception) {
+                            null
                         }
-                        binding.subtitleTitle.text = locale?.let {
-                            val label = format.label
-                            if (!label.isNullOrBlank()) {
-                                "[${it.language}] $label"
+                        locale?.let {
+                            if (track.name.isNotBlank() && track.name != "Track ${track.id}") {
+                                "[${it.language}] ${track.name}"
                             } else {
                                 "[${it.language}] ${it.displayName}"
                             }
-                        } ?: run {
-                            val label = format.label
-                            if (!label.isNullOrBlank()) label else getString(R.string.unknown_track, language)
-                        }
+                        } ?: track.name.ifBlank { getString(R.string.unknown_track, language) }
                     }
                 }
-                if (trackGroup.isSelected) {
-                    val selected = "✔ ${binding.subtitleTitle.text}"
-                    binding.subtitleTitle.text = selected
-                }
-                binding.root.setOnClickListener {
-                    dismiss()
-                    instance.onSetTrackGroupOverride(trackGroup, type)
-                }
+            }
+
+            binding.subtitleTitle.text = if (track.isSelected) {
+                "✔ $displayText"
+            } else {
+                displayText
+            }
+
+            binding.root.setOnClickListener {
+                dismiss()
+                instance.selectAudioTrack(track.id)
             }
         }
 
-        override fun getItemCount(): Int = trackGroups.size
+        override fun getItemCount(): Int = audioTracks.size
     }
 
     override fun onDestroyView() {

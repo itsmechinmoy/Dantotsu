@@ -30,7 +30,7 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.Selected
 import ani.dantotsu.media.anime.Anime
 import ani.dantotsu.media.anime.Episode
-import ani.dantotsu.media.anime.ExoplayerView
+import ani.dantotsu.media.anime.MpvPlayerActivity
 import ani.dantotsu.parsers.Video
 import ani.dantotsu.parsers.VideoContainer
 import ani.dantotsu.parsers.VideoExtractor
@@ -586,9 +586,9 @@ class DirectTorrentBottomSheet : BottomSheetDialogFragment() {
                     val bm = _binding ?: return@withContext
                     bm.torrentProgressBar.isVisible = false
                     bm.torrentStatusText.isVisible = false
-                    ExoplayerView.media = media
-                    ExoplayerView.initialized = true
-                    startActivity(Intent(currentAct, ExoplayerView::class.java))
+                    MpvPlayerActivity.media = media
+                    MpvPlayerActivity.initialized = true
+                    startActivity(Intent(currentAct, MpvPlayerActivity::class.java))
                     dismissAllowingStateLoss()
                 }
             } catch (e: Exception) {

@@ -728,11 +728,15 @@ class MediaDetailsViewModel : ViewModel() {
     fun getFillerEpisodes(): LiveData<Map<String, Episode>> = fillerEpisodes
     suspend fun loadFillerEpisodes(s: Media, force: Boolean = false) {
         tryWithSuspend {
-            if (fillerEpisodes.value == null || force) fillerEpisodes.postValue(
-                Jikan.getEpisodes(
-                    s.idMAL ?: return@tryWithSuspend
-                )
-            )
+            if (fillerEpisodes.value.isNullOrEmpty() || force) {
+                val malId = s.idMAL ?: IdMappers.getMalId(s.id) ?: return@tryWithSuspend
+                val result = Jikan.getEpisodes(malId) { partial ->
+                    if (partial.isNotEmpty()) fillerEpisodes.postValue(partial)
+                }
+                if (result.isNotEmpty()) {
+                    fillerEpisodes.postValue(result)
+                }
+            }
         }
     }
 

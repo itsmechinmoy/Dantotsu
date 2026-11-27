@@ -4,14 +4,11 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <androidx.media3.ui.PlayerView
+    <ani.dantotsu.media.anime.mpv.DantotsuPlayerView
         android:id="@+id/player_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        app:animation_enabled="false"
-        app:resize_mode="fit"
-        app:show_buffering="always" />
+        android:gravity="center" />
 
     <include
         android:id="@+id/castScreenView"

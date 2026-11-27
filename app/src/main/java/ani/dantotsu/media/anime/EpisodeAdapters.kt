@@ -5,10 +5,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
 import android.widget.LinearLayout
-import androidx.annotation.OptIn
 import androidx.core.view.isVisible
 import androidx.lifecycle.coroutineScope
-import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.R
 import ani.dantotsu.connections.updateProgress
@@ -54,7 +52,6 @@ fun handleProgress(cont: LinearLayout, bar: View, empty: View, mediaId: Int, ep:
     }
 }
 
-@OptIn(UnstableApi::class)
 class EpisodeAdapter(
     private var type: Int,
     private val media: Media,
@@ -296,7 +293,6 @@ class EpisodeAdapter(
         }
     }
 
-    @OptIn(UnstableApi::class)
     fun addToDownloadedEpisodes(episodeNumber: String, size: Double) {
         AnimeDownloader.stopDownload(media.id, episodeNumber)
         downloadedEpisodes.add(episodeNumber)

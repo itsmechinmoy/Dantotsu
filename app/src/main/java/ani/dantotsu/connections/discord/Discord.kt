@@ -38,7 +38,7 @@ object Discord {
 
     const val application_Id = "1163925779692912771"
     const val small_Image: String =
-        "https://cdn.discordapp.com/emojis/1167344924874784828.webp?size=128&quality=lossless"
+        "https://cdn.discordapp.com/emojis/1167344924874784828.gif?size=128&animated=true"
     const val small_Image_AniList: String =
         "https://anilist.co/img/icons/android-chrome-512x512.png"
     const val small_Image_MAL: String =

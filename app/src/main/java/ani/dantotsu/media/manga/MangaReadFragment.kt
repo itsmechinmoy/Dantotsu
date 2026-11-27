@@ -365,7 +365,7 @@ open class MangaReadFragment : Fragment(), ScanlatorSelectionListener {
         val seenNumbers = mutableSetOf<String>()
         val resultChapters = mutableSetOf<MangaChapter>()
 
-        for (chapter in (byScanlator[baseScanlator] ?: emptyList())) {
+        for (chapter in byScanlator[baseScanlator] ?: emptyList()) {
             val num = MediaNameAdapter.findChapterNumber(chapter.number)?.toString() ?: chapter.number
             seenNumbers.add(num)
             resultChapters.add(chapter)

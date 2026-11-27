@@ -20,9 +20,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.math.MathUtils.clamp
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import ani.dantotsu.GesturesListener
 import ani.dantotsu.R
 import ani.dantotsu.brightnessConverter
@@ -31,6 +28,8 @@ import ani.dantotsu.dp
 import ani.dantotsu.getCurrentBrightnessValue
 import ani.dantotsu.hideSystemBars
 import ani.dantotsu.hideSystemBarsExtendView
+import ani.dantotsu.media.anime.mpv.DantotsuPlayerView
+import ani.dantotsu.media.anime.mpv.MpvVideoView
 import ani.dantotsu.others.ResettableTimer
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -44,15 +43,14 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-@UnstableApi
 class PlayerGestureManager(
     private val activity: AppCompatActivity,
-    private val playerView: PlayerView,
+    private val playerView: DantotsuPlayerView,
     private val exoBrightnessCont: View,
     private val exoVolumeCont: View,
     private val exoBrightness: Slider,
     private val exoVolume: Slider,
-    private val getPlayer: () -> ExoPlayer?,
+    private val getPlayer: () -> MpvVideoView?,
     private val isPlayerInitialized: () -> Boolean
 ) {
 
@@ -98,7 +96,7 @@ class PlayerGestureManager(
                         marginEnd = 0
                     }
                 }
-            playerView.findViewById<View>(androidx.media3.ui.R.id.exo_buffering)?.translationY =
+            playerView.findViewById<View>(R.id.exo_buffering)?.translationY =
                 (if (orientation == Configuration.ORIENTATION_LANDSCAPE) 0 else notchHeight + 8.toPx).dp
             exoBrightnessCont.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 marginEnd = if (orientation == Configuration.ORIENTATION_LANDSCAPE) notchHeight else 0
@@ -169,12 +167,12 @@ class PlayerGestureManager(
         val (card, text) = if (forward) {
             val t = "+${seekTime * ++seekTimesF}"
             forwardText.text = t
-            handler.post { player.seekTo(player.currentPosition + seekTime * 1000) }
+            handler.post { player.seekTo(player.currentPosition.value + seekTime * 1000L) }
             fastForwardCard to forwardText
         } else {
             val t = "-${seekTime * ++seekTimesR}"
             rewindText.text = t
-            handler.post { player.seekTo(player.currentPosition - seekTime * 1000) }
+            handler.post { player.seekTo(player.currentPosition.value - seekTime * 1000L) }
             fastRewindCard to rewindText
         }
 
@@ -289,7 +287,7 @@ class PlayerGestureManager(
         exoVolumeCont.visibility = View.GONE
 
         playerView.setControllerVisibilityListener(
-            PlayerView.ControllerVisibilityListener { visibility ->
+            DantotsuPlayerView.ControllerVisibilityListener { visibility ->
                 if (visibility == View.GONE) {
                     activity.hideSystemBarsExtendView()
                     brightnessHide()
@@ -361,12 +359,12 @@ class PlayerGestureManager(
         val fastForward = playerView.findViewById<TextView>(R.id.exo_fast_forward_text)
         isFastForwarding = true
         fastForwardStartX = event.rawX
-        fastForwardOriginalSpeed = player.playbackParameters.speed
+        fastForwardOriginalSpeed = player.playbackSpeed.value
         fastForwardInitialSpeed = clamp(fastForwardOriginalSpeed * 2f, minLongPressSpeed, maxLongPressSpeed)
         player.setPlaybackSpeed(fastForwardInitialSpeed)
         lastFastForwardSpeed = fastForwardInitialSpeed
         fastForward?.visibility = View.VISIBLE
-        updateFastForwardText(player.playbackParameters.speed)
+        updateFastForwardText(player.playbackSpeed.value)
     }
 
     private fun updateFastForwardSpeed(event: MotionEvent) {
@@ -384,7 +382,7 @@ class PlayerGestureManager(
         if (abs(targetSpeed - lastFastForwardSpeed) < minSpeedUpdateDelta) return
         player.setPlaybackSpeed(targetSpeed)
         lastFastForwardSpeed = targetSpeed
-        updateFastForwardText(player.playbackParameters.speed)
+        updateFastForwardText(player.playbackSpeed.value)
     }
 
     private fun stopFastForward() {

@@ -15,5 +15,14 @@ object SettingsScreens {
         ani.dantotsu.settings.CommonScreen,
         ani.dantotsu.settings.data.DataScreen,
         ani.dantotsu.settings.AboutScreen,
+        ani.dantotsu.settings.PlayerHubScreen,
+        ani.dantotsu.settings.PlayerInternalScreen,
+        ani.dantotsu.settings.PlayerGesturesScreen,
+        ani.dantotsu.settings.PlayerDecoderScreen,
+        ani.dantotsu.settings.PlayerSubtitlesScreen,
+        ani.dantotsu.settings.PlayerAudioScreen,
+        ani.dantotsu.settings.PlayerCustomButtonsScreen,
+        ani.dantotsu.settings.PlayerScriptEditorScreen,
+        ani.dantotsu.settings.PlayerAdvancedScreen,
     )
 }

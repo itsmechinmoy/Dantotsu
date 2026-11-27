@@ -499,15 +499,10 @@
 
             </LinearLayout>
 
-            <view
+            <ani.dantotsu.media.anime.mpv.DantotsuTimeBar
                 android:id="@id/exo_progress"
-                class="ani.dantotsu.media.anime.ExoplayerView$ExtendedTimeBar"
                 android:layout_width="match_parent"
                 android:layout_height="24dp"
-                app:ad_marker_color="#A9FFFFFF"
-                app:bar_height="2dp"
-                app:played_color="?attr/colorPrimary"
-                app:scrubber_color="?attr/colorPrimary"
                 tools:ignore="SpeakableTextPresentCheck" />
 
         </LinearLayout>
