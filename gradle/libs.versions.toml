@@ -93,7 +93,7 @@ glide-transform = "jp.wasabeef:glide-transformations:4.3.0"
 
 # MPV & Cast & MPD
 mpv-lib = { module = "io.github.animiruorg:mpv-android-lib", version.ref = "mpv" }
-gms-cast = "com.google.android.gms:play-services-cast-framework:22.3.1"
+gms-cast = "com.google.android.gms:play-services-cast-framework:23.0.0"
 mpd-parser = "io.lindstrom:mpd-parser:0.23"
 
 # UI
