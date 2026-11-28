@@ -29,7 +29,7 @@ class PlayerDiscordManager(
         val context = activity
         val offline = PrefManager.getVal<Boolean>(PrefName.OfflineMode)
         val incognito = PrefManager.getVal<Boolean>(PrefName.Incognito)
-        val rpcEnabled = PrefManager.getVal<Boolean>(PrefName.rpcEnabled)
+        val rpcEnabled = PrefManager.getVal(PrefName.rpcEnabled, true)
 
         if (RPCManager.shouldSuppressForAdultMedia(media.isAdult)) {
             RPCManager.clearPresence(context)

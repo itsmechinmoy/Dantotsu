@@ -83,16 +83,17 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
             }
         }
 
-        binding.settingsRescueMode.isChecked = PrefManager.getVal(PrefName.RescueMode)
-        binding.settingsRescueMode.setOnCheckedChangeListener { _, isChecked ->
-            PrefManager.setVal(PrefName.RescueMode, isChecked)
-            val act = activity
+        val activeServiceName = getString(
+            if (isRescueModeEarly) R.string.myanimelist else R.string.anilist
+        )
+        binding.settingsSwitchService.text = getString(R.string.switch_service_label, activeServiceName)
+        binding.settingsSwitchService.setIconResource(
+            if (isRescueModeEarly) R.drawable.ic_myanimelist else R.drawable.ic_anilist
+        )
+        binding.settingsSwitchService.setSafeOnClickListener {
+            val act = activity ?: return@setSafeOnClickListener
             dismiss()
-            when (act) {
-                is MainActivity -> act.serviceChanged()
-                null -> {}
-                else -> startMainActivity(act)
-            }
+            ServiceSwitcherDialog.show(act)
         }
 
         binding.settingsExtensionSettings.setSafeOnClickListener {
@@ -102,6 +103,11 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
 
         binding.settingsDownloadQueue.setSafeOnClickListener {
             startActivity(Intent(activity, DownloadQueueActivity::class.java))
+            dismiss()
+        }
+
+        binding.settingsWatchRooms.setSafeOnClickListener {
+            startActivity(Intent(activity, ani.dantotsu.together.WatchRoomActivity::class.java))
             dismiss()
         }
 

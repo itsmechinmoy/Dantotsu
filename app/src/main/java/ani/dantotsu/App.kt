@@ -292,7 +292,7 @@ class App : Application(), GraphProvider<AppGraph> {
             largeImage = largeImage,
             buttons = mutableListOf()
         )
-        RPCManager.setPresence(activity, rpcData)
+        RPCManager.setPresence(activity, rpcData, activity)
     }
 
     inner class FTActivityLifecycleCallbacks : ActivityLifecycleCallbacks {

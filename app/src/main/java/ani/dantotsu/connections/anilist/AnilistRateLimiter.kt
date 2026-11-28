@@ -193,10 +193,10 @@ internal fun computePacingDelayMs(
         return max(baseDelay, untilResetMs)
     }
 
-    val effectiveThreshold = max(5, weight + 3)
+    val effectiveThreshold = max(2, weight)
     val targetGapMs = when {
-        remaining <= effectiveThreshold -> (untilResetMs / ((remaining / weight.coerceAtLeast(1)) + 1)).coerceIn(1_500L, 10_000L)
-        remaining <= effectiveThreshold + 5 -> (untilResetMs / ((remaining / weight.coerceAtLeast(1)) + 1)).coerceIn(600L, 4_000L)
+        remaining <= effectiveThreshold -> (untilResetMs / ((remaining / weight.coerceAtLeast(1)) + 1)).coerceIn(1_000L, 6_000L)
+        remaining <= effectiveThreshold + 3 -> (untilResetMs / ((remaining / weight.coerceAtLeast(1)) + 1)).coerceIn(300L, 1_500L)
         else -> minIntervalMs
     }
     val adaptiveDelay = if (lastDispatchMs > 0L) {
@@ -216,9 +216,9 @@ internal fun computePacingDelayMs(
  *   number of times. Mutations are NEVER retried.
  */
 class AnilistRateLimiter(
-    private val maxConcurrency: Int = 2,
+    private val maxConcurrency: Int = 4,
     private val maxRetriesForReads: Int = 2,
-    private val minIntervalMs: Long = 250L,
+    private val minIntervalMs: Long = 100L,
     private val minRetryWaitMs: Long = 1_000L,
     private val maxRetryWaitMs: Long = 95_000L,
     private val maxTotalWaitMs: Long = 120_000L,

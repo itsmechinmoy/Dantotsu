@@ -184,6 +184,10 @@
         <activity android:name=".forum.ThreadViewActivity" />
         <activity android:name=".settings.UserInterfaceSettingsActivity" />
         <activity android:name=".settings.PlayerSettingsActivity" />
+        <activity
+            android:name=".together.WatchRoomActivity"
+            android:exported="true"
+            android:launchMode="singleTop" />
         <activity android:name=".settings.PlayerInternalSettingsActivity" />
         <activity android:name=".settings.PlayerGesturesSettingsActivity" />
         <activity android:name=".settings.PlayerDecoderSettingsActivity" />
@@ -381,6 +385,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:scheme="app.dantotsu" />
+            </intent-filter>
+            <intent-filter android:label="Comick Login for Dantotsu">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
                 <data
                     android:host="comick"
                     android:scheme="dantotsu" />
@@ -431,6 +442,12 @@
                 <data
                     android:host="profile"
                     android:scheme="dantotsu" />
+                <data
+                    android:host="together"
+                    android:scheme="dantotsu" />
+                <data
+                    android:host="together"
+                    android:scheme="dartotsu" />
             </intent-filter>
             <intent-filter android:label="Open in Dantotsu">
                 <action android:name="android.intent.action.VIEW" />

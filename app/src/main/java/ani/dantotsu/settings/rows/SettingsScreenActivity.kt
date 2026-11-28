@@ -45,7 +45,7 @@ abstract class SettingsScreenActivity : AppCompatActivity(), SettingsHost {
         onScreenCreate(savedInstanceState)
 
         val list = binding.settingScreenList
-        list.setPadding(0, statusBarHeight, 0, navBarHeight)
+        list.setPadding(0, statusBarHeight, 0, navBarHeight + (24 * resources.displayMetrics.density).toInt())
         list.layoutManager = LinearLayoutManager(this)
         (list.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
 

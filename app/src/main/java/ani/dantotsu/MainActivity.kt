@@ -294,6 +294,7 @@ class MainActivity : AppCompatActivity() {
             binding.mainProgressBar.visibility = View.GONE
             val mainViewPager = binding.viewpager
             mainViewPager.isUserInputEnabled = false
+            mainViewPager.offscreenPageLimit = 2
             mainViewPager.adapter = ViewPagerAdapter(supportFragmentManager, lifecycle)
             mainViewPager.setPageTransformer(ZoomOutPageTransformer())
             navbar.selectTabAt(selectedOption)
@@ -512,6 +513,7 @@ class MainActivity : AppCompatActivity() {
         }
         // the tabs keep their lists in activity-scoped models; drop them so the new tabs load again
         viewModelStore.clear()
+        pager.offscreenPageLimit = 2
         pager.adapter = ViewPagerAdapter(supportFragmentManager, lifecycle)
         pager.setCurrentItem(current, false)
     }
@@ -625,7 +627,7 @@ class MainActivity : AppCompatActivity() {
             if (handleRepoImport(uri, schemeLower)) {
                 return
             }
-            if (schemeLower == "dantotsu") {
+            if (schemeLower == "dantotsu" || schemeLower == "dartotsu") {
                 startActivity(Intent(this, ani.dantotsu.connections.anilist.UrlMedia::class.java).setData(uri))
                 return
             }

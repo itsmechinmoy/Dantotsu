@@ -50,6 +50,7 @@ class DiscordRpcClientCoordinator(
 
     fun requestPresence(presence: DiscordPresence) = synchronized(lock) {
         cancelRecoveryLocked()
+        if (activeRun == null) recovery.reset()
         controller.requestPresence(presence)
         // Updates reuse the current connection; bind only when there is none.
         if (activeRun == null) startBindLocked()

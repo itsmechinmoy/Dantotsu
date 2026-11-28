@@ -161,10 +161,10 @@
 -keep class org.libtorrent4j.swig.libtorrent_jni { *; }
 
 #############################################
-# FFmpegKit (com.antonkarpenko)
+# FFmpegKit (com.arthenica.ffmpegkit)
 #############################################
--keep class com.antonkarpenko.ffmpegkit.** { *; }
--dontwarn com.antonkarpenko.ffmpegkit.**
+-keep class com.arthenica.ffmpegkit.** { *; }
+-dontwarn com.arthenica.ffmpegkit.**
 
 #############################################
 # WebGPU Viewer (ca.mpreg:webgpuviewer)
