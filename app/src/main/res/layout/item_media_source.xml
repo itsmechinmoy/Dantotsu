@@ -37,6 +37,20 @@
             tools:ignore="TextContrastCheck"
             tools:visibility="visible" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/mediaWatchPartyButton"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:fontFamily="@font/poppins_bold"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/watch_party"
+            android:textAllCaps="false"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_round_groups_24" />
+
         <TextView
             android:id="@+id/mediaSourceTitle"
             android:layout_width="match_parent"

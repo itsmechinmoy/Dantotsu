@@ -25,6 +25,7 @@ import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.AnilistMangaViewModel
 import ani.dantotsu.connections.anilist.getUserId
 import ani.dantotsu.databinding.FragmentMangaBinding
+import ani.dantotsu.media.CarouselLogoResolver
 import ani.dantotsu.media.MediaAdaptor
 import ani.dantotsu.media.ProgressAdapter
 import ani.dantotsu.navBarHeight
@@ -249,6 +250,11 @@ class MangaFragment : Fragment() {
                     mangaPageAdapter.updateHeight()
                     model.getTrending().observe(viewLifecycleOwner) {
                         if (it != null) {
+                            if (PrefManager.getVal(PrefName.CarouselClearLogo)) {
+                                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                                    CarouselLogoResolver.preload(it)
+                                }
+                            }
                             mangaPageAdapter.updateTrending(
                                 MediaAdaptor(
                                     if (PrefManager.getVal(PrefName.SmallView)) 3 else 2,
@@ -274,7 +280,7 @@ class MangaFragment : Fragment() {
             mangaPageAdapter.updateAvatar()
         }
         var running = false
-        val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(false) }
+        val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(true) }
         live.observe(viewLifecycleOwner) {
             if (!running && it) {
                 running = true

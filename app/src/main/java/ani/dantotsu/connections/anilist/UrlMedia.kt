@@ -33,7 +33,7 @@ class UrlMedia : Activity() {
 
         try {
             when (data.scheme?.lowercase()) {
-                "dantotsu" -> handleDantotsuScheme(data)
+                "dantotsu", "dartotsu" -> handleDantotsuScheme(data)
                 "http", "https" -> handleHttpScheme(data)
                 else -> handleFallbackScheme(data)
             }
@@ -195,6 +195,14 @@ class UrlMedia : Activity() {
                 } else {
                     startMainActivity(this)
                 }
+            }
+            "together" -> {
+                startActivity(
+                    android.content.Intent(this, ani.dantotsu.together.WatchRoomActivity::class.java).apply {
+                        data = uri
+                    }
+                )
+                finish()
             }
             else -> {
                 startMainActivity(this)

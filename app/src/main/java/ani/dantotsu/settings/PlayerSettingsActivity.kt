@@ -6,6 +6,7 @@ import ani.dantotsu.settings.rows.Section
 import ani.dantotsu.settings.rows.SettingsScreen
 import ani.dantotsu.settings.rows.SettingsScreenActivity
 import ani.dantotsu.settings.rows.actionRow
+import ani.dantotsu.together.WatchRoomActivity
 
 class PlayerSettingsActivity : SettingsScreenActivity() {
     override val screen get() = PlayerHubScreen
@@ -29,6 +30,7 @@ object PlayerHubScreen : SettingsScreen(
             categoryRow("player_cat_custom_buttons", R.string.pref_player_custom_button, R.string.pref_player_custom_button_summary, R.drawable.ic_round_smart_button_24, PlayerCustomButtonsSettingsActivity::class.java),
             categoryRow("player_cat_script_editor", R.string.pref_player_editor, R.string.pref_player_editor_summary, R.drawable.ic_round_edit_note_24, PlayerScriptEditorSettingsActivity::class.java),
             categoryRow("player_cat_torrent", R.string.pref_player_torrents, R.string.pref_player_torrents_summary, R.drawable.ic_round_magnet_24, TorrentSettingsActivity::class.java),
+            categoryRow("player_cat_watch_rooms", R.string.watch_rooms, R.string.watch_rooms_desc, R.drawable.ic_round_groups_24, WatchRoomActivity::class.java),
             categoryRow("player_cat_advanced", R.string.pref_player_advanced, R.string.pref_player_advanced_summary, R.drawable.ic_round_settings_24, PlayerAdvancedSettingsActivity::class.java),
         )),
     )

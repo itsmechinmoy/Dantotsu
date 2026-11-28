@@ -150,6 +150,19 @@ class AnimeWatchAdapter(
         }
         val offline = !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
 
+        binding.mediaWatchPartyButton.isGone = offline
+        val watchState = ani.dantotsu.together.WatchRoomManager.state.value
+        binding.mediaWatchPartyButton.text = if (watchState.isConnected) {
+            "${fragment.getString(R.string.watch_party)} · ${watchState.room}"
+        } else {
+            fragment.getString(R.string.watch_party)
+        }
+        binding.mediaWatchPartyButton.setOnClickListener {
+            ani.dantotsu.together.WatchRoomBottomSheet
+                .newInstance(media.userPreferredName, inPlayer = false)
+                .show(fragment.parentFragmentManager, "WatchRoomBottomSheet")
+        }
+
         binding.mediaSourceNameContainer.isGone = offline
         binding.mediaSourceSettings.isGone = offline
         binding.mediaSourceSearch.isGone = offline
