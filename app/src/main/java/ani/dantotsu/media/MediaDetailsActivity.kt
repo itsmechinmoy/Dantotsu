@@ -106,6 +106,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     private val compactOkHttpClient by lazy { OkHttpClient() }
     private var compactCurrentEpisodeKey: String? = null
     private var compactSubtitlesVisible = true
+    private var trailerBannerHelper: TrailerBannerHelper? = null
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
@@ -198,6 +199,8 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         }
         binding.mediaBanner.updateLayoutParams { height += statusBarHeight }
         binding.mediaBannerNoKen.updateLayoutParams { height += statusBarHeight }
+        binding.mediaTrailerWebView.updateLayoutParams { height += statusBarHeight }
+        binding.mediaTrailerControls.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
         binding.mediaClose.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
         binding.mediaHome.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
         binding.incognito.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin += statusBarHeight }
@@ -240,6 +243,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         }
 
         blurImage(banner, media.banner ?: media.cover)
+        maybeStartTrailerBanner(bannerAnimations)
         val gestureDetector = GestureDetector(this, object : GesturesListener() {
             override fun onDoubleClick(event: MotionEvent) {
                 if (!(PrefManager.getVal(PrefName.BannerAnimations) as Boolean)) {
@@ -467,8 +471,42 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
                     }
                 }
                 updateMediaProgressUi(rescueMode)
+                maybeStartTrailerBanner(bannerAnimations)
             }
         }
+    }
+
+    private fun maybeStartTrailerBanner(bannerAnimations: Boolean) {
+        if (!::binding.isInitialized || compactPlayerActive) return
+        val enabled = PrefManager.getVal<Boolean>(PrefName.TrailerBanner) &&
+            !PrefManager.getVal<Boolean>(PrefName.OfflineMode) &&
+            ani.dantotsu.isOnline(this)
+        val trailerId = media.trailer
+        if (!enabled || trailerId.isNullOrBlank()) {
+            trailerBannerHelper?.hideAndFallback()
+            return
+        }
+        val helper = trailerBannerHelper ?: TrailerBannerHelper(
+            webView = binding.mediaTrailerWebView,
+            controlsContainer = binding.mediaTrailerControls,
+            playPauseButton = binding.mediaTrailerPlayPause,
+            muteButton = binding.mediaTrailerMute,
+            onFallbackToImageBanner = {
+                if (!compactPlayerActive && ::binding.isInitialized) {
+                    binding.mediaBanner.isVisible = bannerAnimations
+                    binding.mediaBannerNoKen.isVisible = !bannerAnimations
+                    if (bannerAnimations) binding.mediaBanner.resume()
+                }
+            },
+            onTrailerReadyUi = {
+                if (::binding.isInitialized && !compactPlayerActive) {
+                    if (bannerAnimations) binding.mediaBanner.pause()
+                    binding.mediaBanner.isVisible = false
+                    binding.mediaBannerNoKen.isVisible = false
+                }
+            }
+        ).also { trailerBannerHelper = it }
+        helper.loadTrailer(trailerId)
     }
 
     private fun setupViewPagerAndTabs(rescueMode: Boolean, isDownload: Boolean) {
@@ -597,6 +635,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
 
     override fun onPause() {
         super.onPause()
+        trailerBannerHelper?.pause()
         if (compactPlayerActive) {
             saveCompactPosition()
             compactPlayerManager?.pause()
@@ -626,6 +665,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
             return false
         }
 
+        trailerBannerHelper?.hideAndFallback()
         this.media = targetMedia
         compactCurrentEpisodeKey = epKey
 
@@ -994,6 +1034,8 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     }
 
     override fun onDestroy() {
+        trailerBannerHelper?.release()
+        trailerBannerHelper = null
         stopCompactPlayback()
         super.onDestroy()
         Refresh.activity.remove(this.hashCode())

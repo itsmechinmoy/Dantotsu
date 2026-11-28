@@ -5,7 +5,12 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.core.widget.addTextChangedListener
@@ -37,6 +42,34 @@ class ActivityMarkdownCreator : AppCompatActivity() {
     private var ping: String? = null
     private var parentId: Int = 0
     private var isPreviewMode: Boolean = false
+    private var pendingImageInsertPos: Int = 0
+    private val pickLocalMediaLauncher =
+        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            binding.formatImage.isEnabled = false
+            binding.formatImage.alpha = 0.4f
+            toast("Uploading image...")
+            lifecycleScope.launch {
+                try {
+                    val outcome = LocalMediaUploader.uploadUri(this@ActivityMarkdownCreator, uri).getOrThrow()
+                    val formatted = String.format(MarkdownFormat.IMAGE.syntax, outcome.url)
+                    val editable = binding.editText.text
+                    val pos = pendingImageInsertPos.coerceIn(0, editable?.length ?: 0)
+                    editable?.insert(pos, formatted)
+                    binding.editText.setSelection((pos + formatted.length).coerceAtMost(editable?.length ?: 0))
+                    if (!outcome.showsOnAniList) {
+                        toast("Uploaded, though this fallback host may not render on AniList web")
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    toast(e.message ?: "Failed to upload image")
+                } finally {
+                    binding.formatImage.isEnabled = true
+                    binding.formatImage.alpha = 1f
+                }
+            }
+        }
 
     enum class MarkdownFormat(
         val syntax: String,
@@ -437,14 +470,25 @@ class ActivityMarkdownCreator : AppCompatActivity() {
             )
             setPadding(0, 0, 0, 0)
         }
+        if (format == MarkdownFormat.IMAGE) {
+            inputLayout.hint = "Image URL (or tap Upload Photo / GIF)"
+        }
         customAlertDialog().apply {
-            setTitle("Paste your link here")
+            setTitle(if (format == MarkdownFormat.IMAGE) "Insert Image" else "Paste your link here")
             setCustomView(container)
             setPosButton(getString(R.string.ok)) {
                 val input = inputEditText.text.toString()
                 val formattedText = String.format(format.syntax, input)
                 binding.editText.text?.insert(position, formattedText)
                 binding.editText.setSelection(position + formattedText.length)
+            }
+            if (format == MarkdownFormat.IMAGE) {
+                setNeutralButton("Upload Photo / GIF") {
+                    pendingImageInsertPos = position
+                    pickLocalMediaLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
             }
             setNegButton(getString(R.string.cancel))
         }.show()

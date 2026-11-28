@@ -326,7 +326,7 @@ fun fullMediaInformation(id: Int) = """
         day
       }
     }
-    reviews(perPage: 3, sort: SCORE_DESC) {
+    reviews(perPage: 10, sort: ID_DESC) {
       nodes {
 $REVIEW_GRAPHQL_FIELDS
       }

@@ -208,6 +208,16 @@
                 tools:text="/??" />
         </LinearLayout>
 
+        <LinearLayout
+            android:id="@+id/itemCompactStreamsRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
     </LinearLayout>
 
 </LinearLayout>

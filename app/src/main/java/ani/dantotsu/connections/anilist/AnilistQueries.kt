@@ -184,7 +184,7 @@ class AnilistQueries {
             try {
                 val idsString = ids.joinToString(",")
                 val response = executeQuery<Query.MediaList>(
-                    """{Page(page:1,perPage:50){media(id_in:[${idsString}],isAdult:false){id mediaListEntry{progress private score(format:POINT_100) status} idMal type isAdult popularity status(version:2) chapters episodes nextAiringEpisode{episode} meanScore isFavourite format bannerImage coverImage{large} title{english romaji userPreferred} startDate{year}}}}""",
+                    """{Page(page:1,perPage:50){media(id_in:[${idsString}],isAdult:false){id mediaListEntry{progress private score(format:POINT_100) status} idMal type isAdult popularity status(version:2) chapters episodes nextAiringEpisode{episode} meanScore isFavourite format bannerImage coverImage{large} title{english romaji userPreferred} startDate{year} externalLinks{url site type color icon language}}}}""",
                     force = true
                 )
                 val fetchedMediaList = response?.data?.page?.media
@@ -2091,6 +2091,14 @@ Page(page:$page,perPage:50) {
         airingAt
         media {
             ${standardMediaInformation()}
+            externalLinks {
+                url
+                site
+                type
+                color
+                icon
+                language
+            }
         }
     }
 }
@@ -2279,7 +2287,7 @@ Page(page:$page,perPage:50) {
     suspend fun getReviews(
         mediaId: Int,
         page: Int = 1,
-        sort: String = "SCORE_DESC"
+        sort: String = "ID_DESC"
     ): Query.ReviewsResponse? {
         return executeQuery<Query.ReviewsResponse>(
             """{Page(page:$page,perPage:10){$standardPageInformation reviews(mediaId:$mediaId,sort:$sort){id,mediaId,mediaType,summary,body(asHtml:true,htmlVersion:2)rating,ratingAmount,userRating,score,private,siteUrl,createdAt,updatedAt,user{id,name,bannerImage avatar{medium,large}}}}}""",

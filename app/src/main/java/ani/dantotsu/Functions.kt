@@ -262,7 +262,9 @@ fun initActivity(a: Activity) {
 }
 
 fun applySystemFont(activity: Activity) {
-    if (!PrefManager.getVal<Boolean>(PrefName.UseSystemFont)) return
+    val customTypeface = ani.dantotsu.themes.CustomFontManager.getActiveTypeface()
+    val useSystemFont = PrefManager.getVal<Boolean>(PrefName.UseSystemFont)
+    if (customTypeface == null && !useSystemFont) return
 
     val decorView = activity.window.decorView
     applySystemFontToViewTree(decorView)
@@ -309,6 +311,7 @@ private fun applySystemFontToTextView(textView: TextView) {
     if (textView.getTag(R.id.tag_system_font_applied) == true) return
     textView.setTag(R.id.tag_system_font_applied, true)
 
+    val baseTypeface = ani.dantotsu.themes.CustomFontManager.getActiveTypeface() ?: Typeface.DEFAULT
     val currentTf = textView.typeface
     val isBold = currentTf?.isBold == true
     val isItalic = currentTf?.isItalic == true
@@ -327,9 +330,9 @@ private fun applySystemFontToTextView(textView: TextView) {
             currentTf.weight <= 300 -> 300
             else -> 400
         }
-        textView.typeface = Typeface.create(Typeface.DEFAULT, weight, isItalic)
+        textView.typeface = Typeface.create(baseTypeface, weight, isItalic)
     } else {
-        textView.setTypeface(Typeface.DEFAULT, style)
+        textView.setTypeface(baseTypeface, style)
     }
 }
 

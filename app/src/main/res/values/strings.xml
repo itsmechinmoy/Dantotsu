@@ -1605,4 +1605,22 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="watch_rooms">WatchRooms (Together)</string>
     <string name="watch_rooms_desc">Create or join synchronized Syncplay watch parties</string>
     <string name="send">Send</string>
+    <string name="custom_font">Custom Font</string>
+    <string name="custom_font_desc">Import a local .ttf/.otf file or download from Google Fonts</string>
+    <string name="default_font_poppins">Default (Poppins)</string>
+    <string name="your_downloaded_fonts">Your Fonts</string>
+    <string name="download_google_font">Download Google Font</string>
+    <string name="import_font_file">Import Local Font (.ttf / .otf)</string>
+    <string name="search_google_fonts">Search Google Fonts…</string>
+    <string name="download_named_font">Download "%s" from Google Fonts</string>
+    <string name="font_applied">Applied font: %s</string>
+    <string name="custom_font_error">Failed to load custom font file</string>
+    <string name="google_font_error">Could not download Google Font</string>
+    <string name="official_streams">Official Streams</string>
+    <string name="official_streams_desc">Licensed streaming platforms and episodes</string>
+    <string name="official_episodes">Official Episodes</string>
+    <string name="dub_calendar_on">Showing Dub Release Schedule</string>
+    <string name="dub_calendar_off">Showing Sub &amp; Main Release Schedule</string>
+    <string name="trailer_banner">Trailer Banners</string>
+    <string name="trailer_banner_desc">Replace media banner with auto-playing trailer when available</string>
 </resources>

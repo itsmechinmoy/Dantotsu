@@ -152,6 +152,11 @@ class UserInterfaceSettingsActivity : AppCompatActivity() {
             restartApp()
         }
 
+        binding.uiSettingsTrailerBanner.isChecked = PrefManager.getVal(PrefName.TrailerBanner)
+        binding.uiSettingsTrailerBanner.setOnCheckedChangeListener { _, isChecked ->
+            PrefManager.setVal(PrefName.TrailerBanner, isChecked)
+        }
+
         binding.uiSettingsLayoutAnimation.isChecked = PrefManager.getVal(PrefName.LayoutAnimations)
         binding.uiSettingsLayoutAnimation.setOnCheckedChangeListener { _, isChecked ->
             PrefManager.setVal(PrefName.LayoutAnimations, isChecked)
