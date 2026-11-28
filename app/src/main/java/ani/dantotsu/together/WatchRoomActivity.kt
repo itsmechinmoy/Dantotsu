@@ -140,6 +140,34 @@ class WatchRoomActivity : AppCompatActivity() {
     }
 
     private fun renderState(st: WatchRoomState) {
+        renderStatusBadge(st)
+        binding.watchRoomSubtitle.text = if (st.isConnected) {
+            "${st.server} · ${st.username}"
+        } else {
+            st.errorMessage ?: st.server
+        }
+
+        val activeOrConnecting = st.isConnected || st.status == WatchRoomStatus.CONNECTING
+        binding.watchRoomSetupCard.isVisible = !activeOrConnecting
+        binding.watchRoomActiveCard.isVisible = activeOrConnecting
+        binding.watchRoomMembersCard.isVisible = st.isConnected
+        binding.watchRoomChatCard.isVisible = activeOrConnecting
+
+        binding.watchRoomActiveName.text = "Room: ${st.room}"
+        binding.watchRoomActiveMeta.text = buildString {
+            append(if (st.isHost) "Host" else "Guest")
+            if (st.rttMs > 0) append(" · Ping ${st.rttMs}ms")
+        }
+        binding.watchRoomReadyButton.text = if (st.isReady) "Ready ✓" else "Not Ready"
+
+        renderSharedStreamCard(st)
+        renderParticipantsList(st)
+        binding.watchRoomChatLog.text = st.messages.takeLast(30).joinToString("\n") { msg ->
+            if (msg.isSystem) "[System] ${msg.text}" else "${msg.sender}: ${msg.text}"
+        }.ifBlank { "No messages yet." }
+    }
+
+    private fun renderStatusBadge(st: WatchRoomState) {
         val (statusText, bgAttr, fgAttr) = when (st.status) {
             WatchRoomStatus.CONNECTED -> Triple(
                 "Connected",
@@ -166,69 +194,49 @@ class WatchRoomActivity : AppCompatActivity() {
         binding.watchRoomStatusBadge.backgroundTintList =
             android.content.res.ColorStateList.valueOf(getThemeColor(bgAttr))
         binding.watchRoomStatusBadge.setTextColor(getThemeColor(fgAttr))
+    }
 
-        binding.watchRoomSubtitle.text = if (st.isConnected) {
-            "${st.server} · ${st.username}"
-        } else {
-            st.errorMessage ?: st.server
-        }
-
-        val activeOrConnecting = st.isConnected || st.status == WatchRoomStatus.CONNECTING
-        binding.watchRoomSetupCard.isVisible = !activeOrConnecting
-        binding.watchRoomActiveCard.isVisible = activeOrConnecting
-        binding.watchRoomMembersCard.isVisible = st.isConnected
-        binding.watchRoomChatCard.isVisible = activeOrConnecting
-
-        binding.watchRoomActiveName.text = "Room: ${st.room}"
-        binding.watchRoomActiveMeta.text = buildString {
-            append(if (st.isHost) "Host" else "Guest")
-            if (st.rttMs > 0) append(" · Ping ${st.rttMs}ms")
-        }
-        binding.watchRoomReadyButton.text = if (st.isReady) "Ready ✓" else "Not Ready"
-
+    private fun renderSharedStreamCard(st: WatchRoomState) {
         val shared = st.sharedStream
         binding.watchRoomStreamCard.isVisible = st.isConnected && shared != null
-        if (shared != null) {
-            binding.watchRoomSharedTitle.text = buildString {
-                append(shared.mediaTitle.ifBlank { "Shared Video" })
-                if (shared.episodeLabel.isNotBlank()) append(" — ${shared.episodeLabel}")
-            }
-            binding.watchRoomSharedMeta.text = "Shared by ${shared.sharedBy ?: "Room"}"
+        if (shared == null) return
+        binding.watchRoomSharedTitle.text = buildString {
+            append(shared.mediaTitle.ifBlank { "Shared Video" })
+            if (shared.episodeLabel.isNotBlank()) append(" — ${shared.episodeLabel}")
         }
+        binding.watchRoomSharedMeta.text = "Shared by ${shared.sharedBy ?: "Room"}"
+    }
 
+    private fun renderParticipantsList(st: WatchRoomState) {
         binding.watchRoomMembersList.removeAllViews()
         if (st.participants.isEmpty() && st.isConnected) {
-            val tv = TextView(this).apply {
-                text = "• ${st.username} (You)"
-                textSize = 13f
-                setPadding(0, 6, 0, 6)
-            }
-            binding.watchRoomMembersList.addView(tv)
-        } else {
-            st.participants.forEach { p ->
-                val tv = TextView(this).apply {
-                    val roleTag = when (p.role) {
-                        TogetherRole.HOST -> " [Host]"
-                        TogetherRole.GUEST -> " [Guest]"
-                        null -> ""
-                    }
-                    val readyTag = when (p.isReady) {
-                        true -> " ✓"
-                        false -> " (paused)"
-                        null -> ""
-                    }
-                    val selfTag = if (p.username == st.username) " (You)" else ""
-                    text = "• ${p.username}$selfTag$roleTag$readyTag"
-                    textSize = 13f
-                    setPadding(0, 6, 0, 6)
-                }
-                binding.watchRoomMembersList.addView(tv)
-            }
+            binding.watchRoomMembersList.addView(createMemberLabel("• ${st.username} (You)"))
+            return
         }
+        st.participants.forEach { p ->
+            binding.watchRoomMembersList.addView(createMemberLabel(formatParticipantLine(p, st.username)))
+        }
+    }
 
-        binding.watchRoomChatLog.text = st.messages.takeLast(30).joinToString("\n") { msg ->
-            if (msg.isSystem) "[System] ${msg.text}" else "${msg.sender}: ${msg.text}"
-        }.ifBlank { "No messages yet." }
+    private fun formatParticipantLine(p: SyncplayParticipant, selfUsername: String): String {
+        val roleTag = when (p.role) {
+            TogetherRole.HOST -> " [Host]"
+            TogetherRole.GUEST -> " [Guest]"
+            null -> ""
+        }
+        val readyTag = when (p.isReady) {
+            true -> " ✓"
+            false -> " (paused)"
+            null -> ""
+        }
+        val selfTag = if (p.username == selfUsername) " (You)" else ""
+        return "• ${p.username}$selfTag$roleTag$readyTag"
+    }
+
+    private fun createMemberLabel(label: String): TextView = TextView(this).apply {
+        text = label
+        textSize = 13f
+        setPadding(0, 6, 0, 6)
     }
 
     companion object {

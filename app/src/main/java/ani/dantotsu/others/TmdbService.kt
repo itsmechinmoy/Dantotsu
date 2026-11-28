@@ -209,7 +209,7 @@ object TmdbService {
                 val candTokens = normCand.split(' ').filter { it.length > 1 }.toSet()
                 val overlap = queryTokens.intersect(candTokens).size
                 if (queryTokens.isNotEmpty() && overlap > 0) {
-                    score += (overlap * 40) / maxOf(queryTokens.size, candTokens.size)
+                    score += overlap * 40 / maxOf(queryTokens.size, candTokens.size)
                 }
             }
         }

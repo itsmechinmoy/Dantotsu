@@ -403,49 +403,55 @@ object WatchRoomManager {
         }
         val bridge = playerBridge ?: return
         if (!bridge.isPlayerReady()) return
-        val selfName = _state.value.username
-        if (update.setBy == selfName && !update.doSeek) return
+        if (update.setBy == _state.value.username && !update.doSeek) return
         if (update.hasClientIgnoring || update.hasServerIgnoring) return
-
-        val remotePaused = update.paused
-        val remotePosSec = update.positionSec
 
         scope.launch(Dispatchers.Main) {
             suppressOutgoingUntilMs = System.currentTimeMillis() + SUPPRESS_SYNC_MS
-
-            if (remotePaused != null && remotePaused != bridge.isPlayerPaused()) {
-                if (remotePaused) bridge.syncPause() else bridge.syncPlay()
-            }
-
-            if (remotePosSec != null) {
-                val compensatedSec = if (remotePaused == false) {
-                    remotePosSec + (_state.value.rttMs / 2000.0)
-                } else {
-                    remotePosSec
-                }
-                val targetMs = (compensatedSec * 1000.0).toLong().coerceAtLeast(0L)
-                val localMs = bridge.getCurrentPositionMs()
-                val diffMs = abs(targetMs - localMs)
-
-                when {
-                    update.doSeek || diffMs > 2500L -> {
-                        if (speedBoostedDown) {
-                            bridge.syncPlaybackSpeed(bridge.getDefaultPlaybackSpeed())
-                            speedBoostedDown = false
-                        }
-                        bridge.syncSeekTo(targetMs)
-                    }
-                    // Gently slow down if slightly ahead (500ms-2500ms) like Syncplay/Dartotsu
-                    localMs - targetMs in 500L..2500L && remotePaused == false -> {
-                        bridge.syncPlaybackSpeed(0.95f)
-                        speedBoostedDown = true
-                    }
-                    speedBoostedDown -> {
-                        bridge.syncPlaybackSpeed(bridge.getDefaultPlaybackSpeed())
-                        speedBoostedDown = false
-                    }
-                }
+            applyRemotePlayState(bridge, update.paused)
+            update.positionSec?.let { posSec ->
+                applyRemotePosition(bridge, posSec, update.paused, update.doSeek)
             }
         }
+    }
+
+    private fun applyRemotePlayState(bridge: WatchRoomPlayerBridge, remotePaused: Boolean?) {
+        if (remotePaused == null || remotePaused == bridge.isPlayerPaused()) return
+        if (remotePaused) bridge.syncPause() else bridge.syncPlay()
+    }
+
+    private fun applyRemotePosition(
+        bridge: WatchRoomPlayerBridge,
+        remotePosSec: Double,
+        remotePaused: Boolean?,
+        doSeek: Boolean
+    ) {
+        val compensatedSec = if (remotePaused == false) {
+            remotePosSec + _state.value.rttMs / 2000.0
+        } else {
+            remotePosSec
+        }
+        val targetMs = (compensatedSec * 1000.0).toLong().coerceAtLeast(0L)
+        val localMs = bridge.getCurrentPositionMs()
+        val diffMs = abs(targetMs - localMs)
+
+        when {
+            doSeek || diffMs > 2500L -> {
+                resetSyncSpeed(bridge)
+                bridge.syncSeekTo(targetMs)
+            }
+            // Gently slow down if slightly ahead (500ms-2500ms) like Syncplay/Dartotsu
+            localMs - targetMs in 500L..2500L && remotePaused == false -> {
+                bridge.syncPlaybackSpeed(0.95f)
+                speedBoostedDown = true
+            }
+            else -> resetSyncSpeed(bridge)
+        }
+    }
+
+    private fun resetSyncSpeed(bridge: WatchRoomPlayerBridge) {
+        if (!speedBoostedDown) return
+        bridge.syncPlaybackSpeed(bridge.getDefaultPlaybackSpeed())
+        speedBoostedDown = false
     }
 }

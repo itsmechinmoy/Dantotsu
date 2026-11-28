@@ -393,7 +393,7 @@ class SyncplayClient {
     }
 
     private fun handleListPacket(listObj: JsonObject) {
-        val roomMembers = (listObj[currentRoom] as? JsonObject) ?: return
+        val roomMembers = listObj[currentRoom] as? JsonObject ?: return
         val updated = linkedMapOf<String, SyncplayParticipant>()
         roomMembers.forEach { (name, value) ->
             val obj = value as? JsonObject ?: return@forEach
