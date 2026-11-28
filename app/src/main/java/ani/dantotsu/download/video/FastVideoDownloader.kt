@@ -5,9 +5,9 @@ import android.net.Uri
 import androidx.core.net.toUri
 import ani.dantotsu.media.anime.player.PlayerSubtitleManager
 import ani.dantotsu.util.Logger
-import com.antonkarpenko.ffmpegkit.FFmpegKit
-import com.antonkarpenko.ffmpegkit.FFmpegKitConfig
-import com.antonkarpenko.ffmpegkit.FFprobeKit
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.FFmpegKitConfig
+import com.arthenica.ffmpegkit.FFprobeKit
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
@@ -329,11 +329,11 @@ class FastVideoDownloader(
             val session = FFmpegKit.executeWithArgumentsAsync(
                 args,
                 { completed ->
-                    if (completed.returnCode?.isValueSuccess == true) {
+                    if (completed.getReturnCode()?.isValueSuccess() == true) {
                         cont.resume(Unit)
                     } else {
                         cont.resumeWithException(
-                            IllegalStateException("FFmpeg remux failed rc=${completed.returnCode}: ${completed.failStackTrace ?: completed.allLogsAsString}"),
+                            IllegalStateException("FFmpeg remux failed rc=${completed.getReturnCode()}: ${completed.getFailStackTrace() ?: completed.getAllLogsAsString()}"),
                         )
                     }
                 },
@@ -356,7 +356,7 @@ class FastVideoDownloader(
         return runCatching {
             val args = FFmpegKitConfig.parseArguments("-v error -hide_banner -show_entries format=duration -of csv=\"p=0\" $videoInput")
             val session = FFprobeKit.executeWithArguments(args)
-            session.output?.lines()?.map { it.trim() }?.firstOrNull { it.toDoubleOrNull() != null }?.toDoubleOrNull()
+            session.getOutput()?.lines()?.map { it.trim() }?.firstOrNull { it.toDoubleOrNull() != null }?.toDoubleOrNull()
         }.getOrNull()
     }
 

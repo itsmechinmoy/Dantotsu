@@ -291,7 +291,7 @@ class AnimeFragment : Fragment() {
             animePageAdapter.updateAvatar()
         }
         var running = false
-        val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(false) }
+        val live = Refresh.activity.getOrPut(this.hashCode()) { MutableLiveData(true) }
         live.observe(viewLifecycleOwner) {
             if (it && !running) {
                 running = true

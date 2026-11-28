@@ -392,6 +392,15 @@
                         android:orientation="horizontal">
 
                         <ImageButton
+                            android:id="@+id/exo_together"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:backgroundTint="#00FFFFFF"
+                            android:src="@drawable/ic_round_groups_24"
+                            app:tint="#fff"
+                            tools:ignore="ContentDescription,SpeakableTextPresentCheck" />
+
+                        <ImageButton
                             android:id="@id/exo_playback_speed"
                             android:layout_width="48dp"
                             android:layout_height="48dp"

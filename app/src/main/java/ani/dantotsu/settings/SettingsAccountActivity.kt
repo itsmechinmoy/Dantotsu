@@ -245,7 +245,7 @@ object AccountsScreen : SettingsScreen("accounts", R.string.accounts, R.drawable
         // Signed out, every row in this section is hidden, so ScreenItems drops the heading too.
         Section(R.string.settings_section_preferences, listOf(
             switchRow(PrefName.rpcEnabled, R.string.enable_rpc, R.string.enable_rpc_desc, R.drawable.interests_24,
-                visible = { loggedIn() && currContext()?.let { RPCManager.isAvailable(it) } == true }),
+                visible = { currContext()?.let { RPCManager.isAvailable(it) } == true }),
             actionRow("anilist_settings", R.string.anilist_settings, R.string.alsettings_desc, R.drawable.ic_anilist,
                 opensScreen = true, visible = loggedIn,
                 // AniList's own settings live on that screen; search finds them through this row.

@@ -76,7 +76,7 @@ class AnilistQueries {
             HomePageCache::class.java
         ) ?: return null
         val ageMs = System.currentTimeMillis() - cached.cachedAt
-        if (ageMs < 0L || ageMs > 3 * 60 * 60 * 1000L) return null
+        if (ageMs < 0L || ageMs > 24 * 60 * 60 * 1000L) return null
         return cached.data to ageMs
     }
 
@@ -1223,7 +1223,7 @@ fun userMediaDetails(media: Media): Media {
             "{${parts.joinToString(" ")}}",
             cacheSpec = AnilistCacheSpec(
                 category = AnilistCacheCategory.BANNERS,
-                freshTtlMs = 6 * 60 * 60_000L,
+                freshTtlMs = 24 * 60 * 60_000L,
             )
         )
 
@@ -1961,8 +1961,8 @@ fun userMediaDetails(media: Media): Media {
         val key = "anime_tab:onList=$onList:adult=${getPreference(PrefName.AdultOnly)}:inc=${getPreference(PrefName.IncludeAnimeList)}:recOnly=${getPreference(PrefName.RecentlyListOnly)}:season=$season-$year"
         return AnilistCacheSpec(
             category = AnilistCacheCategory.CATALOG,
-            freshTtlMs = 5 * 60_000L,
-            maxStaleTtlMs = 30 * 60_000L,
+            freshTtlMs = 24 * 60 * 60_000L,
+            maxStaleTtlMs = 24 * 60 * 60_000L,
             persistToDisk = true,
             cacheKeyOverride = key,
         )
@@ -1972,8 +1972,8 @@ fun userMediaDetails(media: Media): Media {
         val key = "manga_tab:onList=$onList:adult=${getPreference(PrefName.AdultOnly)}:inc=${getPreference(PrefName.IncludeMangaList)}"
         return AnilistCacheSpec(
             category = AnilistCacheCategory.CATALOG,
-            freshTtlMs = 5 * 60_000L,
-            maxStaleTtlMs = 30 * 60_000L,
+            freshTtlMs = 24 * 60 * 60_000L,
+            maxStaleTtlMs = 24 * 60 * 60_000L,
             persistToDisk = true,
             cacheKeyOverride = key,
         )

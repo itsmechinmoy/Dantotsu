@@ -30,14 +30,22 @@ import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.GenresViewModel
 import ani.dantotsu.copyToClipboard
 import ani.dantotsu.currActivity
+import ani.dantotsu.getThemeColor
 import ani.dantotsu.databinding.ActivityGenreBinding
 import ani.dantotsu.databinding.FragmentMediaInfoBinding
 import ani.dantotsu.databinding.ItemChipBinding
+import ani.dantotsu.databinding.ItemMediaThemesBinding
 import ani.dantotsu.databinding.ItemQuelsBinding
+import ani.dantotsu.databinding.ItemThemeSongBinding
 import ani.dantotsu.databinding.ItemTitleChipgroupBinding
 import ani.dantotsu.databinding.ItemTitleRecyclerBinding
 import ani.dantotsu.databinding.ItemTitleTextBinding
 import ani.dantotsu.databinding.ItemTitleTrailerBinding
+import ani.dantotsu.media.anime.MpvPlayerActivity
+import ani.dantotsu.others.AnimeThemeTrack
+import ani.dantotsu.others.AnimeThemeVideo
+import ani.dantotsu.others.AnimeThemesRepository
+import ani.dantotsu.openLinkInCustomTab
 import ani.dantotsu.displayTimer
 import ani.dantotsu.isOnline
 import ani.dantotsu.loadImage
@@ -616,67 +624,215 @@ class MediaInfoFragment : Fragment() {
         parent.addView(bind.root)
     }
 
-    private fun makeYoutubeThemeLink(a: String): String {
-        val first = a.indexOf('"').let { if (it != -1) it else return a } + 1
-        val end = a.indexOf('"', first).let { if (it != -1) it else return a }
-        val name = a.subSequence(first, end).toString()
-        return "${a.subSequence(0, first)}" +
-                "[$name](https://www.youtube.com/results?search_query=${
-                    URLEncoder.encode(
-                        name,
-                        "utf-8"
-                    )
-                })" +
-                "${a.subSequence(end, a.length)}"
-    }
-
-    private fun setupThemeTextView(textView: TextView, arr: ArrayList<String>, markWon: Markwon) {
-        var op = ""
-        arr.forEach {
-            op += "\n"
-            op += makeYoutubeThemeLink(it)
-        }
-        op = op.removePrefix("\n")
-        textView.setOnClickListener {
-            if (textView.maxLines == 4) {
-                ObjectAnimator.ofInt(textView, "maxLines", 100).setDuration(950).start()
-            } else {
-                ObjectAnimator.ofInt(textView, "maxLines", 4).setDuration(400).start()
-            }
-        }
-        markWon.setMarkdown(textView, op)
-    }
-
     private fun bindThemes(media: Media, parent: ViewGroup, offline: Boolean) {
         val anime = media.anime ?: return
-        if ((anime.op.isEmpty() && anime.ed.isEmpty()) || offline) return
+        if (offline) return
 
-        val markWon = Markwon.builder(requireContext())
-            .usePlugin(SoftBreakAddsNewLinePlugin.create()).build()
+        val containerBind = ItemMediaThemesBinding.inflate(
+            LayoutInflater.from(context),
+            parent,
+            false
+        )
+        containerBind.root.tag = "dynamic_view"
+        containerBind.root.visibility = View.GONE
+        parent.addView(containerBind.root)
 
-        if (anime.op.isNotEmpty()) {
-            val bind = ItemTitleTextBinding.inflate(
-                LayoutInflater.from(context),
-                parent,
-                false
-            )
-            bind.itemTitle.setText(R.string.opening)
-            setupThemeTextView(bind.itemText, anime.op, markWon)
-            bind.root.tag = "dynamic_view"
-            parent.addView(bind.root)
+        val anchorMediaId = media.id
+        viewLifecycleOwner.lifecycleScope.launch {
+            val collection = AnimeThemesRepository.getThemes(media)
+            val currentBinding = _binding ?: return@launch
+            if (!isAdded || currentBinding.mediaInfoContainer.indexOfChild(containerBind.root) < 0) return@launch
+            if (collection.themes.isEmpty() || media.id != anchorMediaId) {
+                containerBind.root.visibility = View.GONE
+                return@launch
+            }
+
+            containerBind.root.visibility = View.VISIBLE
+            bindThemesExternalButton(containerBind, collection.animeSlug ?: anime.slug, media.idMAL)
+            setupThemesListState(containerBind, media, collection.themes)
+        }
+    }
+
+    private fun bindThemesExternalButton(
+        containerBind: ItemMediaThemesBinding,
+        slug: String?,
+        malId: Int?
+    ) {
+        val externalUrl = when {
+            !slug.isNullOrBlank() -> "https://animethemes.moe/anime/$slug"
+            malId != null -> "https://myanimelist.net/anime/$malId"
+            else -> null
+        } ?: return
+        containerBind.themesExternalButton.visibility = View.VISIBLE
+        containerBind.themesExternalButton.setSafeOnClickListener {
+            openLinkInCustomTab(externalUrl)
+        }
+    }
+
+    private fun setupThemesListState(
+        containerBind: ItemMediaThemesBinding,
+        media: Media,
+        allThemes: List<AnimeThemeTrack>
+    ) {
+        val selectedVersions = mutableMapOf<String, AnimeThemeVideo?>()
+        var expanded = false
+
+        fun refresh() {
+            val ctx = context ?: return
+            val inflater = LayoutInflater.from(ctx)
+            val visibleThemes = if (expanded || allThemes.size <= 4) allThemes else allThemes.take(4)
+
+            containerBind.themesListContainer.removeAllViews()
+            visibleThemes.forEach { track ->
+                val row = createThemeSongRow(
+                    inflater = inflater,
+                    parent = containerBind.themesListContainer,
+                    ctx = ctx,
+                    track = track,
+                    onPlay = { launchThemeTrack(media, track, selectedVersions[track.slug]) },
+                    onShowMenu = { anchor ->
+                        showThemeTrackMenu(anchor, media, track, selectedVersions) { vid, audioOnly ->
+                            selectedVersions[track.slug] = vid
+                            launchThemeTrack(media, track, vid, audioOnly)
+                        }
+                    }
+                )
+                containerBind.themesListContainer.addView(row)
+            }
+
+            bindThemesExpandButton(containerBind, allThemes.size, expanded) {
+                expanded = !expanded
+                refresh()
+            }
         }
 
-        if (anime.ed.isNotEmpty()) {
-            val bind = ItemTitleTextBinding.inflate(
-                LayoutInflater.from(context),
-                parent,
-                false
-            )
-            bind.itemTitle.setText(R.string.ending)
-            setupThemeTextView(bind.itemText, anime.ed, markWon)
-            bind.root.tag = "dynamic_view"
-            parent.addView(bind.root)
+        refresh()
+    }
+
+    private fun createThemeSongRow(
+        inflater: LayoutInflater,
+        parent: ViewGroup,
+        ctx: Context,
+        track: AnimeThemeTrack,
+        onPlay: () -> Unit,
+        onShowMenu: (View) -> Unit
+    ): View {
+        val row = ItemThemeSongBinding.inflate(inflater, parent, false)
+        row.themeTypeBadge.text = track.slug
+        val isEd = track.type == "ED"
+        val badgeBgAttr = if (isEd) {
+            com.google.android.material.R.attr.colorSecondaryContainer
+        } else {
+            com.google.android.material.R.attr.colorPrimaryContainer
         }
+        val badgeFgAttr = if (isEd) {
+            com.google.android.material.R.attr.colorOnSecondaryContainer
+        } else {
+            com.google.android.material.R.attr.colorOnPrimaryContainer
+        }
+        row.themeTypeBadge.backgroundTintList = android.content.res.ColorStateList.valueOf(
+            ctx.getThemeColor(badgeBgAttr)
+        )
+        row.themeTypeBadge.setTextColor(ctx.getThemeColor(badgeFgAttr))
+        row.themeSongTitle.text = track.songTitle
+
+        val subtitleParts = buildList {
+            track.artist?.takeIf { it.isNotBlank() }?.let { add(it) }
+            track.primaryEpisodes?.let { add("eps $it") }
+            if (track.hasSpoiler) add("Spoiler")
+        }
+        row.themeSubtitle.text = subtitleParts.joinToString(" · ")
+        row.themeSubtitle.isVisible = subtitleParts.isNotEmpty()
+
+        val hasVariants = track.entries.sumOf { it.videos.size } > 1 || track.primaryVideo?.audioUrl != null
+        row.themeMoreButton.isVisible = hasVariants
+        row.themeMoreButton.setSafeOnClickListener { onShowMenu(row.themeMoreButton) }
+        row.themePlayButton.setSafeOnClickListener { onPlay() }
+        row.root.setSafeOnClickListener { onPlay() }
+        row.root.setOnLongClickListener {
+            onShowMenu(row.root)
+            true
+        }
+        return row.root
+    }
+
+    private fun bindThemesExpandButton(
+        containerBind: ItemMediaThemesBinding,
+        totalCount: Int,
+        expanded: Boolean,
+        onToggle: () -> Unit
+    ) {
+        if (totalCount <= 4) {
+            containerBind.themesToggleExpandButton.visibility = View.GONE
+            return
+        }
+        containerBind.themesToggleExpandButton.visibility = View.VISIBLE
+        containerBind.themesToggleExpandButton.text = if (expanded) {
+            getString(R.string.show_less)
+        } else {
+            getString(R.string.show_all_count, totalCount)
+        }
+        containerBind.themesToggleExpandButton.setSafeOnClickListener { onToggle() }
+    }
+
+    private fun launchThemeTrack(
+        media: Media,
+        track: AnimeThemeTrack,
+        selectedVideo: AnimeThemeVideo?,
+        audioOnly: Boolean = false
+    ) {
+        val vid = selectedVideo ?: track.primaryVideo
+        val streamUrl = if (audioOnly) vid?.audioUrl else vid?.link ?: vid?.audioUrl
+        if (streamUrl.isNullOrBlank()) {
+            openLinkInCustomTab(AnimeThemesRepository.buildYoutubeSearchUrl(track, media.userPreferredName))
+            return
+        }
+        val label = buildString {
+            append("${track.slug}: ${track.songTitle}")
+            if (!track.artist.isNullOrBlank()) append(" — ${track.artist}")
+            if (audioOnly) append(" (Audio)")
+        }
+        MpvPlayerActivity.launchStandaloneStream(
+            context = requireContext(),
+            title = media.userPreferredName,
+            subtitle = label,
+            streamUrl = streamUrl,
+            coverUrl = media.cover
+        )
+    }
+
+    private fun showThemeTrackMenu(
+        anchor: View,
+        media: Media,
+        track: AnimeThemeTrack,
+        selectedVersions: Map<String, AnimeThemeVideo?>,
+        onSelect: (AnimeThemeVideo, Boolean) -> Unit
+    ) {
+        val popup = android.widget.PopupMenu(requireContext(), anchor)
+        val items = mutableListOf<Pair<AnimeThemeVideo, Boolean>>()
+        track.entries.forEachIndexed { entryIdx, entry ->
+            val vPrefix = entry.version?.let { "v$it" } ?: "v${entryIdx + 1}"
+            entry.videos.forEach { vid ->
+                val menuItem = popup.menu.add(0, items.size, items.size, "$vPrefix · ${vid.label}")
+                items.add(vid to false)
+                menuItem.isChecked = selectedVersions[track.slug] == vid
+                if (!vid.audioUrl.isNullOrBlank()) {
+                    popup.menu.add(0, items.size, items.size, "$vPrefix Audio only")
+                    items.add(vid to true)
+                }
+            }
+        }
+        val ytIndex = items.size
+        popup.menu.add(0, ytIndex, ytIndex, getString(R.string.search_on_youtube))
+        popup.setOnMenuItemClickListener { item ->
+            if (item.itemId == ytIndex) {
+                openLinkInCustomTab(AnimeThemesRepository.buildYoutubeSearchUrl(track, media.userPreferredName))
+            } else {
+                items.getOrNull(item.itemId)?.let { (vid, audioOnly) -> onSelect(vid, audioOnly) }
+            }
+            true
+        }
+        popup.show()
     }
 
     private fun bindGenres(media: Media, parent: ViewGroup, screenWidth: Float, offline: Boolean) {

@@ -83,9 +83,16 @@ import ani.dantotsu.parsers.AnimeSources
 import ani.dantotsu.parsers.HAnimeSources
 import ani.dantotsu.parsers.StreamTypeDetector
 import ani.dantotsu.parsers.Subtitle
+import ani.dantotsu.parsers.SubtitleType
 import ani.dantotsu.parsers.Video
+import ani.dantotsu.parsers.VideoContainer
 import ani.dantotsu.parsers.VideoExtractor
+import ani.dantotsu.parsers.VideoServer
 import ani.dantotsu.parsers.VideoType
+import ani.dantotsu.together.TogetherStream
+import ani.dantotsu.together.WatchRoomBottomSheet
+import ani.dantotsu.together.WatchRoomManager
+import ani.dantotsu.together.WatchRoomPlayerBridge
 import ani.dantotsu.settings.PlayerSettingsActivity
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
@@ -152,6 +159,7 @@ class MpvPlayerActivity : AppCompatActivity() {
     private lateinit var exoSkipOpEd: ImageButton
     private lateinit var exoPip: ImageButton
     private lateinit var exoScreenshot: ImageButton
+    private lateinit var exoTogether: ImageButton
     private lateinit var screenshotManager: PlayerScreenshotManager
     private lateinit var exoBrightness: Slider
     private lateinit var exoVolume: Slider
@@ -199,6 +207,56 @@ class MpvPlayerActivity : AppCompatActivity() {
     private var rotation = 0
     private var wasPlaying = false
     private var wasPlayingOnPause = false
+    private var isStandaloneMode = false
+    private var isTogetherStreamMode = false
+
+    private val watchRoomBridge = object : WatchRoomPlayerBridge {
+        override fun isPlayerReady(): Boolean = this@MpvPlayerActivity::playerManager.isInitialized && playerManager.isInitialized
+        override fun getCurrentPositionMs(): Long = if (isPlayerReady()) playerManager.mpvView.currentPosition.value else 0L
+        override fun isPlayerPaused(): Boolean = if (isPlayerReady()) !playerManager.mpvView.playWhenReady else true
+        override fun syncPlay() {
+            if (isPlayerReady()) playerManager.play()
+        }
+        override fun syncPause() {
+            if (isPlayerReady()) playerManager.pause()
+        }
+        override fun syncSeekTo(positionMs: Long) {
+            if (isPlayerReady()) playerManager.seekTo(positionMs)
+        }
+        override fun syncPlaybackSpeed(speed: Float) {
+            if (isPlayerReady()) playerManager.setPlaybackSpeed(speed)
+        }
+        override fun getDefaultPlaybackSpeed(): Float = resolvePlaybackSpeed()
+        override fun getCurrentShareableStream(): TogetherStream? {
+            if (isStandaloneMode && !isTogetherStreamMode) return null
+            val currentVideo = video ?: return null
+            val rawUrl = currentVideo.file.url
+            val shareUrl = if (TogetherStream.isValidShareUrl(rawUrl)) {
+                rawUrl
+            } else {
+                val magnetCandidate = episode.extra?.get("torrentUrl")
+                    ?: extractor?.videos?.getOrNull(episode.selectedVideo)?.file?.url
+                magnetCandidate?.takeIf { TogetherStream.isValidShareUrl(it) } ?: return null
+            }
+            val headers = currentVideo.file.headers.filterKeys {
+                it.equals("Referer", ignoreCase = true) ||
+                    it.equals("Origin", ignoreCase = true) ||
+                    it.equals("User-Agent", ignoreCase = true)
+            }
+            val subs = extractor?.subtitles.orEmpty().mapNotNull { sub ->
+                sub.file.url.takeIf { TogetherStream.isValidShareUrl(it) }?.let { url ->
+                    ani.dantotsu.together.TogetherSubtitle(url = url, language = sub.language)
+                }
+            }
+            return TogetherStream(
+                mediaTitle = media.userPreferredName,
+                episodeLabel = "Episode $currentEpisodeNumber",
+                videoUrl = shareUrl,
+                headers = headers,
+                subtitles = subs
+            )
+        }
+    }
 
     private fun isInPipMode(): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
@@ -251,6 +309,114 @@ class MpvPlayerActivity : AppCompatActivity() {
         const val ACTION_PIP_PLAY_PAUSE = "ani.dantotsu.PIP_PLAY_PAUSE"
         const val ACTION_PIP_SKIP = "ani.dantotsu.PIP_SKIP"
         const val ACTION_PIP_NEXT_EP = "ani.dantotsu.PIP_NEXT_EP"
+        const val EXTRA_STANDALONE_MODE = "standalone_mode"
+        const val EXTRA_TOGETHER_MODE = "together_mode"
+
+        fun launchStandaloneStream(
+            context: Context,
+            title: String,
+            subtitle: String,
+            streamUrl: String,
+            headers: Map<String, String> = emptyMap(),
+            coverUrl: String? = null
+        ) {
+            launchDirectPlayback(
+                context = context,
+                title = title,
+                episodeLabel = "1",
+                subtitle = subtitle,
+                streamUrl = streamUrl,
+                headers = headers,
+                subtitles = emptyList(),
+                coverUrl = coverUrl,
+                isTogether = false
+            )
+        }
+
+        fun launchTogetherStream(context: Context, stream: TogetherStream) {
+            val mappedSubs = stream.subtitles.map { sub ->
+                val subType = when {
+                    sub.url.contains(".ass", ignoreCase = true) || sub.url.contains(".ssa", ignoreCase = true) -> SubtitleType.ASS
+                    sub.url.contains(".srt", ignoreCase = true) -> SubtitleType.SRT
+                    else -> SubtitleType.VTT
+                }
+                Subtitle(sub.language, FileUrl(sub.url), subType)
+            }
+            launchDirectPlayback(
+                context = context,
+                title = stream.mediaTitle.ifBlank { "WatchRoom" },
+                episodeLabel = stream.episodeLabel.ifBlank { "1" },
+                subtitle = stream.episodeLabel,
+                streamUrl = stream.videoUrl,
+                headers = stream.headers,
+                subtitles = mappedSubs,
+                coverUrl = null,
+                isTogether = true
+            )
+        }
+
+        private fun launchDirectPlayback(
+            context: Context,
+            title: String,
+            episodeLabel: String,
+            subtitle: String,
+            streamUrl: String,
+            headers: Map<String, String>,
+            subtitles: List<Subtitle>,
+            coverUrl: String?,
+            isTogether: Boolean
+        ) {
+            val streamFormat = when {
+                streamUrl.contains(".m3u8", ignoreCase = true) -> VideoType.M3U8
+                streamUrl.contains(".mpd", ignoreCase = true) -> VideoType.DASH
+                else -> VideoType.CONTAINER
+            }
+            val video = Video(
+                quality = null,
+                format = streamFormat,
+                file = FileUrl(streamUrl, headers),
+                preferred = true
+            )
+            val extractor = object : VideoExtractor() {
+                override val server = VideoServer(
+                    name = if (isTogether) "WatchRoom" else "Theme",
+                    embed = FileUrl(streamUrl, headers)
+                )
+                override suspend fun extract(): VideoContainer = VideoContainer(listOf(video), subtitles)
+            }.apply {
+                videos = listOf(video)
+                this.subtitles = subtitles
+            }
+            val ep = Episode(
+                number = episodeLabel,
+                title = subtitle,
+                selectedExtractor = extractor.server.name,
+                selectedVideo = 0,
+                allStreams = true,
+                extractors = mutableListOf(extractor)
+            )
+            media = Media(
+                id = -1,
+                name = title,
+                nameRomaji = title,
+                userPreferredName = title,
+                cover = coverUrl,
+                isAdult = false,
+                anime = Anime(
+                    totalEpisodes = 1,
+                    selectedEpisode = episodeLabel,
+                    episodes = mutableMapOf(episodeLabel to ep)
+                )
+            )
+            initialized = true
+            targetStartPosition = 0L
+            context.startActivity(
+                Intent(context, MpvPlayerActivity::class.java).apply {
+                    putExtra(EXTRA_STANDALONE_MODE, true)
+                    putExtra(EXTRA_TOGETHER_MODE, isTogether)
+                }
+            )
+        }
     }
 
     override fun onAttachedToWindow() {
@@ -278,6 +444,9 @@ class MpvPlayerActivity : AppCompatActivity() {
             finish()
             return
         }
+
+        isStandaloneMode = intent.getBooleanExtra(EXTRA_STANDALONE_MODE, false)
+        isTogetherStreamMode = intent.getBooleanExtra(EXTRA_TOGETHER_MODE, false)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode =
@@ -319,6 +488,7 @@ class MpvPlayerActivity : AppCompatActivity() {
         exoVolumeCont = playerView.findViewById(R.id.exo_volume_cont)
         exoPip = playerView.findViewById(R.id.exo_pip)
         exoScreenshot = playerView.findViewById(R.id.exo_screenshot)
+        exoTogether = playerView.findViewById(R.id.exo_together)
         exoSkipOpEd = playerView.findViewById(R.id.exo_skip_op_ed)
         exoSkip = playerView.findViewById(R.id.exo_skip)
         skipTimeButton = playerView.findViewById(R.id.exo_skip_timestamp)
@@ -377,7 +547,7 @@ class MpvPlayerActivity : AppCompatActivity() {
                 .into(exoPlay)
         }
         val mpv = playerManager.mpvView
-        if (initialized && this::episode.isInitialized) {
+        if (initialized && !isStandaloneMode && this::episode.isInitialized) {
             discordManager.updatePresence(media, episode, mpv, isPlaying)
         }
         updatePipActions(isPlaying)
@@ -447,6 +617,7 @@ class MpvPlayerActivity : AppCompatActivity() {
     }
 
     private fun handlePlaybackEnded() {
+        if (isStandaloneMode) return
         progressManager.updateAniProgress(forceComplete = true)
         if (PrefManager.getVal<Boolean>(PrefName.AutoPlay)) {
             if (interacted) {
@@ -463,7 +634,7 @@ class MpvPlayerActivity : AppCompatActivity() {
         val mpv = playerManager.mpvView
         val duration = mpv.duration.value
         val selEp = media.anime?.selectedEpisode
-        if (selEp != null && duration > 0L) {
+        if (!isStandaloneMode && selEp != null && duration > 0L) {
             PrefManager.setCustomVal("${media.id}_${selEp}_max", duration)
             val cleanEp = MediaNameAdapter.findEpisodeNumber(selEp)?.let {
                 if (it % 1 == 0f) it.toInt().toString() else it.toString()
@@ -635,9 +806,11 @@ class MpvPlayerActivity : AppCompatActivity() {
                     Glide.with(this).load(R.drawable.anim_play_to_pause).into(exoPlay)
                     mpv.pause()
                     castManager.pause()
+                    WatchRoomManager.notifyLocalPlayPause(true, mpv.currentPosition.value)
                 } else {
                     Glide.with(this).load(R.drawable.anim_pause_to_play).into(exoPlay)
                     mpv.play()
+                    WatchRoomManager.notifyLocalPlayPause(false, mpv.currentPosition.value)
                 }
             }
         }
@@ -698,6 +871,13 @@ class MpvPlayerActivity : AppCompatActivity() {
             }
         } else {
             exoSkip.visibility = View.GONE
+        }
+
+        exoTogether.isVisible = !isStandaloneMode || isTogetherStreamMode
+        exoTogether.setOnClickListener {
+            WatchRoomBottomSheet
+                .newInstance(media.userPreferredName, inPlayer = true)
+                .show(supportFragmentManager, "WatchRoomBottomSheet")
         }
 
         gestureManager.initGestures()
@@ -817,6 +997,10 @@ class MpvPlayerActivity : AppCompatActivity() {
     }
 
     private fun resolveEpisodeResumePosition(epKey: String?, epNumber: String, currentPos: Long?): Long {
+        if (isStandaloneMode) {
+            if (playerManager.isInitialized) releasePlayer()
+            return 0L
+        }
         val key = epKey ?: epNumber
         if (playerManager.isInitialized) {
             releasePlayer()
@@ -860,8 +1044,10 @@ class MpvPlayerActivity : AppCompatActivity() {
             aniSkipManager.resetForNewEpisode()
             initPlayer()
             changingServer = false
-            progressManager.startTracking()
-            aniSkipManager.startTracking()
+            if (!isStandaloneMode) {
+                progressManager.startTracking()
+                aniSkipManager.startTracking()
+            }
             if (!ep.allStreams) {
                 lifecycleScope.launch(Dispatchers.IO) {
                     val sourceIndex = media.selected?.sourceIndex ?: 0
@@ -964,6 +1150,15 @@ class MpvPlayerActivity : AppCompatActivity() {
     }
 
     private fun initEpisodeProgressAndLaunch() {
+        if (isStandaloneMode) {
+            val selectedEpKey = media.anime?.selectedEpisode ?: episodeArr.firstOrNull()
+            val initialEp = selectedEpKey?.let { episodes[it] } ?: episodes.values.firstOrNull() ?: return
+            exoNext.visibility = View.GONE
+            exoPrev.visibility = View.GONE
+            exoSkipOpEd.visibility = View.GONE
+            model.setEpisode(initialEp, "invoke")
+            return
+        }
         val incognito = PrefManager.getVal<Boolean>(PrefName.Incognito)
         val showProgressDialog = if (PrefManager.getVal(PrefName.AskIndividualPlayer)) {
             PrefManager.getCustomVal("${media.id}_progressDialog", true)
@@ -1034,6 +1229,7 @@ class MpvPlayerActivity : AppCompatActivity() {
     }
 
     private fun recordAnimeContinuation(selEp: String) {
+        if (isStandaloneMode) return
         media.anime!!.selectedEpisode = selEp
         PrefManager.setCustomVal("${media.id}_current_ep", selEp)
 
@@ -1101,7 +1297,7 @@ class MpvPlayerActivity : AppCompatActivity() {
     }
 
     private fun triggerOnlineEpisodeMapping() {
-        if (!isOnline(this)) return
+        if (isStandaloneMode || !isOnline(this)) return
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 if (media.idIMDB == null) media.idIMDB = IdMappers.getImdbId(media.id)
@@ -1237,6 +1433,12 @@ class MpvPlayerActivity : AppCompatActivity() {
         subtitleManager.applySubtitleStyles(customSubtitleView)
         subtitleManager.setupSubFormatting()
         progressManager.updateWidgetState(isExiting = false)
+        if (!isStandaloneMode || isTogetherStreamMode) {
+            WatchRoomManager.attachPlayer(
+                watchRoomBridge,
+                "${media.userPreferredName} - Episode $currentEpisodeNumber"
+            )
+        }
         checkSmartDownloadAnime(ext)
     }
 
@@ -1480,6 +1682,7 @@ class MpvPlayerActivity : AppCompatActivity() {
     }
 
     private fun checkAndLoadTimestamps() {
+        if (isStandaloneMode) return
         val mpv = playerManager.mpvView
         if (!aniSkipManager.isTimeStampsLoaded && PrefManager.getVal(PrefName.TimeStampsEnabled)) {
             val dur = mpv.duration.value
@@ -1773,6 +1976,14 @@ class MpvPlayerActivity : AppCompatActivity() {
             wasPlayingOnPause = false
             playerManager.play()
         }
+        if (initialized && this::episode.isInitialized && playerManager.isInitialized) {
+            discordManager.updatePresence(
+                media,
+                episode,
+                playerManager.mpvView,
+                playerManager.mpvView.isPlaying.value
+            )
+        }
     }
 
     override fun onPause() {
@@ -1791,7 +2002,7 @@ class MpvPlayerActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isInPictureInPictureMode) {
             playerManager.abandonAudioFocus()
         }
-        if (playerManager.isInitialized) {
+        if (playerManager.isInitialized && !isStandaloneMode) {
             val pos = playerManager.mpvView.currentPosition.value
             val selEp = media.anime?.selectedEpisode
             if (selEp != null) {
@@ -1815,6 +2026,7 @@ class MpvPlayerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        WatchRoomManager.detachPlayer(watchRoomBridge)
         torrentStartJob?.cancel()
         torrentStartJob = null
         livePlayers.decrementAndGet()
@@ -1843,7 +2055,9 @@ class MpvPlayerActivity : AppCompatActivity() {
         progressManager.stopTracking()
         try {
             if (playerManager.isInitialized) {
-                progressManager.updateAniProgress()
+                if (!isStandaloneMode) {
+                    progressManager.updateAniProgress()
+                }
                 val episodeId = "${media.id}-${media.anime?.selectedEpisode ?: ""}"
                 subtitleManager.clearTransientSubtitleCache(episodeId, media.id)
                 releasePlayer()

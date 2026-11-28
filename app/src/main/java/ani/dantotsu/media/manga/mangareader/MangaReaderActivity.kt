@@ -202,6 +202,9 @@ class MangaReaderActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         hideSystemBars()
+        if (::chapter.isInitialized) {
+            updateDiscordPresence(chapter)
+        }
         if (defaultSettings.autoScroll && ::binding.isInitialized && defaultSettings.layout != PAGED) {
             autoScrollHelper.speed = defaultSettings.autoScrollSpeed
             autoScrollHelper.attach(binding.mangaReaderRecycler, defaultSettings.direction)
@@ -605,7 +608,7 @@ class MangaReaderActivity : AppCompatActivity() {
         val context = this
         val offline: Boolean = PrefManager.getVal(PrefName.OfflineMode)
         val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
-        val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled)
+        val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled, true)
         if (RPCManager.shouldSuppressForAdultMedia(media.isAdult)) {
             RPCManager.clearPresence(context)
         } else if (isOnline(context) && !offline && !incognito && rpcenabled) {

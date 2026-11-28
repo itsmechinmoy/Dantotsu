@@ -162,7 +162,7 @@ class AnilistHomeViewModel : ViewModel() {
     fun getHidden(): LiveData<ArrayList<Media>> = hidden
 
     companion object {
-        private const val HOME_FRESH_TTL_MS = 2 * 60_000L
+        private const val HOME_FRESH_TTL_MS = 24 * 60 * 60 * 1000L
     }
 
     suspend fun initHomePage(forceRefresh: Boolean = false): Boolean {

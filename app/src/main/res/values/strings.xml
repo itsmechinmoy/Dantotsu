@@ -583,6 +583,14 @@
     <string name="rescue_mode_prompt_message">AniList seems to be disabled or unavailable. Would you like to enable Rescue Mode and use MAL/Jikan as a fallback? Your progress will be cached and synced back to AniList when it comes back online.</string>
     <string name="rescue_mode_enable">Enable Rescue Mode</string>
     <string name="rescue_mode_active">Rescue Mode Active (MAL)</string>
+    <string name="switch_service">Switch Service</string>
+    <string name="switch_service_label">Service: %1$s</string>
+    <string name="select_media_service">Select Media Service</string>
+    <string name="service_settings">Service settings</string>
+    <string name="signed_in">Signed in</string>
+    <string name="not_signed_in">Not signed in</string>
+    <string name="tracking_only">Tracking only</string>
+    <string name="tracking_only_hint">%1$s is used for tracking &amp; syncing</string>
     <string name="syncing_progress">Syncing %1$d pending updates to AniList…</string>
     <string name="syncing_deletions">Syncing %1$d pending deletions to AniList…</string>
     <string name="sync_complete">All progress synced to AniList!</string>
@@ -1586,4 +1594,15 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="online_subtitles_languages">Online Subtitle Languages</string>
     <string name="settings_section_filters">Video Filters</string>
     <string name="settings_section_timing">Timing and Sync</string>
+    <string name="themes">Themes</string>
+    <string name="open_on_animethemes">Open on AnimeThemes</string>
+    <string name="more_options">More options</string>
+    <string name="play">Play</string>
+    <string name="show_all_count">Show all (%d)</string>
+    <string name="show_less">Show less</string>
+    <string name="search_on_youtube">Search on YouTube</string>
+    <string name="watch_party">Watch Party</string>
+    <string name="watch_rooms">WatchRooms (Together)</string>
+    <string name="watch_rooms_desc">Create or join synchronized Syncplay watch parties</string>
+    <string name="send">Send</string>
 </resources>

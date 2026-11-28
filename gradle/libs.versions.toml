@@ -11,7 +11,7 @@ markwon = "4.6.2"
 groupie = "2.10.1"
 libtorrent4j = "2.1.0-39"
 shizuku = "13.1.5"
-ffmpeg-kit = "2.2.3"
+ffmpeg-kit = "1.0.0"
 nanohttpd = "2.3.1"
 metro = "1.6.0"
 metrox-viewmodel = "1.6.0"
@@ -34,7 +34,7 @@ desugar-jdk-libs = "2.1.5"
 [libraries]
 leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanary" }
 leakcanary-plumber = { module = "com.squareup.leakcanary:plumber-android", version.ref = "leakcanary" }
-ffmpeg-kit = { module = "com.antonkarpenko:ffmpeg-kit-https", version.ref = "ffmpeg-kit" }
+ffmpeg-kit = { module = "io.github.animiruorg:ffmpeg-kit-next", version.ref = "ffmpeg-kit" }
 junit = { module = "junit:junit", version = "4.13.2" }
 
 
@@ -93,7 +93,7 @@ glide-transform = "jp.wasabeef:glide-transformations:4.3.0"
 
 # MPV & Cast & MPD
 mpv-lib = { module = "io.github.animiruorg:mpv-android-lib", version.ref = "mpv" }
-gms-cast = "com.google.android.gms:play-services-cast-framework:22.3.1"
+gms-cast = "com.google.android.gms:play-services-cast-framework:23.0.0"
 mpd-parser = "io.lindstrom:mpd-parser:0.23"
 
 # UI

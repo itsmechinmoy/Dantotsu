@@ -321,8 +321,7 @@ enum class PrefName(val data: Pref) {
     LocalDir(Pref(Location.Irrelevant, String::class, "")),
     OC(Pref(Location.Irrelevant, Boolean::class, false)),
     RefreshStatus(Pref(Location.Irrelevant, Boolean::class, false)),
-    // off unless a pre-app-presence token login switched it on (LegacyLoginMigration)
-    rpcEnabled(Pref(Location.Irrelevant, Boolean::class, false)),
+    rpcEnabled(Pref(Location.Irrelevant, Boolean::class, true)),
     DiscordLoginMigrated(Pref(Location.Irrelevant, Boolean::class, false)),
 
     //Protected
