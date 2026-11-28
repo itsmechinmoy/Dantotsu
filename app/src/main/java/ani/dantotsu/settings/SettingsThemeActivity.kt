@@ -21,6 +21,7 @@ import ani.dantotsu.settings.rows.segmentedRow
 import ani.dantotsu.settings.rows.switchRow
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.themes.CustomFontManager
 import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.util.Logger
 import eltos.simpledialogfragment.SimpleDialog
@@ -116,7 +117,21 @@ object ThemeScreen : SettingsScreen("theme", R.string.theme, R.drawable.ic_palet
             switchRow(PrefName.UseOLED, R.string.oled_theme_variant, R.string.oled_theme_variant_desc,
                 R.drawable.ic_round_brightness_4_24, onChange = { host, _ -> reload(host) }),
             switchRow(PrefName.UseSystemFont, R.string.use_system_font, R.string.use_system_font_desc,
-                R.drawable.ic_round_font_size_24, onChange = { host, _ -> reload(host) }),
+                R.drawable.ic_round_font_size_24, onChange = { host, on ->
+                    if (on) CustomFontManager.clearCustomFont()
+                    reload(host)
+                }),
+            actionRow(
+                id = "custom_font_picker",
+                title = R.string.custom_font,
+                summary = R.string.custom_font_desc,
+                icon = R.drawable.ic_round_font_size_24,
+                opensScreen = true,
+                onClick = { host, _ ->
+                    FontPickerBottomSheet { reload(host) }
+                        .show(host.activity.supportFragmentManager, "FontPickerBottomSheet")
+                }
+            ),
         )),
         Section(R.string.settings_section_dynamic_colors, listOf(
             switchRow(PrefName.UseMaterialYou, R.string.use_material_you, R.string.use_material_you_desc,

@@ -42,7 +42,13 @@ class ListFragment : Fragment() {
 
         fun update() {
             if (grid != null && list != null) {
-                val adapter = MediaAdaptor(if (grid!!) 0 else 1, list!!, requireActivity(), true)
+                val adapter = MediaAdaptor(
+                    if (grid!!) 0 else 1,
+                    list!!,
+                    requireActivity(),
+                    matchParent = true,
+                    showCalendarStreams = calendar
+                )
                 binding.listRecyclerView.layoutManager =
                     GridLayoutManager(
                         requireContext(),

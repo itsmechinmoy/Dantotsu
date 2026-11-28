@@ -344,6 +344,9 @@ class OtherDetailsViewModel : ViewModel() {
 
     private var cachedAllCalendarData: Map<String, MutableList<Media>>? = null
     private var cachedLibraryCalendarData: Map<String, MutableList<Media>>? = null
+    private var cachedDubCalendarData: Map<String, MutableList<Media>>? = null
+    private var cachedLibraryMediaIds: Set<Int>? = null
+    private var cachedDubFeedItems: List<DubEpisodeFeedItem>? = null
     private var cachedDubAnilistIds: Set<Int>? = null
     private var cachedDubMalIds: Set<Int>? = null
     private val calendar: MutableLiveData<Map<String, MutableList<Media>>> = MutableLiveData(null)
@@ -358,6 +361,14 @@ class OtherDetailsViewModel : ViewModel() {
     }
 
     private suspend fun loadCalendarFromAnilist(showOnlyLibrary: Boolean, showOnlyDubbed: Boolean) {
+        if (showOnlyDubbed) {
+            val dubMap = loadActualDubCalendar(showOnlyLibrary)
+            if (dubMap.isNotEmpty()) {
+                calendar.postValue(dubMap)
+                return
+            }
+        }
+
         if (cachedAllCalendarData == null || cachedLibraryCalendarData == null) {
             val curr = System.currentTimeMillis() / 1000
             val res = Anilist.query.recentlyUpdated(curr - 86400, curr + (86400 * 6))
@@ -369,7 +380,8 @@ class OtherDetailsViewModel : ViewModel() {
 
             val userId = Anilist.userid ?: 0
             val userLibrary = Anilist.query.getMediaLists(true, userId)
-            val libraryMediaIds = userLibrary.flatMap { it.value }.map { it.id }
+            val libraryMediaIds = userLibrary.flatMap { it.value }.map { it.id }.toSet()
+            cachedLibraryMediaIds = libraryMediaIds
 
             res.forEach {
                 val v = it.relation?.split(",")?.map { i -> i.toLong() }!!
@@ -403,6 +415,94 @@ class OtherDetailsViewModel : ViewModel() {
             cacheToUse = applyDubFilter(cacheToUse, rescueMode = false)
         }
         calendar.postValue(cacheToUse)
+    }
+
+    private suspend fun loadActualDubCalendar(showOnlyLibrary: Boolean): Map<String, MutableList<Media>> {
+        ensureDubDataLoaded()
+        val libraryIds = if (showOnlyLibrary) {
+            cachedLibraryMediaIds ?: run {
+                val userId = Anilist.userid ?: 0
+                val userLibrary = Anilist.query.getMediaLists(true, userId)
+                userLibrary.flatMap { it.value }.map { it.id }.toSet().also {
+                    cachedLibraryMediaIds = it
+                }
+            }
+        } else emptySet()
+
+        val allDubs = cachedDubCalendarData ?: buildDubCalendarMap().also {
+            if (it.isNotEmpty()) cachedDubCalendarData = it
+        }
+        if (!showOnlyLibrary) return allDubs
+
+        val filtered = linkedMapOf<String, MutableList<Media>>()
+        allDubs.forEach { (date, list) ->
+            val matching = list.filter { libraryIds.contains(it.id) }.toMutableList()
+            if (matching.isNotEmpty()) filtered[date] = matching
+        }
+        return filtered
+    }
+
+    private suspend fun buildDubCalendarMap(): Map<String, MutableList<Media>> {
+        val feedItems = cachedDubFeedItems.orEmpty()
+        if (feedItems.isEmpty()) return emptyMap()
+
+        val nowMs = System.currentTimeMillis()
+        val minMs = nowMs - 86400_000L
+        val maxMs = nowMs + 6L * 86400_000L
+
+        data class DubWindowEntry(
+            val id: Int,
+            val epNum: Int,
+            val airedAtMs: Long
+        )
+
+        val windowEntries = feedItems.mapNotNull { item ->
+            val mediaId = item.id ?: return@mapNotNull null
+            val epInfo = item.episode ?: return@mapNotNull null
+            val airedAtMs = parseUtcIsoMillis(epInfo.airedAt ?: epInfo.addedAt) ?: return@mapNotNull null
+            if (airedAtMs !in minMs..maxMs) return@mapNotNull null
+            DubWindowEntry(mediaId, epInfo.aired ?: 1, airedAtMs)
+        }.sortedBy { it.airedAtMs }
+
+        if (windowEntries.isEmpty()) return emptyMap()
+
+        val uniqueIds = windowEntries.map { it.id }.distinct().take(150)
+        val mediaById = mutableMapOf<Int, Media>()
+        for (chunk in uniqueIds.chunked(50)) {
+            Anilist.query.getMediaList(chunk)?.forEach { m ->
+                mediaById[m.id] = m
+            }
+        }
+        if (mediaById.isEmpty()) return emptyMap()
+
+        val df = DateFormat.getDateInstance(DateFormat.FULL)
+        val tf = DateFormat.getTimeInstance(DateFormat.SHORT)
+        val result = linkedMapOf<String, MutableList<Media>>()
+        val seenPerDay = mutableMapOf<String, MutableSet<Int>>()
+
+        windowEntries.forEach { entry ->
+            val baseMedia = mediaById[entry.id] ?: return@forEach
+            val dateKey = df.format(Date(entry.airedAtMs))
+            val timeStr = tf.format(Date(entry.airedAtMs))
+            val daySeen = seenPerDay.getOrPut(dateKey) { mutableSetOf() }
+            if (daySeen.add(entry.id)) {
+                val itemMedia = baseMedia.copy(relation = "Dub Ep ${entry.epNum}\n$timeStr")
+                result.getOrPut(dateKey) { mutableListOf() }.add(itemMedia)
+            }
+        }
+        return result
+    }
+
+    private fun parseUtcIsoMillis(isoString: String?): Long? {
+        if (isoString.isNullOrBlank()) return null
+        return try {
+            val clean = isoString.substringBefore('.').removeSuffix("Z").take(19)
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.parse(clean)?.time
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private suspend fun fetchWatchingMalData(): Pair<MutableSet<Int>, MutableMap<Int, Int>> {
@@ -613,6 +713,7 @@ class OtherDetailsViewModel : ViewModel() {
         } ?: emptyList()
 
         if (feedItems.isNotEmpty()) {
+            cachedDubFeedItems = feedItems
             cachedDubAnilistIds = feedItems.mapNotNull { it.id }.toSet()
             cachedDubMalIds = feedItems.mapNotNull { it.idMal }.toSet()
         }
@@ -620,7 +721,15 @@ class OtherDetailsViewModel : ViewModel() {
 }
 
 @Serializable
+private data class DubEpisodeInfo(
+    @SerialName("aired") val aired: Int? = null,
+    @SerialName("airedAt") val airedAt: String? = null,
+    @SerialName("addedAt") val addedAt: String? = null,
+)
+
+@Serializable
 private data class DubEpisodeFeedItem(
     @SerialName("id") val id: Int? = null,
     @SerialName("idMal") val idMal: Int? = null,
+    @SerialName("episode") val episode: DubEpisodeInfo? = null,
 )

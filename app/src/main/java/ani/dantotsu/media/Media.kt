@@ -142,6 +142,7 @@ data class Media(
         format = apiMedia.format?.toString(),
         description = apiMedia.description,
         genres = ArrayList(apiMedia.genres ?: emptyList()),
+        externalLinks = apiMedia.externalLinks?.let { ArrayList(it) },
     ) {
         apiMedia.genres?.let { genreList ->
             this.genres = ArrayList(genreList)

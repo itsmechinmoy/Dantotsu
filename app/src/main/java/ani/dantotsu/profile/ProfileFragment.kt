@@ -1,5 +1,6 @@
 package ani.dantotsu.profile
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -71,6 +72,7 @@ class ProfileFragment : Fragment() {
     }
 
     val model: ProfileViewModel by activityViewModels()
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -80,12 +82,14 @@ class ProfileFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             model.setData(user.id)
         }
+        binding.profileUserBio.settings.javaScriptEnabled = true
         binding.profileUserBio.settings.loadWithOverviewMode = true
         binding.profileUserBio.settings.useWideViewPort = true
         binding.profileUserBio.setInitialScale(1)
         val styledHtml = getFullAniHTML(
             user.about ?: "",
-            ContextCompat.getColor(activity, R.color.bg_opp)
+            ContextCompat.getColor(activity, R.color.bg_opp),
+            isProfileBio = true
         )
         binding.profileUserBio.loadDataWithBaseURL(
             null,

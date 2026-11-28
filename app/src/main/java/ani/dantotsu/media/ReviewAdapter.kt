@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 
 class ReviewAdapter(
     private var review: Query.Review,
+    private val backdropUrl: String? = null
 ) : BindableItem<ItemReviewsBinding>() {
     private lateinit var binding: ItemReviewsBinding
 
@@ -30,10 +31,16 @@ class ReviewAdapter(
         val context = binding.root.context
         binding.reviewUserName.text = review.user?.name
         binding.reviewUserAvatar.loadImage(review.user?.avatar?.medium)
-        binding.reviewText.text = review.summary
+        binding.reviewBackdrop.loadImage(
+            review.user?.bannerImage
+                ?: backdropUrl
+                ?: review.user?.avatar?.large
+                ?: review.user?.avatar?.medium
+        )
+        val summary = review.summary.trim()
+        binding.reviewText.text = if (summary.isNotEmpty()) "\"$summary\"" else ""
         binding.reviewPostTime.text = ActivityItemBuilder.getDateTime(review.createdAt)
-        val text = "[${review.score / 10.0f}]"
-        binding.reviewTag.text = text
+        binding.reviewTag.text = review.score.toString()
         binding.root.setOnClickListener {
             ContextCompat.startActivity(
                 context,

@@ -96,6 +96,10 @@ class CalendarActivity : AppCompatActivity() {
         binding.listDubbed.setOnClickListener {
             showOnlyDubbed = !showOnlyDubbed
             binding.listDubbed.alpha = if (showOnlyDubbed) 1f else 0.6f
+            binding.listProgressBar.visibility = View.VISIBLE
+            ani.dantotsu.snackString(
+                getString(if (showOnlyDubbed) R.string.dub_calendar_on else R.string.dub_calendar_off)
+            )
             scope.launch {
                 model.loadCalendar(showOnlyLibrary, showOnlyDubbed)
             }

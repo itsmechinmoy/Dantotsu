@@ -90,6 +90,7 @@ enum class PrefName(val data: Pref) {
     EpisodeMetadataSource(Pref(Location.UI, Int::class, 0)),
     UseOLED(Pref(Location.UI, Boolean::class, false)),
     UseSystemFont(Pref(Location.UI, Boolean::class, false)),
+    CustomFontPath(Pref(Location.UI, String::class, "")),
     UseCustomTheme(Pref(Location.UI, Boolean::class, false)),
     CustomThemeInt(Pref(Location.UI, Int::class, 0xFF6200EE.toInt())), // #6200EE; a literal keeps PrefName loadable in plain JVM tests
     UseSourceTheme(Pref(Location.UI, Boolean::class, false)),
@@ -122,6 +123,7 @@ enum class PrefName(val data: Pref) {
         )
     ),
     BannerAnimations(Pref(Location.UI, Boolean::class, true)),
+    TrailerBanner(Pref(Location.UI, Boolean::class, false)),
     LayoutAnimations(Pref(Location.UI, Boolean::class, true)),
     TrendingScroller(Pref(Location.UI, Boolean::class, true)),
     AnimationSpeed(Pref(Location.UI, Float::class, 1f)),

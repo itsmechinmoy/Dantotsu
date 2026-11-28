@@ -48,6 +48,7 @@ class MediaAdaptor(
     private val viewPager: ViewPager2? = null,
     private val fav: Boolean = false,
     private val isOtherUser: Boolean = false,
+    private val showCalendarStreams: Boolean = false,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -166,6 +167,11 @@ class MediaAdaptor(
         bindCompactRelation(b, media)
         bindCompactMediaTotal(b, media)
         bindCompactUnreadBadge(b, media)
+        if (showCalendarStreams) {
+            OfficialStreamsUi.bindCircularStreamLogos(b.itemCompactStreamsRow, media, maxIcons = 4, iconSizeDp = 20)
+        } else {
+            b.itemCompactStreamsRow.isVisible = false
+        }
     }
 
     private fun bindCompactRelation(b: ItemMediaCompactBinding, media: Media) {

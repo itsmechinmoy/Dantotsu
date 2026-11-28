@@ -11,6 +11,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.animation.doOnEnd
 import androidx.core.content.res.ResourcesCompat
@@ -39,6 +41,8 @@ import ani.dantotsu.setBaseline
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
+import ani.dantotsu.toast
+import ani.dantotsu.util.LocalMediaUploader
 import ani.dantotsu.util.Logger
 import ani.dantotsu.util.customAlertDialog
 import com.xwray.groupie.GroupieAdapter
@@ -76,6 +80,36 @@ class CommentsFragment : Fragment() {
     private var isSpoilerMode = false
     private var markwonTextWatcher: TextWatcher? = null
     private var limitTextWatcher: TextWatcher? = null
+    private val pickMediaLauncher =
+        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val ctx = context ?: return@registerForActivityResult
+            val mediaActivity = activity
+            if (!mediaActivity.bindingReady) return@registerForActivityResult
+            val attachBtn = mediaActivity.binding.commentAttachMedia
+            attachBtn.isEnabled = false
+            attachBtn.alpha = 0.25f
+            toast("Uploading image...")
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val outcome = LocalMediaUploader.uploadUri(ctx, uri).getOrThrow()
+                    val currentText = mediaActivity.binding.commentInput.text.toString()
+                    val imageMarkdown = "![image](${outcome.url})"
+                    val newText = if (currentText.isEmpty()) imageMarkdown else "$currentText\n$imageMarkdown"
+                    mediaActivity.binding.commentInput.setText(newText)
+                    mediaActivity.binding.commentInput.setSelection(newText.length)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    toast(e.message ?: "Failed to upload image")
+                } finally {
+                    if (mediaActivity.bindingReady) {
+                        mediaActivity.binding.commentAttachMedia.isEnabled = true
+                        mediaActivity.binding.commentAttachMedia.alpha = 0.5f
+                    }
+                }
+            }
+        }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -97,6 +131,7 @@ class CommentsFragment : Fragment() {
             actBinding.commentInput.onFocusChangeListener = null
             actBinding.commentLabel.setOnClickListener(null)
             actBinding.commentSpoiler.setOnClickListener(null)
+            actBinding.commentAttachMedia.setOnClickListener(null)
             actBinding.commentGif.setOnClickListener(null)
             actBinding.commentSend.setOnClickListener(null)
         }
@@ -423,6 +458,7 @@ class CommentsFragment : Fragment() {
                     activity.binding.commentLabel.visibility = View.VISIBLE
                     activity.binding.commentSend.visibility = View.VISIBLE
                     activity.binding.commentSpoiler.visibility = View.VISIBLE
+                    activity.binding.commentAttachMedia.visibility = View.VISIBLE
                     activity.binding.commentGif.visibility = View.VISIBLE
                     activity.binding.commentLabel.animate().translationX(0f).setDuration(300).start()
                     activity.binding.commentSend.animate().translationX(0f).setDuration(300).start()
@@ -459,6 +495,12 @@ class CommentsFragment : Fragment() {
             activity.binding.commentSpoiler.setImageResource(
                 if (isSpoilerMode) R.drawable.format_spoiler_24
                 else R.drawable.ic_round_remove_red_eye_24
+            )
+        }
+
+        activity.binding.commentAttachMedia.setOnClickListener {
+            pickMediaLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
             )
         }
 

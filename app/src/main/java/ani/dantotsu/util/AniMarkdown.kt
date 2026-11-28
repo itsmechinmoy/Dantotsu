@@ -116,8 +116,13 @@ class AniMarkdown { //istg anilist has the worst api
                 .underlineToHtml()
         }
 
-        fun getFullAniHTML(html: String, textColor: Int): String {
-            val contentHtml = html
+        fun getFullAniHTML(
+            html: String,
+            textColor: Int,
+            isProfileBio: Boolean = false
+        ): String {
+            val preparedInput = if (isProfileBio) sanitizeBioAndConvertRawSpoilers(html) else html
+            val rawContentHtml = preparedInput
                 .convertNestedImageToHtml()
                 .convertImageToHtml()
                 .convertLinkToHtml()
@@ -126,6 +131,84 @@ class AniMarkdown { //istg anilist has the worst api
                 .convertCenterToHtml()
                 .replaceLeftovers()
                 .underlineToHtml()
+            val contentHtml = if (isProfileBio) {
+                convertProfileBioSpoilerTags(rawContentHtml)
+            } else {
+                rawContentHtml
+            }
+            val bioCss = if (isProfileBio) {
+                """
+            img {
+                max-width: 100%;
+                vertical-align: middle;
+            }
+            img:not([height]) {
+                height: auto;
+            }
+            [align="center"], center, align[center] {
+                display: block;
+                text-align: center;
+            }
+            [align="left"] {
+                display: block;
+                text-align: left;
+            }
+            [align="right"] {
+                display: block;
+                text-align: right;
+            }
+            .ani-spoiler-wrap {
+                display: inline-block;
+                max-width: 100%;
+                margin: 6px 0;
+            }
+            .ani-spoiler-btn {
+                display: inline-block;
+                background: rgba(128, 128, 128, 0.22);
+                color: ${textColor.toCssColor()};
+                border: 1px solid rgba(128, 128, 128, 0.35);
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 0.9em;
+                font-weight: 600;
+                cursor: pointer;
+                margin: 4px auto;
+            }
+            .ani-spoiler-body {
+                margin-top: 6px;
+                max-width: 100%;
+            }
+                """.trimIndent()
+            } else {
+                """
+            img {
+                max-width: 100%;
+                height: auto; /* Maintain aspect ratio */
+            }
+                """.trimIndent()
+            }
+            val bioScript = if (isProfileBio) {
+                """
+<script>
+(function() {
+    var btns = document.querySelectorAll('.ani-spoiler-btn');
+    for (var i = 0; i < btns.length; i++) {
+        btns[i].addEventListener('click', function() {
+            var body = this.nextElementSibling;
+            if (!body) return;
+            var showing = body.style.display !== 'none';
+            body.style.display = showing ? 'none' : 'inline-block';
+            this.textContent = showing
+                ? (this.getAttribute('data-show') || 'Spoiler, click to view')
+                : (this.getAttribute('data-hide') || 'Hide spoiler');
+        });
+    }
+})();
+</script>
+                """.trimIndent()
+            } else {
+                ""
+            }
 
             val returnHtml = """
             <html>
@@ -140,10 +223,7 @@ class AniMarkdown { //istg anilist has the worst api
                 max-width: 100%;
                 overflow-x: hidden; /* Prevent horizontal scrolling */
             }
-            img {
-                max-width: 100%;
-                height: auto; /* Maintain aspect ratio */
-            }
+$bioCss
             video {
                 max-width: 100%;
                 height: auto; /* Maintain aspect ratio */
@@ -200,10 +280,98 @@ class AniMarkdown { //istg anilist has the worst api
             }
         </style>
 </head>
-<body>$contentHtml</body>
+<body>$contentHtml$bioScript</body>
 </html>
     """.trimIndent()
             return returnHtml
+        }
+
+        private fun sanitizeBioAndConvertRawSpoilers(raw: String): String {
+            var cleaned = raw
+                .replace(Regex("""(?is)<script\b[\s\S]*?</script\s*>"""), "")
+                .replace(Regex("""(?is)\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)"""), "")
+            cleaned = Regex("""~!([\s\S]*?)!~""").replace(cleaned) { match ->
+                "<span class=\"markdown_spoiler\">${match.groupValues[1]}</span>"
+            }
+            return cleaned
+        }
+
+        private fun convertProfileBioSpoilerTags(html: String): String {
+            val spoilerOpenRegex = Regex(
+                """<(span|div)\b[^>]*(?:class\s*=\s*['"]?[^'">]*markdown[-_]spoiler[^'">]*['"]?|rel\s*=\s*['"]?spoiler['"]?)[^>]*>""",
+                RegexOption.IGNORE_CASE
+            )
+            val dataLabelRegex = Regex("""data-label\s*=\s*['"]([^'"]*)['"]""", RegexOption.IGNORE_CASE)
+            val anchorOpenRegex = Regex("""<a\b""", RegexOption.IGNORE_CASE)
+            val anchorCloseRegex = Regex("""</a\s*>""", RegexOption.IGNORE_CASE)
+
+            val out = StringBuilder(html.length + 128)
+            var cursor = 0
+            while (cursor < html.length) {
+                val open = spoilerOpenRegex.find(html, cursor) ?: break
+                val start = open.range.first
+                val innerStart = open.range.last + 1
+                val tagName = open.groupValues[1].lowercase()
+                val tagMatcher = Regex("""<(/?)$tagName\b[^>]*>""", RegexOption.IGNORE_CASE)
+
+                var depth = 1
+                var innerEnd = html.length
+                var after = html.length
+                for (m in tagMatcher.findAll(html, innerStart)) {
+                    depth += if (m.groupValues[1] == "/") -1 else 1
+                    if (depth == 0) {
+                        innerEnd = m.range.first
+                        after = m.range.last + 1
+                        break
+                    }
+                }
+
+                var inner = html.substring(innerStart, innerEnd)
+                val surplusAnchors =
+                    anchorCloseRegex.findAll(inner).count() - anchorOpenRegex.findAll(inner).count()
+                if (surplusAnchors > 0) {
+                    var removed = 0
+                    inner = anchorCloseRegex.replace(inner) { m ->
+                        if (removed < surplusAnchors) {
+                            removed++
+                            ""
+                        } else {
+                            m.value
+                        }
+                    }
+                }
+
+                val label = dataLabelRegex.find(open.value)?.groupValues?.get(1)?.trim().orEmpty()
+                val escapedLabel = label
+                    .replace("&", "&amp;")
+                    .replace("\"", "&quot;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                val showText = if (escapedLabel.isNotEmpty()) {
+                    "Spoiler ($escapedLabel), click to view"
+                } else {
+                    "Spoiler, click to view"
+                }
+                val hideText = if (escapedLabel.isNotEmpty()) {
+                    "Hide spoiler ($escapedLabel)"
+                } else {
+                    "Hide spoiler"
+                }
+
+                out.append(html, cursor, start)
+                if (surplusAnchors > 0) {
+                    out.append("</a>".repeat(surplusAnchors))
+                }
+                out.append("<span class=\"ani-spoiler-wrap\">")
+                out.append("<button type=\"button\" class=\"ani-spoiler-btn\" data-show=\"$showText\" data-hide=\"$hideText\">$showText</button>")
+                out.append("<span class=\"ani-spoiler-body\" style=\"display:none;\">")
+                out.append(inner)
+                out.append("</span></span>")
+                cursor = after
+            }
+            if (cursor == 0) return html
+            out.append(html, cursor, html.length)
+            return out.toString()
         }
     }
 }

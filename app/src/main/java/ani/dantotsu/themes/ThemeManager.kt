@@ -34,7 +34,8 @@ class ThemeManager(private val context: Activity) {
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
         window.statusBarColor = 0x00000000
         context.setTheme(themeToApply)
-        val useSystemFont = PrefManager.getVal<Boolean>(PrefName.UseSystemFont)
+        val hasCustomFont = CustomFontManager.getActiveCustomFontFile() != null
+        val useSystemFont = !hasCustomFont && PrefManager.getVal<Boolean>(PrefName.UseSystemFont)
         if (useSystemFont) {
             context.theme.applyStyle(R.style.ThemeOverlay_Dantotsu_SystemFont, true)
         }
@@ -74,7 +75,8 @@ class ThemeManager(private val context: Activity) {
         if (useOLED) {
             builder.setThemeOverlay(R.style.AppTheme_Amoled)
         }
-        val useSystemFont = PrefManager.getVal<Boolean>(PrefName.UseSystemFont)
+        val hasCustomFont = CustomFontManager.getActiveCustomFontFile() != null
+        val useSystemFont = !hasCustomFont && PrefManager.getVal<Boolean>(PrefName.UseSystemFont)
         if (useSystemFont) {
             builder.setThemeOverlay(R.style.ThemeOverlay_Dantotsu_SystemFont)
         }

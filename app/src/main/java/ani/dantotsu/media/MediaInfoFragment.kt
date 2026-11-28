@@ -1189,7 +1189,8 @@ class MediaInfoFragment : Fragment() {
             false
         ).apply {
             val adapter = GroupieAdapter()
-            media.review!!.forEach { adapter.add(ReviewAdapter(it)) }
+            val backdrop = media.banner ?: media.cover
+            media.review!!.forEach { adapter.add(ReviewAdapter(it, backdrop)) }
             itemTitle.setText(R.string.reviews)
             itemRecycler.adapter = adapter
             itemRecycler.layoutManager = LinearLayoutManager(requireContext())

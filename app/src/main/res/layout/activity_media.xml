@@ -39,6 +39,13 @@
                 tools:ignore="ContentDescription,ImageContrastCheck"
                 tools:srcCompat="@tools:sample/backgrounds/scenic[0]" />
 
+            <WebView
+                android:id="@+id/mediaTrailerWebView"
+                android:layout_width="match_parent"
+                android:layout_height="384dp"
+                android:visibility="gone"
+                app:layout_collapseMode="parallax" />
+
             <ImageView
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
@@ -54,6 +61,50 @@
                 android:scaleY="-1"
                 android:src="@drawable/linear_gradient_bg"
                 tools:ignore="ContentDescription" />
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/mediaTrailerControls"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_gravity="end|top"
+                android:layout_marginTop="72dp"
+                android:layout_marginEnd="16dp"
+                android:translationZ="8dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="#99000000"
+                app:cardCornerRadius="18dp"
+                app:cardElevation="0dp"
+                tools:visibility="visible">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="6dp">
+
+                    <ImageButton
+                        android:id="@+id/mediaTrailerPlayPause"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/play"
+                        android:padding="4dp"
+                        android:src="@drawable/ic_round_pause_24"
+                        app:tint="#FFFFFF" />
+
+                    <ImageButton
+                        android:id="@+id/mediaTrailerMute"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginStart="2dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/more_options"
+                        android:padding="4dp"
+                        android:src="@drawable/ic_round_volume_off_24"
+                        app:tint="#FFFFFF" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
 
             <FrameLayout
                 android:id="@+id/compactPlayerContainer"
@@ -362,6 +413,21 @@
                     android:paddingBottom="8dp"
                     android:textSize="12sp"
                     tools:ignore="HardcodedText" />
+
+                <ImageButton
+                    android:id="@+id/commentAttachMedia"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:layout_marginEnd="4dp"
+                    android:alpha="0.5"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:padding="2dp"
+                    android:src="@drawable/format_image_24"
+                    android:visibility="gone"
+                    app:tint="?attr/colorOnBackground"
+                    tools:ignore="ContentDescription"
+                    tools:visibility="visible" />
 
                 <ImageButton
                     android:id="@+id/commentGif"
