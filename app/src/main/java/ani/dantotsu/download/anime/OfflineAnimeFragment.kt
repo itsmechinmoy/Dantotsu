@@ -24,7 +24,6 @@ import androidx.core.view.isVisible
 import androidx.core.view.marginBottom
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.util.UnstableApi
 import ani.dantotsu.R
 import ani.dantotsu.bottomBarOrNull
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
@@ -171,7 +170,6 @@ class OfflineAnimeFragment : Fragment(), OfflineAnimeSearchListener {
         return view
     }
 
-    @OptIn(UnstableApi::class)
     private fun grid() {
         gridView.visibility = View.VISIBLE
         val fadeIn = AlphaAnimation(0f, 1f)

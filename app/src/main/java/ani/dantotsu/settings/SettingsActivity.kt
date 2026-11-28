@@ -31,7 +31,14 @@ import ani.dantotsu.others.AppUpdater
 import ani.dantotsu.others.CustomBottomDialog
 import ani.dantotsu.pop
 import ani.dantotsu.setSafeOnClickListener
+import ani.dantotsu.settings.rows.RowAdapter
+import ani.dantotsu.settings.rows.ScreenItems
+import ani.dantotsu.settings.rows.Section
+import ani.dantotsu.settings.rows.SettingsHost
+import ani.dantotsu.settings.rows.SettingsIndex
+import ani.dantotsu.settings.rows.actionRow
 import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.screens.SettingsScreens
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
 import ani.dantotsu.startMainActivity
@@ -49,7 +56,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.random.Random
 
 
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : AppCompatActivity(), SettingsHost {
+    override val activity: AppCompatActivity get() = this
+
+    /** The home list has no state of its own to re-read. */
+    override fun refresh() {}
+
     lateinit var binding: ActivitySettingsBinding
     private var cursedCounter = 0
 
@@ -62,7 +74,9 @@ class SettingsActivity : AppCompatActivity() {
 
         setupHeaderAndVersion()
         setupBackNavigation()
-        val mainAdapter = SettingsAdapter(buildSettingsItems(this))
+        // Settings groups, split into Account, Content and App sections.
+        val mainAdapter = RowAdapter(this)
+        mainAdapter.submitList(ScreenItems.build(homeSections(), emptySet()))
         val searchAdapter = ani.dantotsu.settings.search.SettingsSearchAdapter(emptyList())
         binding.settingsRecyclerView.apply {
             adapter = mainAdapter
@@ -93,37 +107,44 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun setupBackNavigation() {
-        onBackPressedDispatcher.addCallback(this) {
-            if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
-                binding.settingsSearchBarText.setText("")
-            } else if (PrefManager.getCustomVal("reload", false)) {
-                startMainActivity(this@SettingsActivity)
-                PrefManager.setCustomVal("reload", false)
-            } else {
-                finish()
-            }
-        }
+        watchSearchKeyboard()
+        backCallback = onBackPressedDispatcher.addCallback(this) { backFromSearch() }
+        binding.settingsBack.setOnClickListener { backFromSearch() }
+    }
 
-        binding.settingsBack.setOnClickListener {
-            if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
-                binding.settingsSearchBarText.setText("")
-            } else {
-                onBackPressedDispatcher.onBackPressed()
-            }
+    private fun backFromSearch() {
+        if (binding.settingsSearchBarText.text?.isNotBlank() == true) {
+            binding.settingsSearchBarText.setText("")
+        } else if (PrefManager.getCustomVal("reload", false)) {
+            startMainActivity(this)
+            PrefManager.setCustomVal("reload", false)
+        } else {
+            finish()
         }
     }
 
+    // Off while the keyboard is up, so the keyboard takes the first back itself.
+    private var backCallback: androidx.activity.OnBackPressedCallback? = null
+
+    private fun keyboardUp() = androidx.core.view.ViewCompat.getRootWindowInsets(binding.settingsSearchBarText)
+        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+
+    private fun updateBackCallback() {
+        backCallback?.isEnabled = !keyboardUp()
+    }
+
     private fun setupSettingsSearch(
-        mainAdapter: SettingsAdapter,
+        mainAdapter: RowAdapter,
         searchAdapter: ani.dantotsu.settings.search.SettingsSearchAdapter
     ) {
         val context = this
         binding.settingsSearchBarText.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updateBackCallback()
                 val query = s?.toString()?.trim() ?: ""
                 if (query.isNotEmpty()) {
-                    val results = ani.dantotsu.settings.search.SettingsRegistry.search(context, query)
+                    val results = searchSettings(context, query)
                     if (results.isNotEmpty()) {
                         searchAdapter.updateResults(results)
                         binding.settingsRecyclerView.adapter = searchAdapter
@@ -134,8 +155,8 @@ class SettingsActivity : AppCompatActivity() {
                         binding.settingsEmptyLayout.visibility = View.VISIBLE
                     }
                     binding.settingsFooterLayout.visibility = View.GONE
-                    binding.settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_close_24)
-                    binding.settingsSearchBar.setEndIconOnClickListener {
+                    binding.settingsSearchClear.visibility = View.VISIBLE
+                    binding.settingsSearchClear.setOnClickListener {
                         binding.settingsSearchBarText.setText("")
                     }
                 } else {
@@ -143,8 +164,7 @@ class SettingsActivity : AppCompatActivity() {
                     binding.settingsRecyclerView.visibility = View.VISIBLE
                     binding.settingsEmptyLayout.visibility = View.GONE
                     binding.settingsFooterLayout.visibility = View.VISIBLE
-                    binding.settingsSearchBar.setEndIconDrawable(R.drawable.ic_round_search_24)
-                    binding.settingsSearchBar.setEndIconOnClickListener(null)
+                    binding.settingsSearchClear.visibility = View.GONE
                 }
             }
             override fun afterTextChanged(s: android.text.Editable?) {}
@@ -276,122 +296,104 @@ class SettingsActivity : AppCompatActivity() {
     override fun onResume() {
         ThemeManager(this).applyTheme()
         super.onResume()
+        updateBackCallback()
     }
-    private fun buildSettingsItems(context: Context): ArrayList<Settings> {
-        return arrayListOf(
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.accounts),
-                        desc = getString(R.string.accounts_desc),
-                        icon = R.drawable.ic_round_person_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAccountActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.theme),
-                        desc = getString(R.string.theme_desc),
-                        icon = R.drawable.ic_palette,
-                        onClick = {
-                            startActivity(Intent(context, SettingsThemeActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.common),
-                        desc = getString(R.string.common_desc),
-                        icon = R.drawable.ic_lightbulb_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsCommonActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.label_data_storage),
-                        desc = getString(R.string.label_data_storage_desc),
-                        icon = R.drawable.ic_round_folder_24,
-                        onClick = {
-                            startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.anime),
-                        desc = getString(R.string.anime_desc),
-                        icon = R.drawable.ic_round_movie_filter_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAnimeActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.manga),
-                        desc = getString(R.string.manga_desc),
-                        icon = R.drawable.ic_round_import_contacts_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsMangaActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.extensions),
-                        desc = getString(R.string.extensions_desc),
-                        icon = R.drawable.ic_extension,
-                        onClick = {
-                            startActivity(Intent(context, SettingsExtensionsActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    /*
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.addons),
-                        desc = getString(R.string.addons_desc),
-                        icon = R.drawable.ic_round_restaurant_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAddonActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    */
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.torrent_settings),
-                        desc = getString(R.string.torrent_settings_desc),
-                        icon = R.drawable.ic_round_dns_24,
-                        onClick = {
-                            startActivity(Intent(context, TorrentSettingsActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.notifications),
-                        desc = getString(R.string.notifications_desc),
-                        icon = R.drawable.ic_round_notifications_none_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsNotificationActivity::class.java))
-                        },
-                        isActivity = true
-                    ),
-                    Settings(
-                        type = 1,
-                        name = getString(R.string.about),
-                        desc = getString(R.string.about_desc),
-                        icon = R.drawable.ic_round_info_24,
-                        onClick = {
-                            startActivity(Intent(context, SettingsAboutActivity::class.java))
-                        },
-                        isActivity = true
-                    )
-                )
+
+    /** Groups on the settings home, in order; each opens its screen. Keep [SettingsScreens.all] in step. */
+    private fun homeSections() = listOf(
+        Section(R.string.settings_section_account, listOf(
+            home("accounts", R.string.accounts, R.string.accounts_desc, R.drawable.ic_round_person_24, SettingsAccountActivity::class.java),
+            home("notifications", R.string.notifications, R.string.notifications_desc, R.drawable.ic_round_notifications_none_24,
+                SettingsNotificationActivity::class.java),
+        )),
+        Section(R.string.settings_section_content, listOf(
+            home("anime", R.string.anime, R.string.anime_desc, R.drawable.ic_round_movie_filter_24, SettingsAnimeActivity::class.java),
+            home("manga", R.string.manga, R.string.manga_desc, R.drawable.ic_round_import_contacts_24, SettingsMangaActivity::class.java),
+            home("extensions", R.string.extensions, R.string.extensions_desc, R.drawable.ic_extension, SettingsExtensionsActivity::class.java),
+            home("torrent", R.string.torrent_settings, R.string.torrent_settings_desc, R.drawable.ic_round_dns_24, TorrentSettingsActivity::class.java),
+        )),
+        Section(R.string.app, listOf(
+            home("theme", R.string.theme, R.string.theme_desc, R.drawable.ic_palette, SettingsThemeActivity::class.java),
+            home("common", R.string.common, R.string.common_desc, R.drawable.ic_lightbulb_24, SettingsCommonActivity::class.java),
+            home("data", R.string.label_data_storage, R.string.label_data_storage_desc, R.drawable.ic_round_folder_24,
+                ani.dantotsu.settings.data.SettingsDataActivity::class.java),
+            home("about", R.string.about, R.string.about_desc, R.drawable.ic_round_info_24, SettingsAboutActivity::class.java),
+        )),
+    )
+
+    private fun home(id: String, title: Int, summary: Int, icon: Int, target: Class<out android.app.Activity>) =
+        actionRow("home_$id", title, summary, icon, opensScreen = true) { host, _ ->
+            host.activity.startActivity(Intent(host.activity, target))
+        }
+
+    /** Hits come from the rows of every screen in [SettingsScreens.all]. */
+    private fun searchSettings(context: Context, query: String): List<ani.dantotsu.settings.search.SearchableSetting> =
+        SettingsIndex.search(context, query).map {
+            ani.dantotsu.settings.search.SearchableSetting(
+                title = it.title,
+                desc = it.summary,
+                icon = it.icon,
+                breadcrumbs = it.breadcrumbs,
+                targetActivity = it.entry.screen.activity,
+                rowId = it.entry.row.id,
+            )
+        }
+
+
+    /**
+     * A tap or a scroll outside the search bar closes the keyboard. Nothing happens on touch
+     * down: a back swipe from the edge also starts with one, and the system cancels it.
+     */
+    private var dismissOnUp = false
+    private var downX = 0f
+    private var downY = 0f
+    private val touchSlop by lazy { android.view.ViewConfiguration.get(this).scaledTouchSlop }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (this::binding.isInitialized) when (ev.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                val field = binding.settingsSearchBarText
+                val bar = field.parent as? android.view.View ?: field
+                val r = android.graphics.Rect()
+                bar.getGlobalVisibleRect(r)
+                dismissOnUp = field.hasFocus() && !r.contains(ev.rawX.toInt(), ev.rawY.toInt())
+                downX = ev.rawX
+                downY = ev.rawY
+            }
+            android.view.MotionEvent.ACTION_MOVE -> if (dismissOnUp) {
+                val dy = kotlin.math.abs(ev.rawY - downY)
+                if (dy > touchSlop && dy > kotlin.math.abs(ev.rawX - downX)) {
+                    dismissOnUp = false
+                    hideSearchKeyboard()
+                }
+            }
+            android.view.MotionEvent.ACTION_UP -> if (dismissOnUp) {
+                dismissOnUp = false
+                hideSearchKeyboard()
+            }
+            android.view.MotionEvent.ACTION_CANCEL -> dismissOnUp = false
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun hideSearchKeyboard() {
+        val field = binding.settingsSearchBarText
+        (getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+            .hideSoftInputFromWindow(field.windowToken, 0)
+        field.clearFocus()
+    }
+
+    // Tracks the keyboard so back goes to it first, then clears the search, then leaves.
+    // Insets, not the keyboard animation: with animations off there is no animation.
+    private fun watchSearchKeyboard() {
+        val field = binding.settingsSearchBarText
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(field) { _, insets ->
+            if (!insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) && field.hasFocus()) {
+                field.clearFocus()
+            }
+            field.post { updateBackCallback() }
+            insets
+        }
     }
 
 }

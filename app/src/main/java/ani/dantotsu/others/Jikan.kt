@@ -28,14 +28,21 @@ object Jikan {
         return null
     }
 
-    suspend fun getEpisodes(malId: Int): Map<String, Episode> {
+    suspend fun getEpisodes(
+        malId: Int,
+        onPageLoaded: ((Map<String, Episode>) -> Unit)? = null
+    ): Map<String, Episode> {
         var hasNextPage = true
         var page = 0
         val eps = mutableMapOf<String, Episode>()
         while (hasNextPage) {
             if (page > 0) kotlinx.coroutines.delay(1000)
             page++
-            val res = query<EpisodeResponse>("anime/$malId/episodes?page=$page")
+            var res = query<EpisodeResponse>("anime/$malId/episodes?page=$page")
+            if (res == null && page > 1) {
+                kotlinx.coroutines.delay(1500)
+                res = query<EpisodeResponse>("anime/$malId/episodes?page=$page")
+            }
             res?.data?.forEach {
                 val ep = it.malID.toString()
                 eps[ep] = Episode(
@@ -44,6 +51,9 @@ object Jikan {
                     filler = if (malId != 34566) it.filler else true,
                     date = it.aired?.substringBefore("T")
                 )
+            }
+            if (eps.isNotEmpty()) {
+                onPageLoaded?.invoke(eps.toMap())
             }
             hasNextPage = res?.pagination?.hasNextPage == true
         }

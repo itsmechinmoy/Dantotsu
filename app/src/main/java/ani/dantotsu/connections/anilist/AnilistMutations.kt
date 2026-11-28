@@ -81,6 +81,12 @@ class AnilistMutations {
         """.trimIndent().replace("\n", "").replace("""    """, "").replace(",}", "}")
 
         executeQuery<JsonObject>(query, variables)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_PROFILE)
+        if (displayAdultContent != null) {
+            Anilist.query.invalidateHomePageCache()
+            Anilist.responseCache.invalidateCategory(AnilistCacheCategory.CATALOG)
+            Anilist.responseCache.invalidateCategory(AnilistCacheCategory.SEARCH)
+        }
     }
 
     suspend fun toggleFav(anime: Boolean = true, id: Int) {
@@ -102,6 +108,10 @@ class AnilistMutations {
         """.trimIndent()
         val variables = if (anime) """{"animeId":"$id"}""" else """{"mangaId":"$id"}"""
         executeQuery<JsonObject>(query, variables)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_FAVS)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_LIST)
+        Anilist.responseCache.invalidateMedia(id)
+        Anilist.query.invalidateHomePageCache()
     }
 
     suspend fun toggleFav(type: FavType, id: Int): Boolean {
@@ -124,7 +134,16 @@ class AnilistMutations {
             }
         """.trimIndent()
         val result = executeQuery<JsonObject>(query)
-        return result?.get("errors") == null && result != null
+        val ok = result?.get("errors") == null && result != null
+        if (ok) {
+            Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_FAVS)
+            if (type == FavType.ANIME || type == FavType.MANGA) {
+                Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_LIST)
+                Anilist.responseCache.invalidateMedia(id)
+                Anilist.query.invalidateHomePageCache()
+            }
+        }
+        return ok
     }
 
     enum class FavType {
@@ -146,7 +165,12 @@ class AnilistMutations {
             }
         """.trimIndent()
         val result = executeQuery<JsonObject>(query, variables)
-        return result?.get("errors") == null
+        val ok = result?.get("errors") == null
+        if (ok && result != null) {
+            Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_PROFILE)
+            Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_LIST)
+        }
+        return ok
     }
 
     suspend fun updateCustomLists(
@@ -176,7 +200,12 @@ class AnilistMutations {
         """.trimIndent().replace("\n", "").replace("""    """, "").replace(",}", "}")
 
         val result = executeQuery<JsonObject>(query, variables)
-        return result?.get("errors") == null
+        val ok = result?.get("errors") == null
+        if (ok && result != null) {
+            Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_PROFILE)
+            Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_LIST)
+        }
+        return ok
     }
 
     suspend fun editList(
@@ -263,6 +292,9 @@ class AnilistMutations {
         executeQuery<JsonObject>(query, variables, show = true)
         Anilist.query.invalidateUserStatusCache()
         Anilist.query.invalidateHomePageCache()
+        Anilist.responseCache.invalidateMedia(mediaID)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_LIST)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_PROFILE)
     }
 
     suspend fun deleteList(listId: Int) {
@@ -277,6 +309,9 @@ class AnilistMutations {
         executeQuery<JsonObject>(query, variables)
         Anilist.query.invalidateUserStatusCache()
         Anilist.query.invalidateHomePageCache()
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.MEDIA_DETAILS)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_LIST)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_PROFILE)
     }
 
     suspend fun rateReview(reviewId: Int, rating: String): Query.RateReviewResponse? {
@@ -291,7 +326,7 @@ $REVIEW_GRAPHQL_FIELDS
     }
 
     suspend fun toggleFollow(id: Int): Query.ToggleFollow? {
-        return executeQuery<Query.ToggleFollow>(
+        val res = executeQuery<Query.ToggleFollow>(
             """
             mutation {
                 ToggleFollow(userId: $id) {
@@ -302,6 +337,10 @@ $REVIEW_GRAPHQL_FIELDS
             }
         """.trimIndent()
         )
+        if (res != null) {
+            Anilist.query.invalidateUserStatusCache()
+        }
+        return res
     }
 
     suspend fun toggleBlock(userId: Int): Boolean {
@@ -637,7 +676,11 @@ $REVIEW_GRAPHQL_FIELDS
         """.trimIndent()
         val result = executeQuery<JsonObject>(query)
         val errors = result?.get("errors")
-        return errors == null && result != null
+        val ok = errors == null && result != null
+        if (ok) {
+            Anilist.responseCache.invalidateCategory(AnilistCacheCategory.USER_PROFILE)
+        }
+        return ok
     }
 
     suspend fun deleteActivityReply(activityId: Int): Boolean {

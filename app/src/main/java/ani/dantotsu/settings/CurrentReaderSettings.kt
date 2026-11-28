@@ -42,7 +42,12 @@ data class CurrentReaderSettings(
         ?: ImageQuality.FAST,
     var webGpuRenderer: Boolean = PrefManager.getVal(PrefName.WebGpuRenderer),
     var preloadAmount: Int = PrefManager.getVal(PrefName.PagePreloadAmount),
-    var alwaysShowChapterTransition: Boolean = PrefManager.getVal(PrefName.AlwaysShowChapterTransition)
+    var alwaysShowChapterTransition: Boolean = PrefManager.getVal(PrefName.AlwaysShowChapterTransition),
+    var colorFilterMode: Int = PrefManager.getVal(PrefName.ReaderColorFilterMode),
+    var filterBrightness: Float = PrefManager.getVal(PrefName.ReaderFilterBrightness),
+    var filterContrast: Float = PrefManager.getVal(PrefName.ReaderFilterContrast),
+    var filterSaturation: Float = PrefManager.getVal(PrefName.ReaderFilterSaturation),
+    var filterTemperature: Float = PrefManager.getVal(PrefName.ReaderFilterTemperature)
 ) : Serializable {
 
     enum class Directions {

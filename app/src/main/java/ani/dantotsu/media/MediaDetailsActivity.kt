@@ -42,7 +42,17 @@ import ani.dantotsu.getThemeColor
 import ani.dantotsu.initActivity
 import ani.dantotsu.loadImage
 import ani.dantotsu.media.anime.AnimeWatchFragment
+import ani.dantotsu.media.anime.MpvPlayerActivity
+import ani.dantotsu.media.anime.getEpisode
+import ani.dantotsu.media.anime.mpv.DantotsuPlayerView
+import ani.dantotsu.media.anime.player.DantotsuPlayerManager
+import ani.dantotsu.media.anime.player.PlayerSubtitleManager
+import ani.dantotsu.others.Xubtitle
 import ani.dantotsu.media.comments.CommentsFragment
+import ani.dantotsu.snackString
+import ani.dantotsu.parsers.StreamTypeDetector
+import ani.dantotsu.torrent.TorrentRelayLink
+import okhttp3.OkHttpClient
 import ani.dantotsu.notifications.comment.MediaNameFetch
 import ani.dantotsu.media.manga.MangaReadFragment
 import ani.dantotsu.media.novel.NovelReadFragment
@@ -90,6 +100,12 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     var anime = true
     private var adult = false
     lateinit var media: Media
+    private var compactPlayerActive = false
+    private var compactPlayerManager: DantotsuPlayerManager? = null
+    private var compactSubtitleManager: PlayerSubtitleManager? = null
+    private val compactOkHttpClient by lazy { OkHttpClient() }
+    private var compactCurrentEpisodeKey: String? = null
+    private var compactSubtitlesVisible = true
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
@@ -579,6 +595,212 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
         binding.root.requestLayout()
     }
 
+    override fun onPause() {
+        super.onPause()
+        if (compactPlayerActive) {
+            saveCompactPosition()
+            compactPlayerManager?.pause()
+        }
+    }
+
+    fun startCompactPlayback(targetMedia: Media): Boolean {
+        if (!::binding.isInitialized) return false
+        if (targetMedia.anime == null) return false
+        if (!PrefManager.getVal<Boolean>(PrefName.CompactPlayerViewEnabled)) return false
+        if (resources.configuration.orientation != Configuration.ORIENTATION_PORTRAIT) return false
+
+        val epKey = targetMedia.anime?.selectedEpisode ?: return false
+        val ep = targetMedia.anime?.episodes?.getEpisode(epKey) ?: model.getEpisode().value ?: return false
+        val ext = ep.extractors?.find { it.server.name == ep.selectedExtractor }
+            ?: ep.extractors?.firstOrNull { it.isPreferred }
+            ?: ep.extractors?.firstOrNull()
+            ?: return false
+        val video = ext.videos.getOrNull(ep.selectedVideo) ?: ext.videos.firstOrNull() ?: return false
+
+        val rawUrl = video.file.url
+        val isTorrent = TorrentRelayLink.parse(rawUrl) != null ||
+            StreamTypeDetector.isTorrentStreamUrl(rawUrl) ||
+            rawUrl.startsWith("magnet:", ignoreCase = true) ||
+            rawUrl.endsWith(".torrent", ignoreCase = true)
+        if (isTorrent || video.drm != null || ext.server.offline) {
+            return false
+        }
+
+        this.media = targetMedia
+        compactCurrentEpisodeKey = epKey
+
+        val container = binding.compactPlayerContainer ?: return false
+        val playerView = binding.compactPlayerView ?: return false
+        val screenW = resources.displayMetrics.widthPixels
+        playerView.updateLayoutParams { height = screenW * 9 / 16 }
+        container.setPadding(0, statusBarHeight, 0, 0)
+
+        binding.mediaBanner.isVisible = false
+        binding.mediaBannerNoKen.isVisible = false
+        binding.mediaCollapseContainer.isVisible = false
+        binding.mediaCover.isVisible = false
+        binding.mediaClose.isVisible = false
+        binding.mediaHome.isVisible = false
+        binding.incognito.isVisible = false
+        container.isVisible = true
+
+        (binding.mediaCollapsing.layoutParams as? AppBarLayout.LayoutParams)?.let { lp ->
+            lp.scrollFlags = 0
+            binding.mediaCollapsing.layoutParams = lp
+        }
+        binding.mediaAppBar.setExpanded(true, false)
+
+        if (!compactPlayerActive) {
+            compactPlayerActive = true
+            initCompactPlayerControls(playerView)
+            model.getEpisode().observe(this) { updatedEp ->
+                if (!compactPlayerActive || updatedEp == null) return@observe
+                val updatedKey = updatedEp.number
+                val uExt = updatedEp.extractors?.find { it.server.name == updatedEp.selectedExtractor }
+                    ?: updatedEp.extractors?.firstOrNull { it.isPreferred }
+                    ?: updatedEp.extractors?.firstOrNull()
+                    ?: return@observe
+                val uVideo = uExt.videos.getOrNull(updatedEp.selectedVideo) ?: uExt.videos.firstOrNull() ?: return@observe
+                if (updatedKey != compactCurrentEpisodeKey || uVideo.file.url != compactPlayerManager?.currentVideo?.file?.url) {
+                    compactCurrentEpisodeKey = updatedKey
+                    playVideoInCompact(uExt, uVideo, updatedEp)
+                }
+            }
+        }
+
+        playVideoInCompact(ext, video, ep)
+        return true
+    }
+
+    private fun initCompactPlayerControls(playerView: DantotsuPlayerView) {
+        playerView.setCompactMode(true)
+        playerView.controllerShowTimeoutMs = 4000
+        val customSub = playerView.findViewById<Xubtitle>(R.id.customSubtitleView)
+        val subMgr = PlayerSubtitleManager(this, playerView, customSub, model) {
+            compactPlayerManager?.mpvView
+        }
+        compactSubtitleManager = subMgr
+        compactPlayerManager = DantotsuPlayerManager(this, playerView, subMgr, compactOkHttpClient) { msg ->
+            snackString("Player Error: $msg")
+        }
+
+        playerView.findViewById<View>(R.id.exo_back)?.setOnClickListener {
+            stopCompactPlayback()
+        }
+        playerView.findViewById<View>(R.id.exo_screen)?.setOnClickListener {
+            expandCompactToFullscreen()
+        }
+        playerView.findViewById<View>(R.id.exo_source)?.setOnClickListener {
+            val epKey = compactCurrentEpisodeKey ?: media.anime?.selectedEpisode ?: return@setOnClickListener
+            media.selected?.server = null
+            media.selected?.let { model.saveSelected(media.id, it) }
+            model.onEpisodeClick(media, epKey, supportFragmentManager, launch = false)
+        }
+        val compactSpeeds = floatArrayOf(1f, 1.25f, 1.5f, 1.75f, 2f)
+        var speedIdx = 0
+        playerView.findViewById<View>(R.id.exo_playback_speed)?.setOnClickListener {
+            speedIdx = (speedIdx + 1) % compactSpeeds.size
+            val nextSpeed = compactSpeeds[speedIdx]
+            compactPlayerManager?.setPlaybackSpeed(nextSpeed)
+            snackString("${nextSpeed}x")
+        }
+        playerView.findViewById<View>(R.id.exo_sub)?.setOnClickListener {
+            compactSubtitlesVisible = !compactSubtitlesVisible
+            compactPlayerManager?.mpvView?.setSubVisibility(compactSubtitlesVisible)
+            snackString(if (compactSubtitlesVisible) "Subtitles ON" else "Subtitles OFF")
+        }
+        val seekStepMs = 10_000L
+        playerView.findViewById<View>(R.id.exo_fast_rewind_button)?.setOnClickListener {
+            val mpv = compactPlayerManager?.mpvView ?: return@setOnClickListener
+            mpv.seekTo((mpv.currentPosition.value - seekStepMs).coerceAtLeast(0L))
+        }
+        playerView.findViewById<View>(R.id.exo_fast_forward_button)?.setOnClickListener {
+            val mpv = compactPlayerManager?.mpvView ?: return@setOnClickListener
+            mpv.seekTo(mpv.currentPosition.value + seekStepMs)
+        }
+        playerView.findViewById<View>(R.id.exo_skip)?.setOnClickListener {
+            val skipSec = PrefManager.getVal<Int>(PrefName.SkipTime).coerceAtLeast(30)
+            val mpv = compactPlayerManager?.mpvView ?: return@setOnClickListener
+            mpv.seekTo(mpv.currentPosition.value + skipSec * 1000L)
+        }
+    }
+
+    private fun playVideoInCompact(
+        ext: ani.dantotsu.parsers.VideoExtractor,
+        video: ani.dantotsu.parsers.Video,
+        ep: ani.dantotsu.media.anime.Episode
+    ) {
+        val subMgr = compactSubtitleManager ?: return
+        val playerMgr = compactPlayerManager ?: return
+        val extSubs = subMgr.buildExternalSubtitles(
+            subtitles = ext.subtitles,
+            embedUrl = ext.server.embed.url,
+            currentVideoUrl = video.file.url,
+            hasExtSubtitles = ext.subtitles.isNotEmpty(),
+            defaultSubLanguage = "English"
+        )
+        val epKey = compactCurrentEpisodeKey ?: ep.number
+        val savedPos = PrefManager.getCustomVal("${media.id}_$epKey", 0L)
+        binding.compactPlayerView?.findViewById<android.widget.TextView>(R.id.exo_anime_title)?.text =
+            "${media.userPreferredName} - Ep ${ep.number}"
+
+        playerMgr.loadVideo(
+            video = video,
+            startPositionMs = savedPos,
+            externalSubtitles = extSubs,
+            audioTracks = ext.audioTracks,
+            speed = 1.0f
+        )
+        subMgr.setupSubFormatting()
+    }
+
+    private fun saveCompactPosition() {
+        val epKey = compactCurrentEpisodeKey ?: media.anime?.selectedEpisode ?: return
+        val pos = compactPlayerManager?.mpvView?.currentPosition?.value ?: 0L
+        if (pos > 0L) {
+            PrefManager.setCustomVal("${media.id}_$epKey", pos)
+        }
+    }
+
+    private fun expandCompactToFullscreen() {
+        saveCompactPosition()
+        val resumePos = compactPlayerManager?.mpvView?.currentPosition?.value ?: 0L
+        stopCompactPlayback()
+        MpvPlayerActivity.media = media
+        MpvPlayerActivity.initialized = true
+        MpvPlayerActivity.targetStartPosition = resumePos
+        startActivity(Intent(this, MpvPlayerActivity::class.java))
+    }
+
+    fun stopCompactPlayback() {
+        if (!::binding.isInitialized) return
+        if (compactPlayerActive) {
+            saveCompactPosition()
+        }
+        compactPlayerActive = false
+        compactPlayerManager?.release()
+        compactSubtitleManager?.release()
+        compactPlayerManager = null
+        compactSubtitleManager = null
+
+        binding.compactPlayerContainer?.isVisible = false
+        val bannerAnimations: Boolean = PrefManager.getVal(PrefName.BannerAnimations)
+        binding.mediaBanner.isVisible = bannerAnimations
+        binding.mediaBannerNoKen.isVisible = !bannerAnimations
+        binding.mediaCollapseContainer.isVisible = true
+        binding.mediaCover.isVisible = true
+        binding.mediaClose.isVisible = true
+        binding.mediaHome.isVisible = true
+        binding.incognito.isVisible = PrefManager.getVal(PrefName.Incognito)
+
+        (binding.mediaCollapsing.layoutParams as? AppBarLayout.LayoutParams)?.let { lp ->
+            lp.scrollFlags = AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL or
+                AppBarLayout.LayoutParams.SCROLL_FLAG_EXIT_UNTIL_COLLAPSED or
+                AppBarLayout.LayoutParams.SCROLL_FLAG_SNAP
+            binding.mediaCollapsing.layoutParams = lp
+        }
+    }
+
     private fun syncExtensionPrefsUi() {
         if (!::binding.isInitialized) return
         val hasExtFragment =
@@ -772,6 +994,7 @@ class MediaDetailsActivity : AppCompatActivity(), AppBarLayout.OnOffsetChangedLi
     }
 
     override fun onDestroy() {
+        stopCompactPlayback()
         super.onDestroy()
         Refresh.activity.remove(this.hashCode())
         mediaSingleton = null

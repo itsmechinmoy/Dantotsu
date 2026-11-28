@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Back button, screen title and icon; first item of every settings screen. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="32dp"
+        app:cardBackgroundColor="@color/nav_bg_inv"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp">
+
+        <ImageButton
+            android:id="@+id/screenBack"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:background="@color/nav_bg_inv"
+            android:contentDescription="@string/back"
+            android:padding="16dp"
+            app:srcCompat="@drawable/ic_round_arrow_back_ios_new_24"
+            app:tint="?attr/colorOnBackground" />
+    </androidx.cardview.widget.CardView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        tools:ignore="UseCompoundDrawables">
+
+        <TextView
+            android:id="@+id/screenTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="32dp"
+            android:layout_weight="1"
+            android:accessibilityHeading="true"
+            android:fontFamily="@font/poppins_bold"
+            android:textSize="28sp"
+            tools:ignore="UnusedAttribute"
+            tools:text="@string/settings" />
+
+        <ImageView
+            android:id="@+id/screenIcon"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_marginEnd="20dp"
+            android:padding="24dp"
+            app:tint="?attr/colorOnBackground"
+            tools:ignore="ContentDescription"
+            tools:srcCompat="@drawable/ic_round_settings_24" />
+    </LinearLayout>
+</LinearLayout>

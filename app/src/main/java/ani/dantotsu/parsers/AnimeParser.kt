@@ -142,8 +142,10 @@ abstract class AnimeParser : BaseParser() {
         return tryWithSuspend(post) {
             val servers = loadVideoServers(episodeUrl, extra, sEpisode)
             val target = servers.find { it.name == serverName }
-                ?: servers.find { it.isPreferred }
-                ?: servers.firstOrNull()
+                ?: ani.dantotsu.media.anime.selector.ReleaseFamily.pick(serverName, servers) { it.name }
+                // a remembered release whose group has nothing for this episode: let the user pick
+                ?: if (ani.dantotsu.media.anime.selector.ReleaseFamily.of(serverName) != null) null
+                else servers.find { it.isPreferred } ?: servers.firstOrNull()
 
             target?.let {
                 getVideoExtractor(it)?.apply {

@@ -1,44 +1,43 @@
 package ani.dantotsu.settings
 
 import android.app.AlertDialog
-import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
-import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
-import android.widget.ArrayAdapter
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.core.view.isVisible
-import androidx.core.view.updateLayoutParams
 import androidx.documentfile.provider.DocumentFile
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.lifecycle.lifecycleScope
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.Anilist
-import ani.dantotsu.databinding.ActivitySettingsCommonBinding
 import ani.dantotsu.databinding.DialogSetPasswordBinding
 import ani.dantotsu.databinding.DialogUserAgentBinding
 import ani.dantotsu.download.DownloadsManager
 import ani.dantotsu.initActivity
-import ani.dantotsu.navBarHeight
 import ani.dantotsu.others.calc.BiometricPromptUtils
 import ani.dantotsu.restartApp
 import ani.dantotsu.savePrefsToDownloads
+import ani.dantotsu.settings.rows.Section
+import ani.dantotsu.settings.rows.Segment
+import ani.dantotsu.settings.rows.SettingsHost
+import ani.dantotsu.settings.rows.SettingsScreen
+import ani.dantotsu.settings.rows.SettingsScreenActivity
+import ani.dantotsu.settings.rows.actionRow
+import ani.dantotsu.settings.rows.choiceRow
+import ani.dantotsu.settings.rows.segmentedRow
+import ani.dantotsu.settings.rows.switchRow
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.settings.saving.internal.Location
 import ani.dantotsu.settings.saving.internal.PreferenceKeystore
 import ani.dantotsu.settings.saving.internal.PreferencePackager
-import ani.dantotsu.statusBarHeight
-import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.toast
 import ani.dantotsu.util.LauncherWrapper
 import ani.dantotsu.util.StoragePermissions
 import ani.dantotsu.util.customAlertDialog
-import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,18 +45,14 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.UUID
 
-class SettingsCommonActivity : AppCompatActivity() {
-    private lateinit var binding: ActivitySettingsCommonBinding
-    private lateinit var launcher: LauncherWrapper
+class SettingsCommonActivity : SettingsScreenActivity() {
+    override val screen get() = CommonScreen
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        ThemeManager(this).applyTheme()
-        initActivity(this)
-        val context = this
-        binding = ActivitySettingsCommonBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        val openDocumentLauncher =
+    private lateinit var launcher: LauncherWrapper
+    private lateinit var openDocumentLauncher: ActivityResultLauncher<Array<String>>
+
+    override fun onScreenCreate(savedInstanceState: Bundle?) {
+        openDocumentLauncher =
             registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null) {
                     try {
@@ -101,86 +96,6 @@ class SettingsCommonActivity : AppCompatActivity() {
             }
         val contract = ActivityResultContracts.OpenDocumentTree()
         launcher = LauncherWrapper(this, contract)
-
-        binding.apply {
-            settingsCommonLayout.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                topMargin = statusBarHeight
-                bottomMargin = navBarHeight
-            }
-            commonSettingsBack.setOnClickListener {
-                onBackPressedDispatcher.onBackPressed()
-            }
-            val exDns =
-                listOf(
-                    "None",
-                    "Cloudflare",
-                    "Google",
-                    "AdGuard",
-                    "Quad9",
-                    "AliDNS",
-                    "DNSPod",
-                    "360",
-                    "Quad101",
-                    "Mullvad",
-                    "Controld",
-                    "Njalla",
-                    "Shecan",
-                    "Libre",
-                )
-            settingsExtensionDns.setText(exDns[PrefManager.getVal(PrefName.DohProvider)])
-            settingsExtensionDns.setAdapter(
-                ArrayAdapter(
-                    context,
-                    R.layout.item_dropdown,
-                    exDns,
-                ),
-            )
-            settingsExtensionDns.setOnItemClickListener { _, _, i, _ ->
-                PrefManager.setVal(PrefName.DohProvider, i)
-                settingsExtensionDns.clearFocus()
-                restartApp()
-            }
-
-            val highlightKey = intent.getStringExtra(ani.dantotsu.settings.search.SettingsSearchAdapter.EXTRA_HIGHLIGHT_KEY)
-            val settingsList = buildCommonSettingsList(context, openDocumentLauncher)
-            settingsRecyclerView.adapter = SettingsAdapter(settingsList, highlightKey = highlightKey)
-
-                        settingsRecyclerView.apply {
-                layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-                setHasFixedSize(true)
-            }
-            var previousStart: View =
-                when (PrefManager.getVal<Int>(PrefName.DefaultStartUpTab)) {
-                    0 -> uiSettingsAnime
-                    1 -> uiSettingsHome
-                    2 -> uiSettingsManga
-                    else -> uiSettingsHome
-                }
-            previousStart.alpha = 1f
-
-            fun uiDefault(
-                mode: Int,
-                current: View,
-            ) {
-                previousStart.alpha = 0.33f
-                previousStart = current
-                current.alpha = 1f
-                PrefManager.setVal(PrefName.DefaultStartUpTab, mode)
-                initActivity(context)
-            }
-
-            uiSettingsAnime.setOnClickListener {
-                uiDefault(0, it)
-            }
-
-            uiSettingsHome.setOnClickListener {
-                uiDefault(1, it)
-            }
-
-            uiSettingsManga.setOnClickListener {
-                uiDefault(2, it)
-            }
-        }
     }
 
     private fun passwordAlertDialog(
@@ -245,167 +160,7 @@ class SettingsCommonActivity : AppCompatActivity() {
             handleOkAction()
         }
     }
-    private fun buildCommonSettingsList(
-        context: AppCompatActivity,
-        openDocumentLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>
-    ): ArrayList<Settings> {
-        return arrayListOf(
-            Settings(
-                type = 1,
-                name = getString(R.string.ui_settings),
-                desc = getString(R.string.ui_settings_desc),
-                icon = R.drawable.ic_round_auto_awesome_24,
-                onClick = {
-                    startActivity(
-                        Intent(
-                            context,
-                            UserInterfaceSettingsActivity::class.java,
-                        ),
-                    )
-                },
-                isActivity = true,
-            ),
-            Settings(
-                type = 1,
-                name = getString(R.string.download_manager_select),
-                desc = getString(R.string.download_manager_select_desc),
-                icon = R.drawable.ic_download_24,
-                onClick = {
-                    val managers = arrayOf("Default", "1DM", "ADM")
-                    customAlertDialog().apply {
-                        setTitle(getString(R.string.download_manager))
-                        singleChoiceItems(
-                            managers,
-                            PrefManager.getVal(PrefName.DownloadManager),
-                        ) { count ->
-                            PrefManager.setVal(PrefName.DownloadManager, count)
-                        }
-                        show()
-                    }
-                },
-            ),
-            Settings(
-                type = 1,
-                name = "Max Parallel Downloads",
-                desc = "Concurrent download tasks (0 = Sequential, 1-10 = Concurrent). Note: High concurrency may trigger source rate limits.",
-                icon = R.drawable.ic_download_24,
-                onClick = {
-                    val options = arrayOf("0 (Off / Sequential)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
-                    val current = PrefManager.getVal<Int>(PrefName.MaxParallelDownloads).coerceIn(0, 10)
-                    customAlertDialog().apply {
-                        setTitle("Max Parallel Downloads")
-                        singleChoiceItems(options, current) { which ->
-                            PrefManager.setVal(PrefName.MaxParallelDownloads, which)
-                        }
-                        show()
-                    }
-                },
-            ),
-            Settings(
-                type = 2,
-                name = getString(R.string.download_wifi_only),
-                desc = getString(R.string.download_wifi_only_desc),
-                icon = R.drawable.lan_24,
-                isChecked = PrefManager.getVal(PrefName.DownloadWifiOnly),
-                switch = { isChecked, _ ->
-                    PrefManager.setVal(PrefName.DownloadWifiOnly, isChecked)
-                }
-            ),
-            Settings(
-                type = 1,
-                name = getString(R.string.app_lock),
-                desc = getString(R.string.app_lock_desc),
-                icon = R.drawable.ic_round_lock_open_24,
-                onClick = { showAppLockDialog() },
-            ),
-            Settings(
-                type = 1,
-                name = getString(R.string.label_data_storage),
-                desc = getString(R.string.label_data_storage_desc),
-                icon = R.drawable.ic_round_folder_24,
-                onClick = {
-                    startActivity(Intent(context, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
-                },
-                isActivity = true
-            ),
-            Settings(
-                type = 1,
-                name = getString(R.string.backup_restore),
-                desc = getString(R.string.backup_restore_desc),
-                icon = R.drawable.backup_restore,
-                onClick = { showBackupRestoreDialog(context, openDocumentLauncher) },
-            ),
-            Settings(
-                type = 1,
-                name = getString(R.string.change_download_location),
-                desc = getString(R.string.change_download_location_desc),
-                icon = R.drawable.ic_round_source_24,
-                onClick = { showChangeDownloadLocationDialog(context) },
-            ),
-            Settings(
-                type = 1,
-                name = getString(R.string.rebuild_download_index),
-                desc = getString(R.string.rebuild_download_index_desc),
-                icon = R.drawable.ic_download_24,
-                onClick = { showRebuildDownloadIndexDialog() },
-            ),
-            Settings(
-                type = 2,
-                name = getString(R.string.always_continue_content),
-                desc = getString(R.string.always_continue_content_desc),
-                icon = R.drawable.ic_round_delete_24,
-                isChecked = PrefManager.getVal(PrefName.ContinueMedia),
-                switch = { isChecked, _ ->
-                    PrefManager.setVal(PrefName.ContinueMedia, isChecked)
-                },
-            ),
-            Settings(
-                type = 2,
-                name = getString(R.string.hide_private),
-                desc = getString(R.string.hide_private_desc),
-                icon = R.drawable.ic_round_remove_red_eye_24,
-                isChecked = PrefManager.getVal(PrefName.HidePrivate),
-                switch = { isChecked, _ ->
-                    PrefManager.setVal(PrefName.HidePrivate, isChecked)
-                    restartApp()
-                },
-            ),
-            Settings(
-                type = 2,
-                name = getString(R.string.search_source_list),
-                desc = getString(R.string.search_source_list_desc),
-                icon = R.drawable.ic_round_search_sources_24,
-                isChecked = PrefManager.getVal(PrefName.SearchSources),
-                switch = { isChecked, _ ->
-                    PrefManager.setVal(PrefName.SearchSources, isChecked)
-                },
-            ),
-            Settings(
-                type = 2,
-                name = getString(R.string.recentlyListOnly),
-                desc = getString(R.string.recentlyListOnly_desc),
-                icon = R.drawable.ic_round_new_releases_24,
-                isChecked = PrefManager.getVal(PrefName.RecentlyListOnly),
-                switch = { isChecked, _ ->
-                    PrefManager.setVal(PrefName.RecentlyListOnly, isChecked)
-                },
-            ),
-            Settings(
-                type = 2,
-                name = getString(R.string.adult_only_content),
-                desc = getString(R.string.adult_only_content_desc),
-                icon = R.drawable.ic_round_nsfw_24,
-                isChecked = PrefManager.getVal(PrefName.AdultOnly),
-                switch = { isChecked, _ ->
-                    PrefManager.setVal(PrefName.AdultOnly, isChecked)
-                    restartApp()
-                },
-                isVisible = Anilist.adult,
-            ),
-        )
-    }
-
-    private fun showAppLockDialog() {
+    internal fun showAppLockDialog() {
         customAlertDialog().apply {
             val view = DialogSetPasswordBinding.inflate(layoutInflater)
             setTitle(R.string.app_lock)
@@ -463,10 +218,8 @@ class SettingsCommonActivity : AppCompatActivity() {
         }
     }
 
-    private fun showBackupRestoreDialog(
-        context: AppCompatActivity,
-        openDocumentLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>
-    ) {
+    internal fun showBackupRestoreDialog() {
+        val context = this
         StoragePermissions.downloadsPermission(context)
         val filteredLocations = Location.entries.filter { it.exportable }
         val selectedArray = BooleanArray(filteredLocations.size) { false }
@@ -516,7 +269,8 @@ class SettingsCommonActivity : AppCompatActivity() {
         }
     }
 
-    private fun showChangeDownloadLocationDialog(context: AppCompatActivity) {
+    internal fun showChangeDownloadLocationDialog() {
+        val context = this
         context.customAlertDialog().apply {
             setTitle(R.string.change_download_location)
             setMessage(R.string.download_location_msg)
@@ -550,7 +304,7 @@ class SettingsCommonActivity : AppCompatActivity() {
         }
     }
 
-    private fun showRebuildDownloadIndexDialog() {
+    internal fun showRebuildDownloadIndexDialog() {
         customAlertDialog().apply {
             setTitle(R.string.rebuild_download_index)
             setMessage(R.string.rebuild_download_index_msg)
@@ -567,5 +321,80 @@ class SettingsCommonActivity : AppCompatActivity() {
             show()
         }
     }
+}
 
+object CommonScreen : SettingsScreen("common", R.string.common, R.drawable.ic_lightbulb_24, R.string.common_desc) {
+
+    override val activity get() = SettingsCommonActivity::class.java
+
+    private val DNS = listOf(
+        "None", "Cloudflare", "Google", "AdGuard", "Quad9", "AliDNS", "DNSPod",
+        "360", "Quad101", "Mullvad", "Controld", "Njalla", "Shecan", "Libre",
+    )
+    private val MANAGERS = listOf("Default", "1DM", "ADM")
+
+    private fun common(host: SettingsHost) = host.activity as SettingsCommonActivity
+
+    override fun sections() = listOf(
+        Section(R.string.general, listOf(
+            segmentedRow(PrefName.DefaultStartUpTab, R.string.startUpTab, R.drawable.ic_round_home_24,
+                options = listOf(
+                    Segment(R.drawable.ic_round_movie_filter_24, R.string.anime),
+                    Segment(R.drawable.ic_round_home_24, R.string.home),
+                    Segment(R.drawable.ic_round_import_contacts_24, R.string.manga),
+                ),
+                onChange = { host, _ -> initActivity(host.activity) }),
+            actionRow("ui_settings", R.string.ui_settings, R.string.ui_settings_desc,
+                R.drawable.ic_round_auto_awesome_24, opensScreen = true,
+                // search reaches the interface settings through this row
+                keywords = listOf(R.string.immersive_mode, R.string.hide_notification_dot,
+                    R.string.home_layout_show, R.string.small_view, R.string.carousel_clearlogo,
+                    R.string.banner_animations, R.string.layout_animations),
+                onClick = { host, _ ->
+                    host.activity.startActivity(android.content.Intent(host.activity, UserInterfaceSettingsActivity::class.java))
+                }),
+            choiceRow(PrefName.DohProvider, R.string.selected_dns, R.drawable.ic_round_dns_24,
+                labels = { DNS }, onChange = { host, _ -> host.activity.restartApp() }),
+            switchRow(PrefName.ContinueMedia, R.string.always_continue_content, R.string.always_continue_content_desc,
+                R.drawable.ic_round_delete_24),
+            switchRow(PrefName.SearchSources, R.string.search_source_list, R.string.search_source_list_desc,
+                R.drawable.ic_round_search_sources_24),
+            switchRow(PrefName.RecentlyListOnly, R.string.recentlyListOnly, R.string.recentlyListOnly_desc,
+                R.drawable.ic_round_new_releases_24),
+        )),
+        Section(R.string.downloads, listOf(
+            choiceRow(PrefName.DownloadManager, R.string.download_manager_select, R.drawable.ic_download_24,
+                summary = R.string.download_manager_select_desc, labels = { MANAGERS }),
+            choiceRow(PrefName.MaxParallelDownloads, R.string.max_parallel_downloads, R.drawable.ic_download_24,
+                summary = R.string.max_parallel_downloads_desc,
+                labels = { c -> listOf(c.getString(R.string.max_parallel_downloads_off)) + (1..10).map { it.toString() } }),
+            switchRow(PrefName.DownloadWifiOnly, R.string.download_wifi_only, R.string.download_wifi_only_desc,
+                R.drawable.lan_24),
+            actionRow("change_download_location", R.string.change_download_location,
+                R.string.change_download_location_desc, R.drawable.ic_round_source_24,
+                onClick = { host, _ -> common(host).showChangeDownloadLocationDialog() }),
+            actionRow("rebuild_download_index", R.string.rebuild_download_index, R.string.rebuild_download_index_desc,
+                R.drawable.ic_download_24, onClick = { host, _ -> common(host).showRebuildDownloadIndexDialog() }),
+        )),
+        Section(R.string.settings_section_privacy_security, listOf(
+            actionRow("app_lock", R.string.app_lock, R.string.app_lock_desc, R.drawable.ic_round_lock_open_24,
+                keys = listOf(PrefName.AppPassword, PrefName.BiometricToken, PrefName.OverridePassword),
+                onClick = { host, _ -> common(host).showAppLockDialog() }),
+            switchRow(PrefName.HidePrivate, R.string.hide_private, R.string.hide_private_desc,
+                R.drawable.ic_round_remove_red_eye_24, onChange = { host, _ -> host.activity.restartApp() }),
+            switchRow(PrefName.AdultOnly, R.string.adult_only_content, R.string.adult_only_content_desc,
+                R.drawable.ic_round_nsfw_24, visible = { Anilist.adult },
+                onChange = { host, _ -> host.activity.restartApp() }),
+        )),
+        Section(R.string.settings_section_data_backup, listOf(
+            actionRow("data_storage", R.string.label_data_storage, R.string.label_data_storage_desc,
+                R.drawable.ic_round_folder_24, opensScreen = true,
+                onClick = { host, _ ->
+                    host.activity.startActivity(
+                        android.content.Intent(host.activity, ani.dantotsu.settings.data.SettingsDataActivity::class.java))
+                }),
+            actionRow("backup_restore", R.string.backup_restore, R.string.backup_restore_desc, R.drawable.backup_restore,
+                onClick = { host, _ -> common(host).showBackupRestoreDialog() }),
+        )),
+    )
 }

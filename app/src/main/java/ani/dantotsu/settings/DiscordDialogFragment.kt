@@ -7,17 +7,11 @@ import android.view.ViewGroup
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.R
 import ani.dantotsu.connections.discord.Discord
-import ani.dantotsu.connections.discord.RPCManager
 import ani.dantotsu.connections.mal.MAL
 import ani.dantotsu.databinding.BottomSheetDiscordRpcBinding
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import com.bumptech.glide.Glide
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import androidx.lifecycle.lifecycleScope
-import java.io.File
 
 class DiscordDialogFragment : BottomSheetDialogFragment() {
     private var _binding: BottomSheetDiscordRpcBinding? = null
@@ -25,7 +19,6 @@ class DiscordDialogFragment : BottomSheetDialogFragment() {
 
     private var isMangaTabSelected = false
     private var isLoadingSettings = false
-    private var tokenRefreshJob: Job? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -93,48 +86,6 @@ class DiscordDialogFragment : BottomSheetDialogFragment() {
         isMangaTabSelected = false
         loadSettingsForCurrentTab()
         updatePreview()
-        updateTokenExpiry()
-
-        // Auto-refresh the token expiry display every 30s while dialog is open
-        tokenRefreshJob = lifecycleScope.launch {
-            while (true) {
-                delay(30_000L)
-                if (_binding != null) updateTokenExpiry()
-            }
-        }
-    }
-
-    private fun updateTokenExpiry() {
-        var expiresAt = RPCManager.getTokenExpiresAt()
-
-        // If RPCManager hasn't initialized yet, try loading from disk
-        if (expiresAt == 0L) {
-            expiresAt = runCatching {
-                val ctx = context ?: return
-                File(ctx.filesDir, "discord/discord_expiry.txt").readText().toLong()
-            }.getOrDefault(0L)
-        }
-
-        val currentBinding = _binding ?: return
-        if (expiresAt > 0L) {
-            val remaining = expiresAt - System.currentTimeMillis()
-            currentBinding.tokenExpiryStatus.visibility = View.VISIBLE
-            if (remaining <= 0) {
-                currentBinding.tokenExpiryStatus.text = "⚠️ Token expired — will auto-refresh on next RPC"
-            } else {
-                val days = remaining / (1000 * 60 * 60 * 24)
-                val hours = remaining / (1000 * 60 * 60) % 24
-                val mins = remaining / (1000 * 60) % 60
-                val timeStr = buildString {
-                    if (days > 0) append("${days}d ")
-                    if (hours > 0) append("${hours}h ")
-                    if (days == 0L) append("${mins}m")
-                }.trim()
-                currentBinding.tokenExpiryStatus.text = "🔄 Token auto-refreshes in $timeStr"
-            }
-        } else {
-            currentBinding.tokenExpiryStatus.visibility = View.GONE
-        }
     }
 
     private fun loadSettingsForCurrentTab() {
@@ -220,8 +171,6 @@ class DiscordDialogFragment : BottomSheetDialogFragment() {
     }
 
     override fun onDestroyView() {
-        tokenRefreshJob?.cancel()
-        tokenRefreshJob = null
         _binding = null
         super.onDestroyView()
     }

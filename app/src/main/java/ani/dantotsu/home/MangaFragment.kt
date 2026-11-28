@@ -25,6 +25,7 @@ import ani.dantotsu.connections.anilist.Anilist
 import ani.dantotsu.connections.anilist.AnilistMangaViewModel
 import ani.dantotsu.connections.anilist.getUserId
 import ani.dantotsu.databinding.FragmentMangaBinding
+import ani.dantotsu.media.CarouselLogoResolver
 import ani.dantotsu.media.MediaAdaptor
 import ani.dantotsu.media.ProgressAdapter
 import ani.dantotsu.navBarHeight
@@ -192,7 +193,7 @@ class MangaFragment : Fragment() {
             mangaPageAdapter.updateAvatar()
         }
 
-        setupRefreshObserver(popularAdaptor, scope)
+        setupRefreshObserver(scope)
     }
 
     override fun onResume() {
@@ -249,6 +250,11 @@ class MangaFragment : Fragment() {
                     mangaPageAdapter.updateHeight()
                     model.getTrending().observe(viewLifecycleOwner) {
                         if (it != null) {
+                            if (PrefManager.getVal(PrefName.CarouselClearLogo)) {
+                                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                                    CarouselLogoResolver.preload(it)
+                                }
+                            }
                             mangaPageAdapter.updateTrending(
                                 MediaAdaptor(
                                     if (PrefManager.getVal(PrefName.SmallView)) 3 else 2,
@@ -268,7 +274,6 @@ class MangaFragment : Fragment() {
     }
 
     private fun setupRefreshObserver(
-        popularAdaptor: MediaAdaptor,
         scope: androidx.lifecycle.LifecycleCoroutineScope
     ) {
         fun load() = scope.launch(Dispatchers.Main) {
@@ -285,30 +290,24 @@ class MangaFragment : Fragment() {
                         if (rescueMode) {
                             withContext(Dispatchers.Main) { load() }
                         } else {
-                            Anilist.userid =
-                                PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
-                                    ?.toIntOrNull()
                             if (Anilist.userid == null) {
-                                getUserId(context) {
-                                    load()
-                                }
-                            } else {
-                                getUserId(context) {
-                                    load()
-                                }
+                                Anilist.userid =
+                                    PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
+                                        ?.toIntOrNull()
+                            }
+                            getUserId(context) {
+                                load()
                             }
                         }
                     }
-                    model.loaded = true
-                    if (_binding?.mangaRefresh?.isRefreshing == true) {
-                        withContext(Dispatchers.Main) {
-                            model.aniMangaSearchResults.results.clear()
-                            popularAdaptor.notifyDataSetChanged()
-                        }
+                    val isPullToRefresh = _binding?.mangaRefresh?.isRefreshing == true
+                    val loadedOk = withContext(Dispatchers.IO) {
+                        model.loadAll(
+                            onList = PrefManager.getVal(PrefName.PopularMangaList),
+                            forceRefresh = isPullToRefresh,
+                        )
                     }
-                    withContext(Dispatchers.IO) {
-                        model.loadAll(PrefManager.getVal(PrefName.PopularMangaList))
-                    }
+                    model.loaded = loadedOk
 
                     live.postValue(false)
                     _binding?.mangaRefresh?.isRefreshing = false

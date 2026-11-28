@@ -1,6 +1,7 @@
 package ani.dantotsu.connections.anilist
 
 import android.util.Base64
+import ani.dantotsu.Mapper
 import ani.dantotsu.R
 import ani.dantotsu.checkGenreTime
 import ani.dantotsu.checkId
@@ -38,6 +39,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.ObjectInputStream
@@ -62,16 +69,22 @@ class AnilistQueries {
         val cachedAt: Long
     ) : Serializable
 
-    fun loadHomePageCache(): Map<String, ArrayList<Media>>? {
+    fun loadHomePageCacheWithAge(): Pair<Map<String, ArrayList<Media>>, Long>? {
         val cached = PrefManager.getNullableCustomVal(
             "home_page_cache",
             null,
             HomePageCache::class.java
         ) ?: return null
-        val cacheExpired = System.currentTimeMillis() - cached.cachedAt > 3 * 60 * 60 * 1000L
-        if (cacheExpired) return null
-        return cached.data
+        val ageMs = System.currentTimeMillis() - cached.cachedAt
+        if (ageMs < 0L || ageMs > 24 * 60 * 60 * 1000L) return null
+        return cached.data to ageMs
     }
+
+    fun loadHomePageCache(): Map<String, ArrayList<Media>>? = loadHomePageCacheWithAge()?.first
+
+    /** Returns any saved home cache regardless of age, for display while waiting/rate-limited. */
+    fun loadHomePageCacheStale(): Map<String, ArrayList<Media>>? =
+        PrefManager.getNullableCustomVal("home_page_cache", null, HomePageCache::class.java)?.data
 
     fun saveHomePageCache(data: Map<String, ArrayList<Media>>) {
         PrefManager.setCustomVal(
@@ -82,13 +95,18 @@ class AnilistQueries {
 
     fun invalidateHomePageCache() {
         PrefManager.setCustomVal("home_page_cache", null)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.HOME)
     }
 
     suspend fun getUserData(): Boolean {
         val response: Query.Viewer?
         measureTimeMillis {
             response = executeQuery(
-                """{Viewer{name options{timezone titleLanguage staffNameLanguage activityMergeTime airingNotifications displayAdultContent restrictMessagesToFollowing} avatar{medium} bannerImage id mediaListOptions{scoreFormat rowOrder animeList{customLists} mangaList{customLists}} statistics{anime{episodesWatched} manga{chaptersRead}} unreadNotificationCount}}"""
+                """{Viewer{name options{timezone titleLanguage staffNameLanguage activityMergeTime airingNotifications displayAdultContent restrictMessagesToFollowing} avatar{medium} bannerImage id mediaListOptions{scoreFormat rowOrder animeList{customLists} mangaList{customLists}} statistics{anime{episodesWatched} manga{chaptersRead}} unreadNotificationCount}}""",
+                cacheSpec = AnilistCacheSpec(
+                    category = AnilistCacheCategory.USER_PROFILE,
+                    freshTtlMs = 5 * 60_000L,
+                )
             )
         }.also { println("time : $it") }
         val user = response?.data?.user ?: return false
@@ -139,7 +157,12 @@ class AnilistQueries {
                 val typeArg = if (type != null) "type: $type," else ""
                 val response = executeQuery<Query.Media>(
                     """{Media($typeArg${if (!mal) "id:" else "idMal:"}$id){id idMal status chapters episodes nextAiringEpisode{episode}type meanScore isAdult isFavourite format bannerImage coverImage{large}title{english romaji userPreferred}mediaListEntry{progress private score(format:POINT_100)status}}}""",
-                    force = true
+                    force = true,
+                    cacheSpec = AnilistCacheSpec(
+                        category = AnilistCacheCategory.MEDIA_DETAILS,
+                        freshTtlMs = 2 * 60_000L,
+                        mediaId = if (!mal) id else null,
+                    )
                 )
                 val fetchedMedia = response?.data?.media
                 if (fetchedMedia != null) return Media(fetchedMedia)
@@ -199,8 +222,13 @@ class AnilistQueries {
     }
 
     private suspend fun fetchAndParseMediaDetails(media: Media) {
+        val mediaCacheSpec = AnilistCacheSpec(
+            category = AnilistCacheCategory.MEDIA_DETAILS,
+            freshTtlMs = 3 * 60_000L,
+            mediaId = media.id,
+        )
         var response =
-            executeQuery<Query.Media>(fullMediaInformation(media.id), force = true)
+            executeQuery<Query.Media>(fullMediaInformation(media.id), force = true, cacheSpec = mediaCacheSpec)
         if (response != null) {
             val fetchedMedia = response.data?.media
             if (fetchedMedia != null) {
@@ -210,7 +238,8 @@ class AnilistQueries {
                 response = executeQuery(
                     fullMediaInformation(media.id),
                     force = true,
-                    useToken = false
+                    useToken = false,
+                    cacheSpec = mediaCacheSpec,
                 )
                 val retryMedia = response?.data?.media
                 if (retryMedia != null) {
@@ -220,7 +249,7 @@ class AnilistQueries {
                 }
             }
         } else {
-            if (currContext()?.let { isOnline(it) } == true) {
+            if (currContext()?.let { isOnline(it) } == true && !Anilist.isRateLimited()) {
                 snackString(currContext()?.getString(R.string.error_getting_data))
             }
         }
@@ -317,7 +346,7 @@ class AnilistQueries {
             media.characters?.add(
                 Character(
                     id = node.id,
-                    name = node.name?.userPreferred,
+                    name = edge.name?.takeIf { it.isNotBlank() } ?: node.name?.userPreferred,
                     image = node.image?.medium,
                     banner = media.banner ?: media.cover,
                     isFav = node.isFavourite ?: false,
@@ -658,6 +687,15 @@ fun userMediaDetails(media: Media): Media {
 
     fun invalidateUserStatusCache() {
         PrefManager.setCustomVal("user_status_cache", null)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.STORIES)
+    }
+
+    fun invalidateBannerCache() {
+        PrefManager.setCustomVal("banner_ANIME_url", null)
+        PrefManager.setCustomVal("banner_ANIME_time", null)
+        PrefManager.setCustomVal("banner_MANGA_url", null)
+        PrefManager.setCustomVal("banner_MANGA_time", null)
+        Anilist.responseCache.invalidateCategory(AnilistCacheCategory.BANNERS)
     }
 
     suspend fun getUserStatus(forceRefresh: Boolean = false): ArrayList<User>? {
@@ -668,78 +706,70 @@ fun userMediaDetails(media: Media): Media {
             loadUserStatusCache()?.let { return sortUserStatusList(it) }
         }
 
-        return coroutineScope {
-            val followingDeferred = async {
-                executeQuery<Query.HomePageMedia>(
-                    """{Page1:${status(1)}Page2:${status(2)}}""",
-                    force = forceRefresh
-                )
-            }
-            val myDeferred = if (Anilist.userid != null) {
-                async {
-                    executeQuery<Query.HomePageMedia>(
-                        """{${myStatus()}}""",
-                        force = forceRefresh
-                    )
-                }
-            } else null
+        val combinedQuery = """{Page1:${status(1)} Page2:${status(2)} ${myStatus()}}"""
+        val response = executeQuery<Query.HomePageMedia>(
+            combinedQuery,
+            force = false,
+            cacheSpec = AnilistCacheSpec(
+                category = AnilistCacheCategory.STORIES,
+                freshTtlMs = 5 * 60_000L,
+            ),
+            bypassCache = forceRefresh,
+        )
 
-            val followingResponse = followingDeferred.await()
-            val myResponse = myDeferred?.await()
+        val allPages = mutableListOf<List<Activity>>()
+        response?.data?.page1?.activities?.let { allPages.add(it) }
+        response?.data?.page2?.activities?.let { allPages.add(it) }
+        response?.data?.myActivities?.activities?.let { allPages.add(it) }
 
-            val allPages = mutableListOf<List<Activity>>()
-            followingResponse?.data?.page1?.activities?.let { allPages.add(it) }
-            followingResponse?.data?.page2?.activities?.let { allPages.add(it) }
-            myResponse?.data?.myActivities?.activities?.let { allPages.add(it) }
-                ?: followingResponse?.data?.myActivities?.activities?.let { allPages.add(it) }
-
-            if (allPages.isEmpty() && followingResponse == null && myResponse == null) {
+        if (allPages.isEmpty() && response == null) {
+            if (!Anilist.isRateLimited()) {
                 snackString(currContext()?.getString(R.string.error_loading_data, "stories"))
-                return@coroutineScope emptyUserStatusFallback() ?: arrayListOf()
             }
+            return emptyUserStatusFallback() ?: arrayListOf()
+        }
 
-            val threeDaysAgo = Calendar.getInstance().apply {
-                add(Calendar.DAY_OF_MONTH, -3)
-            }.timeInMillis
-            val list = mutableListOf<User>()
-            val activities = allPages.asSequence().flatten()
-                .filter { it.typename != "MessageActivity" }
-                .filter { if (Anilist.adult) true else it.media?.isAdult != true }
-                .filter { it.createdAt * 1000L > threeDaysAgo }
-                .distinctBy { it.id }
-                .toList()
-                .sortedByDescending { it.createdAt }
-            val anilistActivities = mutableListOf<User>()
-            val groupedActivities = activities.groupBy { it.userId }
+        val threeDaysAgo = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_MONTH, -3)
+        }.timeInMillis
+        val list = mutableListOf<User>()
+        val activities = allPages.asSequence().flatten()
+            .filter { it.typename != "MessageActivity" }
+            .filter { if (Anilist.adult) true else it.media?.isAdult != true }
+            .filter { it.createdAt * 1000L > threeDaysAgo }
+            .distinctBy { it.id }
+            .toList()
+            .sortedByDescending { it.createdAt }
+        val anilistActivities = mutableListOf<User>()
+        val groupedActivities = activities.groupBy { it.userId }
 
-            groupedActivities.forEach { (_, userActivities) ->
-                val user = userActivities.firstOrNull()?.user
-                if (user != null) {
-                    val userToAdd = User(
-                        user.id,
-                        user.name ?: "",
-                        user.avatar?.large ?: user.avatar?.medium,
-                        user.bannerImage,
-                        activity = userActivities.sortedBy { it.createdAt }.toList()
-                    )
-                    if (user.id == Anilist.userid) {
-                        anilistActivities.add(0, userToAdd)
-                    } else {
-                        list.add(userToAdd)
-                    }
+        groupedActivities.forEach { (_, userActivities) ->
+            val user = userActivities.firstOrNull()?.user
+            if (user != null) {
+                val userToAdd = User(
+                    user.id,
+                    user.name ?: "",
+                    user.avatar?.large ?: user.avatar?.medium,
+                    user.bannerImage,
+                    activity = userActivities.sortedBy { it.createdAt }.toList()
+                )
+                if (user.id == Anilist.userid) {
+                    anilistActivities.add(0, userToAdd)
+                } else {
+                    list.add(userToAdd)
                 }
             }
-
-            if (anilistActivities.isEmpty()) {
-                emptyUserStatusFallback()?.firstOrNull()?.let { anilistActivities.add(0, it) }
-            }
-            list.addAll(0, anilistActivities)
-            val result = list.toCollection(ArrayList())
-            if (result.isNotEmpty()) {
-                saveUserStatusCache(result)
-            }
-            sortUserStatusList(result)
         }
+
+        if (anilistActivities.isEmpty()) {
+            emptyUserStatusFallback()?.firstOrNull()?.let { anilistActivities.add(0, it) }
+        }
+        list.addAll(0, anilistActivities)
+        val result = list.toCollection(ArrayList())
+        if (result.isNotEmpty()) {
+            saveUserStatusCache(result)
+        }
+        return sortUserStatusList(result)
     }
 
     private fun emptyUserStatusFallback(): ArrayList<User>? {
@@ -934,6 +964,7 @@ fun userMediaDetails(media: Media): Media {
         }
 
         returnMap["hidden"] = sortHiddenMedia(removedMedia)
+        seedBannerImagesFromHome(returnMap)
         return returnMap
     }
 
@@ -1115,49 +1146,102 @@ fun userMediaDetails(media: Media): Media {
         return sortedHidden
     }
 
-    private suspend fun bannerImage(type: String): String? {
-        if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-            if (MAL.token != null) {
-                val isAnime = type == "ANIME"
-                val status = if (isAnime) "watching" else "reading"
-                val listRes = tryWithSuspend {
-                    if (isAnime) MAL.query.getUserAnimeList(status = status, limit = 25)
-                    else MAL.query.getUserMangaList(status = status, limit = 25)
-                }
-                val randomCover = listRes?.data?.mapNotNull {
-                    it.node.mainPicture?.large ?: it.node.mainPicture?.medium
-                }?.randomOrNull()
-                if (randomCover != null) return randomCover
+    internal fun seedBannerImagesFromHome(data: Map<String, ArrayList<Media>>) {
+        fun trySeed(type: String, keys: List<String>) {
+            val existing = BannerImage(
+                PrefManager.getCustomVal("banner_${type}_url", ""),
+                PrefManager.getCustomVal("banner_${type}_time", 0L)
+            )
+            if (!existing.url.isNullOrEmpty() && !existing.checkTime()) return
+            val candidate = keys.asSequence()
+                .mapNotNull { data[it] }
+                .flatten()
+                .filter { !it.isAdult }
+                .mapNotNull { it.banner?.takeIf { url -> url.isNotBlank() && url != "null" } }
+                .toList()
+                .randomOrNull()
+            if (candidate != null) {
+                PrefManager.setCustomVal("banner_${type}_url", candidate)
+                PrefManager.setCustomVal("banner_${type}_time", System.currentTimeMillis())
             }
-            return MAL.avatar
         }
+        trySeed("ANIME", listOf("currentAnime", "favoriteAnime", "currentAnimePlanned", "missingSequels", "recommendations"))
+        trySeed("MANGA", listOf("currentManga", "favoriteManga", "currentMangaPlanned"))
+    }
 
-        val image = BannerImage(
-            PrefManager.getCustomVal("banner_${type}_url", ""),
-            PrefManager.getCustomVal("banner_${type}_time", 0L)
-        )
-        if (image.url.isNullOrEmpty() || image.checkTime()) {
-            val response =
-                executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: ${Anilist.userid}, type: $type, chunk:1,perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries{ media { id bannerImage isAdult } } } } } """)
-            val random: String? = response?.data?.mediaListCollection?.lists?.mapNotNull {
-                it.entries?.filter { i -> i.media?.isAdult != true }?.mapNotNull { entry ->
-                    val imageUrl = entry.media?.bannerImage
-                    if (imageUrl != null && imageUrl != "null") imageUrl else null
-                }
-            }?.flatten()?.randomOrNull()
-            if (random == null) return null
-            PrefManager.setCustomVal("banner_${type}_url", random)
-            PrefManager.setCustomVal("banner_${type}_time", System.currentTimeMillis())
-            return random
-        } else return image.url
+    private suspend fun rescueBannerImage(type: String): String? {
+        if (MAL.token != null) {
+            val isAnime = type == "ANIME"
+            val status = if (isAnime) "watching" else "reading"
+            val listRes = tryWithSuspend {
+                if (isAnime) MAL.query.getUserAnimeList(status = status, limit = 25)
+                else MAL.query.getUserMangaList(status = status, limit = 25)
+            }
+            val randomCover = listRes?.data?.mapNotNull {
+                it.node.mainPicture?.large ?: it.node.mainPicture?.medium
+            }?.randomOrNull()
+            if (randomCover != null) return randomCover
+        }
+        return MAL.avatar
     }
 
     suspend fun getBannerImages(): ArrayList<String?> {
-        return coroutineScope {
-            val anime = async { bannerImage("ANIME") }
-            val manga = async { bannerImage("MANGA") }
-            arrayListOf(anime.await(), manga.await())
+        if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+            return coroutineScope {
+                val anime = async { rescueBannerImage("ANIME") }
+                val manga = async { rescueBannerImage("MANGA") }
+                arrayListOf(anime.await(), manga.await())
+            }
         }
+
+        val cachedAnime = BannerImage(
+            PrefManager.getCustomVal("banner_ANIME_url", ""),
+            PrefManager.getCustomVal("banner_ANIME_time", 0L)
+        )
+        val cachedManga = BannerImage(
+            PrefManager.getCustomVal("banner_MANGA_url", ""),
+            PrefManager.getCustomVal("banner_MANGA_time", 0L)
+        )
+        val needAnime = cachedAnime.url.isNullOrEmpty() || cachedAnime.checkTime()
+        val needManga = cachedManga.url.isNullOrEmpty() || cachedManga.checkTime()
+        if (!needAnime && !needManga) {
+            return arrayListOf(cachedAnime.url, cachedManga.url)
+        }
+        val uid = Anilist.userid ?: return arrayListOf(
+            cachedAnime.url?.takeIf { it.isNotEmpty() },
+            cachedManga.url?.takeIf { it.isNotEmpty() },
+        )
+
+        val parts = mutableListOf<String>()
+        if (needAnime) {
+            parts.add("""anime: MediaListCollection(userId: $uid, type: ANIME, chunk:1, perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries { media { id bannerImage isAdult } } } }""")
+        }
+        if (needManga) {
+            parts.add("""manga: MediaListCollection(userId: $uid, type: MANGA, chunk:1, perChunk:25, sort: [SCORE_DESC,UPDATED_TIME_DESC]) { lists { entries { media { id bannerImage isAdult } } } }""")
+        }
+        val response = executeQuery<Query.BannerCollections>(
+            "{${parts.joinToString(" ")}}",
+            cacheSpec = AnilistCacheSpec(
+                category = AnilistCacheCategory.BANNERS,
+                freshTtlMs = 24 * 60 * 60_000L,
+            )
+        )
+
+        fun pickBanner(collection: ani.dantotsu.connections.anilist.api.MediaListCollection?, type: String): String? {
+            val random = collection?.lists?.mapNotNull { list ->
+                list.entries?.filter { i -> i.media?.isAdult != true }?.mapNotNull { entry ->
+                    val imageUrl = entry.media?.bannerImage
+                    if (imageUrl != null && imageUrl != "null") imageUrl else null
+                }
+            }?.flatten()?.randomOrNull() ?: return null
+            PrefManager.setCustomVal("banner_${type}_url", random)
+            PrefManager.setCustomVal("banner_${type}_time", System.currentTimeMillis())
+            return random
+        }
+
+        val animeUrl = if (needAnime) pickBanner(response?.data?.anime, "ANIME") ?: cachedAnime.url?.takeIf { it.isNotEmpty() } else cachedAnime.url
+        val mangaUrl = if (needManga) pickBanner(response?.data?.manga, "MANGA") ?: cachedManga.url?.takeIf { it.isNotEmpty() } else cachedManga.url
+        return arrayListOf(animeUrl, mangaUrl)
     }
 
     suspend fun getMediaLists(
@@ -1166,7 +1250,13 @@ fun userMediaDetails(media: Media): Media {
         sortOrder: String? = null
     ): MutableMap<String, ArrayList<Media>> {
         val response =
-            executeQuery<Query.MediaListCollection>("""{ MediaListCollection(userId: $userId, type: ${if (anime) "ANIME" else "MANGA"}) { lists { name isCustomList entries { status progress progressVolumes private score(format:POINT_100) updatedAt startedAt{year month day} completedAt{year month day} media { id idMal isAdult type status chapters volumes episodes nextAiringEpisode {episode} bannerImage genres tags { name isMediaSpoiler } meanScore isFavourite format coverImage{large} startDate{year month day} title {english romaji userPreferred } } } } user { id mediaListOptions { rowOrder animeList { sectionOrder } mangaList { sectionOrder } } } } }""")
+            executeQuery<Query.MediaListCollection>(
+                """{ MediaListCollection(userId: $userId, type: ${if (anime) "ANIME" else "MANGA"}) { lists { name isCustomList entries { status progress progressVolumes private score(format:POINT_100) updatedAt startedAt{year month day} completedAt{year month day} media { id idMal isAdult type status chapters volumes episodes nextAiringEpisode {episode} bannerImage genres tags { name isMediaSpoiler } meanScore isFavourite format coverImage{large} startDate{year month day} title {english romaji userPreferred } } } } user { id mediaListOptions { rowOrder animeList { sectionOrder } mangaList { sectionOrder } } } } }""",
+                cacheSpec = AnilistCacheSpec(
+                    category = AnilistCacheCategory.USER_LIST,
+                    freshTtlMs = 2 * 60_000L,
+                )
+            )
         val sorted = mutableMapOf<String, ArrayList<Media>>()
         val unsorted = mutableMapOf<String, ArrayList<Media>>()
         val all = arrayListOf<Media>()
@@ -1240,37 +1330,63 @@ fun userMediaDetails(media: Media): Media {
                 false to nonAdultTags.sortedBy { it }
             )
 
-        if (genres.isNullOrEmpty()) {
-            executeQuery<Query.GenreCollection>(
-                """{GenreCollection}""",
-                force = true,
-                useToken = false
-            )?.data?.genreCollection?.apply {
-                val list = arrayListOf<String>()
-                forEach {
-                    list.add(it)
-                }
-                genres = list
-                PrefManager.setVal(PrefName.GenresList, list.toSet())
+        val needGenres = genres.isNullOrEmpty()
+        val needTags = tags == null
+
+        fun applyTagCollection(tagList: List<ani.dantotsu.connections.anilist.api.MediaTag>) {
+            val adult = mutableListOf<String>()
+            val good = mutableListOf<String>()
+            tagList.forEach { node ->
+                if (node.isAdult == true) adult.add(node.name)
+                else good.add(node.name)
             }
+            tags = mapOf(
+                true to adult,
+                false to good
+            )
+            PrefManager.setVal(PrefName.TagsListIsAdult, adult.toSet())
+            PrefManager.setVal(PrefName.TagsListNonAdult, good.toSet())
         }
-        if (tags == null) {
-            executeQuery<Query.MediaTagCollection>(
-                """{ MediaTagCollection { name isAdult } }""",
-                force = true
-            )?.data?.mediaTagCollection?.apply {
-                val adult = mutableListOf<String>()
-                val good = mutableListOf<String>()
-                forEach { node ->
-                    if (node.isAdult == true) adult.add(node.name)
-                    else good.add(node.name)
+
+        val staticSpec = AnilistCacheSpec(
+            category = AnilistCacheCategory.STATIC,
+            freshTtlMs = 24 * 60 * 60_000L,
+        )
+
+        if (needGenres && needTags) {
+            val combined = executeQuery<Query.GenresAndTags>(
+                """{GenreCollection MediaTagCollection{name isAdult}}""",
+                force = true,
+                useToken = false,
+                cacheSpec = staticSpec,
+            )?.data
+            combined?.genreCollection?.let { list ->
+                val result = ArrayList(list)
+                genres = result
+                PrefManager.setVal(PrefName.GenresList, result.toSet())
+            }
+            combined?.mediaTagCollection?.let { applyTagCollection(it) }
+        } else {
+            if (needGenres) {
+                executeQuery<Query.GenreCollection>(
+                    """{GenreCollection}""",
+                    force = true,
+                    useToken = false,
+                    cacheSpec = staticSpec,
+                )?.data?.genreCollection?.apply {
+                    val list = arrayListOf<String>()
+                    forEach { list.add(it) }
+                    genres = list
+                    PrefManager.setVal(PrefName.GenresList, list.toSet())
                 }
-                tags = mapOf(
-                    true to adult,
-                    false to good
-                )
-                PrefManager.setVal(PrefName.TagsListIsAdult, adult.toSet())
-                PrefManager.setVal(PrefName.TagsListNonAdult, good.toSet())
+            }
+            if (needTags) {
+                executeQuery<Query.MediaTagCollection>(
+                    """{ MediaTagCollection { name isAdult } }""",
+                    force = true,
+                    useToken = false,
+                    cacheSpec = staticSpec,
+                )?.data?.mediaTagCollection?.let { applyTagCollection(it) }
             }
         }
         return if (!genres.isNullOrEmpty() && tags != null) {
@@ -1280,14 +1396,67 @@ fun userMediaDetails(media: Media): Media {
         } else false
     }
 
+    private fun escapeGraphqlString(value: String): String =
+        value.replace("\\", "\\\\").replace("\"", "\\\"")
+
     suspend fun getGenres(genres: ArrayList<String>, listener: ((Pair<String, String>) -> Unit)) {
-        genres.forEach {
-            val thumbnail = getGenreThumbnail(it)
-            if (thumbnail != null) {
-                listener.invoke(it to thumbnail.thumbnail)
+        val cachedMap: MutableMap<String, Genre> =
+            loadSerializableMap<String, Genre>("genre_thumb")?.toMutableMap()
+                ?: mutableMapOf()
+        val missing = mutableListOf<String>()
+        for (genre in genres) {
+            if (!cachedMap.checkGenreTime(genre)) {
+                listener.invoke(genre to (cachedMap[genre]?.thumbnail ?: ""))
             } else {
-                listener.invoke(it to "")
+                missing.add(genre)
             }
+        }
+        if (missing.isEmpty()) return
+
+        var dirty = false
+        for (chunk in missing.chunked(10)) {
+            val query = buildString {
+                append("{")
+                chunk.forEachIndexed { idx, genre ->
+                    val safeGenre = escapeGraphqlString(genre)
+                    append("""g$idx:Page(perPage:10){media(genre:"$safeGenre",sort:TRENDING_DESC,type:ANIME,countryOfOrigin:"JP"){id bannerImage}} """)
+                }
+                append("}")
+            }
+            val raw = Anilist.executeRawQuery(
+                query = query,
+                force = true,
+                useToken = false,
+                cacheSpec = AnilistCacheSpec(
+                    category = AnilistCacheCategory.STATIC,
+                    freshTtlMs = 24 * 60 * 60_000L,
+                )
+            )
+            val dataObj = raw?.let {
+                runCatching { Json.parseToJsonElement(it).jsonObject["data"]?.jsonObject }.getOrNull()
+            }
+            val now = System.currentTimeMillis()
+            chunk.forEachIndexed { idx, genre ->
+                var chosenThumb = ""
+                val mediaArr = dataObj?.get("g$idx")?.jsonObject?.get("media")?.jsonArray
+                if (mediaArr != null) {
+                    for (elem in mediaArr) {
+                        val obj = elem.jsonObject
+                        val id = obj["id"]?.jsonPrimitive?.intOrNull ?: continue
+                        val banner = obj["bannerImage"]?.jsonPrimitive?.contentOrNull
+                        if (!banner.isNullOrBlank() && cachedMap.checkId(id)) {
+                            cachedMap[genre] = Genre(genre, id, banner, now)
+                            chosenThumb = banner
+                            dirty = true
+                            break
+                        }
+                    }
+                }
+                listener.invoke(genre to chosenThumb.ifEmpty { cachedMap[genre]?.thumbnail ?: "" })
+            }
+        }
+        if (dirty) {
+            saveSerializableMap("genre_thumb", cachedMap)
         }
     }
 
@@ -1316,35 +1485,6 @@ fun userMediaDetails(media: Media): Media {
         } catch (e: Exception) {
             return null
         }
-    }
-
-    private suspend fun getGenreThumbnail(genre: String): Genre? {
-        val genres: MutableMap<String, Genre> =
-            loadSerializableMap<String, Genre>("genre_thumb")?.toMutableMap()
-                ?: mutableMapOf()
-        if (genres.checkGenreTime(genre)) {
-            try {
-                val genreQuery =
-                    """{ Page(perPage: 10){media(genre:"$genre", sort: TRENDING_DESC, type: ANIME, countryOfOrigin:"JP") {id bannerImage title{english romaji userPreferred} } } }"""
-                executeQuery<Query.Page>(genreQuery, force = true)?.data?.page?.media?.forEach {
-                    if (genres.checkId(it.id) && it.bannerImage != null) {
-                        genres[genre] = Genre(
-                            genre,
-                            it.id,
-                            it.bannerImage!!,
-                            System.currentTimeMillis()
-                        )
-                        saveSerializableMap("genre_thumb", genres)
-                        return genres[genre]
-                    }
-                }
-            } catch (e: Exception) {
-                logError(e)
-            }
-        } else {
-            return genres[genre]
-        }
-        return null
     }
 
     suspend fun searchAniManga(
@@ -1391,8 +1531,15 @@ fun userMediaDetails(media: Media): Media {
             id = id,
             adultOnly = adultOnly
         )
-        val response =
-            executeQuery<Query.Page>(aniMangaSearch(perPage), variables, true)?.data?.page
+        val response = executeQuery<Query.Page>(
+            aniMangaSearch(perPage),
+            variables,
+            force = true,
+            cacheSpec = AnilistCacheSpec(
+                category = AnilistCacheCategory.SEARCH,
+                freshTtlMs = 2 * 60_000L,
+            )
+        )?.data?.page
         if (response?.media != null) {
             val pageInfo = response.pageInfo ?: return null
             return AniMangaSearchResults(
@@ -1747,9 +1894,9 @@ fun userMediaDetails(media: Media): Media {
     }
 
     private fun recentAnimeUpdates(page: Int): String {
-        val currentTime = System.currentTimeMillis() / 1000
+        val bucketedTime = System.currentTimeMillis() / 1000L / 300L * 300L
         return buildString {
-            append("""Page(page:$page,perPage:50){$standardPageInformation airingSchedules(airingAt_greater:0 airingAt_lesser:${currentTime - 10000} sort:TIME_DESC){episode airingAt media{id idMal status chapters episodes nextAiringEpisode{episode} isAdult type meanScore isFavourite format bannerImage countryOfOrigin coverImage{large} title{english romaji userPreferred} description genres tags { name isMediaSpoiler } mediaListEntry{progress private score(format:POINT_100) status}}}}""")
+            append("""Page(page:$page,perPage:50){$standardPageInformation airingSchedules(airingAt_greater:0 airingAt_lesser:${bucketedTime - 10000} sort:TIME_DESC){episode airingAt media{id idMal status chapters episodes nextAiringEpisode{episode} isAdult type meanScore isFavourite format bannerImage countryOfOrigin coverImage{large} title{english romaji userPreferred} description genres tags { name isMediaSpoiler } mediaListEntry{progress private score(format:POINT_100) status}}}}""")
         }
     }
 
@@ -1809,8 +1956,32 @@ fun userMediaDetails(media: Media): Media {
         }
     }
 
-    suspend fun loadAnimeList(onList: Boolean = true): Map<String, ArrayList<Media>> = coroutineScope {
+    private fun animeCatalogCacheSpec(onList: Boolean): AnilistCacheSpec {
+        val (season, year) = Anilist.currentSeasons[1]
+        val key = "anime_tab:onList=$onList:adult=${getPreference(PrefName.AdultOnly)}:inc=${getPreference(PrefName.IncludeAnimeList)}:recOnly=${getPreference(PrefName.RecentlyListOnly)}:season=$season-$year"
+        return AnilistCacheSpec(
+            category = AnilistCacheCategory.CATALOG,
+            freshTtlMs = 24 * 60 * 60_000L,
+            maxStaleTtlMs = 24 * 60 * 60_000L,
+            persistToDisk = true,
+            cacheKeyOverride = key,
+        )
+    }
+
+    private fun mangaCatalogCacheSpec(onList: Boolean): AnilistCacheSpec {
+        val key = "manga_tab:onList=$onList:adult=${getPreference(PrefName.AdultOnly)}:inc=${getPreference(PrefName.IncludeMangaList)}"
+        return AnilistCacheSpec(
+            category = AnilistCacheCategory.CATALOG,
+            freshTtlMs = 24 * 60 * 60_000L,
+            maxStaleTtlMs = 24 * 60 * 60_000L,
+            persistToDisk = true,
+            cacheKeyOverride = key,
+        )
+    }
+
+    private fun parseAnimeListData(data: Query.AnimeList.Data?): Map<String, ArrayList<Media>> {
         val list = mutableMapOf<String, ArrayList<Media>>()
+        if (data == null) return list
 
         fun filterRecentUpdates(page: Page?): ArrayList<Media> {
             val listOnly = getPreference(PrefName.RecentlyListOnly)
@@ -1832,9 +2003,7 @@ fun userMediaDetails(media: Media): Media {
             }?.toCollection(ArrayList()) ?: arrayListOf()
         }
 
-        val animeList = async { executeQuery<Query.AnimeList>(queryAnimeList(onList), force = true) }
-
-        animeList.await()?.data?.apply {
+        data.apply {
             list["recentUpdates"] = filterRecentUpdates(recentUpdates)
             list["trendingMovies"] = mediaList(trendingMovies)
             list["topRated"] = mediaList(topRated)
@@ -1842,16 +2011,14 @@ fun userMediaDetails(media: Media): Media {
             list["trending"] = mediaList(trending)
             list["popular"] = mediaList(popular)
         }
-
-        list
+        return list
     }
 
-    suspend fun loadMangaList(onList: Boolean = true): Map<String, ArrayList<Media>> = coroutineScope {
+    private fun parseMangaListData(data: Query.MangaList.Data?): Map<String, ArrayList<Media>> {
         val list = mutableMapOf<String, ArrayList<Media>>()
+        if (data == null) return list
 
-        val mangaList = async { executeQuery<Query.MangaList>(queryMangaList(onList), force = true) }
-
-        mangaList.await()?.data?.apply {
+        data.apply {
             list["trendingManga"] = mediaList(trendingManga)
             list["trendingManhwa"] = mediaList(trendingManhwa)
             list["trendingNovel"] = mediaList(trendingNovel)
@@ -1860,8 +2027,51 @@ fun userMediaDetails(media: Media): Media {
             list["trending"] = mediaList(trending)
             list["popular"] = mediaList(popular)
         }
+        return list
+    }
 
-        list
+    fun peekAnimeListCache(onList: Boolean = true): Pair<Map<String, ArrayList<Media>>, Boolean>? {
+        val lookup = Anilist.peekCachedRawQuery(queryAnimeList(onList), cacheSpec = animeCatalogCacheSpec(onList))
+        val (raw, fresh) = when (lookup) {
+            is CacheLookup.Fresh -> lookup.value to true
+            is CacheLookup.Stale -> lookup.value to false
+            CacheLookup.Miss -> return null
+        }
+        val parsed = runCatching { Mapper.parse<Query.AnimeList>(raw) }.getOrNull()?.data ?: return null
+        val map = parseAnimeListData(parsed)
+        return if (map.isNotEmpty()) map to fresh else null
+    }
+
+    fun peekMangaListCache(onList: Boolean = true): Pair<Map<String, ArrayList<Media>>, Boolean>? {
+        val lookup = Anilist.peekCachedRawQuery(queryMangaList(onList), cacheSpec = mangaCatalogCacheSpec(onList))
+        val (raw, fresh) = when (lookup) {
+            is CacheLookup.Fresh -> lookup.value to true
+            is CacheLookup.Stale -> lookup.value to false
+            CacheLookup.Miss -> return null
+        }
+        val parsed = runCatching { Mapper.parse<Query.MangaList>(raw) }.getOrNull()?.data ?: return null
+        val map = parseMangaListData(parsed)
+        return if (map.isNotEmpty()) map to fresh else null
+    }
+
+    suspend fun loadAnimeList(onList: Boolean = true, forceRefresh: Boolean = false): Map<String, ArrayList<Media>> {
+        val response = executeQuery<Query.AnimeList>(
+            queryAnimeList(onList),
+            force = true,
+            cacheSpec = animeCatalogCacheSpec(onList),
+            bypassCache = forceRefresh,
+        )
+        return parseAnimeListData(response?.data)
+    }
+
+    suspend fun loadMangaList(onList: Boolean = true, forceRefresh: Boolean = false): Map<String, ArrayList<Media>> {
+        val response = executeQuery<Query.MangaList>(
+            queryMangaList(onList),
+            force = true,
+            cacheSpec = mangaCatalogCacheSpec(onList),
+            bypassCache = forceRefresh,
+        )
+        return parseMangaListData(response?.data)
     }
 
     suspend fun recentlyUpdated(
@@ -1941,7 +2151,8 @@ Page(page:$page,perPage:50) {
                             va.languageV2
                         )
                     } ?: emptyList()
-                }?.distinctBy { it.id }?.let { ArrayList(it) }
+                }?.distinctBy { it.id }?.let { ArrayList(it) },
+                height = i.height?.formatDisplay()
             )
         }
         return character
@@ -2014,6 +2225,10 @@ Page(page:$page,perPage:50) {
             author.yearsActive =
                 if (query?.yearsActive?.isEmpty() == true) null else query?.yearsActive
             author.homeTown = if (query?.homeTown?.isBlank() == true) null else query?.homeTown
+            author.height = query?.height?.formatDisplay() ?: author.height
+            if (author.about.isNullOrBlank()) {
+                author.about = query?.description?.takeIf { it.isNotBlank() }
+            }
             author.dateOfDeath = if (query?.dateOfDeath?.toStringOrEmpty()
                     ?.isBlank() == true
             ) null else query?.dateOfDeath?.toStringOrEmpty()
@@ -2067,14 +2282,14 @@ Page(page:$page,perPage:50) {
         sort: String = "SCORE_DESC"
     ): Query.ReviewsResponse? {
         return executeQuery<Query.ReviewsResponse>(
-            """{Page(page:$page,perPage:10){$standardPageInformation reviews(mediaId:$mediaId,sort:$sort){id,mediaId,mediaType,summary,body(asHtml:true)rating,ratingAmount,userRating,score,private,siteUrl,createdAt,updatedAt,user{id,name,bannerImage avatar{medium,large}}}}}""",
+            """{Page(page:$page,perPage:10){$standardPageInformation reviews(mediaId:$mediaId,sort:$sort){id,mediaId,mediaType,summary,body(asHtml:true,htmlVersion:2)rating,ratingAmount,userRating,score,private,siteUrl,createdAt,updatedAt,user{id,name,bannerImage avatar{medium,large}}}}}""",
             force = true
         )
     }
 
     suspend fun getUserProfile(id: Int): Query.UserProfileResponse? {
         return executeQuery<Query.UserProfileResponse>(
-            """{followerPage:Page{followers(userId:$id){id}$standardPageInformation}followingPage:Page{following(userId:$id){id}$standardPageInformation}user:User(id:$id){id name about(asHtml:true)avatar{medium large}bannerImage isFollowing isFollower isBlocked favourites{anime{nodes{id coverImage{extraLarge large medium color}}}manga{nodes{id coverImage{extraLarge large medium color}}}characters{nodes{id name{first middle last full native alternative userPreferred}image{large medium}isFavourite}}staff{nodes{id name{first middle last full native alternative userPreferred}image{large medium}isFavourite}}studios{nodes{id name isFavourite}}}statistics{anime{count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead}manga{count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead}}siteUrl}}""",
+            """{followerPage:Page{followers(userId:$id){id}$standardPageInformation}followingPage:Page{following(userId:$id){id}$standardPageInformation}user:User(id:$id){id name about(asHtml:true,htmlVersion:2)avatar{medium large}bannerImage isFollowing isFollower isBlocked favourites{anime{nodes{id coverImage{extraLarge large medium color}}}manga{nodes{id coverImage{extraLarge large medium color}}}characters{nodes{id name{first middle last full native alternative userPreferred}image{large medium}isFavourite}}staff{nodes{id name{first middle last full native alternative userPreferred}image{large medium}isFavourite}}studios{nodes{id name isFavourite}}}statistics{anime{count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead}manga{count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead}}siteUrl}}""",
             force = true
         )
     }
@@ -2181,7 +2396,7 @@ Page(page:$page,perPage:50) {
         val typeIn =
             if (filter == "isFollowing:true,") "type_in:[TEXT,ANIME_LIST,MANGA_LIST,MEDIA_LIST]," else ""
         return executeQuery<FeedResponse>(
-            """{Page(page:$page,perPage:$ITEMS_PER_PAGE){pageInfo{hasNextPage}activities(${filter}${typeIn}sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id title{english romaji native userPreferred}bannerImage coverImage{medium large}isAdult}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id recipientId messengerId type replyCount likeCount message(asHtml:true)isLocked isSubscribed isLiked isPrivate siteUrl createdAt recipient{id name bannerImage avatar{medium large}}messenger{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}}""",
+            """{Page(page:$page,perPage:$ITEMS_PER_PAGE){pageInfo{hasNextPage}activities(${filter}${typeIn}sort:ID_DESC){__typename ... on TextActivity{id userId type replyCount text(asHtml:true,htmlVersion:2)siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true,htmlVersion:2)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id title{english romaji native userPreferred}bannerImage coverImage{medium large}isAdult}replies{id userId activityId text(asHtml:true,htmlVersion:2)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id recipientId messengerId type replyCount likeCount message(asHtml:true,htmlVersion:2)isLocked isSubscribed isLiked isPrivate siteUrl createdAt recipient{id name bannerImage avatar{medium large}}messenger{id name bannerImage avatar{medium large}}replies{id userId activityId text(asHtml:true,htmlVersion:2)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}}""",
             force = true
         )
     }
@@ -2191,12 +2406,12 @@ Page(page:$page,perPage:50) {
         page: Int = 1
     ): ReplyResponse? {
         val query =
-            """{Page(page:$page,perPage:50){activityReplies(activityId:$activityId){id userId activityId text(asHtml:true)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}"""
+            """{Page(page:$page,perPage:50){activityReplies(activityId:$activityId){id userId activityId text(asHtml:true,htmlVersion:2)likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}}}"""
         return executeQuery(query, force = true)
     }
 
     private fun statusActivityFields(): String {
-        return """__typename ... on TextActivity{id userId type replyCount text(asHtml:true)siteUrl isLocked isSubscribed likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{large extraLarge}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id type createdAt likes{id name isFollowing isFollower bannerImage avatar{medium large}}}"""
+        return """__typename ... on TextActivity{id userId type replyCount text(asHtml:true,htmlVersion:2)siteUrl isLocked isSubscribed likeCount isLiked createdAt user{id name bannerImage avatar{medium large}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on ListActivity{id userId type replyCount status progress siteUrl isLocked isSubscribed likeCount isLiked isPinned createdAt user{id name bannerImage avatar{medium large}}media{id isAdult title{english romaji native userPreferred}bannerImage coverImage{large extraLarge}}likes{id name isFollowing isFollower bannerImage avatar{medium large}}}... on MessageActivity{id type createdAt likes{id name isFollowing isFollower bannerImage avatar{medium large}}}"""
     }
 
     private fun status(page: Int = 1): String {
@@ -2230,22 +2445,22 @@ Page(page:$page,perPage:50) {
         favType: AnilistMutations.FavType,
         id: Int
     ): Boolean {   //anilist isFavourite is broken, so we need to check it manually
-        val res = getUserProfile(Anilist.userid ?: return false)
+        val uid = Anilist.userid ?: return false
+        val res = executeQuery<Query.UserFavouriteIdsResponse>(
+            """{User(id:$uid){favourites{anime{nodes{id}} manga{nodes{id}} characters{nodes{id}} staff{nodes{id}} studios{nodes{id}}}}}""",
+            force = false,
+            cacheSpec = AnilistCacheSpec(
+                category = AnilistCacheCategory.USER_FAVS,
+                freshTtlMs = 10 * 60_000L,
+            )
+        )
+        val favs = res?.data?.user?.favourites ?: return false
         return when (favType) {
-            AnilistMutations.FavType.ANIME -> res?.data?.user?.favourites?.anime?.nodes?.any { it.id == id }
-                ?: false
-
-            AnilistMutations.FavType.MANGA -> res?.data?.user?.favourites?.manga?.nodes?.any { it.id == id }
-                ?: false
-
-            AnilistMutations.FavType.CHARACTER -> res?.data?.user?.favourites?.characters?.nodes?.any { it.id == id }
-                ?: false
-
-            AnilistMutations.FavType.STAFF -> res?.data?.user?.favourites?.staff?.nodes?.any { it.id == id }
-                ?: false
-
-            AnilistMutations.FavType.STUDIO -> res?.data?.user?.favourites?.studios?.nodes?.any { it.id == id }
-                ?: false
+            AnilistMutations.FavType.ANIME -> favs.anime?.nodes?.any { it.id == id } ?: false
+            AnilistMutations.FavType.MANGA -> favs.manga?.nodes?.any { it.id == id } ?: false
+            AnilistMutations.FavType.CHARACTER -> favs.characters?.nodes?.any { it.id == id } ?: false
+            AnilistMutations.FavType.STAFF -> favs.staff?.nodes?.any { it.id == id } ?: false
+            AnilistMutations.FavType.STUDIO -> favs.studios?.nodes?.any { it.id == id } ?: false
         }
     }
 

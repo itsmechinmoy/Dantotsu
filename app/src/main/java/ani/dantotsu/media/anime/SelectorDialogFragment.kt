@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.BottomSheetDialogFragment
 import ani.dantotsu.R
 import ani.dantotsu.addons.download.DownloadAddonManager
+import ani.dantotsu.torrent.TorrentLinks
 import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.copyToClipboard
@@ -47,6 +48,13 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.media.MediaType
 import ani.dantotsu.media.SubtitleDownloader
+import ani.dantotsu.media.anime.selector.ReleaseEpisode
+import ani.dantotsu.media.anime.selector.ReleaseFamily
+import ani.dantotsu.media.anime.selector.SourceMetaIcon
+import ani.dantotsu.media.anime.selector.SourcePresentationKind
+import ani.dantotsu.media.anime.selector.SourceRowSummarizer
+import ani.dantotsu.media.anime.selector.SourceRowViewModel
+import ani.dantotsu.media.anime.selector.SourceRowViewModelCache
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.others.Download.download
 import ani.dantotsu.parsers.Subtitle
@@ -63,6 +71,7 @@ import ani.dantotsu.tryWith
 import ani.dantotsu.util.Logger
 import ani.dantotsu.util.customAlertDialog
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -70,7 +79,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import tachiyomi.core.util.lang.launchIO
 import uy.kohesive.injekt.Injekt
@@ -129,34 +137,6 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                                               selectedAudioTracks: MutableList<String>) {
             _onFinishingUserSelection(selectedServerName, selectedSubtitles, selectedAudioTracks)
         }
-    }
-
-    fun findBestVideoForDownload(
-        videos: List<Video>,
-        preferredResolutions: List<String>
-    ): Video? {
-        if (videos.isEmpty()) return null
-        val preferredVideo = videos.firstOrNull { it.preferred }
-        if (preferredVideo != null) return preferredVideo
-        if (preferredResolutions.isEmpty()) return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
-
-        for (preferred in preferredResolutions) {
-            val resNumber = Regex("""\d+""").find(preferred)?.value?.toIntOrNull()
-            if (resNumber != null) {
-                val match = videos.firstOrNull { it.quality == resNumber }
-                if (match != null) return match
-            }
-            val cleanPreferred = preferred.lowercase().replace("p", "").trim()
-            val matchFallback = videos.firstOrNull { video ->
-                val note = video.extraNote?.lowercase() ?: ""
-                val url = video.file.url.lowercase()
-                note.contains(preferred.lowercase()) || note.contains(cleanPreferred) ||
-                        url.contains("${cleanPreferred}p") || url.contains(cleanPreferred)
-            }
-            if (matchFallback != null) return matchFallback
-        }
-
-        return videos.maxByOrNull { it.quality ?: 0 } ?: videos.first()
     }
 
     @SuppressLint("SetTextI18n")
@@ -294,12 +274,21 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         chosenExtractor: VideoExtractor,
         preferredResolutions: List<String>
     ): Boolean {
-        val bestVideo = findBestVideoForDownload(chosenExtractor.videos, preferredResolutions) ?: return false
+        val bestVideo = Helper.findBestVideoForDownload(chosenExtractor.videos, preferredResolutions) ?: return false
         ep.selectedExtractor = chosenExtractor.server.name
         ep.selectedVideo = chosenExtractor.videos.indexOf(bestVideo).takeIf { it >= 0 } ?: 0
         val currentKey = media?.anime?.selectedEpisode ?: ep.number
-        media?.anime?.episodes?.getEpisode(currentKey)?.selectedExtractor = ep.selectedExtractor
-        media?.anime?.episodes?.getEpisode(currentKey)?.selectedVideo = ep.selectedVideo
+        media?.anime?.episodes?.let { map ->
+            val existing = map.getEpisode(currentKey)
+            if (existing != null && existing !== ep) {
+                existing.extractors = ep.extractors
+                existing.allStreams = ep.allStreams
+                existing.selectedExtractor = ep.selectedExtractor
+                existing.selectedVideo = ep.selectedVideo
+            } else {
+                map[currentKey] = ep
+            }
+        }
         media?.let { startExoplayer(it) }
         return true
     }
@@ -371,7 +360,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         return success
     }
 
-    private fun startEpisodeDownload(
+    private suspend fun startEpisodeDownload(
         episodeName: String,
         selectedServerName: String,
         selectedSubtitles: MutableList<String>,
@@ -400,7 +389,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         }
     }
 
-    private fun downloadUsingSingleServer(
+    private suspend fun downloadUsingSingleServer(
         extractor: VideoExtractor,
         currentEp: Episode,
         selectedSubtitles: MutableList<String>,
@@ -411,11 +400,13 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         if (PrefManager.getVal<Int>(PrefName.DownloadManager) != 0) {
             val act = activity ?: currActivity()
             if (act != null) {
-                download(
-                    act,
-                    currentEp,
-                    media!!.userPreferredName
-                )
+                withContext(Dispatchers.Main) {
+                    download(
+                        act,
+                        currentEp,
+                        media!!.userPreferredName
+                    )
+                }
             }
             return true
         }
@@ -430,7 +421,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
         currentEp.selectedExtractor = extractor.server.name
         val bestVideo = if (autoPriority && extractor.videos.isNotEmpty()) {
-            findBestVideoForDownload(extractor.videos, preferredResolutions)
+            Helper.findBestVideoForDownload(extractor.videos, preferredResolutions)
         } else null
 
         val chosenVideoIndex = if (bestVideo != null) {
@@ -447,7 +438,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         }
     }
 
-    private fun executeAddonDownload(
+    private suspend fun executeAddonDownload(
         extractor: VideoExtractor,
         currentEp: Episode,
         selectedSubtitles: MutableList<String>,
@@ -455,7 +446,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     ): Boolean {
         val downloadAddonManager: DownloadAddonManager = Injekt.get()
         if (!downloadAddonManager.isAvailable()) {
-            showDownloadAddonNotInstalledDialog()
+            withContext(Dispatchers.Main) { showDownloadAddonNotInstalledDialog() }
             return false
         }
         val subtitlesToDownload = collectSubtitlesToDownload(extractor, currentEp, selectedSubtitles)
@@ -465,32 +456,36 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
             if (currentEp.selectedVideo in extractor.videos.indices) extractor.videos[currentEp.selectedVideo] else extractor.videos[0]
         } else null
 
-        val act = activity ?: currActivity()
-        selectedVideo?.file?.url?.let { url ->
-            if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
-                if (!prepareTorrentForDownload(url, selectedVideo)) {
-                    return false
-                }
+        val videoToDownload = selectedVideo?.let { video ->
+            val url = video.file.url
+            if (url.startsWith("magnet:", ignoreCase = true) || url.endsWith(".torrent", ignoreCase = true)) {
+                prepareTorrentForDownload(url, video) ?: return false
+            } else {
+                video
             }
         }
-        if (selectedVideo != null && act != null) {
-            Helper.startAnimeDownloadService(
-                act,
-                media!!.mainName(),
-                currentEp.number,
-                selectedVideo,
-                subtitlesToDownload,
-                audioTracksToDownload,
-                media,
-                currentEp.thumb?.url ?: media!!.banner ?: media!!.cover
-            )
-            val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_STARTED).apply {
-                putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, currentEp.number)
-                putExtra("mediaId", media?.id)
+
+        withContext(Dispatchers.Main) {
+            val act = activity ?: currActivity()
+            if (videoToDownload != null && act != null) {
+                Helper.startAnimeDownloadService(
+                    act,
+                    media!!.mainName(),
+                    currentEp.number,
+                    videoToDownload,
+                    subtitlesToDownload,
+                    audioTracksToDownload,
+                    media,
+                    currentEp.thumb?.url ?: media!!.banner ?: media!!.cover
+                )
+                val intent = Intent(AnimeWatchFragment.ACTION_DOWNLOAD_STARTED).apply {
+                    putExtra(AnimeWatchFragment.EXTRA_EPISODE_NUMBER, currentEp.number)
+                    putExtra("mediaId", media?.id)
+                }
+                act.sendBroadcast(intent)
+            } else if (videoToDownload == null) {
+                snackString(R.string.no_video_selected)
             }
-            act.sendBroadcast(intent)
-        } else if (selectedVideo == null) {
-            snackString(R.string.no_video_selected)
         }
         return true
     }
@@ -542,41 +537,39 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         return audioTracksToDownload
     }
 
-    private fun prepareTorrentForDownload(url: String, selectedVideo: Video): Boolean {
+    private suspend fun prepareTorrentForDownload(url: String, selectedVideo: Video): Video? {
         val torrentManager = Injekt.get<TorrentServerManager>()
         if (!torrentManager.isAvailable()) {
-            toast(R.string.torrent_addon_not_available)
-            return false
+            withContext(Dispatchers.Main) { toast(R.string.torrent_addon_not_available) }
+            return null
         }
-        runBlocking {
-            try {
-                withContext(Dispatchers.IO) {
-                    torrentManager.activeTorrentHash?.let {
-                        torrentManager.removeTorrent(it)
-                    }
-                    val index = if (url.contains("index=")) {
-                        url.substringAfter("index=").toIntOrNull() ?: 0
-                    } else 0
-                    Logger.log("Sending: $url, ${selectedVideo.quality}, $index")
-                    val currentTorrent = torrentManager.addTorrent(
-                        url,
-                        selectedVideo.quality.toString(),
-                        "",
-                        "",
-                        false
-                    )
-                    torrentManager.activeTorrentHash = currentTorrent.hash
-                    torrentManager.prebuffer(currentTorrent.hash!!, index)
-                    selectedVideo.file.url = torrentManager.getLink(currentTorrent, index)
-                    Logger.log("Received: ${selectedVideo.file.url}")
-                }
-            } catch (e: Exception) {
-                Injekt.get<CrashlyticsInterface>().logException(e)
-                Logger.log(e)
-                toast("Error starting video: ${e.message}")
+        return try {
+            withContext(Dispatchers.IO) {
+                ani.dantotsu.addons.torrent.TorrentServerService.start()
+                // keep the active torrent: it may still be playing
+                val index = TorrentLinks.fileIndex(url)
+                Logger.log("Sending: $url, ${selectedVideo.quality}, $index")
+                val currentTorrent = torrentManager.addTorrent(
+                    url,
+                    selectedVideo.quality.toString(),
+                    "",
+                    "",
+                    false
+                )
+                torrentManager.activeTorrentHash = currentTorrent.hash
+                torrentManager.prebuffer(currentTorrent.hash!!, index)
+                val link = torrentManager.getLink(currentTorrent, index)
+                Logger.log("Received: $link")
+                selectedVideo.copy(file = selectedVideo.file.copy(url = link))
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Injekt.get<CrashlyticsInterface>().logException(e)
+            Logger.log(e)
+            withContext(Dispatchers.Main) { toast("Error starting video: ${e.message}") }
+            null
         }
-        return true
     }
 
     private fun handleWatchMenu(rawKey: String) {
@@ -599,13 +592,28 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         val serverName = selected ?: return
         binding.selectorListContainer.visibility = View.GONE
         binding.selectorAutoListContainer.visibility = View.VISIBLE
-        binding.selectorAutoText.text = serverName
+        binding.selectorAutoText.text = ReleaseFamily.label(serverName) ?: serverName
         binding.selectorCancel.setOnClickListener {
             media?.selected?.server = null
             media?.let { m -> m.selected?.let { sel -> model.saveSelected(m.id, sel) } }
             tryWith {
                 dismissAllowingStateLoss()
             }
+        }
+
+        // The remembered name is last episode's release ("... S03E02 ..."): loading it by name could
+        // hand back that episode. Load the whole list instead and match by release group.
+        if (!ReleaseEpisode.fits(serverName, ep.number)) {
+            scope.launch {
+                withContext(Dispatchers.IO) {
+                    if (!ep.allStreams) model.loadEpisodeVideos(ep, media?.selected?.sourceIndex ?: return@withContext)
+                }
+                withContext(Dispatchers.Main) {
+                    if (_binding == null || !isAdded) return@withContext
+                    loadMatchedExtractorAndPlay(ep, actualKey, serverName)
+                }
+            }
+            return
         }
 
         val hasMatchingExtractor = ep.extractors?.any {
@@ -641,14 +649,19 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         initializeVideoServerSelector(ep)
     }
 
-    private fun findMatchedExtractor(ep: Episode, sourceIndex: Int, serverName: String): VideoExtractor? =
-        if (model.watchSources?.isDownloadedSource(sourceIndex) == true) {
-            ep.extractors?.firstOrNull()
+    private fun findMatchedExtractor(ep: Episode, sourceIndex: Int, serverName: String): VideoExtractor? {
+        // one snapshot: a preload on IO may still be adding servers to ep.extractors
+        // rows named for another episode (torrent lists carry neighbours) are never picked
+        val list = ep.extractors?.toList()?.filter { ReleaseEpisode.fits(it.server.name, ep.number) } ?: return null
+        return if (model.watchSources?.isDownloadedSource(sourceIndex) == true) {
+            list.firstOrNull()
         } else {
-            ep.extractors?.find { it.server.name == serverName }
-                ?: ep.extractors?.find { it.isPreferred }
-                ?: ep.extractors?.firstOrNull()
+            list.find { it.server.name == serverName }
+                ?: ReleaseFamily.pick(serverName, list) { it.server.name }
+                ?: list.find { it.isPreferred }
+                ?: list.firstOrNull()
         }
+    }
 
     private fun loadMatchedExtractorAndPlay(ep: Episode, actualKey: String, serverName: String) {
         val m = media ?: return
@@ -658,9 +671,20 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         val size = matchedExtractor?.videos?.size
         if (matchedExtractor != null && size != null && size > 0) {
             val currentKey = m.anime?.selectedEpisode ?: actualKey
-            m.anime?.episodes?.getEpisode(currentKey)?.selectedExtractor = matchedExtractor.server.name
             val chosenVideo = if (sel.video in 0 until size) sel.video else 0
-            m.anime?.episodes?.getEpisode(currentKey)?.selectedVideo = chosenVideo
+            ep.selectedExtractor = matchedExtractor.server.name
+            ep.selectedVideo = chosenVideo
+            m.anime?.episodes?.let { map ->
+                val existing = map.getEpisode(currentKey)
+                if (existing != null && existing !== ep) {
+                    existing.extractors = ep.extractors
+                    existing.allStreams = ep.allStreams
+                    existing.selectedExtractor = ep.selectedExtractor
+                    existing.selectedVideo = ep.selectedVideo
+                } else {
+                    map[currentKey] = ep
+                }
+            }
             sel.server = matchedExtractor.server.name
             model.saveSelected(m.id, sel)
             startExoplayer(m)
@@ -748,8 +772,8 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     }
 
     private fun isTorrentUrl(url: String, ep: Episode): Boolean =
-        url.startsWith("magnet:") ||
-                url.endsWith(".torrent") ||
+        url.startsWith("magnet:", ignoreCase = true) ||
+                url.endsWith(".torrent", ignoreCase = true) ||
                 url.contains("/stream?hash=") ||
                 url.contains("127.0.0.1") ||
                 ep.extra?.containsKey("torrentHash") == true
@@ -766,12 +790,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         }?.videos?.getOrNull(ep.selectedVideo)
         val url = video?.file?.url
 
-        if (ep != null && video != null && url != null) {
-            if (isTorrentUrl(url, ep)) {
-                if (handleTorrentPlayback(ep, video, url, media)) {
-                    return
-                }
-            } else if (url.startsWith("magnet:")) {
+        if (ep != null && video != null && url != null && isTorrentUrl(url, ep)) {
+            if (handleTorrentPlayback(ep, video, url, media)) {
+                return
+            }
+            if (url.startsWith("magnet:", ignoreCase = true)) {
                 launchExternalMagnetPlayer(ep, video)
                 return
             }
@@ -785,62 +808,23 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         val torrentManager = Injekt.get<TorrentServerManager>()
         if (!torrentManager.isAvailable()) return false
 
-        val activity = activity ?: currActivity()
-        launchIO {
-            try {
-                ani.dantotsu.addons.torrent.TorrentServerService.start()
-                torrentManager.start()
-                val torrentHash = ep.extra?.get("torrentHash")
-                    ?: if (url.contains("hash=")) url.substringAfter("hash=").substringBefore("&") else null
-                val index = ep.extra?.get("fileId")?.toIntOrNull()
-                    ?: (if (url.contains("index=")) url.substringAfter("index=").substringBefore("&").toIntOrNull() else null)
-                    ?: 0
+        val index = ep.extra?.get("fileId")?.toIntOrNull()
+            ?: TorrentLinks.fileIndex(url)
 
-                prepareTorrentBuffer(torrentManager, torrentHash, url, video, index)
-
-                if (launch == true) {
-                    Intent(activity, ExoplayerView::class.java).apply {
-                        ExoplayerView.media = media
-                        ExoplayerView.initialized = true
-                        startActivity(this)
-                    }
-                } else {
-                    val epKey = media.anime?.selectedEpisode
-                    val targetEp = media.anime?.episodes?.getEpisode(epKey) ?: ep
-                    model.setEpisode(targetEp, "startExo no launch")
+        ani.dantotsu.addons.torrent.TorrentServerService.start()
+        if (url.startsWith("magnet:", ignoreCase = true)) {
+            launchIO {
+                try {
+                    torrentManager.startMagnetForStream(url, index)
+                } catch (e: Exception) {
+                    Injekt.get<CrashlyticsInterface>().logException(e)
+                    Logger.log(e)
                 }
-                dismissAllowingStateLoss()
-            } catch (e: Exception) {
-                Injekt.get<CrashlyticsInterface>().logException(e)
-                Logger.log(e)
-                toast("Error starting video: ${e.message}")
-                dismissAllowingStateLoss()
             }
         }
-        return true
-    }
 
-    private suspend fun prepareTorrentBuffer(
-        torrentManager: TorrentServerManager,
-        torrentHash: String?,
-        url: String,
-        video: Video,
-        index: Int
-    ) {
-        if (torrentHash != null) {
-            torrentManager.activeTorrentHash = torrentHash
-            torrentManager.prebuffer(torrentHash, index)
-        } else if (url.startsWith("magnet:") || url.endsWith(".torrent")) {
-            torrentManager.activeTorrentHash?.let {
-                torrentManager.removeTorrent(it)
-            }
-            val currentTorrent = torrentManager.addTorrent(
-                url, video.quality.toString(), "", "", false
-            )
-            torrentManager.activeTorrentHash = currentTorrent.hash
-            torrentManager.prebuffer(currentTorrent.hash!!, index)
-            video.file.url = torrentManager.getLink(currentTorrent, index)
-        }
+        launchDefaultExoplayer(media)
+        return true
     }
 
     private fun launchExternalMagnetPlayer(ep: Episode, video: Video) {
@@ -871,9 +855,13 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
         dismissAllowingStateLoss()
         if (launch == true) {
             stopAddingToList()
-            val intent = Intent(activity, ExoplayerView::class.java)
-            ExoplayerView.media = media
-            ExoplayerView.initialized = true
+            val detailsAct = activity as? ani.dantotsu.media.MediaDetailsActivity
+            if (detailsAct?.startCompactPlayback(media) == true) {
+                return
+            }
+            val intent = Intent(activity, MpvPlayerActivity::class.java)
+            MpvPlayerActivity.media = media
+            MpvPlayerActivity.initialized = true
             startActivity(intent)
         } else {
             val epKey = media.anime?.selectedEpisode
@@ -966,6 +954,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 
     private inner class VideoAdapter(private val extractor: VideoExtractor,private val onEpisodeDownloadHandler: EpisodeDownloadHandler?) :
         RecyclerView.Adapter<VideoAdapter.UrlViewHolder>() {
+        private val rowCache = SourceRowViewModelCache()
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UrlViewHolder {
             return UrlViewHolder(
@@ -1234,19 +1223,63 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 binding.urlSize.text = getString(R.string.mb_size, "$prefix$formattedSize")
             }
             val isPref = video.preferred || extractor.isPreferred
-            binding.urlNote.visibility = View.VISIBLE
-            binding.urlNote.text = if (isPref) "${video.format.name} • Preferred" else video.format.name
+            // CONTAINER is the plain-file default, not worth a line on every card
+            val note = listOfNotNull(
+                video.format.name.takeIf { video.format != VideoType.CONTAINER },
+                "Preferred".takeIf { isPref }
+            ).joinToString(" • ")
+            binding.urlNote.isVisible = note.isNotEmpty()
+            binding.urlNote.text = note
             val hoster = video.hoster ?: extractor.server.hoster
             val cleanServerName = if (hoster != null && extractor.server.name.startsWith("$hoster - ")) {
                 extractor.server.name.removePrefix("$hoster - ")
             } else {
                 extractor.server.name
             }
-            binding.urlQuality.text = if (hoster != null && cleanServerName.isNotBlank() && cleanServerName != hoster) {
+            val label = if (hoster != null && cleanServerName.isNotBlank() && cleanServerName != hoster) {
                 "$hoster • $cleanServerName"
             } else {
                 extractor.server.name
             }
+            if (bindReleaseRow(binding, video)) return
+            // multi-line names (release, stats, languages) read better below a short bold first line
+            val lines = label.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            binding.urlQuality.text = lines.firstOrNull() ?: label
+            binding.urlDetails.text = lines.drop(1).joinToString("\n")
+            binding.urlDetails.isVisible = lines.size > 1
+        }
+
+        /**
+         * Torrent-style rows (release name plus emoji-tagged seeders / size / source lines)
+         * shown as parsed fields: release group (or the clean title) on top, then the clean
+         * title, the tags (quality, languages, audio, codec) and seeders · size · source.
+         * Returns false for plain stream rows, which keep the label as sent.
+         */
+        private fun bindReleaseRow(binding: ItemUrlBinding, video: Video): Boolean {
+            val name = extractor.server.name
+            val row = runCatching {
+                rowCache.getOrBuild(SourceRowViewModelCache.rowKey(name, video.format.name, video.file.url)) {
+                    SourceRowSummarizer.build(
+                        displayLabel = name,
+                        qualityText = name,
+                        format = video.format,
+                        url = video.file.url,
+                    )
+                }
+            }.getOrNull() ?: return false
+            if (row.presentation != SourcePresentationKind.RELEASE) return false
+            val header = row.header?.takeIf { it.isNotBlank() } ?: return false
+            binding.urlQuality.text = header
+            binding.urlDetails.text = releaseDetailLines(row, header).joinToString("\n")
+            binding.urlDetails.isVisible = binding.urlDetails.text.isNotEmpty()
+            return true
+        }
+
+        private fun releaseDetailLines(row: SourceRowViewModel, header: String): List<String> {
+            val title = row.cleanSubtitle?.takeIf { it.isNotBlank() } ?: row.subtitle
+            val tags = row.pills.joinToString(" · ") { it.text }
+            val meta = row.meta.filter { it.icon != SourceMetaIcon.TRACK }.joinToString(" · ") { it.text }
+            return listOfNotNull(title?.takeIf { it != header }, tags, meta).filter { it.isNotBlank() }
         }
 
         override fun getItemCount(): Int = extractor.videos.size
@@ -1282,7 +1315,11 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                 itemView.setOnLongClickListener {
                     val video = extractor.videos[bindingAdapterPosition]
                     val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(Uri.parse(video.file.url), "video/*")
+                        if (video.file.url.startsWith("magnet:", ignoreCase = true)) {
+                            data = Uri.parse(video.file.url)
+                        } else {
+                            setDataAndType(Uri.parse(video.file.url), "video/*")
+                        }
                     }
                     copyToClipboard(video.file.url, true)
                     dismissAllowingStateLoss()

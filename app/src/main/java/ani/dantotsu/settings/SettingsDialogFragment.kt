@@ -59,59 +59,66 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        val window = dialog?.window
-        window?.statusBarColor = Color.CYAN
-        window?.navigationBarColor =
-            requireContext().getThemeColor(com.google.android.material.R.attr.colorSurface)
+        dialog?.window?.apply {
+            statusBarColor = Color.CYAN
+            navigationBarColor = requireContext().getThemeColor(com.google.android.material.R.attr.colorSurface)
+        }
         val isRescueModeEarly: Boolean = PrefManager.getVal(PrefName.RescueMode)
-        val notificationIcon = if (!isRescueModeEarly && Anilist.unreadNotificationCount > 0) {
+        setupNotificationBadge(isRescueModeEarly)
+        setupLoginAndUserHeader(isRescueModeEarly)
+        setupIncognitoAndService(isRescueModeEarly)
+        setupMenuNavigationActions()
+        setupDownloadsSwitch()
+    }
+
+    private fun setupNotificationBadge(isRescueMode: Boolean) {
+        val notificationIcon = if (!isRescueMode && Anilist.unreadNotificationCount > 0) {
             R.drawable.ic_round_notifications_active_24
         } else {
             R.drawable.ic_round_notifications_none_24
         }
         binding.settingsNotification.setImageResource(notificationIcon)
-        if (isRescueModeEarly) binding.settingsNotification.visibility = View.GONE
+        if (isRescueMode) binding.settingsNotification.visibility = View.GONE
+    }
 
-        setupLoginAndUserHeader(isRescueModeEarly)
-
-                binding.settingsIncognito.isChecked = PrefManager.getVal(PrefName.Incognito)
+    private fun setupIncognitoAndService(isRescueMode: Boolean) {
+        binding.settingsIncognito.isChecked = PrefManager.getVal(PrefName.Incognito)
         binding.settingsIncognito.setOnCheckedChangeListener { _, isChecked ->
-            // Added check to ensure fragment is still active before updating
             if (isAdded) {
                 PrefManager.setVal(PrefName.Incognito, isChecked)
                 incognitoNotification(requireContext())
             }
         }
 
-        binding.settingsRescueMode.isChecked = PrefManager.getVal(PrefName.RescueMode)
-        binding.settingsRescueMode.setOnCheckedChangeListener { _, isChecked ->
-            PrefManager.setVal(PrefName.RescueMode, isChecked)
-            activity?.let { act ->
-                dismiss()
-                val intent = Intent(act, MainActivity::class.java)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-                act.startActivity(intent)
-                act.overridePendingTransition(0, 0)
-                act.finish()
-                act.overridePendingTransition(0, 0)
-            }
+        val activeServiceName = getString(if (isRescueMode) R.string.myanimelist else R.string.anilist)
+        binding.settingsSwitchService.text = getString(R.string.switch_service_label, activeServiceName)
+        binding.settingsSwitchService.setIconResource(
+            if (isRescueMode) R.drawable.ic_myanimelist else R.drawable.ic_anilist
+        )
+        binding.settingsSwitchService.setSafeOnClickListener {
+            val act = activity ?: return@setSafeOnClickListener
+            dismiss()
+            ServiceSwitcherDialog.show(act)
         }
+    }
 
+    private fun setupMenuNavigationActions() {
         binding.settingsExtensionSettings.setSafeOnClickListener {
             startActivity(Intent(activity, ExtensionsActivity::class.java))
             dismiss()
         }
-
         binding.settingsDownloadQueue.setSafeOnClickListener {
             startActivity(Intent(activity, DownloadQueueActivity::class.java))
             dismiss()
         }
-
+        binding.settingsWatchRooms.setSafeOnClickListener {
+            startActivity(Intent(activity, ani.dantotsu.together.WatchRoomActivity::class.java))
+            dismiss()
+        }
         binding.settingsSettings.setSafeOnClickListener {
             startActivity(Intent(activity, SettingsActivity::class.java))
             dismiss()
         }
-
         binding.settingsActivity.setSafeOnClickListener {
             if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
                 snackString(getString(R.string.rescue_mode_active))
@@ -120,7 +127,6 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
             startActivity(Intent(activity, FeedActivity::class.java))
             dismiss()
         }
-
         binding.settingsNotification.setOnClickListener {
             if (PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
                 snackString(getString(R.string.rescue_mode_active))
@@ -129,64 +135,33 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
             startActivity(Intent(activity, NotificationActivity::class.java))
             dismiss()
         }
+    }
+
+    private fun setupDownloadsSwitch() {
         binding.settingsDownloads.isChecked = PrefManager.getVal(PrefName.OfflineMode)
         binding.settingsDownloads.setOnCheckedChangeListener { _, isChecked ->
             binding.root.postDelayed({
                 val currentActivity = activity
-                // Ensure fragment is added and activity is not null
                 if (currentActivity != null && isAdded) {
-                    when (pageType) {
-                        PageType.MANGA -> {
-                            val intent = Intent(currentActivity, NoInternet::class.java)
-                            intent.putExtra(
-                                "FRAGMENT_CLASS_NAME",
-                                OfflineMangaFragment::class.java.name
-                            )
-                            startActivity(intent)
-                        }
-
-                        PageType.ANIME -> {
-                            val intent = Intent(currentActivity, NoInternet::class.java)
-                            intent.putExtra(
-                                "FRAGMENT_CLASS_NAME",
-                                OfflineAnimeFragment::class.java.name
-                            )
-                            startActivity(intent)
-                        }
-
-                        PageType.HOME -> {
-                            val intent = Intent(currentActivity, NoInternet::class.java)
-                            intent.putExtra("FRAGMENT_CLASS_NAME", OfflineFragment::class.java.name)
-                            startActivity(intent)
-                        }
-
-                        PageType.OfflineMANGA -> {
-                            val intent = Intent(currentActivity, MainActivity::class.java)
-                            intent.putExtra("FRAGMENT_CLASS_NAME", MangaFragment::class.java.name)
-                            startActivity(intent)
-                        }
-
-                        PageType.OfflineHOME -> {
-                            val intent = Intent(currentActivity, MainActivity::class.java)
-                            intent.putExtra(
-                                "FRAGMENT_CLASS_NAME",
-                                if (Anilist.token != null) HomeFragment::class.java.name else LoginFragment::class.java.name
-                            )
-                            startActivity(intent)
-                        }
-
-                        PageType.OfflineANIME -> {
-                            val intent = Intent(currentActivity, MainActivity::class.java)
-                            intent.putExtra("FRAGMENT_CLASS_NAME", AnimeFragment::class.java.name)
-                            startActivity(intent)
-                        }
-                    }
-
+                    startActivity(buildOfflineSwitchIntent(currentActivity))
                     dismiss()
                     PrefManager.setVal(PrefName.OfflineMode, isChecked)
                 }
             }, 300)
         }
+    }
+
+    private fun buildOfflineSwitchIntent(currentActivity: android.app.Activity): Intent {
+        val (targetClass, fragmentName) = when (pageType) {
+            PageType.MANGA -> NoInternet::class.java to OfflineMangaFragment::class.java.name
+            PageType.ANIME -> NoInternet::class.java to OfflineAnimeFragment::class.java.name
+            PageType.HOME -> NoInternet::class.java to OfflineFragment::class.java.name
+            PageType.OfflineMANGA -> MainActivity::class.java to MangaFragment::class.java.name
+            PageType.OfflineHOME -> MainActivity::class.java to
+                if (Anilist.token != null) HomeFragment::class.java.name else LoginFragment::class.java.name
+            PageType.OfflineANIME -> MainActivity::class.java to AnimeFragment::class.java.name
+        }
+        return Intent(currentActivity, targetClass).putExtra("FRAGMENT_CLASS_NAME", fragmentName)
     }
 
     override fun onDestroyView() {

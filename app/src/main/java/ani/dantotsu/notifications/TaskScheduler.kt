@@ -51,18 +51,21 @@ interface TaskScheduler {
                 CommentNotificationWorker.WORK_NAME + "_single",
                 androidx.work.ExistingWorkPolicy.REPLACE,
                 androidx.work.OneTimeWorkRequest.Builder(CommentNotificationWorker::class.java)
+                    .setInitialDelay(20, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
             )
             workManager.enqueueUniqueWork(
                 AnilistNotificationWorker.WORK_NAME + "_single",
                 androidx.work.ExistingWorkPolicy.REPLACE,
                 androidx.work.OneTimeWorkRequest.Builder(AnilistNotificationWorker::class.java)
+                    .setInitialDelay(20, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
             )
             workManager.enqueueUniqueWork(
                 SubscriptionNotificationWorker.WORK_NAME + "_single",
                 androidx.work.ExistingWorkPolicy.REPLACE,
                 androidx.work.OneTimeWorkRequest.Builder(SubscriptionNotificationWorker::class.java)
+                    .setInitialDelay(20, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
             )
         }

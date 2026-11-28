@@ -5,10 +5,10 @@ import android.net.Uri
 import android.os.Build
 import androidx.annotation.RequiresApi
 import ani.dantotsu.util.Logger
-import com.antonkarpenko.ffmpegkit.FFmpegKit
-import com.antonkarpenko.ffmpegkit.FFmpegKitConfig
-import com.antonkarpenko.ffmpegkit.FFprobeKit
-import com.antonkarpenko.ffmpegkit.SessionState
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.FFmpegKitConfig
+import com.arthenica.ffmpegkit.FFprobeKit
+import com.arthenica.ffmpegkit.SessionState
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -69,8 +69,8 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
             override fun getStatus(): String {
                 FFmpegKitConfig.getFFmpegSessions().forEach {
-                    if (it.sessionId == sessionId) {
-                        return when (it.state) {
+                    if (it.getSessionId() == sessionId) {
+                        return when (it.getState()) {
                             SessionState.COMPLETED -> "COMPLETED"
                             SessionState.FAILED -> "FAILED"
                             SessionState.RUNNING -> "RUNNING"
@@ -83,8 +83,8 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
             override fun getStackTrace(): String? {
                 FFmpegKitConfig.getFFmpegSessions().forEach {
-                    if (it.sessionId == sessionId) {
-                        return it.failStackTrace
+                    if (it.getSessionId() == sessionId) {
+                        return it.getFailStackTrace()
                     }
                 }
                 return null
@@ -92,12 +92,40 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
             override fun hadError(): Boolean {
                 FFmpegKitConfig.getFFmpegSessions().forEach {
-                    if (it.sessionId == sessionId) {
-                        return it.returnCode.isValueError
+                    if (it.getSessionId() == sessionId) {
+                        return it.getReturnCode()?.isValueError() == true
                     }
                 }
                 return false
             }
+        }
+
+        class FastSession(
+            override val sessionId: Long,
+            override val downloadPath: String
+        ) : DownloadSession() {
+            @Volatile
+            var currentStatus: String = "RUNNING"
+            @Volatile
+            var failReason: String? = null
+            @Volatile
+            var hasError: Boolean = false
+            @Volatile
+            var job: Job? = null
+
+            val downloadedBytes = AtomicLong(0L)
+            val totalBytes = AtomicLong(0L)
+
+            override fun cancel() {
+                currentStatus = "FAILED"
+                hasError = true
+                failReason = "Cancelled by user"
+                job?.cancel()
+            }
+
+            override fun getStatus(): String = currentStatus
+            override fun getStackTrace(): String? = failReason
+            override fun hadError(): Boolean = hasError
         }
 
         class Aria2Session(
@@ -221,6 +249,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
     override fun getDownloadedBytes(sessionId: Long): Long {
         val session = activeSessions[sessionId] ?: return -1L
         return when (session) {
+            is DownloadSession.FastSession -> session.downloadedBytes.get()
             is DownloadSession.Aria2Session -> session.downloadedBytes
             is DownloadSession.HlsSession -> session.downloadedBytes.get()
             is DownloadSession.ComplexHlsSession -> session.downloadedBytes.get()
@@ -231,6 +260,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
     override fun getEstimatedTotalBytes(sessionId: Long): Long {
         val session = activeSessions[sessionId] ?: return -1L
         return when (session) {
+            is DownloadSession.FastSession -> session.totalBytes.get()
             is DownloadSession.Aria2Session -> session.totalBytes
             is DownloadSession.HlsSession -> session.totalBytes
             is DownloadSession.ComplexHlsSession -> session.totalBytes
@@ -258,7 +288,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         FFprobeKit.executeAsync(
             request,
             { session ->
-                val output = session.output ?: session.allLogsAsString
+                val output = session.getOutput() ?: session.getAllLogsAsString()
                 if (output != null) {
                     val duration = output.lines().map { it.trim() }.firstOrNull { it.toDoubleOrNull() != null }
                     if (duration != null) {
@@ -283,23 +313,45 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         statCallback: (Double) -> Unit
     ): Long {
         val sessionId = nextSessionId.incrementAndGet()
-        val isHls = videoUrl.contains(".m3u8", ignoreCase = true) || videoUrl.contains("m3u8", ignoreCase = true)
-        val isDash = videoUrl.contains(".mpd", ignoreCase = true) || videoUrl.contains("mpd", ignoreCase = true)
+        val session = DownloadSession.FastSession(sessionId, downloadPath)
+        activeSessions[sessionId] = session
 
-        return when {
-            isHls && subtitleUrls.isEmpty() && audioUrls.isEmpty() -> {
-                executeSimpleHlsDownload(sessionId, videoUrl, downloadPath, headers, statCallback)
-            }
-            !isHls && !isDash && subtitleUrls.isEmpty() && audioUrls.isEmpty() -> {
-                executeProgressiveDownload(sessionId, videoUrl, downloadPath, headers, statCallback)
-            }
-            isHls -> {
-                executeComplexHlsDownload(sessionId, videoUrl, downloadPath, headers, subtitleUrls, audioUrls, statCallback)
-            }
-            else -> {
-                executeFallbackFFmpegDownload(sessionId, videoUrl, downloadPath, headers, subtitleUrls, audioUrls, statCallback)
+        session.job = scope.launch {
+            try {
+                session.currentStatus = "RUNNING"
+                val downloader = ani.dantotsu.download.video.FastVideoDownloader(
+                    context = context,
+                    downloadedBytesCounter = session.downloadedBytes,
+                    totalBytesEstimate = session.totalBytes,
+                )
+                downloader.downloadAndRemux(
+                    sessionId = sessionId,
+                    videoUrl = videoUrl,
+                    outputPath = downloadPath,
+                    headersMap = headers,
+                    externalSubtitles = subtitleUrls,
+                    externalAudios = audioUrls,
+                ) { percent, _ ->
+                    emitProgress(sessionId, statCallback, percent.toDouble() * 1000.0)
+                }
+                if (!session.hasError && !cancelledSessions.contains(sessionId)) {
+                    session.currentStatus = "COMPLETED"
+                } else {
+                    session.currentStatus = "FAILED"
+                }
+            } catch (e: CancellationException) {
+                session.currentStatus = "FAILED"
+                session.hasError = true
+                session.failReason = "Cancelled by user"
+                throw e
+            } catch (e: Exception) {
+                Logger.log("FastVideoDownloader failed ($videoUrl): ${e.message}")
+                session.currentStatus = "FAILED"
+                session.hasError = true
+                session.failReason = e.stackTraceToString()
             }
         }
+        return sessionId
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
@@ -649,7 +701,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         val exec = FFmpegKit.executeAsync(
             command,
             { session ->
-                Logger.log("Built-in FFmpeg session exited: state=${session.state} rc=${session.returnCode}")
+                Logger.log("Built-in FFmpeg session exited: state=${session.getState()} rc=${session.getReturnCode()}")
             },
             {
                 // console logs
@@ -660,7 +712,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
                 emitProgress(sid, statCallback, it.time)
             }
         }
-        val rawId = exec.sessionId
+        val rawId = exec.getSessionId()
         ffmpegSessionId.set(rawId)
         activeSessions[rawId] = DownloadSession.FFMpegSession(rawId, downloadPath)
         if (cancelledSessions.contains(sessionId)) {
@@ -735,13 +787,13 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
         }
         val exec = FFmpegKit.executeAsync(actualCommand,
             { session ->
-                Logger.log("Built-in Custom FFmpeg exited: ${session.state} rc=${session.returnCode}")
+                Logger.log("Built-in Custom FFmpeg exited: ${session.getState()} rc=${session.getReturnCode()}")
             }, {
                 logCallback(it.message)
             }) {
             // stats
         }
-        val rawId = exec.sessionId
+        val rawId = exec.getSessionId()
         activeSessions[rawId] = DownloadSession.FFMpegSession(rawId, "")
         return rawId
     }
@@ -1478,8 +1530,8 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
 
         Logger.log("Built-in: Mux command (forceMpegTs=$forceMpegTs): $command")
         val exec = FFmpegKit.execute(command)
-        if (exec.returnCode?.isValueError == true) {
-            throw IOException("FFmpeg muxing failed: ${exec.allLogsAsString}")
+        if (exec.getReturnCode()?.isValueError() == true) {
+            throw IOException("FFmpeg muxing failed: ${exec.getAllLogsAsString()}")
         }
 
         // Filesystem path: verify size. SAF paths are validated via ffprobe next.
@@ -1589,7 +1641,7 @@ class NativeVideoDownloader(private val context: Context) : DownloadAddonApiV2 {
             Logger.log("Built-in: FFprobe verification skipped: ${e.message}")
             return
         }
-        val output = (probe.output ?: probe.allLogsAsString ?: "").trim()
+        val output = (probe.getOutput() ?: probe.getAllLogsAsString() ?: "").trim()
         if (output.isBlank()) {
             Logger.log("Built-in: FFprobe returned empty output, skipping codec assertion")
             return

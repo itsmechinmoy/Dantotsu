@@ -18,7 +18,7 @@ interface AnimeCatalogueSource : AnimeSource {
     /**
      * Whether the source has support for latest updates.
      */
-    val supportsLatest: Boolean
+    override val supportsLatest: Boolean
 
     /**
      * Get the related anime list for an anime.
@@ -36,7 +36,7 @@ interface AnimeCatalogueSource : AnimeSource {
      * @param page the page number to retrieve.
      */
     @Suppress("DEPRECATION")
-    suspend fun getPopularAnime(page: Int): AnimesPage = withIOContext {
+    override suspend fun getPopularAnime(page: Int): AnimesPage = withIOContext {
         fetchPopularAnime(page).awaitSingle()
     }
 
@@ -49,7 +49,7 @@ interface AnimeCatalogueSource : AnimeSource {
      * @param filters the list of filters to apply.
      */
     @Suppress("DEPRECATION")
-    suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage = withIOContext {
+    override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage = withIOContext {
         fetchSearchAnime(page, query, filters).awaitSingle()
     }
 
@@ -60,14 +60,14 @@ interface AnimeCatalogueSource : AnimeSource {
      * @param page the page number to retrieve.
      */
     @Suppress("DEPRECATION")
-    suspend fun getLatestUpdates(page: Int): AnimesPage = withIOContext {
+    override suspend fun getLatestUpdates(page: Int): AnimesPage = withIOContext {
         fetchLatestUpdates(page).awaitSingle()
     }
 
     /**
      * Returns the list of filters for the source.
      */
-    fun getFilterList(): AnimeFilterList
+    override fun getFilterList(): AnimeFilterList
 
     // Should be replaced as soon as Anime Extension reach 1.5
     @Deprecated(

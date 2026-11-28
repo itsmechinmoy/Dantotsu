@@ -16,8 +16,8 @@ import android.view.SurfaceView
 import android.view.TextureView
 import android.view.View
 import android.media.MediaScannerConnection
-import androidx.media3.ui.PlayerView
 import ani.dantotsu.R
+import ani.dantotsu.media.anime.mpv.DantotsuPlayerView
 import ani.dantotsu.snackString
 import ani.dantotsu.toast
 import ani.dantotsu.util.Logger
@@ -29,7 +29,7 @@ import java.util.Locale
 
 class PlayerScreenshotManager(
     private val activity: Activity,
-    private val playerView: PlayerView
+    private val playerView: DantotsuPlayerView
 ) {
     fun takeScreenshot(
         animeTitle: String? = null,

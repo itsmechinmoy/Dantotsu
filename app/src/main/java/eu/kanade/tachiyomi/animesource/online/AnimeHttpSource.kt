@@ -1,11 +1,15 @@
 package eu.kanade.tachiyomi.animesource.online
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.HttpServer
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.ThumbnailInfo
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -40,6 +44,13 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
      * Base url of the website without the trailing slash, like: http://mysite.com
      */
     abstract val baseUrl: String
+
+    /**
+     * Returns the base (home) URL of the website as a string.
+     *
+     * @since extensions-lib 17
+     */
+    open fun getHomeUrl(): String = baseUrl
 
     /**
      * Version id used to generate the source id. If the site completely changes and urls are
@@ -427,6 +438,41 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
      */
     open suspend fun resolveVideo(video: Video): Video? {
         return video
+    }
+
+    /**
+     * Enable the use of a local http server.
+     *
+     * Return an instance of HttpServer. The app handles starting and closing of the server.
+     *
+     * @since extensions-lib 17
+     */
+    open fun createHttpServer(): HttpServer? {
+        return null
+    }
+
+    /**
+     * Return info for thumbnails to be used as a preview when seeking.
+     *
+     * @since extensions-lib 17
+     * @param video the video information.
+     * @return the info for thumbnails. Return null if no thumbnails exist.
+     */
+    open suspend fun getVideoThumbnails(video: Video): ThumbnailInfo? {
+        return null
+    }
+
+    /**
+     * Return bitmap for the image tiles.
+     *
+     * @since extensions-lib 17
+     * @param url the url for the image tiles
+     * @return the image bitmap
+     */
+    open suspend fun getImageTile(url: String): Bitmap? {
+        return client.newCall(GET(url, headers)).execute().body.byteStream().use {
+            BitmapFactory.decodeStream(it)
+        }
     }
 
     /**

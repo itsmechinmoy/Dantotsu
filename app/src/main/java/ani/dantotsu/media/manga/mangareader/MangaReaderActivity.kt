@@ -202,6 +202,9 @@ class MangaReaderActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         hideSystemBars()
+        if (::chapter.isInitialized) {
+            updateDiscordPresence(chapter)
+        }
         if (defaultSettings.autoScroll && ::binding.isInitialized && defaultSettings.layout != PAGED) {
             autoScrollHelper.speed = defaultSettings.autoScrollSpeed
             autoScrollHelper.attach(binding.mangaReaderRecycler, defaultSettings.direction)
@@ -218,7 +221,7 @@ class MangaReaderActivity : AppCompatActivity() {
         mangaCache.clear()
         goneHandler.removeCallbacksAndMessages(null)
         pageSliderHandler.removeCallbacksAndMessages(null)
-        RPCManager.clearPresence(this)
+        RPCManager.clearPresence(this, this)
         ani.dantotsu.widgets.continue_widget.ContinueWidget.updateReadingState(this, null, null, null, isExiting = true)
         if (::binding.isInitialized) {
             try {
@@ -401,10 +404,7 @@ class MangaReaderActivity : AppCompatActivity() {
         chaptersTitleArr = arrayListOf()
         chapters.forEach {
             val ch = it.value
-            val hasTitle = !ch.title.isNullOrEmpty() && ch.title != "null"
-            val prefix = if (hasTitle) "" else "Chapter "
-            val suffix = if (hasTitle) " : " + ch.title else ""
-            chaptersTitleArr.add("$prefix${ch.number}$suffix")
+            chaptersTitleArr.add(formatChapterTitle(ch.number, ch.title))
         }
 
         showProgressDialog = if (PrefManager.getVal(PrefName.AskIndividualReader)) {
@@ -608,10 +608,10 @@ class MangaReaderActivity : AppCompatActivity() {
         val context = this
         val offline: Boolean = PrefManager.getVal(PrefName.OfflineMode)
         val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
-        val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled)
+        val rpcenabled: Boolean = PrefManager.getVal(PrefName.rpcEnabled, true)
         if (RPCManager.shouldSuppressForAdultMedia(media.isAdult)) {
             RPCManager.clearPresence(context)
-        } else if (isOnline(context) && !offline && Discord.token != null && !incognito && rpcenabled) {
+        } else if (isOnline(context) && !offline && !incognito && rpcenabled) {
             lifecycleScope.launch {
                 val buttons = mutableListOf<RPC.Link>()
                 buttons.add(RPC.Link("View Manga", "https://anilist.co/manga/${media.id}/"))
@@ -633,7 +633,7 @@ class MangaReaderActivity : AppCompatActivity() {
                     },
                     buttons = buttons
                 )
-                RPCManager.setPresence(context, rpcData)
+                RPCManager.setPresence(context, rpcData, context)
             }
         }
     }
@@ -1162,10 +1162,23 @@ class MangaReaderActivity : AppCompatActivity() {
         setupPagedVolumeKeys()
     }
 
+    fun applyColorFilter() {
+        val s = defaultSettings
+        MangaColorFilterManager.applyColorFilter(
+            binding.mangaReaderSwipy,
+            colorFilterMode = s.colorFilterMode,
+            brightness = s.filterBrightness,
+            contrast = s.filterContrast,
+            saturation = s.filterSaturation,
+            temperature = s.filterTemperature
+        )
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     fun applySettings() {
         saveReaderSettings("${media.id}_current_settings", defaultSettings)
         applyReaderWindowSettings()
+        applyColorFilter()
 
         val chapImages = setupChapterImagesAndAdapter()
         setupAutoScrollSettings()
@@ -1273,27 +1286,31 @@ class MangaReaderActivity : AppCompatActivity() {
 
     private fun determinePressPosition(x: Int, y: Int, screenWidth: Int): PressPos {
         val isRtl = defaultSettings.direction == RIGHT_TO_LEFT
-        return if (screenWidth / 5 in x + 1..<y) {
-            if (isRtl) PressPos.RIGHT else PressPos.LEFT
-        } else if (x > screenWidth - screenWidth / 5 && y > screenWidth / 5) {
-            if (isRtl) PressPos.LEFT else PressPos.RIGHT
-        } else {
-            PressPos.CENTER
+        val leftBoundary = screenWidth * 0.28f
+        val rightBoundary = screenWidth * 0.72f
+        return when {
+            x < leftBoundary -> if (isRtl) PressPos.RIGHT else PressPos.LEFT
+            x > rightBoundary -> if (isRtl) PressPos.LEFT else PressPos.RIGHT
+            else -> PressPos.CENTER
         }
     }
 
     private fun navigatePaged(pressLocation: PressPos): Boolean {
-        if (pressLocation == PressPos.LEFT && binding.mangaReaderPager.currentItem > 0) {
-            if (imageAdapter?.isZoomed() == true) {
-                imageAdapter?.setZoom(1f)
+        if (pressLocation == PressPos.LEFT) {
+            if (binding.mangaReaderPager.currentItem > 0) {
+                if (imageAdapter?.isZoomed() == true) {
+                    imageAdapter?.setZoom(1f)
+                }
+                binding.mangaReaderPager.currentItem -= 1
             }
-            binding.mangaReaderPager.currentItem -= 1
             return true
-        } else if (pressLocation == PressPos.RIGHT && binding.mangaReaderPager.currentItem < maxChapterPage - 1) {
-            if (imageAdapter?.isZoomed() == true) {
-                imageAdapter?.setZoom(1f)
+        } else if (pressLocation == PressPos.RIGHT) {
+            if (binding.mangaReaderPager.currentItem < maxChapterPage - 1) {
+                if (imageAdapter?.isZoomed() == true) {
+                    imageAdapter?.setZoom(1f)
+                }
+                binding.mangaReaderPager.currentItem += 1
             }
-            binding.mangaReaderPager.currentItem += 1
             return true
         }
         return false
@@ -1744,6 +1761,30 @@ class MangaReaderActivity : AppCompatActivity() {
         autoScrollHelper.speed = speed
     }
 
+    fun formatChapterTitle(number: String, title: String?): String {
+        val num = number.trim()
+        val t = title?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
+
+        if (t == null) {
+            return if (num.startsWith("Chapter", ignoreCase = true)) num else "Chapter $num"
+        }
+
+        if (num.equals(t, ignoreCase = true)) {
+            return if (num.startsWith("Chapter", ignoreCase = true)) num else "Chapter $num"
+        }
+
+        if (num.contains(t, ignoreCase = true)) {
+            return if (num.startsWith("Chapter", ignoreCase = true)) num else "Chapter $num"
+        }
+
+        if (t.startsWith(num, ignoreCase = true) || t.startsWith("Chapter", ignoreCase = true)) {
+            return t
+        }
+
+        val prefix = if (num.startsWith("Chapter", ignoreCase = true)) num else "Chapter $num"
+        return "$prefix : $t"
+    }
+
     fun getChapterDisplayTitle(chap: MangaChapter?): String {
         if (chap == null) return ""
         val index = chaptersArr.indexOf(chap.uniqueNumber())
@@ -1751,12 +1792,7 @@ class MangaReaderActivity : AppCompatActivity() {
             val title = chaptersTitleArr.getOrNull(index)
             if (!title.isNullOrEmpty()) return title
         }
-        val t = chap.title
-        return if (!t.isNullOrEmpty() && t != "null") {
-            "Chapter ${chap.number} : $t"
-        } else {
-            "Chapter ${chap.number}"
-        }
+        return formatChapterTitle(chap.number, chap.title)
     }
 
     fun getFinishedChapterTitle(): String {

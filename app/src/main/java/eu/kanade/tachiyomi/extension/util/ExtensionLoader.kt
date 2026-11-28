@@ -10,6 +10,8 @@ import ani.dantotsu.media.MediaType
 import ani.dantotsu.parsers.NovelInterface
 import ani.dantotsu.parsers.novel.NovelExtension
 import ani.dantotsu.parsers.novel.NovelLoadResult
+import ani.dantotsu.settings.saving.PrefManager
+import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.util.Logger
 import dalvik.system.PathClassLoader
 import eu.kanade.domain.source.service.SourcePreferences
@@ -20,6 +22,7 @@ import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.anime.model.AnimeLoadResult
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaLoadResult
+import eu.kanade.tachiyomi.extension.model.ExtensionContentWarning
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.SourceFactory
@@ -54,6 +57,8 @@ import java.io.File
 internal object ExtensionLoader {
 
     private fun isNsfwAllowed(context: Context): Boolean {
+        val prefAllowed = PrefManager.getVal(PrefName.NSFWExtension, true)
+        if (!prefAllowed) return false
         return try {
             val app = context.applicationContext
             if (app is GraphProvider<*>) {
@@ -471,9 +476,14 @@ internal object ExtensionLoader {
 
         val libVersion = validateAnimeLibVersion(appInfo, versionName) ?: return AnimeLoadResult.Error
 
-        val isNsfw = isAnimeExtensionNsfw(appInfo)
+        val contentWarning = resolveExtensionContentWarning(
+            appInfo = appInfo,
+            warningKeys = listOf("aniyomix.contentWarning", "tachiyomix.contentWarning"),
+            legacyNsfwKey = "$ANIME_PACKAGE$XX_METADATA_NSFW"
+        )
+        val isNsfw = contentWarning.isRestricted
         if (!isNsfwAllowed(context) && isNsfw) {
-            Logger.log("NSFW extension $pkgName not allowed")
+            Logger.log("NSFW/Mixed extension $pkgName not allowed")
             return AnimeLoadResult.Error
         }
 
@@ -504,6 +514,7 @@ internal object ExtensionLoader {
             libVersion = libVersion,
             lang = lang,
             isNsfw = isNsfw,
+            contentWarning = contentWarning,
             hasReadme = hasReadme,
             hasChangelog = hasChangelog,
             sources = sources,
@@ -521,9 +532,25 @@ internal object ExtensionLoader {
             ?: pkgManager.getApplicationLabel(appInfo).toString().substringAfter("Aniyomi: ")
     }
 
-    private fun isAnimeExtensionNsfw(appInfo: ApplicationInfo): Boolean {
-        return (appInfo.metaData?.getInt("aniyomix.contentWarning", 0) ?: 0) > 0 ||
-            appInfo.metaData?.getInt("$ANIME_PACKAGE$XX_METADATA_NSFW", 0) == 1
+    private fun resolveExtensionContentWarning(
+        appInfo: ApplicationInfo,
+        warningKeys: List<String>,
+        legacyNsfwKey: String
+    ): ExtensionContentWarning {
+        val meta = appInfo.metaData ?: return ExtensionContentWarning.SAFE
+        val warningKey = warningKeys.firstOrNull { meta.containsKey(it) }
+        if (warningKey != null) {
+            return when (meta.getInt(warningKey, 0)) {
+                1 -> ExtensionContentWarning.MIXED
+                2 -> ExtensionContentWarning.NSFW
+                else -> ExtensionContentWarning.SAFE
+            }
+        }
+        return if (meta.getInt(legacyNsfwKey, 0) == 1) {
+            ExtensionContentWarning.NSFW
+        } else {
+            ExtensionContentWarning.SAFE
+        }
     }
 
     private fun validateAnimeLibVersion(appInfo: ApplicationInfo, versionName: String): Double? {
@@ -665,9 +692,14 @@ internal object ExtensionLoader {
         val libVersion = validateMangaLibVersion(appInfo, versionName) ?: return MangaLoadResult.Error
 
         val loadNsfwSource = isNsfwAllowed(context)
-        val isNsfw = appInfo.metaData?.getInt("$MANGA_PACKAGE$XX_METADATA_NSFW", 0) == 1
+        val contentWarning = resolveExtensionContentWarning(
+            appInfo = appInfo,
+            warningKeys = listOf("tachiyomix.contentWarning", "mihon.contentWarning"),
+            legacyNsfwKey = "$MANGA_PACKAGE$XX_METADATA_NSFW"
+        )
+        val isNsfw = contentWarning.isRestricted
         if (!loadNsfwSource && isNsfw) {
-            Logger.log("NSFW extension $pkgName not allowed")
+            Logger.log("NSFW/Mixed extension $pkgName not allowed")
             return MangaLoadResult.Error
         }
 
@@ -698,6 +730,7 @@ internal object ExtensionLoader {
             libVersion = libVersion,
             lang = lang,
             isNsfw = isNsfw,
+            contentWarning = contentWarning,
             hasReadme = hasReadme,
             hasChangelog = hasChangelog,
             sources = sources,

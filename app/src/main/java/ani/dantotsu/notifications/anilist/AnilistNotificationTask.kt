@@ -56,7 +56,7 @@ class AnilistNotificationTask : Task {
                         newNotifications?.forEach {
                             if (!filteredTypes.contains(it.notificationType)) {
                                 val content = ActivityItemBuilder.getContent(it)
-                                val notification = createNotification(context, content, it.id)
+                                val notification = createNotification(context, content, it.id, it.media?.id)
                                 if (ActivityCompat.checkSelfPermission(
                                         context,
                                         Manifest.permission.POST_NOTIFICATIONS
@@ -109,10 +109,17 @@ class AnilistNotificationTask : Task {
     private fun createNotification(
         context: Context,
         content: String,
-        notificationId: Int? = null
+        notificationId: Int? = null,
+        mediaId: Int? = null
     ): android.app.Notification {
         val title = "New Anilist Notification"
-        val intent = Intent(context, MainActivity::class.java).apply {
+        // about a show: open that show; its page loads without an AniList sign-in
+        val intent = if (mediaId != null) Intent(context, ani.dantotsu.connections.anilist.UrlMedia::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("mediaId", mediaId)
+            putExtra("media", mediaId)
+            action = "anilist-$mediaId-$notificationId"
+        } else Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra("FRAGMENT_TO_LOAD", "NOTIFICATIONS")
             if (notificationId != null) {

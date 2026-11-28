@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="search"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_search"
+        android:shortcutShortLabel="@string/shortcut_search"
+        android:shortcutLongLabel="@string/shortcut_search_desc">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ani.dantotsu"
+            android:targetClass="ani.dantotsu.MainActivity">
+            <extra
+                android:name="shortcut_action"
+                android:value="search" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="anime"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_anime"
+        android:shortcutShortLabel="@string/shortcut_anime"
+        android:shortcutLongLabel="@string/shortcut_anime_desc">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ani.dantotsu"
+            android:targetClass="ani.dantotsu.MainActivity">
+            <extra
+                android:name="shortcut_tab"
+                android:value="0" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="manga"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_manga"
+        android:shortcutShortLabel="@string/shortcut_manga"
+        android:shortcutLongLabel="@string/shortcut_manga_desc">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ani.dantotsu"
+            android:targetClass="ani.dantotsu.MainActivity">
+            <extra
+                android:name="shortcut_tab"
+                android:value="2" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="downloads"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_download"
+        android:shortcutShortLabel="@string/shortcut_downloads"
+        android:shortcutLongLabel="@string/shortcut_downloads_desc">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ani.dantotsu"
+            android:targetClass="ani.dantotsu.MainActivity">
+            <extra
+                android:name="shortcut_action"
+                android:value="downloads" />
+        </intent>
+    </shortcut>
+</shortcuts>

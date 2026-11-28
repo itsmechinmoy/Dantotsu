@@ -30,7 +30,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.util.UnstableApi
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import ani.dantotsu.torrent.TorrentServerManager
 import ani.dantotsu.addons.torrent.TorrentServerService
@@ -46,6 +45,8 @@ import ani.dantotsu.home.LoginFragment
 import ani.dantotsu.home.MangaFragment
 import ani.dantotsu.home.NoInternet
 import ani.dantotsu.media.MediaDetailsActivity
+import ani.dantotsu.media.SearchActivity
+import ani.dantotsu.settings.DownloadQueueActivity
 import ani.dantotsu.notifications.TaskScheduler
 import ani.dantotsu.others.CustomBottomDialog
 import ani.dantotsu.others.calc.CalcActivity
@@ -86,11 +87,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var incognitoLiveData: SharedPreferenceBooleanLiveData
     private val scope = lifecycleScope
     private var load = false
+    private var tabsStale = false
 
 
     @kotlin.OptIn(DelicateCoroutinesApi::class)
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
-    @OptIn(UnstableApi::class)
     private fun checkSecurityAndLauncher(): Boolean {
         if (!isTaskRoot && intent.hasCategory(Intent.CATEGORY_LAUNCHER) && intent.action == Intent.ACTION_MAIN) {
             finish()
@@ -206,13 +207,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.rescueModeIcon.setOnClickListener {
             PrefManager.setVal(PrefName.RescueMode, false)
-            val restartIntent = Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            }
-            startActivity(restartIntent)
-            overridePendingTransition(0, 0)
-            finish()
-            overridePendingTransition(0, 0)
+            serviceChanged()
         }
         incognitoNotification(this)
     }
@@ -263,6 +258,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun determineInitialTab(fragment: String?): Int {
+        val shortcutTab = intent.getIntExtra("shortcut_tab", -1).takeIf { it != -1 }
+            ?: intent.getStringExtra("shortcut_tab")?.toIntOrNull()
+        if (shortcutTab != null && shortcutTab in 0..2) return shortcutTab
         return if (intent.getBooleanExtra("goToHome", false)) {
             1
         } else if (fragment != null) {
@@ -296,6 +294,7 @@ class MainActivity : AppCompatActivity() {
             binding.mainProgressBar.visibility = View.GONE
             val mainViewPager = binding.viewpager
             mainViewPager.isUserInputEnabled = false
+            mainViewPager.offscreenPageLimit = 2
             mainViewPager.adapter = ViewPagerAdapter(supportFragmentManager, lifecycle)
             mainViewPager.setPageTransformer(ZoomOutPageTransformer())
             navbar.selectTabAt(selectedOption)
@@ -312,7 +311,7 @@ class MainActivity : AppCompatActivity() {
                 }
             })
             if (mainViewPager.currentItem != selectedOption) {
-                mainViewPager.post { mainViewPager.setCurrentItem(selectedOption, false) }
+                mainViewPager.setCurrentItem(selectedOption, false)
             }
             binding.includedNavbar.navbarContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 bottomMargin = navBarHeight
@@ -322,6 +321,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleStartupExtras(): Boolean {
         val extras = intent.extras ?: return false
+        val shortcutAction = extras.getString("shortcut_action")
+        if (shortcutAction != null) {
+            intent.removeExtra("shortcut_action")
+            when (shortcutAction) {
+                "search" -> startActivity(Intent(this, SearchActivity::class.java))
+                "downloads" -> startActivity(Intent(this, DownloadQueueActivity::class.java))
+            }
+        }
         val fragmentToLoad = extras.getString("FRAGMENT_TO_LOAD")
         val mediaId = extras.getInt("mediaId", -1)
         val commentId = extras.getInt("commentId", -1)
@@ -482,6 +489,35 @@ class MainActivity : AppCompatActivity() {
         window.navigationBarColor = ContextCompat.getColor(this, android.R.color.transparent)
     }
 
+    override fun onStart() {
+        // after super: fragments can only be swapped once the activity has started again
+        super.onStart()
+        if (tabsStale) reloadTabs()
+    }
+
+    /** The tracking service changed (AniList / MyAnimeList): rebuild the tabs in place instead of restarting. */
+    fun serviceChanged() {
+        tabsStale = true
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) reloadTabs()
+    }
+
+    private fun reloadTabs() {
+        tabsStale = false
+        if (!::binding.isInitialized || binding.viewpager.adapter == null) return
+        val pager = binding.viewpager
+        val current = pager.currentItem
+        pager.adapter = null
+        val tabs = supportFragmentManager.fragments.filter { it.tag?.matches(Regex("f\\d+")) == true }
+        if (tabs.isNotEmpty()) {
+            supportFragmentManager.beginTransaction().apply { tabs.forEach { remove(it) } }.commitNow()
+        }
+        // the tabs keep their lists in activity-scoped models; drop them so the new tabs load again
+        viewModelStore.clear()
+        pager.offscreenPageLimit = 2
+        pager.adapter = ViewPagerAdapter(supportFragmentManager, lifecycle)
+        pager.setCurrentItem(current, false)
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         val margin = if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) 8 else 32
@@ -591,7 +627,7 @@ class MainActivity : AppCompatActivity() {
             if (handleRepoImport(uri, schemeLower)) {
                 return
             }
-            if (schemeLower == "dantotsu") {
+            if (schemeLower == "dantotsu" || schemeLower == "dartotsu") {
                 startActivity(Intent(this, ani.dantotsu.connections.anilist.UrlMedia::class.java).setData(uri))
                 return
             }
@@ -668,74 +704,96 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleIncomingExtras(targetIntent: Intent) {
-        targetIntent.extras?.let { extras ->
-            val fragmentToLoad = extras.getString("FRAGMENT_TO_LOAD")
-            val mediaId = extras.getInt("mediaId", -1)
-            val commentId = extras.getInt("commentId", -1)
-            val activityId = extras.getInt("activityId", -1)
+        val extras = targetIntent.extras ?: return
+        handleShortcutExtras(targetIntent, extras)
+        if (handleNotificationExtra(extras)) return
+        handleMediaOrProfileExtra(extras)
+    }
 
-            if (fragmentToLoad != null && mediaId != -1 && commentId != -1) {
-                val detailIntent = Intent(this, MediaDetailsActivity::class.java).apply {
-                    putExtra("FRAGMENT_TO_LOAD", fragmentToLoad)
-                    putExtra("mediaId", mediaId)
-                    putExtra("commentId", commentId)
-                }
-                startActivity(detailIntent)
-                return
-            } else if (fragmentToLoad == "FEED" && activityId != -1) {
-                if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-                    val feedIntent = Intent(this, FeedActivity::class.java).apply {
+    private fun handleShortcutExtras(targetIntent: Intent, extras: android.os.Bundle) {
+        val shortcutAction = extras.getString("shortcut_action")
+        if (shortcutAction != null) {
+            targetIntent.removeExtra("shortcut_action")
+            when (shortcutAction) {
+                "search" -> startActivity(Intent(this, SearchActivity::class.java))
+                "downloads" -> startActivity(Intent(this, DownloadQueueActivity::class.java))
+            }
+        }
+        val shortcutTab = extras.getInt("shortcut_tab", -1).takeIf { it != -1 }
+            ?: extras.getString("shortcut_tab")?.toIntOrNull()
+        if (shortcutTab != null && shortcutTab in 0..2) {
+            targetIntent.removeExtra("shortcut_tab")
+            selectedOption = shortcutTab
+            binding.includedNavbar.navbar.selectTabAt(shortcutTab)
+            binding.viewpager.setCurrentItem(shortcutTab, false)
+        }
+    }
+
+    private fun handleNotificationExtra(extras: android.os.Bundle): Boolean {
+        val fragmentToLoad = extras.getString("FRAGMENT_TO_LOAD")
+        val mediaId = extras.getInt("mediaId", -1)
+        val commentId = extras.getInt("commentId", -1)
+        val activityId = extras.getInt("activityId", -1)
+        val isRescue = PrefManager.getVal<Boolean>(PrefName.RescueMode)
+
+        return when {
+            fragmentToLoad != null && mediaId != -1 && commentId != -1 -> {
+                startActivity(
+                    Intent(this, MediaDetailsActivity::class.java).apply {
+                        putExtra("FRAGMENT_TO_LOAD", fragmentToLoad)
+                        putExtra("mediaId", mediaId)
+                        putExtra("commentId", commentId)
+                    }
+                )
+                true
+            }
+            fragmentToLoad == "FEED" && activityId != -1 && !isRescue -> {
+                startActivity(
+                    Intent(this, FeedActivity::class.java).apply {
                         putExtra("FRAGMENT_TO_LOAD", "NOTIFICATIONS")
                         putExtra("activityId", activityId)
                     }
-                    startActivity(feedIntent)
-                    return
-                }
-            } else if (fragmentToLoad == "NOTIFICATIONS" && activityId != -1) {
-                if (!PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
-                    val notificationIntent = Intent(this, NotificationActivity::class.java).apply {
+                )
+                true
+            }
+            fragmentToLoad == "NOTIFICATIONS" && activityId != -1 && !isRescue -> {
+                startActivity(
+                    Intent(this, NotificationActivity::class.java).apply {
                         putExtra("activityId", activityId)
                     }
-                    startActivity(notificationIntent)
-                    return
-                }
+                )
+                true
             }
+            else -> false
+        }
+    }
 
-            val id = extras.getInt("mediaId", 0).takeIf { it != 0 }
-                ?: extras.getInt("media", 0)
+    private fun handleMediaOrProfileExtra(extras: android.os.Bundle) {
+        val id = extras.getInt("mediaId", 0).takeIf { it != 0 }
+            ?: extras.getInt("media", 0)
+        if (id > 0) {
             val isMAL = extras.getBoolean("mal", false)
             val cont = extras.getBoolean("continue", false)
             val mediaType = extras.getString("mediaType")
-            if (id > 0) {
-                scope.launch(Dispatchers.IO) {
-                    val media = Anilist.query.getMedia(id, isMAL, mediaType)
-                    if (media != null) {
-                        media.cameFromContinue = cont
-                        startActivity(
-                            Intent(this@MainActivity, MediaDetailsActivity::class.java)
-                                .putExtra("media", media as java.io.Serializable)
-                        )
-                    } else {
-                        snackString(this@MainActivity.getString(R.string.anilist_not_found))
-                    }
-                }
-            }
-            val username = extras.getString("username")
-            if (username != null) {
-                val nameInt = username.toIntOrNull()
-                if (nameInt != null) {
+            scope.launch(Dispatchers.IO) {
+                val media = Anilist.query.getMedia(id, isMAL, mediaType)
+                if (media != null) {
+                    media.cameFromContinue = cont
                     startActivity(
-                        Intent(this@MainActivity, ProfileActivity::class.java)
-                            .putExtra("userId", nameInt)
+                        Intent(this@MainActivity, MediaDetailsActivity::class.java)
+                            .putExtra("media", media as java.io.Serializable)
                     )
                 } else {
-                    startActivity(
-                        Intent(this@MainActivity, ProfileActivity::class.java)
-                            .putExtra("username", username)
-                    )
+                    snackString(this@MainActivity.getString(R.string.anilist_not_found))
                 }
             }
         }
+        val username = extras.getString("username") ?: return
+        val intent = Intent(this@MainActivity, ProfileActivity::class.java).apply {
+            val nameInt = username.toIntOrNull()
+            if (nameInt != null) putExtra("userId", nameInt) else putExtra("username", username)
+        }
+        startActivity(intent)
     }
 
     override fun onDestroy() {

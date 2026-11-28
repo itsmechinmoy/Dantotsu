@@ -19,9 +19,11 @@ import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.dantotsu.MainActivity
@@ -53,6 +55,7 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefManager.asLiveBool
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.snackString
+import ani.dantotsu.startMainActivity
 import ani.dantotsu.statusBarHeight
 import ani.dantotsu.tryWithSuspend
 import ani.dantotsu.util.Logger
@@ -114,6 +117,7 @@ class HomeFragment : Fragment() {
         binding.homeUserAvatarContainer.startAnimation(setSlideUp())
 
         setupDynamicLayoutAndRefresh(scope)
+        setupRateLimitBanner()
     }
 
     private fun bindUserHeader(currentBinding: FragmentHomeBinding, rescueMode: Boolean) {
@@ -281,27 +285,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun getSkeletonMediaList(count: Int = 7): ArrayList<Media> {
-        val list = ArrayList<Media>()
-        for (i in 0 until count) {
-            list.add(
-                Media(
-                    anime = ani.dantotsu.media.anime.Anime(),
-                    manga = null,
-                    id = -100 - i,
-                    name = "—",
-                    nameRomaji = "—",
-                    userPreferredName = "—",
-                    cover = null,
-                    isAdult = false,
-                    meanScore = 0,
-                    userProgress = 0
-                )
-            )
-        }
-        return list
-    }
-
     private fun updateRecyclerAdapter(recyclerView: RecyclerView, it: ArrayList<Media>) {
         val currentAdapter = recyclerView.adapter as? MediaAdaptor
         if (currentAdapter != null && currentAdapter.type == 0 && currentAdapter.mediaList === it && recyclerView.tag == "loaded") {
@@ -330,13 +313,12 @@ class HomeFragment : Fragment() {
         string: String
     ) {
         container.visibility = View.VISIBLE
-        progress.visibility = View.GONE
+        progress.visibility = View.VISIBLE
         empty.visibility = View.GONE
         title.visibility = View.VISIBLE
         more.visibility = View.VISIBLE
-        recyclerView.visibility = View.VISIBLE
+        recyclerView.visibility = View.GONE
 
-        recyclerView.adapter = MediaAdaptor(0, getSkeletonMediaList(), requireActivity())
         recyclerView.layoutManager = LinearLayoutManager(
             requireContext(),
             LinearLayoutManager.HORIZONTAL,
@@ -345,8 +327,10 @@ class HomeFragment : Fragment() {
 
         mode.observe(viewLifecycleOwner) { it ->
             if (it != null) {
+                progress.visibility = View.GONE
                 if (it.isNotEmpty()) {
                     empty.visibility = View.GONE
+                    recyclerView.visibility = View.VISIBLE
                     updateRecyclerAdapter(recyclerView, it)
                     more.setOnClickListener { i ->
                         MediaListViewActivity.passedMedia = it
@@ -582,12 +566,8 @@ class HomeFragment : Fragment() {
             setNeutralButton(R.string.rescue_mode_enable) {
                 PrefManager.setVal(PrefName.RescueMode, true)
                 Anilist.anilistDisabledSignal = false
-                val intent = Intent(ctx, MainActivity::class.java)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-                startActivity(intent)
-                activity?.overridePendingTransition(0, 0)
-                activity?.finish()
-                activity?.overridePendingTransition(0, 0)
+                (activity as? MainActivity)?.serviceChanged()
+                    ?: activity?.let { startMainActivity(it) }
             }
             setNegButton(R.string.cancel) {
                 Anilist.anilistDisabledSignal = false
@@ -659,23 +639,62 @@ class HomeFragment : Fragment() {
         }
     }
 
+    private fun setupRateLimitBanner() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                Anilist.rateLimitState.collect { state ->
+                    val b = _binding ?: return@collect
+                    val inRescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+                    val showBanner = !inRescueMode && (state.waiting || state.exhausted)
+                    b.homeRateLimitBanner.isVisible = showBanner
+                    if (showBanner) {
+                        val remainingSec = ((state.retryAtEpochMs - System.currentTimeMillis() + 999L) / 1000L).coerceAtLeast(0L)
+                        b.homeRateLimitProgress.isVisible = state.waiting
+                        b.homeRateLimitText.text = when {
+                            state.waiting && remainingSec > 0L ->
+                                getString(R.string.anilist_rate_limit_waiting, remainingSec)
+                            state.waiting ->
+                                getString(R.string.anilist_rate_limit_waiting_short)
+                            else ->
+                                getString(R.string.anilist_rate_limit_exhausted)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun ensureUserDataLoaded(rescueMode: Boolean) {
+        withContext(Dispatchers.IO) {
+            if (rescueMode) {
+                if (MAL.token != null && MAL.episodesWatched == null) {
+                    tryWithSuspend { MAL.query.getUserData() }
+                }
+            } else {
+                if (Anilist.userid == null) {
+                    Anilist.userid =
+                        PrefManager.getNullableVal<String>(PrefName.AnilistUserId, null)
+                            ?.toIntOrNull()
+                }
+                getUserId(context) {}
+            }
+        }
+        withContext(Dispatchers.Main) {
+            if (activity != null && _binding != null && (Anilist.token != null || MAL.token != null)) {
+                loadUserData()
+            }
+        }
+    }
+
     private suspend fun performHomeRefresh(
         containers: Array<View>,
         live: MutableLiveData<Boolean>
     ) = coroutineScope {
         if (_binding != null) {
-            if (!model.loaded) {
-                withContext(Dispatchers.Main) {
-                    if (activity != null) {
-                        if (Anilist.token != null || MAL.token != null) {
-                            loadUserData()
-                        }
-                    }
-                }
-                model.loaded = true
-            }
+            val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+            ensureUserDataLoaded(rescueMode)
 
-            if (Anilist.anilistDisabledSignal && !PrefManager.getVal<Boolean>(PrefName.RescueMode)) {
+            if (Anilist.anilistDisabledSignal && !rescueMode) {
                 withContext(Dispatchers.Main) {
                     context?.let { showRescueModeOfflineDialog(it) }
                 }
@@ -685,14 +704,17 @@ class HomeFragment : Fragment() {
                 applyDynamicHomeLayout(containers)
             }
 
-            val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
             val isPullToRefresh = _binding?.homeRefresh?.isRefreshing == true
-            val initHomePage = async(Dispatchers.IO) { model.initHomePage(forceRefresh = isPullToRefresh) }
-            async(Dispatchers.IO) { model.setListImages() }
-            if (!rescueMode) {
-                async(Dispatchers.IO) { model.initUserStatus(forceRefresh = isPullToRefresh) }
+            val homeLoaded = withContext(Dispatchers.IO) {
+                model.initHomePage(forceRefresh = isPullToRefresh)
             }
-            initHomePage.await()
+            model.loaded = homeLoaded
+            val bannerJob = async(Dispatchers.IO) { model.setListImages() }
+            val statusJob = if (!rescueMode) {
+                async(Dispatchers.IO) { model.initUserStatus(forceRefresh = isPullToRefresh) }
+            } else null
+            bannerJob.await()
+            statusJob?.await()
 
             withContext(Dispatchers.Main) {
                 model.empty.postValue(empty)

@@ -139,6 +139,8 @@ class NotificationFragment : Fragment() {
         type: Boolean? = null,
         filter: (Notification) -> Boolean
     ): List<Notification> {
+        // opened cold from a notification: the saved sign-in isn't loaded yet
+        if (Anilist.token == null) Anilist.getSavedToken()
         val userId =
             Anilist.userid ?: PrefManager.getVal<String>(PrefName.AnilistUserId).toIntOrNull() ?: 0
         val res = Anilist.query.getNotifications(userId, currentPage, reset, type)?.data?.page

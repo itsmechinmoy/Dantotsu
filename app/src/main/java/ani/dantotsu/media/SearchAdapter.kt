@@ -52,16 +52,12 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
         binding.searchFilter.setIconResource(filterDrawable)
     }
 
-    @SuppressLint("ClickableViewAccessibility")
+    /** Filters the header edits; old listeners keep their own copy, as before the split. */
+    private class SearchToggles(var adult: Boolean, var listOnly: Boolean?)
+
     override fun onBindViewHolder(holder: SearchHeaderViewHolder, position: Int) {
         binding = holder.binding
-
-        searchHistoryAdapter = SearchHistoryAdapter(type) {
-            binding.searchBarText.setText(it)
-            binding.searchBarText.setSelection(it.length)
-        }
-        binding.searchHistoryList.layoutManager = LinearLayoutManager(binding.root.context)
-        binding.searchHistoryList.adapter = searchHistoryAdapter
+        bindHistoryList()
 
         val imm: InputMethodManager =
             activity.getSystemService(AppCompatActivity.INPUT_METHOD_SERVICE) as InputMethodManager
@@ -70,6 +66,46 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
             throw IllegalArgumentException("Invalid search type (wrong adapter)")
         }
 
+        applyStyleAlpha()
+        bindSearchBarLook()
+
+        val toggles = SearchToggles(activity.aniMangaResult.isAdult, activity.aniMangaResult.onList)
+
+        binding.searchBarText.removeTextChangedListener(textWatcher)
+        binding.searchBarText.setText(activity.aniMangaResult.search)
+
+        binding.searchAdultCheck.isChecked = toggles.adult
+        binding.searchList.isChecked = toggles.listOnly == true
+
+        binding.searchChipRecycler.adapter = SearchChipAdapter(activity, this).also {
+            activity.updateChips = { it.update() }
+        }
+
+        binding.searchChipRecycler.layoutManager =
+            LinearLayoutManager(binding.root.context, HORIZONTAL, false)
+
+        bindHeaderButtons()
+
+        textWatcher = setupSearchInputListeners(binding, activity, imm, { setHistoryVisibility(it) }, { searchTitle(toggles) })
+
+        bindStyleButtons()
+        bindAdultCheck(toggles)
+        bindListCheck(toggles)
+
+        search = Runnable { searchTitle(toggles) }
+        requestFocus = Runnable { binding.searchBarText.requestFocus() }
+    }
+
+    private fun bindHistoryList() {
+        searchHistoryAdapter = SearchHistoryAdapter(type) {
+            binding.searchBarText.setText(it)
+            binding.searchBarText.setSelection(it.length)
+        }
+        binding.searchHistoryList.layoutManager = LinearLayoutManager(binding.root.context)
+        binding.searchHistoryList.adapter = searchHistoryAdapter
+    }
+
+    private fun applyStyleAlpha() {
         when (activity.style) {
             0 -> {
                 binding.searchResultGrid.alpha = 1f
@@ -81,7 +117,9 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
                 binding.searchResultGrid.alpha = 0.33f
             }
         }
+    }
 
+    private fun bindSearchBarLook() {
         binding.searchBar.hint = activity.aniMangaResult.type
         if (PrefManager.getVal(PrefName.Incognito)) {
             val startIconDrawableRes = R.drawable.ic_incognito_24
@@ -89,23 +127,9 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
                 context?.let { AppCompatResources.getDrawable(it, startIconDrawableRes) }
             binding.searchBar.startIconDrawable = startIconDrawable
         }
+    }
 
-        var adult = activity.aniMangaResult.isAdult
-        var listOnly = activity.aniMangaResult.onList
-
-        binding.searchBarText.removeTextChangedListener(textWatcher)
-        binding.searchBarText.setText(activity.aniMangaResult.search)
-
-        binding.searchAdultCheck.isChecked = adult
-        binding.searchList.isChecked = listOnly == true
-
-        binding.searchChipRecycler.adapter = SearchChipAdapter(activity, this).also {
-            activity.updateChips = { it.update() }
-        }
-
-        binding.searchChipRecycler.layoutManager =
-            LinearLayoutManager(binding.root.context, HORIZONTAL, false)
-
+    private fun bindHeaderButtons() {
         binding.searchFilter.setOnClickListener {
             SearchFilterBottomDialog.newInstance().show(activity.supportFragmentManager, "dialog")
         }
@@ -122,21 +146,25 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
             searchHistoryAdapter.clearHistory()
         }
         updateClearHistoryVisibility()
-        fun searchTitle() {
-            activity.aniMangaResult.apply {
-                search =
-                    if (binding.searchBarText.text.toString() != "") binding.searchBarText.text.toString() else null
-                onList = listOnly
-                isAdult = adult
-            }
-            if (binding.searchBarText.text.toString().equals("hentai", true)) {
-                openLinkInBrowser("https://www.youtube.com/watch?v=GgJrEOo0QoA")
-            }
-            activity.search()
+    }
+
+    private fun searchTitle(toggles: SearchToggles) {
+        activity.aniMangaResult.apply {
+            search =
+                if (binding.searchBarText.text.toString() != "") binding.searchBarText.text.toString() else null
+            onList = toggles.listOnly
+            isAdult = toggles.adult
         }
+        if (binding.searchBarText.text.toString().equals("hentai", true)) {
+            openLinkInBrowser("https://www.youtube.com/watch?v=GgJrEOo0QoA")
+        }
+        if (binding.searchBarText.text.toString().equals("ciapciap", true)) {
+            openLinkInBrowser("https://www.tiktok.com/@hejsiematuedi")
+        }
+        activity.search()
+    }
 
-        textWatcher = setupSearchInputListeners(binding, activity, imm, { setHistoryVisibility(it) }, { searchTitle() })
-
+    private fun bindStyleButtons() {
         binding.searchResultGrid.setOnClickListener {
             it.alpha = 1f
             binding.searchResultList.alpha = 0.33f
@@ -151,26 +179,32 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
             PrefManager.setVal(PrefName.SearchStyle, 1)
             activity.recycler()
         }
+    }
 
+    private fun bindAdultCheck(toggles: SearchToggles) {
         if (Anilist.adult) {
             binding.searchAdultCheck.visibility = View.VISIBLE
-            binding.searchAdultCheck.isChecked = adult
+            binding.searchAdultCheck.isChecked = toggles.adult
             binding.searchAdultCheck.setOnCheckedChangeListener { _, b ->
-                adult = b
-                searchTitle()
+                toggles.adult = b
+                searchTitle(toggles)
             }
         } else binding.searchAdultCheck.visibility = View.GONE
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun bindListCheck(toggles: SearchToggles) {
         binding.searchList.apply {
             if (Anilist.userid != null) {
                 visibility = View.VISIBLE
-                checkedState = when (listOnly) {
+                checkedState = when (toggles.listOnly) {
                     null -> STATE_UNCHECKED
                     true -> STATE_CHECKED
                     false -> STATE_INDETERMINATE
                 }
 
                 addOnCheckedStateChangedListener { _, state ->
-                    listOnly = when (state) {
+                    toggles.listOnly = when (state) {
                         STATE_CHECKED -> true
                         STATE_INDETERMINATE -> false
                         STATE_UNCHECKED -> null
@@ -181,14 +215,11 @@ class SearchAdapter(private val activity: SearchActivity, private val type: Sear
                 setOnTouchListener { _, event ->
                     (event.actionMasked == MotionEvent.ACTION_DOWN).also {
                         if (it) checkedState = (checkedState + 1) % 3
-                        searchTitle()
+                        searchTitle(toggles)
                     }
                 }
             } else visibility = View.GONE
         }
-
-        search = Runnable { searchTitle() }
-        requestFocus = Runnable { binding.searchBarText.requestFocus() }
     }
 
     class SearchChipAdapter(

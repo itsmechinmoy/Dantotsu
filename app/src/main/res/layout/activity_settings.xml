@@ -68,45 +68,63 @@
                 android:id="@+id/settingsSearchContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="24dp"
+                android:layout_marginHorizontal="16dp"
                 android:layout_marginBottom="12dp"
                 android:orientation="horizontal">
 
-                <com.google.android.material.textfield.TextInputLayout
+                <!-- the same search pill as the app search: leading icon, clear button while typing -->
+                <com.google.android.material.card.MaterialCardView
                     android:id="@+id/settingsSearchBar"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    style="@style/Widget.Material3.CardView.Filled"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
-                    android:textColorHint="?attr/colorOnSurfaceVariant"
                     android:transitionName="@string/search"
-                    app:boxBackgroundColor="@color/nav_bg_inv"
-                    app:boxCornerRadiusBottomEnd="28dp"
-                    app:boxCornerRadiusBottomStart="28dp"
-                    app:boxCornerRadiusTopEnd="28dp"
-                    app:boxCornerRadiusTopStart="28dp"
-                    app:boxStrokeColor="?attr/colorPrimary"
-                    app:boxStrokeWidth="1.5dp"
-                    app:boxStrokeWidthFocused="2dp"
-                    app:endIconDrawable="@drawable/ic_round_search_24"
-                    app:endIconTint="?attr/colorPrimary"
-                    app:hintAnimationEnabled="true">
+                    app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
+                    app:cardCornerRadius="28dp">
 
-                    <AutoCompleteTextView
-                        android:id="@+id/settingsSearchBarText"
+                    <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:fontFamily="@font/poppins_bold"
-                        android:hint="@string/search_settings"
-                        android:imeOptions="actionSearch"
-                        android:inputType="text"
-                        android:padding="8dp"
-                        android:selectAllOnFocus="true"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textColorHint="?attr/colorOnSurfaceVariant"
-                        android:textSize="14sp"
-                        tools:ignore="LabelFor,TextContrastCheck" />
-                </com.google.android.material.textfield.TextInputLayout>
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="4dp">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:importantForAccessibility="no"
+                            android:src="@drawable/ic_round_search_24"
+                            app:tint="?attr/colorOnSurfaceVariant" />
+
+                        <AutoCompleteTextView
+                            android:id="@+id/settingsSearchBarText"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginStart="16dp"
+                            android:layout_weight="1"
+                            android:background="@null"
+                            android:fontFamily="@font/poppins"
+                            android:hint="@string/search_settings"
+                            android:imeOptions="actionSearch"
+                            android:inputType="text"
+                            android:selectAllOnFocus="true"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textColorHint="?attr/colorOnSurfaceVariant"
+                            android:textSize="16sp"
+                            tools:ignore="LabelFor" />
+
+                        <ImageButton
+                            android:id="@+id/settingsSearchClear"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/clear"
+                            android:src="@drawable/ic_round_close_24"
+                            android:visibility="gone"
+                            app:tint="?attr/colorOnSurfaceVariant" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
 
             </LinearLayout>
 
@@ -116,7 +134,6 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_marginHorizontal="24dp"
             android:animateLayoutChanges="true"
             android:clipToPadding="false"
             android:orientation="vertical"
@@ -129,10 +146,11 @@
                 android:nestedScrollingEnabled="false"
                 android:requiresFadingEdge="vertical"
                 tools:itemCount="5"
-                tools:listitem="@layout/item_settings" />
+                tools:listitem="@layout/item_setting_row" />
 
             <LinearLayout
                 android:id="@+id/settingsEmptyLayout"
+                android:layout_marginHorizontal="24dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="32dp"
@@ -172,6 +190,7 @@
 
             <LinearLayout
                 android:id="@+id/settingsFooterLayout"
+                android:layout_marginHorizontal="24dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">

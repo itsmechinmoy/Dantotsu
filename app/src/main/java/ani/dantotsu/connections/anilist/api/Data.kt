@@ -253,6 +253,71 @@ class Query {
     }
 
     @Serializable
+    data class GenresAndTags(
+        @SerialName("data")
+        val data: Data?
+    ) : java.io.Serializable {
+        @Serializable
+        data class Data(
+            @SerialName("GenreCollection")
+            val genreCollection: List<String>? = null,
+            @SerialName("MediaTagCollection")
+            val mediaTagCollection: List<MediaTag>? = null,
+        ) : java.io.Serializable
+    }
+
+    @Serializable
+    data class BannerCollections(
+        @SerialName("data")
+        val data: Data?
+    ) : java.io.Serializable {
+        @Serializable
+        data class Data(
+            @SerialName("anime")
+            val anime: ani.dantotsu.connections.anilist.api.MediaListCollection? = null,
+            @SerialName("manga")
+            val manga: ani.dantotsu.connections.anilist.api.MediaListCollection? = null,
+        ) : java.io.Serializable
+    }
+
+    @Serializable
+    data class UserFavouriteIdsResponse(
+        @SerialName("data")
+        val data: Data?
+    ) : java.io.Serializable {
+        @Serializable
+        data class Data(
+            @SerialName("User")
+            val user: FavUser? = null,
+        ) : java.io.Serializable
+
+        @Serializable
+        data class FavUser(
+            @SerialName("favourites")
+            val favourites: FavGroups? = null,
+        ) : java.io.Serializable
+
+        @Serializable
+        data class FavGroups(
+            @SerialName("anime") val anime: IdNodes? = null,
+            @SerialName("manga") val manga: IdNodes? = null,
+            @SerialName("characters") val characters: IdNodes? = null,
+            @SerialName("staff") val staff: IdNodes? = null,
+            @SerialName("studios") val studios: IdNodes? = null,
+        ) : java.io.Serializable
+
+        @Serializable
+        data class IdNodes(
+            @SerialName("nodes") val nodes: List<IdNode>? = null,
+        ) : java.io.Serializable
+
+        @Serializable
+        data class IdNode(
+            @SerialName("id") val id: Int,
+        ) : java.io.Serializable
+    }
+
+    @Serializable
     data class User(
         @SerialName("data")
         val data: Data

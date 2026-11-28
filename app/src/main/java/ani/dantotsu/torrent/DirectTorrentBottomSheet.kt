@@ -27,11 +27,10 @@ import ani.dantotsu.databinding.BottomSheetDirectTorrentBinding
 import ani.dantotsu.databinding.ItemTorrentFileBinding
 import ani.dantotsu.loadImage
 import ani.dantotsu.media.Media
-import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.media.Selected
 import ani.dantotsu.media.anime.Anime
 import ani.dantotsu.media.anime.Episode
-import ani.dantotsu.media.anime.ExoplayerView
+import ani.dantotsu.media.anime.MpvPlayerActivity
 import ani.dantotsu.parsers.Video
 import ani.dantotsu.parsers.VideoContainer
 import ani.dantotsu.parsers.VideoExtractor
@@ -539,7 +538,7 @@ class DirectTorrentBottomSheet : BottomSheetDialogFragment() {
 
                 scopedFiles.forEachIndexed { index, stat ->
                     val fCleanName = stat.path.replace('\\', '/').substringAfterLast('/')
-                    val epNum = MediaNameAdapter.findEpisodeNumber(fCleanName)?.let {
+                    val epNum = ani.dantotsu.parsers.TorrentAnimeParser.episodeNumberFromFileName(fCleanName)?.let {
                         if (it % 1 == 0f) it.toInt().toString() else it.toString()
                     } ?: (index + 1).toString()
 
@@ -587,9 +586,9 @@ class DirectTorrentBottomSheet : BottomSheetDialogFragment() {
                     val bm = _binding ?: return@withContext
                     bm.torrentProgressBar.isVisible = false
                     bm.torrentStatusText.isVisible = false
-                    ExoplayerView.media = media
-                    ExoplayerView.initialized = true
-                    startActivity(Intent(currentAct, ExoplayerView::class.java))
+                    MpvPlayerActivity.media = media
+                    MpvPlayerActivity.initialized = true
+                    startActivity(Intent(currentAct, MpvPlayerActivity::class.java))
                     dismissAllowingStateLoss()
                 }
             } catch (e: Exception) {
@@ -683,7 +682,7 @@ class DirectTorrentBottomSheet : BottomSheetDialogFragment() {
 
             fun bind(fileStat: FileStat, position: Int, onClick: (FileStat) -> Unit) {
                 val rawName = fileStat.path.replace('\\', '/').substringAfterLast('/')
-                val epNum = MediaNameAdapter.findEpisodeNumber(rawName)?.let {
+                val epNum = ani.dantotsu.parsers.TorrentAnimeParser.episodeNumberFromFileName(rawName)?.let {
                     if (it % 1 == 0f) String.format(Locale.US, "%02d", it.toInt()) else it.toString()
                 } ?: String.format(Locale.US, "%02d", position + 1)
 

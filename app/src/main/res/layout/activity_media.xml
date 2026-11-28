@@ -55,6 +55,21 @@
                 android:src="@drawable/linear_gradient_bg"
                 tools:ignore="ContentDescription" />
 
+            <FrameLayout
+                android:id="@+id/compactPlayerContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#FF000000"
+                android:visibility="gone"
+                app:layout_collapseMode="pin">
+
+                <ani.dantotsu.media.anime.mpv.DantotsuPlayerView
+                    android:id="@+id/compactPlayerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="220dp" />
+
+            </FrameLayout>
+
             <LinearLayout
                 android:id="@+id/mediaCollapseContainer"
                 android:layout_width="match_parent"
